@@ -94,17 +94,23 @@ object PumpBotEngine {
     private const val keyLastSync = "last_sync"
     private const val keyMarket4h = "market_4h_json"
     private const val keyMarket2h = "market_2h_json"
-    private const val fastPeriod = 25
-    private const val slowPeriod = 99
+    private const val primaryFastPeriod = 25
+    private const val primarySlowPeriod = 99
+    private const val experimentFastPeriod = 34
+    private const val experimentSlowPeriod = 99
     private const val adxPeriod = 14
-    private const val adxTrendMin = 14.0
-    private const val adxExitMin = 11.0
-    private const val minAtrPercent = 0.45
-    private const val volumeFactor = 0.65
+    private const val primaryAdxTrendMin = 14.0
+    private const val experimentAdxTrendMin = 14.0
+    private const val primaryMinAtrPercent = 0.45
+    private const val experimentMinAtrPercent = 0.25
+    private const val primaryVolumeFactor = 0.65
+    private const val experimentVolumeFactor = 0.55
     const val feeRate = 0.0015
     private const val slippage = 0.0005
-    private const val stopLoss = 0.08
-    private const val trailingStop = 0.10
+    private const val primaryStopLoss = 0.08
+    private const val experimentStopLoss = 0.05
+    private const val primaryTrailingStop = 0.10
+    private const val experimentTrailingStop = 0.05
 
     fun klineUrl(interval: String): String {
         return "https://data-api.binance.vision/api/v3/klines?symbol=$symbol&interval=$interval&limit=500"
@@ -174,8 +180,8 @@ object PumpBotEngine {
         val candles2h = parseSavedCandles(p.getString(keyMarket2h, "").orEmpty())
         val primary = p.getStrategy("primary", defaultPrimary()).withMarketOnly(candles4h)
         val experimental = p.getStrategy("experiment", defaultExperimental()).withMarketOnly(candles2h)
-        val ind4h = indicators(candles4h)
-        val ind2h = indicators(candles2h)
+        val ind4h = indicators(candles4h, primaryFastPeriod, primarySlowPeriod)
+        val ind2h = indicators(candles2h, experimentFastPeriod, experimentSlowPeriod)
 
         return BotSnapshot(
             running = p.getBoolean(keyRunning, false),
@@ -184,7 +190,7 @@ object PumpBotEngine {
             primary = result(primary),
             experimental = result(experimental),
             primaryChart = ChartBundle(candles4h, ind4h.fast, ind4h.slow, primary.trades, "Primary 4H WMA25/WMA99"),
-            experimentalChart = ChartBundle(candles2h, ind2h.fast, ind2h.slow, experimental.trades, "Experiment 2H with 4H trend filter")
+            experimentalChart = ChartBundle(candles2h, ind2h.fast, ind2h.slow, experimental.trades, "Experiment 2H WMA34/WMA99 with 4H fast-line filter")
         )
     }
 
@@ -246,17 +252,17 @@ object PumpBotEngine {
     }
 
     private fun runPrimary(initial: StrategyState, candles: List<PumpCandle>): StrategyState {
-        if (candles.size < slowPeriod + 10) return initial.withMarketOnly(candles, "Waiting for enough 4H candles")
+        if (candles.size < primarySlowPeriod + 10) return initial.withMarketOnly(candles, "Waiting for enough 4H candles")
 
-        val ind = indicators(candles)
+        val ind = indicators(candles, primaryFastPeriod, primarySlowPeriod)
         var state = initial.withMarketOnly(candles)
-        val first = maxOf(slowPeriod + 4, adxPeriod * 2)
+        val first = maxOf(primarySlowPeriod + 4, adxPeriod * 2)
 
         for (i in first until candles.size) {
             val candle = candles[i]
             if (candle.closeTime <= state.lastProcessedCandle) continue
 
-            val info = filterInfo(candles, ind, i)
+            val info = filterInfo(candles, ind, i, primaryAdxTrendMin, primaryMinAtrPercent, primaryVolumeFactor)
             val crossedUp = crossedUp(ind.fast, ind.slow, i)
             val crossedDown = crossedDown(ind.fast, ind.slow, i)
             val resumeUp = bullishResume(candles, ind, i)
@@ -265,9 +271,9 @@ object PumpBotEngine {
                 state = state,
                 candle = candle,
                 shouldBuy = state.coins <= 0.0 && info.trendOk && (crossedUp || resumeUp),
-                shouldSell = state.coins > 0.0 && (crossedDown || peakExit || stopHit(state, candle.close) || trendFaded(info)),
+                shouldSell = state.coins > 0.0 && (crossedDown || peakExit || stopHit(state, candle.close, primaryStopLoss, primaryTrailingStop) || trendFaded(info)),
                 buyReason = if (crossedUp) "4H WMA crossed up. ${info.text}" else "4H pullback resumed inside trend. ${info.text}",
-                sellReason = sellReason(state, candle.close, crossedDown, peakExit, info)
+                sellReason = sellReason(state, candle.close, crossedDown, peakExit, info, primaryStopLoss, primaryTrailingStop)
             )
         }
 
@@ -275,24 +281,29 @@ object PumpBotEngine {
     }
 
     private fun runExperimental(initial: StrategyState, candles2h: List<PumpCandle>, candles4h: List<PumpCandle>): StrategyState {
-        if (candles2h.size < slowPeriod + 10 || candles4h.size < slowPeriod + 10) {
+        if (candles2h.size < experimentSlowPeriod + 10 || candles4h.size < primarySlowPeriod + 10) {
             return initial.withMarketOnly(candles2h, "Waiting for enough 2H/4H candles")
         }
 
-        val ind2h = indicators(candles2h)
-        val ind4h = indicators(candles4h)
+        val ind2h = indicators(candles2h, experimentFastPeriod, experimentSlowPeriod)
+        val ind4h = indicators(candles4h, primaryFastPeriod, primarySlowPeriod)
         var state = initial.withMarketOnly(candles2h)
-        val first = maxOf(slowPeriod + 4, adxPeriod * 2)
+        val first = maxOf(experimentSlowPeriod + 4, adxPeriod * 2)
 
         for (i in first until candles2h.size) {
             val candle = candles2h[i]
             if (candle.closeTime <= state.lastProcessedCandle) continue
 
-            val twoHour = filterInfo(candles2h, ind2h, i, adxMin = 12.0)
+            val twoHour = filterInfo(candles2h, ind2h, i, experimentAdxTrendMin, experimentMinAtrPercent, experimentVolumeFactor)
             val fourIndex = candles4h.indexOfLast { it.closeTime <= candle.closeTime }
-            val fourHour = if (fourIndex >= first) filterInfo(candles4h, ind4h, fourIndex) else null
-            val fourHourTrendOk = fourHour?.directionOk == true && value(ind4h.fast, fourIndex) > value(ind4h.slow, fourIndex)
-            val fourHourTrendWeak = fourHour == null || value(ind4h.fast, fourIndex) < value(ind4h.slow, fourIndex) || value(ind4h.adx, fourIndex) < adxExitMin
+            val fourHourFirst = maxOf(primarySlowPeriod + 4, adxPeriod * 2)
+            val fourHour = if (fourIndex >= fourHourFirst) {
+                filterInfo(candles4h, ind4h, fourIndex, primaryAdxTrendMin, experimentMinAtrPercent, 0.4)
+            } else {
+                null
+            }
+            val fourHourTrendOk = fourHour != null && candles4h[fourIndex].close > value(ind4h.fast, fourIndex)
+            val fourHourTrendWeak = fourHour == null || value(ind4h.fast, fourIndex) < value(ind4h.slow, fourIndex)
             val crossedUp2h = crossedUp(ind2h.fast, ind2h.slow, i)
             val crossedDown2h = crossedDown(ind2h.fast, ind2h.slow, i)
             val resumeUp2h = bullishResume(candles2h, ind2h, i)
@@ -302,14 +313,14 @@ object PumpBotEngine {
                 state = state,
                 candle = candle,
                 shouldBuy = state.coins <= 0.0 && twoHour.trendOk && fourHourTrendOk && (crossedUp2h || resumeUp2h),
-                shouldSell = state.coins > 0.0 && (crossedDown2h || peakExit2h || stopHit(state, candle.close) || fourHourTrendWeak),
+                shouldSell = state.coins > 0.0 && (crossedDown2h || peakExit2h || stopHit(state, candle.close, experimentStopLoss, experimentTrailingStop) || fourHourTrendWeak),
                 buyReason = if (crossedUp2h) {
-                    "2H WMA crossed up with 4H trend confirmation. 2H ${twoHour.text}; 4H ${fourHour?.text ?: "not ready"}"
+                    "2H WMA crossed up with 4H fast-line confirmation. 2H ${twoHour.text}; 4H ${fourHour?.text ?: "not ready"}"
                 } else {
-                    "2H pullback resumed with 4H trend confirmation. 2H ${twoHour.text}; 4H ${fourHour?.text ?: "not ready"}"
+                    "2H pullback resumed with 4H fast-line confirmation. 2H ${twoHour.text}; 4H ${fourHour?.text ?: "not ready"}"
                 },
                 sellReason = when {
-                    stopHit(state, candle.close) -> sellReason(state, candle.close, false, peakExit2h, twoHour)
+                    stopHit(state, candle.close, experimentStopLoss, experimentTrailingStop) -> sellReason(state, candle.close, false, peakExit2h, twoHour, experimentStopLoss, experimentTrailingStop)
                     crossedDown2h -> "2H WMA crossed down. ${twoHour.text}"
                     peakExit2h -> "2H local peak exit. ${twoHour.text}"
                     fourHourTrendWeak -> "4H trend filter weakened. ${fourHour?.text ?: "4H not ready"}"
@@ -407,7 +418,7 @@ object PumpBotEngine {
         return StrategyState(
             id = "experiment",
             title = "Experiment 2H + 4H",
-            subtitle = "2H entries and exits with 4H trend confirmation",
+            subtitle = "2H WMA34/WMA99 entries with 4H fast-line confirmation",
             cash = startBalance,
             coins = 0.0,
             entryPrice = 0.0,
@@ -439,7 +450,14 @@ object PumpBotEngine {
         val text: String
     )
 
-    private fun filterInfo(candles: List<PumpCandle>, ind: IndicatorSeries, i: Int, adxMin: Double = adxTrendMin): FilterInfo {
+    private fun filterInfo(
+        candles: List<PumpCandle>,
+        ind: IndicatorSeries,
+        i: Int,
+        adxMin: Double,
+        minAtrPercent: Double,
+        volumeFactor: Double
+    ): FilterInfo {
         val candle = candles[i]
         val slowNow = value(ind.slow, i)
         val slowSlope = slowNow - value(ind.slow, i - 3)
@@ -458,7 +476,15 @@ object PumpBotEngine {
         return FilterInfo(trendOk, directionOk, text)
     }
 
-    private fun sellReason(state: StrategyState, close: Double, crossedDown: Boolean, peakExit: Boolean, info: FilterInfo): String {
+    private fun sellReason(
+        state: StrategyState,
+        close: Double,
+        crossedDown: Boolean,
+        peakExit: Boolean,
+        info: FilterInfo,
+        stopLoss: Double,
+        trailingStop: Double
+    ): String {
         return when {
             close <= state.entryPrice * (1 - stopLoss) -> "Stop-loss. ${info.text}"
             close <= state.highestClose * (1 - trailingStop) -> "Trailing stop. ${info.text}"
@@ -473,7 +499,7 @@ object PumpBotEngine {
         return !info.directionOk
     }
 
-    private fun stopHit(state: StrategyState, close: Double): Boolean {
+    private fun stopHit(state: StrategyState, close: Double, stopLoss: Double, trailingStop: Double): Boolean {
         return state.coins > 0.0 &&
             (close <= state.entryPrice * (1 - stopLoss) || close <= state.highestClose * (1 - trailingStop))
     }
@@ -492,7 +518,7 @@ object PumpBotEngine {
         return copy(trades = nextTrades)
     }
 
-    private fun indicators(candles: List<PumpCandle>): IndicatorSeries {
+    private fun indicators(candles: List<PumpCandle>, fastPeriod: Int, slowPeriod: Int): IndicatorSeries {
         val closes = candles.map { it.close }
         val volumes = candles.map { it.volume }
         return IndicatorSeries(
