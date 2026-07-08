@@ -18,15 +18,13 @@ class PumpBotWorker(
 
     override fun doWork(): Result {
         return try {
-            val json4h = fetch(PumpBotEngine.klineUrl("30m"))
-            val json2h = fetch(PumpBotEngine.klineUrl("2h"))
-            PumpBotEngine.sync(
-                context = applicationContext,
-                json4h = json4h,
-                json2h = json2h,
-                allowTrading = PumpBotEngine.isRunning(applicationContext)
-            )
-
+            val json = fetch(PumpBotEngine.klineUrl(PumpBotEngine.pumpSymbol, "30m"))
+            PumpBotEngine.syncPump(applicationContext, json)
+            val snapshot = PumpBotEngine.snapshot(applicationContext)
+            if (PumpBotEngine.shouldAlert(applicationContext, snapshot)) {
+                PumpAlert.showSignal(applicationContext, snapshot)
+                PumpBotEngine.markAlerted(applicationContext, snapshot)
+            }
             Result.success()
         } catch (e: Exception) {
             Result.retry()
@@ -37,7 +35,7 @@ class PumpBotWorker(
         val request = Request.Builder()
             .url(url)
             .header("Accept", "application/json")
-            .header("User-Agent", "PumpPaperBotAndroid/${PumpBotEngine.appVersionName}")
+            .header("User-Agent", "PumpRsi35BotAndroid/${PumpBotEngine.appVersionName}")
             .build()
 
         client.newCall(request).execute().use { response ->

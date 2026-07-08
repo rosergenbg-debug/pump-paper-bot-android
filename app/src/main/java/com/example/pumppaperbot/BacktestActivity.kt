@@ -4,9 +4,11 @@ import android.app.DatePickerDialog
 import android.graphics.Color
 import android.os.Bundle
 import android.view.View
+import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
+import android.widget.Spinner
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import okhttp3.OkHttpClient
@@ -22,13 +24,11 @@ class BacktestActivity : AppCompatActivity() {
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
 
-    private var startTime: Long = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(90)
-    private var strategyId = "primary"
+    private var startTime: Long = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(180)
     private lateinit var status: TextView
     private lateinit var resultBox: LinearLayout
     private lateinit var dateButton: Button
-    private lateinit var primaryButton: Button
-    private lateinit var experimentButton: Button
+    private lateinit var spinner: Spinner
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -41,29 +41,24 @@ class BacktestActivity : AppCompatActivity() {
             setPadding(dp(14), dp(14), dp(14), dp(14))
             setBackgroundColor(Color.parseColor("#0D1117"))
         }
-        root.addView(label("BACKTEST", 24, "#F0F6FC", true))
-        root.addView(label("Choose a historical start date and strategy.", 13, "#8B949E", false))
+        root.addView(label("RSI35 BACKTEST", 24, "#F0F6FC", true))
+        root.addView(label("Choose coin and start date. Strategy: 30m RSI <= 35, trend above EMA200.", 13, "#8B949E", false))
 
-        dateButton = button("START: ${PumpBotEngine.formatTime(startTime)}", "#30363D")
+        spinner = Spinner(this).apply {
+            adapter = ArrayAdapter(
+                this@BacktestActivity,
+                android.R.layout.simple_spinner_dropdown_item,
+                PumpBotEngine.coinOptions.map { "${it.name} (${it.symbol})" }
+            )
+            setBackgroundColor(Color.parseColor("#30363D"))
+        }
+        root.addView(spinner, LinearLayout.LayoutParams(-1, dp(52)).apply { topMargin = dp(10) })
+
+        dateButton = button("START: ${PumpBotEngine.formatDate(startTime)}", "#30363D")
         dateButton.setOnClickListener { pickDate() }
         root.addView(dateButton)
 
-        val strategyRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        primaryButton = button("30m RSI", "#1F6FEB")
-        experimentButton = button("2h SUPER", "#30363D")
-        primaryButton.setOnClickListener {
-            strategyId = "primary"
-            updateStrategyButtons()
-        }
-        experimentButton.setOnClickListener {
-            strategyId = "experiment"
-            updateStrategyButtons()
-        }
-        strategyRow.addView(primaryButton, LinearLayout.LayoutParams(0, dp(48), 1f))
-        strategyRow.addView(experimentButton, LinearLayout.LayoutParams(0, dp(48), 1f).apply { leftMargin = dp(8) })
-        root.addView(strategyRow)
-
-        val run = button("RUN BACKTEST", "#238636")
+        val run = button("RUN RSI35 BACKTEST", "#238636")
         run.setOnClickListener { runBacktest() }
         root.addView(run)
 
@@ -89,7 +84,7 @@ class BacktestActivity : AppCompatActivity() {
                 picked.set(year, month, day, 0, 0, 0)
                 picked.set(Calendar.MILLISECOND, 0)
                 startTime = picked.timeInMillis
-                dateButton.text = "START: ${PumpBotEngine.formatTime(startTime)}"
+                dateButton.text = "START: ${PumpBotEngine.formatDate(startTime)}"
             },
             cal.get(Calendar.YEAR),
             cal.get(Calendar.MONTH),
@@ -97,29 +92,22 @@ class BacktestActivity : AppCompatActivity() {
         ).show()
     }
 
-    private fun updateStrategyButtons() {
-        primaryButton.setBackgroundColor(Color.parseColor(if (strategyId == "primary") "#1F6FEB" else "#30363D"))
-        experimentButton.setBackgroundColor(Color.parseColor(if (strategyId == "experiment") "#1F6FEB" else "#30363D"))
-    }
-
     private fun runBacktest() {
-        status.text = "Loading historical candles..."
+        val selected = PumpBotEngine.coinOptions[spinner.selectedItemPosition]
+        status.text = "Loading ${selected.symbol} 30m candles..."
         resultBox.removeAllViews()
         thread {
             try {
-                val warmupStart = startTime - TimeUnit.DAYS.toMillis(35)
-                val now = System.currentTimeMillis()
-                val candles4h = fetchCandles("30m", warmupStart, now)
-                val candles2h = fetchCandles("2h", warmupStart, now)
-                val firstData = listOfNotNull(candles4h.firstOrNull()?.openTime, candles2h.firstOrNull()?.openTime).minOrNull()
-                val result = PumpBotEngine.backtest(strategyId, candles4h, candles2h, startTime)
+                val warmupStart = startTime - TimeUnit.DAYS.toMillis(14)
+                val candles = fetchCandles(selected.symbol, warmupStart, System.currentTimeMillis())
+                val result = PumpBotEngine.backtest(selected, candles, startTime)
                 runOnUiThread {
-                    val availability = if (firstData != null && startTime < firstData) {
-                        " Requested date is before PUMP data; first available candle: ${PumpBotEngine.formatTime(firstData)}."
+                    val note = if (result.firstCandleTime > 0L && startTime < result.firstCandleTime) {
+                        " First available: ${PumpBotEngine.formatDate(result.firstCandleTime)}."
                     } else {
                         ""
                     }
-                    status.text = "Done. Candles: 30m ${candles4h.size}, 2h ${candles2h.size}.$availability"
+                    status.text = "Done. Candles: ${candles.size}.$note"
                     showResult(result)
                 }
             } catch (e: Exception) {
@@ -130,15 +118,14 @@ class BacktestActivity : AppCompatActivity() {
         }
     }
 
-    private fun fetchCandles(interval: String, start: Long, end: Long): List<PumpCandle> {
+    private fun fetchCandles(symbol: String, start: Long, end: Long): List<PumpCandle> {
         val all = ArrayList<PumpCandle>()
         var cursor = start
         while (cursor < end) {
-            val url = "https://data-api.binance.vision/api/v3/klines?symbol=${PumpBotEngine.symbol}&interval=$interval&startTime=$cursor&endTime=$end&limit=1000"
             val request = Request.Builder()
-                .url(url)
+                .url(PumpBotEngine.historicalKlineUrl(symbol, "30m", cursor, end))
                 .header("Accept", "application/json")
-                .header("User-Agent", "PumpPaperBotAndroid/${PumpBotEngine.appVersionName}")
+                .header("User-Agent", "PumpRsi35BotAndroid/${PumpBotEngine.appVersionName}")
                 .build()
             val body = client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) error("HTTP ${response.code}")
@@ -154,29 +141,30 @@ class BacktestActivity : AppCompatActivity() {
         return all.distinctBy { it.closeTime }.sortedBy { it.closeTime }
     }
 
-    private fun showResult(result: StrategyResult) {
+    private fun showResult(result: BacktestResult) {
         resultBox.removeAllViews()
         resultBox.addView(summary(result))
-        if (result.state.trades.isEmpty()) {
+        if (result.trades.isEmpty()) {
             resultBox.addView(label("No trades in selected period.", 14, "#8B949E", false))
         } else {
-            result.state.trades.reversed().forEach { trade ->
+            result.trades.reversed().forEach { trade ->
                 resultBox.addView(greenDivider())
                 resultBox.addView(tradeRow(trade))
             }
         }
     }
 
-    private fun summary(result: StrategyResult): View {
+    private fun summary(result: BacktestResult): View {
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(12), dp(12), dp(12), dp(12))
             setBackgroundColor(Color.parseColor("#161B22"))
-            addView(label(result.state.title, 18, "#F0F6FC", true))
-            addView(label("Start: ${PumpBotEngine.formatTime(startTime)}", 13, "#8B949E", false))
+            addView(label("${result.assetName} RSI35", 18, "#F0F6FC", true))
+            addView(label("Start: ${PumpBotEngine.formatDate(startTime)}", 13, "#8B949E", false))
             addView(label(String.format(Locale.US, "Invested: %.2f USDT", PumpBotEngine.startBalance), 14, "#C9D1D9", false))
-            addView(label(String.format(Locale.US, "Now: %.2f USDT | P/L %+.2f USDT (%+.2f%%)", result.equity, result.profit, result.profitPercent), 17, if (result.profit >= 0) "#32C789" else "#FF4D6D", true))
-            addView(label(String.format(Locale.US, "Trades: %d | Fees paid: %.2f USDT | Fee per operation: %.2f%%", result.tradeCount, result.totalFees, PumpBotEngine.feeRate * 100.0), 14, "#F0F6FC", false))
+            addView(label(String.format(Locale.US, "Now: %.2f USDT | P/L %+.2f USDT (%+.2f%%)", result.equity, result.profit, result.profitPercent), 18, if (result.profit >= 0) "#32C789" else "#FF4D6D", true))
+            addView(label(String.format(Locale.US, "Trades: %d | Fees paid: %.2f USDT | Fee per operation: %.2f%%", result.trades.size, result.totalFees, PumpBotEngine.feeRate * 100.0), 14, "#F0F6FC", false))
+            addView(label("Data through: ${PumpBotEngine.formatDate(result.lastCandleTime)}", 13, "#8B949E", false))
         }
     }
 

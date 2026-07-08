@@ -1,14 +1,18 @@
 package com.example.pumppaperbot
 
+import android.Manifest
 import android.app.AlertDialog
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Color
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.widget.Button
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
@@ -21,84 +25,65 @@ class MainActivity : AppCompatActivity() {
     private val refreshUi = object : Runnable {
         override fun run() {
             updateUi()
-            handler.postDelayed(this, 10_000)
+            handler.postDelayed(this, 5000)
         }
     }
 
-    private var tvGlobalStatus: TextView? = null
-    private var tvPrimaryTitle: TextView? = null
-    private var tvPrimaryBalance: TextView? = null
-    private var tvPrimaryMeta: TextView? = null
-    private var tvPrimaryDecision: TextView? = null
-    private var tvExperimentalTitle: TextView? = null
-    private var tvExperimentalBalance: TextView? = null
-    private var tvExperimentalMeta: TextView? = null
-    private var tvExperimentalDecision: TextView? = null
-    private var tvMode4h: TextView? = null
-    private var tvMode2h: TextView? = null
-    private var tvSelectedStatsTitle: TextView? = null
-    private var tvSelectedStatsSummary: TextView? = null
-    private var tvSelectedStatsDetails: TextView? = null
-    private var tvSelectedStatsTrades: TextView? = null
-    private var chartPrimary: StrategyChartView? = null
-    private var chartExperimental: StrategyChartView? = null
+    private var tvStatus: TextView? = null
+    private var tvBuySignal: TextView? = null
+    private var tvSellSignal: TextView? = null
+    private var tvMode: TextView? = null
+    private var tvPrice: TextView? = null
+    private var tvReason: TextView? = null
+    private var tvPosition: TextView? = null
+    private var chart: StrategyChartView? = null
     private var btnStart: Button? = null
+    private var btnCheck: Button? = null
     private var btnStop: Button? = null
     private var btnReset: Button? = null
-    private var btnCheck: Button? = null
+    private var btnManual: Button? = null
+    private var btnToggleMode: Button? = null
     private var btnBacktest: Button? = null
-    private var selectedStats = "primary"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        tvGlobalStatus = findViewById(R.id.tvGlobalStatus)
-        tvPrimaryTitle = findViewById(R.id.tvPrimaryTitle)
-        tvPrimaryBalance = findViewById(R.id.tvPrimaryBalance)
-        tvPrimaryMeta = findViewById(R.id.tvPrimaryMeta)
-        tvPrimaryDecision = findViewById(R.id.tvPrimaryDecision)
-        tvExperimentalTitle = findViewById(R.id.tvExperimentalTitle)
-        tvExperimentalBalance = findViewById(R.id.tvExperimentalBalance)
-        tvExperimentalMeta = findViewById(R.id.tvExperimentalMeta)
-        tvExperimentalDecision = findViewById(R.id.tvExperimentalDecision)
-        tvMode4h = findViewById(R.id.tvMode4h)
-        tvMode2h = findViewById(R.id.tvMode2h)
-        tvSelectedStatsTitle = findViewById(R.id.tvSelectedStatsTitle)
-        tvSelectedStatsSummary = findViewById(R.id.tvSelectedStatsSummary)
-        tvSelectedStatsDetails = findViewById(R.id.tvSelectedStatsDetails)
-        tvSelectedStatsTrades = findViewById(R.id.tvSelectedStatsTrades)
-        chartPrimary = findViewById(R.id.chartPrimary)
-        chartExperimental = findViewById(R.id.chartExperimental)
+        tvStatus = findViewById(R.id.tvStatus)
+        tvBuySignal = findViewById(R.id.tvBuySignal)
+        tvSellSignal = findViewById(R.id.tvSellSignal)
+        tvMode = findViewById(R.id.tvMode)
+        tvPrice = findViewById(R.id.tvPrice)
+        tvReason = findViewById(R.id.tvReason)
+        tvPosition = findViewById(R.id.tvPosition)
+        chart = findViewById(R.id.chart)
         btnStart = findViewById(R.id.btnStart)
+        btnCheck = findViewById(R.id.btnCheck)
         btnStop = findViewById(R.id.btnStop)
         btnReset = findViewById(R.id.btnReset)
-        btnCheck = findViewById(R.id.btnCheck)
+        btnManual = findViewById(R.id.btnManual)
+        btnToggleMode = findViewById(R.id.btnToggleMode)
         btnBacktest = findViewById(R.id.btnBacktest)
 
-        tvMode4h?.setOnClickListener {
-            selectedStats = "primary"
-            updateUi()
-        }
-        tvMode2h?.setOnClickListener {
-            selectedStats = "experiment"
-            updateUi()
-        }
-        btnStart?.setOnClickListener { startBot() }
+        PumpBotEngine.ensureInitialized(this)
+        requestNotificationPermission()
+
+        btnStart?.setOnClickListener { startMonitor() }
         btnCheck?.setOnClickListener { checkNow() }
-        btnBacktest?.setOnClickListener { startActivity(Intent(this, BacktestActivity::class.java)) }
         btnStop?.setOnClickListener {
-            confirm("Stop simulation?", "Virtual trading will pause. Current balances and positions stay saved.") {
-                stopBot()
+            confirm("Stop monitor?", "PUMP checks and alarms will stop.") {
+                stopMonitor()
             }
         }
         btnReset?.setOnClickListener {
-            confirm("Reset everything?", "Both virtual accounts, positions and trade logs will be cleared.") {
-                resetBot()
+            confirm("Reset state?", "This clears wait mode, entry price and saved chart data.") {
+                resetAll()
             }
         }
+        btnManual?.setOnClickListener { confirmManualAction() }
+        btnToggleMode?.setOnClickListener { toggleMode() }
+        btnBacktest?.setOnClickListener { startActivity(Intent(this, BacktestActivity::class.java)) }
 
-        PumpBotEngine.ensureInitialized(this)
         updateUi()
         checkNow()
     }
@@ -114,33 +99,60 @@ class MainActivity : AppCompatActivity() {
         super.onPause()
     }
 
-    private fun startBot() {
+    private fun startMonitor() {
         PumpBotEngine.setRunning(this, true)
+        PumpAlert.ensureChannels(this)
+        val serviceIntent = Intent(this, PumpSignalService::class.java)
+        ContextCompat.startForegroundService(this, serviceIntent)
         val request = PeriodicWorkRequestBuilder<PumpBotWorker>(15, TimeUnit.MINUTES).build()
         WorkManager.getInstance(this).enqueueUniquePeriodicWork(
             PumpBotEngine.uniqueWorkName,
             ExistingPeriodicWorkPolicy.UPDATE,
             request
         )
-        checkNow()
+        updateUi()
     }
 
-    private fun stopBot() {
+    private fun stopMonitor() {
         PumpBotEngine.setRunning(this, false)
+        stopService(Intent(this, PumpSignalService::class.java))
         WorkManager.getInstance(this).cancelUniqueWork(PumpBotEngine.uniqueWorkName)
         updateUi()
     }
 
-    private fun resetBot() {
-        PumpBotEngine.reset(this)
+    private fun resetAll() {
+        stopService(Intent(this, PumpSignalService::class.java))
         WorkManager.getInstance(this).cancelUniqueWork(PumpBotEngine.uniqueWorkName)
+        PumpBotEngine.reset(this)
+        updateUi()
         checkNow()
     }
 
     private fun checkNow() {
         WorkManager.getInstance(this).enqueue(OneTimeWorkRequestBuilder<PumpBotWorker>().build())
-        handler.postDelayed({ updateUi() }, 2500)
+        handler.postDelayed({ updateUi() }, 2000)
         handler.postDelayed({ updateUi() }, 6000)
+    }
+
+    private fun confirmManualAction() {
+        val snapshot = PumpBotEngine.snapshot(this)
+        if (snapshot.waitMode == "BUY") {
+            confirm("Confirm BUY?", "The app will remember this price and start waiting for SELL.") {
+                PumpBotEngine.confirmBought(this)
+                updateUi()
+            }
+        } else {
+            confirm("Confirm SELL?", "The app will clear the entry price and start waiting for BUY.") {
+                PumpBotEngine.confirmSold(this)
+                updateUi()
+            }
+        }
+    }
+
+    private fun toggleMode() {
+        val snapshot = PumpBotEngine.snapshot(this)
+        val next = if (snapshot.waitMode == "BUY") "SELL" else "BUY"
+        PumpBotEngine.setWaitMode(this, next)
         updateUi()
     }
 
@@ -155,107 +167,60 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateUi() {
         val snapshot = PumpBotEngine.snapshot(this)
-        val updated = PumpBotEngine.formatTime(snapshot.lastSync)
-        tvGlobalStatus?.text = if (snapshot.running) {
-            "Status: running. Last sync: $updated. Android checks about every 15 min; missed candles are backfilled."
+        val active = snapshot.signalAction == snapshot.waitMode &&
+            (snapshot.signalAction == "BUY" || snapshot.signalAction == "SELL")
+        val status = if (snapshot.running) "RUNNING" else "STOPPED"
+        tvStatus?.text = "$status | Last sync: ${PumpBotEngine.formatTime(snapshot.lastSync)} | Checks every 2 min while monitor is running"
+        tvMode?.text = if (snapshot.waitMode == "BUY") "MODE: waiting for BUY" else "MODE: waiting for SELL"
+        tvMode?.setTextColor(if (active) Color.WHITE else Color.parseColor("#C9D1D9"))
+        tvMode?.setBackgroundColor(if (active) Color.parseColor("#DA3633") else Color.parseColor("#30363D"))
+
+        renderSignalBox(tvBuySignal, "BUY", snapshot.buySignal, snapshot.waitMode == "BUY")
+        renderSignalBox(tvSellSignal, "SELL", snapshot.sellSignal, snapshot.waitMode == "SELL")
+
+        tvPrice?.text = String.format(
+            Locale.US,
+            "PUMP price %.8f | RSI %.1f | EMA200 %.8f | Candle %s",
+            snapshot.lastPrice,
+            snapshot.lastRsi,
+            snapshot.lastEma200,
+            PumpBotEngine.formatTime(snapshot.lastCandle)
+        )
+        tvReason?.text = snapshot.signalReason
+        tvReason?.setTextColor(if (active) Color.parseColor("#FF4D6D") else Color.parseColor("#8B949E"))
+
+        tvPosition?.text = if (snapshot.waitMode == "SELL" && snapshot.entryPrice > 0.0) {
+            String.format(Locale.US, "Manual position: bought around %.8f | highest %.8f", snapshot.entryPrice, snapshot.highestClose)
         } else {
-            "Status: stopped. Last sync: $updated. CHECK refreshes charts without virtual trades."
+            "Manual position: none"
         }
+
         btnStart?.isEnabled = !snapshot.running
         btnStart?.alpha = if (snapshot.running) 0.45f else 1f
         btnStop?.isEnabled = snapshot.running
-        btnStop?.alpha = if (snapshot.running) 1f else 0.55f
-
-        renderStrategy(
-            result = snapshot.primary,
-            titleView = tvPrimaryTitle,
-            balanceView = tvPrimaryBalance,
-            metaView = tvPrimaryMeta,
-            decisionView = tvPrimaryDecision
-        )
-        renderStrategy(
-            result = snapshot.experimental,
-            titleView = tvExperimentalTitle,
-            balanceView = tvExperimentalBalance,
-            metaView = tvExperimentalMeta,
-            decisionView = tvExperimentalDecision
-        )
-
-        chartPrimary?.setData("30m RSI", snapshot.primaryChart)
-        chartExperimental?.setData("2h SUPER", snapshot.experimentalChart)
-        renderSelectedStats(snapshot)
+        btnStop?.alpha = if (snapshot.running) 1f else 0.65f
+        btnManual?.text = if (snapshot.waitMode == "BUY") "I BOUGHT - WAIT SELL" else "I SOLD - WAIT BUY"
+        btnToggleMode?.text = if (snapshot.waitMode == "BUY") "SWITCH TO SELL" else "SWITCH TO BUY"
+        chart?.setData("PUMP RSI35", snapshot.chart)
     }
 
-    private fun renderStrategy(
-        result: StrategyResult,
-        titleView: TextView?,
-        balanceView: TextView?,
-        metaView: TextView?,
-        decisionView: TextView?
-    ) {
-        val state = result.state
-        titleView?.text = "${state.title}  ${state.buys} BUY / ${state.sells} SELL"
-        balanceView?.text = String.format(Locale.US, "%.2f USDT  (%+.2f%%)", result.equity, result.profitPercent)
-        balanceView?.setTextColor(if (result.profit >= 0.0) Color.parseColor("#32C789") else Color.parseColor("#FF4D6D"))
-        val position = if (state.coins > 0.0) {
-            String.format(Locale.US, "Position: %.2f PUMP @ %.8f", state.coins, state.entryPrice)
-        } else {
-            "Position: none"
+    private fun renderSignalBox(view: TextView?, label: String, signal: Boolean, selectedMode: Boolean) {
+        val color = when {
+            signal && label == "BUY" -> "#238636"
+            signal && label == "SELL" -> "#DA3633"
+            selectedMode -> "#30363D"
+            else -> "#161B22"
         }
-        metaView?.text = "$position | Last price: ${formatPrice(state.lastPrice)}"
-        decisionView?.text = "${state.lastAction} | ${PumpBotEngine.formatTime(state.lastUpdated)} | ${state.lastReason}"
+        view?.setBackgroundColor(Color.parseColor(color))
+        view?.text = if (signal) "$label NOW" else "$label idle"
+        view?.setTextColor(if (signal) Color.WHITE else Color.parseColor("#8B949E"))
     }
 
-    private fun renderSelectedStats(snapshot: BotSnapshot) {
-        val result = if (selectedStats == "experiment") snapshot.experimental else snapshot.primary
-        val selectedColor = Color.parseColor("#1F6FEB")
-        val idleColor = Color.parseColor("#30363D")
-        tvMode4h?.setBackgroundColor(if (selectedStats == "primary") selectedColor else idleColor)
-        tvMode2h?.setBackgroundColor(if (selectedStats == "experiment") selectedColor else idleColor)
-
-        tvSelectedStatsTitle?.text = if (selectedStats == "experiment") "2h SUPER STATISTICS" else "30m RSI STATISTICS"
-        tvSelectedStatsSummary?.text = String.format(
-            Locale.US,
-            "Started: %s | Invested: %.2f USDT | Now: %.2f USDT | P/L: %+.2f USDT (%+.2f%%)",
-            PumpBotEngine.formatTime(snapshot.startedAt),
-            PumpBotEngine.startBalance,
-            result.equity,
-            result.profit,
-            result.profitPercent
-        )
-        tvSelectedStatsSummary?.setTextColor(if (result.profit >= 0.0) Color.parseColor("#32C789") else Color.parseColor("#FF4D6D"))
-        tvSelectedStatsDetails?.text = String.format(
-            Locale.US,
-            "Trades: %d | BUY %d / SELL %d | Fees paid: %.2f USDT | Fee: %.2f%%",
-            result.tradeCount,
-            result.state.buys,
-            result.state.sells,
-            result.totalFees,
-            PumpBotEngine.feeRate * 100.0
-        )
-        tvSelectedStatsTrades?.text = selectedTradeRows(result)
-    }
-
-    private fun selectedTradeRows(result: StrategyResult): String {
-        val trades = result.state.trades.takeLast(5).reversed()
-        if (trades.isEmpty()) return "No trades yet."
-        return trades.joinToString("\n----------------\n") {
-            val pnl = if (it.action == "SELL") String.format(Locale.US, " | P/L %+.2f", it.pnl) else ""
-            String.format(
-                Locale.US,
-                "%s %s | price %.8f | amount %.2f | fee %.2f | balance %.2f%s",
-                PumpBotEngine.formatTime(it.time),
-                it.action,
-                it.price,
-                it.amount,
-                it.fee,
-                it.equity,
-                pnl
-            )
+    private fun requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 350)
         }
-    }
-
-    private fun formatPrice(value: Double): String {
-        return if (value > 0.0) String.format(Locale.US, "%.8f", value) else "-"
     }
 }

@@ -14,97 +14,62 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="PUMP Bot v0.7"
+            android:text="PUMP RSI35 Signal"
             android:textColor="#F0F6FC"
             android:textSize="28sp"
             android:textStyle="bold" />
 
         <TextView
-            android:id="@+id/tvGlobalStatus"
+            android:id="@+id/tvStatus"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
-            android:text="Status: stopped"
+            android:text="STOPPED"
             android:textColor="#8B949E"
             android:textSize="14sp" />
 
+        <TextView
+            android:id="@+id/tvMode"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="12dp"
+            android:background="#30363D"
+            android:gravity="center"
+            android:text="MODE: waiting for BUY"
+            android:textColor="#C9D1D9"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
+            android:layout_marginTop="10dp"
             android:orientation="horizontal">
 
             <TextView
-                android:id="@+id/tvMode4h"
+                android:id="@+id/tvBuySignal"
                 android:layout_width="0dp"
-                android:layout_height="42dp"
+                android:layout_height="72dp"
                 android:layout_weight="1"
-                android:background="#1F6FEB"
+                android:background="#161B22"
                 android:gravity="center"
-                android:text="30m RSI STATS"
-                android:textColor="#FFFFFF"
-                android:textSize="12sp"
+                android:text="BUY idle"
+                android:textColor="#8B949E"
+                android:textSize="21sp"
                 android:textStyle="bold" />
 
             <TextView
-                android:id="@+id/tvMode2h"
+                android:id="@+id/tvSellSignal"
                 android:layout_width="0dp"
-                android:layout_height="42dp"
+                android:layout_height="72dp"
                 android:layout_marginStart="8dp"
                 android:layout_weight="1"
-                android:background="#30363D"
+                android:background="#161B22"
                 android:gravity="center"
-                android:text="2h SUPER STATS"
-                android:textColor="#FFFFFF"
-                android:textSize="12sp"
-                android:textStyle="bold" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/statsPanel"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:background="#161B22"
-            android:minHeight="190dp"
-            android:orientation="vertical"
-            android:padding="14dp">
-
-            <TextView
-                android:id="@+id/tvSelectedStatsTitle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="30m RSI STATISTICS"
-                android:textColor="#F0F6FC"
-                android:textSize="20sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/tvSelectedStatsSummary"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:text="Invested: 1000.00 USDT"
-                android:textColor="#C9D1D9"
-                android:textSize="15sp" />
-
-            <TextView
-                android:id="@+id/tvSelectedStatsDetails"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:text="Trades: 0 | Fees: 0.00 USDT"
+                android:text="SELL idle"
                 android:textColor="#8B949E"
-                android:textSize="13sp" />
-
-            <TextView
-                android:id="@+id/tvSelectedStatsTrades"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:text="No trades yet."
-                android:textColor="#C9D1D9"
-                android:textSize="12sp" />
+                android:textSize="21sp"
+                android:textStyle="bold" />
         </LinearLayout>
 
         <LinearLayout
@@ -116,99 +81,37 @@
             android:padding="12dp">
 
             <TextView
-                android:id="@+id/tvPrimaryTitle"
+                android:id="@+id/tvPrice"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="30m RSI Recovery"
+                android:text="PUMP price - | RSI -"
                 android:textColor="#F0F6FC"
-                android:textSize="18sp"
+                android:textSize="15sp"
                 android:textStyle="bold" />
 
             <TextView
-                android:id="@+id/tvPrimaryBalance"
+                android:id="@+id/tvReason"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="6dp"
-                android:text="1000.00 USDT"
-                android:textColor="#F0F6FC"
-                android:textSize="22sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/tvPrimaryMeta"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:text="Position: none"
-                android:textColor="#C9D1D9"
-                android:textSize="13sp" />
-
-            <com.example.pumppaperbot.StrategyChartView
-                android:id="@+id/chartPrimary"
-                android:layout_width="match_parent"
-                android:layout_height="300dp"
-                android:layout_marginTop="10dp" />
-
-            <TextView
-                android:id="@+id/tvPrimaryDecision"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:text="Decision: -"
+                android:text="Press START MONITOR"
                 android:textColor="#8B949E"
-                android:textSize="12sp" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:background="#161B22"
-            android:orientation="vertical"
-            android:padding="12dp">
+                android:textSize="14sp" />
 
             <TextView
-                android:id="@+id/tvExperimentalTitle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="2h Supertrend Trend"
-                android:textColor="#F0F6FC"
-                android:textSize="18sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/tvExperimentalBalance"
+                android:id="@+id/tvPosition"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="6dp"
-                android:text="1000.00 USDT"
-                android:textColor="#F0F6FC"
-                android:textSize="22sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/tvExperimentalMeta"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:text="Position: none"
+                android:text="Manual position: none"
                 android:textColor="#C9D1D9"
-                android:textSize="13sp" />
+                android:textSize="14sp" />
 
             <com.example.pumppaperbot.StrategyChartView
-                android:id="@+id/chartExperimental"
+                android:id="@+id/chart"
                 android:layout_width="match_parent"
-                android:layout_height="300dp"
+                android:layout_height="320dp"
                 android:layout_marginTop="10dp" />
-
-            <TextView
-                android:id="@+id/tvExperimentalDecision"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:text="Decision: -"
-                android:textColor="#8B949E"
-                android:textSize="12sp" />
         </LinearLayout>
 
         <LinearLayout
@@ -220,21 +123,21 @@
             <Button
                 android:id="@+id/btnStart"
                 android:layout_width="0dp"
-                android:layout_height="52dp"
+                android:layout_height="54dp"
                 android:layout_weight="1"
                 android:backgroundTint="#238636"
-                android:text="START"
+                android:text="START MONITOR"
                 android:textColor="#FFFFFF"
                 android:textStyle="bold" />
 
             <Button
                 android:id="@+id/btnCheck"
                 android:layout_width="0dp"
-                android:layout_height="52dp"
+                android:layout_height="54dp"
                 android:layout_marginStart="8dp"
                 android:layout_weight="1"
                 android:backgroundTint="#1F6FEB"
-                android:text="CHECK"
+                android:text="CHECK NOW"
                 android:textColor="#FFFFFF"
                 android:textStyle="bold" />
         </LinearLayout>
@@ -248,7 +151,7 @@
             <Button
                 android:id="@+id/btnStop"
                 android:layout_width="0dp"
-                android:layout_height="52dp"
+                android:layout_height="54dp"
                 android:layout_weight="1"
                 android:backgroundTint="#6E7681"
                 android:text="STOP"
@@ -258,7 +161,7 @@
             <Button
                 android:id="@+id/btnReset"
                 android:layout_width="0dp"
-                android:layout_height="52dp"
+                android:layout_height="54dp"
                 android:layout_marginStart="8dp"
                 android:layout_weight="1"
                 android:backgroundTint="#DA3633"
@@ -268,13 +171,41 @@
         </LinearLayout>
 
         <Button
-            android:id="@+id/btnBacktest"
+            android:id="@+id/btnManual"
             android:layout_width="match_parent"
-            android:layout_height="52dp"
+            android:layout_height="54dp"
             android:layout_marginTop="8dp"
-            android:backgroundTint="#2F81F7"
-            android:text="BACKTEST"
+            android:backgroundTint="#238636"
+            android:text="I BOUGHT - WAIT SELL"
             android:textColor="#FFFFFF"
             android:textStyle="bold" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnToggleMode"
+                android:layout_width="0dp"
+                android:layout_height="54dp"
+                android:layout_weight="1"
+                android:backgroundTint="#30363D"
+                android:text="SWITCH TO SELL"
+                android:textColor="#FFFFFF"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/btnBacktest"
+                android:layout_width="0dp"
+                android:layout_height="54dp"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:backgroundTint="#2F81F7"
+                android:text="BACKTEST"
+                android:textColor="#FFFFFF"
+                android:textStyle="bold" />
+        </LinearLayout>
     </LinearLayout>
 </ScrollView>
