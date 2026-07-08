@@ -111,9 +111,15 @@ class BacktestActivity : AppCompatActivity() {
                 val now = System.currentTimeMillis()
                 val candles4h = fetchCandles("4h", warmupStart, now)
                 val candles2h = fetchCandles("2h", warmupStart, now)
+                val firstData = listOfNotNull(candles4h.firstOrNull()?.openTime, candles2h.firstOrNull()?.openTime).minOrNull()
                 val result = PumpBotEngine.backtest(strategyId, candles4h, candles2h, startTime)
                 runOnUiThread {
-                    status.text = "Done. Candles: 4H ${candles4h.size}, 2H ${candles2h.size}"
+                    val availability = if (firstData != null && startTime < firstData) {
+                        " Requested date is before PUMP data; first available candle: ${PumpBotEngine.formatTime(firstData)}."
+                    } else {
+                        ""
+                    }
+                    status.text = "Done. Candles: 4H ${candles4h.size}, 2H ${candles2h.size}.$availability"
                     showResult(result)
                 }
             } catch (e: Exception) {

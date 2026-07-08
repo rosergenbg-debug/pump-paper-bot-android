@@ -9,9 +9,6 @@
         android:label="PUMP Paper Bot"
         android:theme="@style/Theme.PumpPaperBot">
         <activity
-            android:name=".StatsActivity"
-            android:exported="false" />
-        <activity
             android:name=".BacktestActivity"
             android:exported="false" />
         <activity

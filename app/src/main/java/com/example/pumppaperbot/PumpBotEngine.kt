@@ -97,10 +97,10 @@ object PumpBotEngine {
     private const val fastPeriod = 25
     private const val slowPeriod = 99
     private const val adxPeriod = 14
-    private const val adxTrendMin = 20.0
-    private const val adxExitMin = 16.0
-    private const val minAtrPercent = 1.0
-    private const val volumeFactor = 1.0
+    private const val adxTrendMin = 14.0
+    private const val adxExitMin = 11.0
+    private const val minAtrPercent = 0.45
+    private const val volumeFactor = 0.65
     const val feeRate = 0.0015
     private const val slippage = 0.0005
     private const val stopLoss = 0.08
@@ -259,13 +259,15 @@ object PumpBotEngine {
             val info = filterInfo(candles, ind, i)
             val crossedUp = crossedUp(ind.fast, ind.slow, i)
             val crossedDown = crossedDown(ind.fast, ind.slow, i)
+            val resumeUp = bullishResume(candles, ind, i)
+            val peakExit = bearishPeakExit(candles, ind, i)
             state = applySignal(
                 state = state,
                 candle = candle,
-                shouldBuy = state.coins <= 0.0 && crossedUp && info.trendOk,
-                shouldSell = state.coins > 0.0 && (crossedDown || stopHit(state, candle.close) || trendFaded(info)),
-                buyReason = "4H WMA crossed up. ${info.text}",
-                sellReason = sellReason(state, candle.close, crossedDown, info)
+                shouldBuy = state.coins <= 0.0 && info.trendOk && (crossedUp || resumeUp),
+                shouldSell = state.coins > 0.0 && (crossedDown || peakExit || stopHit(state, candle.close) || trendFaded(info)),
+                buyReason = if (crossedUp) "4H WMA crossed up. ${info.text}" else "4H pullback resumed inside trend. ${info.text}",
+                sellReason = sellReason(state, candle.close, crossedDown, peakExit, info)
             )
         }
 
@@ -286,23 +288,30 @@ object PumpBotEngine {
             val candle = candles2h[i]
             if (candle.closeTime <= state.lastProcessedCandle) continue
 
-            val twoHour = filterInfo(candles2h, ind2h, i, adxMin = 18.0)
+            val twoHour = filterInfo(candles2h, ind2h, i, adxMin = 12.0)
             val fourIndex = candles4h.indexOfLast { it.closeTime <= candle.closeTime }
             val fourHour = if (fourIndex >= first) filterInfo(candles4h, ind4h, fourIndex) else null
-            val fourHourTrendOk = fourHour?.trendOk == true && value(ind4h.fast, fourIndex) > value(ind4h.slow, fourIndex)
-            val fourHourTrendWeak = fourHour == null || !fourHour.directionOk || value(ind4h.adx, fourIndex) < adxExitMin
+            val fourHourTrendOk = fourHour?.directionOk == true && value(ind4h.fast, fourIndex) > value(ind4h.slow, fourIndex)
+            val fourHourTrendWeak = fourHour == null || value(ind4h.fast, fourIndex) < value(ind4h.slow, fourIndex) || value(ind4h.adx, fourIndex) < adxExitMin
             val crossedUp2h = crossedUp(ind2h.fast, ind2h.slow, i)
             val crossedDown2h = crossedDown(ind2h.fast, ind2h.slow, i)
+            val resumeUp2h = bullishResume(candles2h, ind2h, i)
+            val peakExit2h = bearishPeakExit(candles2h, ind2h, i)
 
             state = applySignal(
                 state = state,
                 candle = candle,
-                shouldBuy = state.coins <= 0.0 && crossedUp2h && twoHour.trendOk && fourHourTrendOk,
-                shouldSell = state.coins > 0.0 && (crossedDown2h || stopHit(state, candle.close) || fourHourTrendWeak),
-                buyReason = "2H WMA crossed up with 4H trend confirmation. 2H ${twoHour.text}; 4H ${fourHour?.text ?: "not ready"}",
+                shouldBuy = state.coins <= 0.0 && twoHour.trendOk && fourHourTrendOk && (crossedUp2h || resumeUp2h),
+                shouldSell = state.coins > 0.0 && (crossedDown2h || peakExit2h || stopHit(state, candle.close) || fourHourTrendWeak),
+                buyReason = if (crossedUp2h) {
+                    "2H WMA crossed up with 4H trend confirmation. 2H ${twoHour.text}; 4H ${fourHour?.text ?: "not ready"}"
+                } else {
+                    "2H pullback resumed with 4H trend confirmation. 2H ${twoHour.text}; 4H ${fourHour?.text ?: "not ready"}"
+                },
                 sellReason = when {
-                    stopHit(state, candle.close) -> sellReason(state, candle.close, false, twoHour)
+                    stopHit(state, candle.close) -> sellReason(state, candle.close, false, peakExit2h, twoHour)
                     crossedDown2h -> "2H WMA crossed down. ${twoHour.text}"
+                    peakExit2h -> "2H local peak exit. ${twoHour.text}"
                     fourHourTrendWeak -> "4H trend filter weakened. ${fourHour?.text ?: "4H not ready"}"
                     else -> "No exit"
                 }
@@ -449,11 +458,12 @@ object PumpBotEngine {
         return FilterInfo(trendOk, directionOk, text)
     }
 
-    private fun sellReason(state: StrategyState, close: Double, crossedDown: Boolean, info: FilterInfo): String {
+    private fun sellReason(state: StrategyState, close: Double, crossedDown: Boolean, peakExit: Boolean, info: FilterInfo): String {
         return when {
             close <= state.entryPrice * (1 - stopLoss) -> "Stop-loss. ${info.text}"
             close <= state.highestClose * (1 - trailingStop) -> "Trailing stop. ${info.text}"
             crossedDown -> "WMA crossed down. ${info.text}"
+            peakExit -> "Local peak exit: fast WMA turned down and price fell below it. ${info.text}"
             trendFaded(info) -> "Trend faded into sideways/weak market. ${info.text}"
             else -> "No exit"
         }
@@ -478,7 +488,7 @@ object PumpBotEngine {
         pnl: Double,
         coins: Double
     ): StrategyState {
-        val nextTrades = (trades + TradeEvent(time, action, price, amount, fee, equity, pnl, coins)).takeLast(200)
+        val nextTrades = trades + TradeEvent(time, action, price, amount, fee, equity, pnl, coins)
         return copy(trades = nextTrades)
     }
 
@@ -509,6 +519,25 @@ object PumpBotEngine {
 
     private fun crossedDown(fast: List<Double?>, slow: List<Double?>, i: Int): Boolean {
         return value(fast, i - 1) >= value(slow, i - 1) && value(fast, i) < value(slow, i)
+    }
+
+    private fun bullishResume(candles: List<PumpCandle>, ind: IndicatorSeries, i: Int): Boolean {
+        val fastNow = value(ind.fast, i)
+        val fastPrev = value(ind.fast, i - 1)
+        val slowNow = value(ind.slow, i)
+        val closeNow = candles[i].close
+        val closePrev = candles[i - 1].close
+        return fastNow > slowNow &&
+            fastNow > fastPrev &&
+            closeNow > fastNow &&
+            closePrev <= fastPrev
+    }
+
+    private fun bearishPeakExit(candles: List<PumpCandle>, ind: IndicatorSeries, i: Int): Boolean {
+        val fastNow = value(ind.fast, i)
+        val fastPrev = value(ind.fast, i - 1)
+        val closeNow = candles[i].close
+        return fastNow < fastPrev && closeNow < fastNow
     }
 
     private fun value(values: List<Double?>, index: Int): Double {

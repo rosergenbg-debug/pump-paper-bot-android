@@ -34,15 +34,20 @@ class MainActivity : AppCompatActivity() {
     private var tvExperimentalBalance: TextView? = null
     private var tvExperimentalMeta: TextView? = null
     private var tvExperimentalDecision: TextView? = null
-    private var tvTradeLog: TextView? = null
+    private var tvMode4h: TextView? = null
+    private var tvMode2h: TextView? = null
+    private var tvSelectedStatsTitle: TextView? = null
+    private var tvSelectedStatsSummary: TextView? = null
+    private var tvSelectedStatsDetails: TextView? = null
+    private var tvSelectedStatsTrades: TextView? = null
     private var chartPrimary: StrategyChartView? = null
     private var chartExperimental: StrategyChartView? = null
     private var btnStart: Button? = null
     private var btnStop: Button? = null
     private var btnReset: Button? = null
     private var btnCheck: Button? = null
-    private var btnStats: Button? = null
     private var btnBacktest: Button? = null
+    private var selectedStats = "primary"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -57,19 +62,30 @@ class MainActivity : AppCompatActivity() {
         tvExperimentalBalance = findViewById(R.id.tvExperimentalBalance)
         tvExperimentalMeta = findViewById(R.id.tvExperimentalMeta)
         tvExperimentalDecision = findViewById(R.id.tvExperimentalDecision)
-        tvTradeLog = findViewById(R.id.tvTradeLog)
+        tvMode4h = findViewById(R.id.tvMode4h)
+        tvMode2h = findViewById(R.id.tvMode2h)
+        tvSelectedStatsTitle = findViewById(R.id.tvSelectedStatsTitle)
+        tvSelectedStatsSummary = findViewById(R.id.tvSelectedStatsSummary)
+        tvSelectedStatsDetails = findViewById(R.id.tvSelectedStatsDetails)
+        tvSelectedStatsTrades = findViewById(R.id.tvSelectedStatsTrades)
         chartPrimary = findViewById(R.id.chartPrimary)
         chartExperimental = findViewById(R.id.chartExperimental)
         btnStart = findViewById(R.id.btnStart)
         btnStop = findViewById(R.id.btnStop)
         btnReset = findViewById(R.id.btnReset)
         btnCheck = findViewById(R.id.btnCheck)
-        btnStats = findViewById(R.id.btnStats)
         btnBacktest = findViewById(R.id.btnBacktest)
 
+        tvMode4h?.setOnClickListener {
+            selectedStats = "primary"
+            updateUi()
+        }
+        tvMode2h?.setOnClickListener {
+            selectedStats = "experiment"
+            updateUi()
+        }
         btnStart?.setOnClickListener { startBot() }
         btnCheck?.setOnClickListener { checkNow() }
-        btnStats?.setOnClickListener { startActivity(Intent(this, StatsActivity::class.java)) }
         btnBacktest?.setOnClickListener { startActivity(Intent(this, BacktestActivity::class.java)) }
         btnStop?.setOnClickListener {
             confirm("Stop simulation?", "Virtual trading will pause. Current balances and positions stay saved.") {
@@ -167,7 +183,7 @@ class MainActivity : AppCompatActivity() {
 
         chartPrimary?.setData("PRIMARY 4H", snapshot.primaryChart)
         chartExperimental?.setData("EXPERIMENT 2H", snapshot.experimentalChart)
-        tvTradeLog?.text = tradeLog(snapshot)
+        renderSelectedStats(snapshot)
     }
 
     private fun renderStrategy(
@@ -190,16 +206,53 @@ class MainActivity : AppCompatActivity() {
         decisionView?.text = "${state.lastAction} | ${PumpBotEngine.formatTime(state.lastUpdated)} | ${state.lastReason}"
     }
 
-    private fun tradeLog(snapshot: BotSnapshot): String {
-        val rows = mutableListOf<String>()
-        rows.add("Recent trades")
-        rows.addAll(snapshot.primary.state.trades.takeLast(6).reversed().map {
-            "4H ${PumpBotEngine.formatTime(it.time)} ${it.action} ${formatPrice(it.price)} equity ${String.format(Locale.US, "%.2f", it.equity)}"
-        })
-        rows.addAll(snapshot.experimental.state.trades.takeLast(6).reversed().map {
-            "2H ${PumpBotEngine.formatTime(it.time)} ${it.action} ${formatPrice(it.price)} equity ${String.format(Locale.US, "%.2f", it.equity)}"
-        })
-        return if (rows.size == 1) "Trade log is empty." else rows.joinToString("\n")
+    private fun renderSelectedStats(snapshot: BotSnapshot) {
+        val result = if (selectedStats == "experiment") snapshot.experimental else snapshot.primary
+        val selectedColor = Color.parseColor("#1F6FEB")
+        val idleColor = Color.parseColor("#30363D")
+        tvMode4h?.setBackgroundColor(if (selectedStats == "primary") selectedColor else idleColor)
+        tvMode2h?.setBackgroundColor(if (selectedStats == "experiment") selectedColor else idleColor)
+
+        tvSelectedStatsTitle?.text = if (selectedStats == "experiment") "2H EXPERIMENT STATISTICS" else "4H PRIMARY STATISTICS"
+        tvSelectedStatsSummary?.text = String.format(
+            Locale.US,
+            "Started: %s | Invested: %.2f USDT | Now: %.2f USDT | P/L: %+.2f USDT (%+.2f%%)",
+            PumpBotEngine.formatTime(snapshot.startedAt),
+            PumpBotEngine.startBalance,
+            result.equity,
+            result.profit,
+            result.profitPercent
+        )
+        tvSelectedStatsSummary?.setTextColor(if (result.profit >= 0.0) Color.parseColor("#32C789") else Color.parseColor("#FF4D6D"))
+        tvSelectedStatsDetails?.text = String.format(
+            Locale.US,
+            "Trades: %d | BUY %d / SELL %d | Fees paid: %.2f USDT | Fee: %.2f%%",
+            result.tradeCount,
+            result.state.buys,
+            result.state.sells,
+            result.totalFees,
+            PumpBotEngine.feeRate * 100.0
+        )
+        tvSelectedStatsTrades?.text = selectedTradeRows(result)
+    }
+
+    private fun selectedTradeRows(result: StrategyResult): String {
+        val trades = result.state.trades.takeLast(5).reversed()
+        if (trades.isEmpty()) return "No trades yet."
+        return trades.joinToString("\n----------------\n") {
+            val pnl = if (it.action == "SELL") String.format(Locale.US, " | P/L %+.2f", it.pnl) else ""
+            String.format(
+                Locale.US,
+                "%s %s | price %.8f | amount %.2f | fee %.2f | balance %.2f%s",
+                PumpBotEngine.formatTime(it.time),
+                it.action,
+                it.price,
+                it.amount,
+                it.fee,
+                it.equity,
+                pnl
+            )
+        }
     }
 
     private fun formatPrice(value: Double): String {
