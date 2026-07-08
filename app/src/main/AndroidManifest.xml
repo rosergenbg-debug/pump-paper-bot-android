@@ -10,7 +10,7 @@
         android:allowBackup="true"
         android:icon="@drawable/ic_launcher"
         android:roundIcon="@drawable/ic_launcher"
-        android:label="PUMP RSI35"
+        android:label="PUMP Сигнал"
         android:theme="@style/Theme.PumpPaperBot">
         <service
             android:name=".PumpSignalService"

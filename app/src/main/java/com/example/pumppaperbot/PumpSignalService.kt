@@ -31,7 +31,7 @@ class PumpSignalService : Service() {
         PumpAlert.ensureChannels(this)
         startForeground(
             PumpAlert.monitorId(),
-            PumpAlert.monitorNotification(this, "Checks PUMP every 2 minutes while enabled.")
+            PumpAlert.monitorNotification(this, "Проверяет PUMP примерно каждые 2 минуты.")
         )
     }
 
@@ -69,7 +69,7 @@ class PumpSignalService : Service() {
                     PumpBotEngine.markAlerted(this, snapshot)
                 }
             } catch (_: Exception) {
-                // The next scheduled loop will try again.
+                // Следующая проверка попробует еще раз.
             }
         }
     }

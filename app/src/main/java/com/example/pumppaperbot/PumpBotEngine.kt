@@ -69,7 +69,7 @@ data class LiveSnapshot(
 data class CoinOption(val name: String, val symbol: String)
 
 object PumpBotEngine {
-    const val appVersionName = "0.8"
+    const val appVersionName = "0.9"
     const val startBalance = 1000.0
     const val feeRate = 0.0015
     const val slippage = 0.0005
@@ -138,7 +138,7 @@ object PumpBotEngine {
             .putBoolean(keyBuySignal, false)
             .putBoolean(keySellSignal, false)
             .putString(keySignalAction, "WAIT")
-            .putString(keySignalReason, "Press START MONITOR")
+            .putString(keySignalReason, "Нажмите ЗАПУСТИТЬ")
             .putDouble(keyEntryPrice, 0.0)
             .putDouble(keyHighestClose, 0.0)
             .putString(keyLastAlertKey, "")
@@ -241,10 +241,10 @@ object PumpBotEngine {
             buySignal = p.getBoolean(keyBuySignal, false),
             sellSignal = p.getBoolean(keySellSignal, false),
             signalAction = p.getString(keySignalAction, "WAIT").orEmpty(),
-            signalReason = p.getString(keySignalReason, "No signal").orEmpty(),
+            signalReason = p.getString(keySignalReason, "Сигнала нет").orEmpty(),
             entryPrice = p.getDouble(keyEntryPrice, 0.0),
             highestClose = p.getDouble(keyHighestClose, 0.0),
-            chart = ChartBundle(candles, fast, slow, emptyList(), "RSI 35 on 30m candles. Yellow EMA50 / Purple EMA200")
+            chart = ChartBundle(candles, fast, slow, emptyList(), "RSI 35 на 30-минутных свечах. Желтая EMA50 / фиолетовая EMA200")
         )
     }
 
@@ -376,7 +376,7 @@ object PumpBotEngine {
         storedHighest: Double
     ): LiveEvaluation {
         if (candles.size < emaSlowPeriod + 5) {
-            return LiveEvaluation(0L, 0.0, 0.0, 0.0, false, false, "WAIT", "Waiting for enough 30m candles", storedHighest)
+            return LiveEvaluation(0L, 0.0, 0.0, 0.0, false, false, "WAIT", "Ждем достаточно 30-минутных свечей", storedHighest)
         }
 
         val closes = candles.map { it.close }
@@ -399,14 +399,14 @@ object PumpBotEngine {
             else -> "WAIT"
         }
         val reason = when (action) {
-            "BUY" -> String.format(Locale.US, "BUY: RSI %.1f <= %.0f and price is above EMA200", rsiNow, buyRsi)
+            "BUY" -> String.format(Locale.US, "ПОКУПКА: RSI %.1f <= %.0f и цена выше EMA200", rsiNow, buyRsi)
             "SELL" -> when {
-                stop -> "SELL: stop or trailing protection"
-                rsiNow >= sellRsi -> String.format(Locale.US, "SELL: RSI %.1f >= %.0f", rsiNow, sellRsi)
-                !trendOk -> "SELL: price lost EMA200"
-                else -> "SELL signal"
+                stop -> "ПРОДАЖА: сработала защита стоп/трейлинг"
+                rsiNow >= sellRsi -> String.format(Locale.US, "ПРОДАЖА: RSI %.1f >= %.0f", rsiNow, sellRsi)
+                !trendOk -> "ПРОДАЖА: цена ушла ниже EMA200"
+                else -> "ПРОДАЖА: есть сигнал"
             }
-            else -> String.format(Locale.US, "WAIT: RSI %.1f, EMA200 %.8f", rsiNow, emaNow)
+            else -> String.format(Locale.US, "ЖДЕМ: RSI %.1f, EMA200 %.8f", rsiNow, emaNow)
         }
 
         return LiveEvaluation(candle.closeTime, candle.close, rsiNow, emaNow, buy, sell, action, reason, highest)

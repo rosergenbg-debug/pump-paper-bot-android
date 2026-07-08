@@ -30,12 +30,12 @@ object PumpAlert {
             .build()
         val monitor = NotificationChannel(
             monitorChannelId,
-            "PUMP RSI35 monitor",
+            "PUMP RSI35 монитор",
             NotificationManager.IMPORTANCE_LOW
         )
         val signal = NotificationChannel(
             signalChannelId,
-            "PUMP RSI35 BUY SELL signals",
+            "PUMP RSI35 сигналы покупки и продажи",
             NotificationManager.IMPORTANCE_HIGH
         ).apply {
             enableVibration(true)
@@ -49,7 +49,7 @@ object PumpAlert {
     fun monitorNotification(context: Context, text: String) =
         NotificationCompat.Builder(context, monitorChannelId)
             .setSmallIcon(R.drawable.ic_launcher)
-            .setContentTitle("PUMP RSI35 monitor is running")
+            .setContentTitle("PUMP RSI35 работает")
             .setContentText(text)
             .setOngoing(true)
             .setContentIntent(openAppIntent(context))
@@ -58,8 +58,8 @@ object PumpAlert {
 
     fun showSignal(context: Context, snapshot: LiveSnapshot) {
         ensureChannels(context)
-        val title = if (snapshot.signalAction == "BUY") "PUMP BUY signal" else "PUMP SELL signal"
-        val text = "${snapshot.signalReason}. Price ${formatPrice(snapshot.lastPrice)}"
+        val title = if (snapshot.signalAction == "BUY") "PUMP: сигнал ПОКУПКА" else "PUMP: сигнал ПРОДАЖА"
+        val text = "${snapshot.signalReason}. Цена ${formatPrice(snapshot.lastPrice)}"
         val notification = NotificationCompat.Builder(context, signalChannelId)
             .setSmallIcon(R.drawable.ic_launcher)
             .setContentTitle(title)

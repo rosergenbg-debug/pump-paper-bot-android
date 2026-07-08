@@ -65,8 +65,8 @@ class StrategyChartView @JvmOverloads constructor(
 
         val data = bundle
         if (data == null || data.candles.size < 4) {
-            canvas.drawText(title.ifBlank { "Waiting for chart data" }, 24f, 48f, textPaint)
-            canvas.drawText("Press CHECK NOW or START", 24f, 84f, mutedPaint)
+            canvas.drawText(title.ifBlank { "Ждем данные графика" }, 24f, 48f, textPaint)
+            canvas.drawText("Нажмите ПРОВЕРИТЬ или ЗАПУСТИТЬ", 24f, 84f, mutedPaint)
             return
         }
 
@@ -89,7 +89,7 @@ class StrategyChartView @JvmOverloads constructor(
         fun y(price: Double): Float = top + ((maxPrice - price) / span).toFloat() * chartHeight
 
         canvas.drawText(title, 24f, 34f, textPaint)
-        canvas.drawText("${data.subtitle}   Yellow fast / Purple slow", 24f, 62f, mutedPaint)
+        canvas.drawText("${data.subtitle}   Желтая быстрая / фиолетовая медленная", 24f, 62f, mutedPaint)
 
         for (i in 0..4) {
             val gy = top + chartHeight / 4f * i

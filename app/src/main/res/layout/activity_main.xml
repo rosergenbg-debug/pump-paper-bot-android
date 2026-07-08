@@ -14,7 +14,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="PUMP RSI35 Signal"
+            android:text="PUMP Сигнал RSI35"
             android:textColor="#F0F6FC"
             android:textSize="28sp"
             android:textStyle="bold" />
@@ -24,7 +24,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
-            android:text="STOPPED"
+            android:text="Остановлено"
             android:textColor="#8B949E"
             android:textSize="14sp" />
 
@@ -35,7 +35,7 @@
             android:layout_marginTop="12dp"
             android:background="#30363D"
             android:gravity="center"
-            android:text="MODE: waiting for BUY"
+            android:text="Режим: жду покупку"
             android:textColor="#C9D1D9"
             android:textSize="16sp"
             android:textStyle="bold" />
@@ -53,7 +53,7 @@
                 android:layout_weight="1"
                 android:background="#161B22"
                 android:gravity="center"
-                android:text="BUY idle"
+                android:text="Покупка: нет"
                 android:textColor="#8B949E"
                 android:textSize="21sp"
                 android:textStyle="bold" />
@@ -66,7 +66,7 @@
                 android:layout_weight="1"
                 android:background="#161B22"
                 android:gravity="center"
-                android:text="SELL idle"
+                android:text="Продажа: нет"
                 android:textColor="#8B949E"
                 android:textSize="21sp"
                 android:textStyle="bold" />
@@ -84,7 +84,7 @@
                 android:id="@+id/tvPrice"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="PUMP price - | RSI -"
+                android:text="PUMP цена - | RSI -"
                 android:textColor="#F0F6FC"
                 android:textSize="15sp"
                 android:textStyle="bold" />
@@ -94,7 +94,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="6dp"
-                android:text="Press START MONITOR"
+                android:text="Нажмите ЗАПУСТИТЬ"
                 android:textColor="#8B949E"
                 android:textSize="14sp" />
 
@@ -103,7 +103,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="6dp"
-                android:text="Manual position: none"
+                android:text="Позиция: нет"
                 android:textColor="#C9D1D9"
                 android:textSize="14sp" />
 
@@ -126,7 +126,7 @@
                 android:layout_height="54dp"
                 android:layout_weight="1"
                 android:backgroundTint="#238636"
-                android:text="START MONITOR"
+                android:text="ЗАПУСТИТЬ"
                 android:textColor="#FFFFFF"
                 android:textStyle="bold" />
 
@@ -137,7 +137,7 @@
                 android:layout_marginStart="8dp"
                 android:layout_weight="1"
                 android:backgroundTint="#1F6FEB"
-                android:text="CHECK NOW"
+                android:text="ПРОВЕРИТЬ"
                 android:textColor="#FFFFFF"
                 android:textStyle="bold" />
         </LinearLayout>
@@ -154,7 +154,7 @@
                 android:layout_height="54dp"
                 android:layout_weight="1"
                 android:backgroundTint="#6E7681"
-                android:text="STOP"
+                android:text="СТОП"
                 android:textColor="#FFFFFF"
                 android:textStyle="bold" />
 
@@ -165,7 +165,7 @@
                 android:layout_marginStart="8dp"
                 android:layout_weight="1"
                 android:backgroundTint="#DA3633"
-                android:text="RESET"
+                android:text="СБРОС"
                 android:textColor="#FFFFFF"
                 android:textStyle="bold" />
         </LinearLayout>
@@ -176,7 +176,7 @@
             android:layout_height="54dp"
             android:layout_marginTop="8dp"
             android:backgroundTint="#238636"
-            android:text="I BOUGHT - WAIT SELL"
+            android:text="Я КУПИЛ - ЖДАТЬ ПРОДАЖУ"
             android:textColor="#FFFFFF"
             android:textStyle="bold" />
 
@@ -192,7 +192,7 @@
                 android:layout_height="54dp"
                 android:layout_weight="1"
                 android:backgroundTint="#30363D"
-                android:text="SWITCH TO SELL"
+                android:text="ЖДАТЬ ПРОДАЖУ"
                 android:textColor="#FFFFFF"
                 android:textStyle="bold" />
 
@@ -203,7 +203,7 @@
                 android:layout_marginStart="8dp"
                 android:layout_weight="1"
                 android:backgroundTint="#2F81F7"
-                android:text="BACKTEST"
+                android:text="ПРОВЕРКА НАЗАД"
                 android:textColor="#FFFFFF"
                 android:textStyle="bold" />
         </LinearLayout>

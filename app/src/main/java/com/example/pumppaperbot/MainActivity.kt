@@ -71,12 +71,12 @@ class MainActivity : AppCompatActivity() {
         btnStart?.setOnClickListener { startMonitor() }
         btnCheck?.setOnClickListener { checkNow() }
         btnStop?.setOnClickListener {
-            confirm("Stop monitor?", "PUMP checks and alarms will stop.") {
+            confirm("Остановить монитор?", "Проверка PUMP и звуковые сигналы будут остановлены.") {
                 stopMonitor()
             }
         }
         btnReset?.setOnClickListener {
-            confirm("Reset state?", "This clears wait mode, entry price and saved chart data.") {
+            confirm("Сбросить состояние?", "Очистится режим ожидания, цена входа и сохраненные данные графика.") {
                 resetAll()
             }
         }
@@ -137,12 +137,12 @@ class MainActivity : AppCompatActivity() {
     private fun confirmManualAction() {
         val snapshot = PumpBotEngine.snapshot(this)
         if (snapshot.waitMode == "BUY") {
-            confirm("Confirm BUY?", "The app will remember this price and start waiting for SELL.") {
+            confirm("Подтвердить покупку?", "Приложение запомнит текущую цену и начнет ждать сигнал на продажу.") {
                 PumpBotEngine.confirmBought(this)
                 updateUi()
             }
         } else {
-            confirm("Confirm SELL?", "The app will clear the entry price and start waiting for BUY.") {
+            confirm("Подтвердить продажу?", "Приложение очистит цену входа и начнет ждать сигнал на покупку.") {
                 PumpBotEngine.confirmSold(this)
                 updateUi()
             }
@@ -160,8 +160,8 @@ class MainActivity : AppCompatActivity() {
         AlertDialog.Builder(this)
             .setTitle(title)
             .setMessage(message)
-            .setPositiveButton("Confirm") { _, _ -> action() }
-            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Подтвердить") { _, _ -> action() }
+            .setNegativeButton("Отмена", null)
             .show()
     }
 
@@ -169,9 +169,9 @@ class MainActivity : AppCompatActivity() {
         val snapshot = PumpBotEngine.snapshot(this)
         val active = snapshot.signalAction == snapshot.waitMode &&
             (snapshot.signalAction == "BUY" || snapshot.signalAction == "SELL")
-        val status = if (snapshot.running) "RUNNING" else "STOPPED"
-        tvStatus?.text = "$status | Last sync: ${PumpBotEngine.formatTime(snapshot.lastSync)} | Checks every 2 min while monitor is running"
-        tvMode?.text = if (snapshot.waitMode == "BUY") "MODE: waiting for BUY" else "MODE: waiting for SELL"
+        val status = if (snapshot.running) "РАБОТАЕТ" else "ОСТАНОВЛЕНО"
+        tvStatus?.text = "$status | Последняя проверка: ${PumpBotEngine.formatTime(snapshot.lastSync)} | При запуске проверяет примерно каждые 2 минуты"
+        tvMode?.text = if (snapshot.waitMode == "BUY") "Режим: жду покупку" else "Режим: жду продажу"
         tvMode?.setTextColor(if (active) Color.WHITE else Color.parseColor("#C9D1D9"))
         tvMode?.setBackgroundColor(if (active) Color.parseColor("#DA3633") else Color.parseColor("#30363D"))
 
@@ -180,7 +180,7 @@ class MainActivity : AppCompatActivity() {
 
         tvPrice?.text = String.format(
             Locale.US,
-            "PUMP price %.8f | RSI %.1f | EMA200 %.8f | Candle %s",
+            "PUMP цена %.8f | RSI %.1f | EMA200 %.8f | свеча %s",
             snapshot.lastPrice,
             snapshot.lastRsi,
             snapshot.lastEma200,
@@ -190,17 +190,17 @@ class MainActivity : AppCompatActivity() {
         tvReason?.setTextColor(if (active) Color.parseColor("#FF4D6D") else Color.parseColor("#8B949E"))
 
         tvPosition?.text = if (snapshot.waitMode == "SELL" && snapshot.entryPrice > 0.0) {
-            String.format(Locale.US, "Manual position: bought around %.8f | highest %.8f", snapshot.entryPrice, snapshot.highestClose)
+            String.format(Locale.US, "Позиция: куплено около %.8f | максимум после входа %.8f", snapshot.entryPrice, snapshot.highestClose)
         } else {
-            "Manual position: none"
+            "Позиция: нет"
         }
 
         btnStart?.isEnabled = !snapshot.running
         btnStart?.alpha = if (snapshot.running) 0.45f else 1f
         btnStop?.isEnabled = snapshot.running
         btnStop?.alpha = if (snapshot.running) 1f else 0.65f
-        btnManual?.text = if (snapshot.waitMode == "BUY") "I BOUGHT - WAIT SELL" else "I SOLD - WAIT BUY"
-        btnToggleMode?.text = if (snapshot.waitMode == "BUY") "SWITCH TO SELL" else "SWITCH TO BUY"
+        btnManual?.text = if (snapshot.waitMode == "BUY") "Я КУПИЛ - ЖДАТЬ ПРОДАЖУ" else "Я ПРОДАЛ - ЖДАТЬ ПОКУПКУ"
+        btnToggleMode?.text = if (snapshot.waitMode == "BUY") "ЖДАТЬ ПРОДАЖУ" else "ЖДАТЬ ПОКУПКУ"
         chart?.setData("PUMP RSI35", snapshot.chart)
     }
 
@@ -212,7 +212,8 @@ class MainActivity : AppCompatActivity() {
             else -> "#161B22"
         }
         view?.setBackgroundColor(Color.parseColor(color))
-        view?.text = if (signal) "$label NOW" else "$label idle"
+        val display = if (label == "BUY") "Покупка" else "Продажа"
+        view?.text = if (signal) "$display СЕЙЧАС" else "$display: нет"
         view?.setTextColor(if (signal) Color.WHITE else Color.parseColor("#8B949E"))
     }
 

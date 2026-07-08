@@ -1,31 +1,31 @@
-# PUMP RSI35 Signal Android
+# PUMP Сигнал RSI35 для Android
 
-Separate Android app for RSI35 signal monitoring and paper-style backtests.
+Отдельное Android-приложение для сигналов RSI35 и проверки стратегии назад.
 
-## Main mode
+## Главный режим
 
-- Main live asset: PUMP/USDT.
-- Data source: public Binance 30-minute candles, no API key.
-- Strategy: RSI14 on 30m candles.
-- BUY signal: RSI <= 35 and price is above EMA200.
-- SELL signal: RSI >= 62, or price falls below EMA200, or stop/trailing protection is hit.
-- Fee model in backtest: 0.15% per buy and per sell.
-- Slippage model in backtest: 0.05%.
-- The app remembers whether you are waiting for BUY or waiting for SELL.
-- If you confirm a manual BUY, it stores the entry price and starts waiting for SELL.
-- If you confirm a manual SELL, it clears the entry price and starts waiting for BUY.
+- Основная монета в живом режиме: PUMP/USDT.
+- Источник данных: публичные 30-минутные свечи Binance, без API-ключа.
+- Стратегия: RSI14 на 30-минутных свечах.
+- Сигнал ПОКУПКА: RSI <= 35 и цена выше EMA200.
+- Сигнал ПРОДАЖА: RSI >= 62, или цена ниже EMA200, или сработала стоп/трейлинг-защита.
+- В проверке назад учитывается комиссия 0.15% на покупку и 0.15% на продажу.
+- В проверке назад учитывается проскальзывание 0.05%.
+- Приложение помнит, что вы сейчас ждете: покупку или продажу.
+- Если вручную подтвердить покупку, приложение запоминает цену входа и начинает ждать продажу.
+- Если вручную подтвердить продажу, приложение очищает цену входа и начинает ждать покупку.
 
-## Alerts
+## Сигналы
 
-- START MONITOR launches a foreground service with a permanent Android notification.
-- While running, the service checks PUMP about every 2 minutes.
-- When the active mode matches a new BUY or SELL signal, the phone shows a high-priority notification with sound and vibration.
-- Android may still limit background work depending on battery settings, but a foreground service is much more reliable than a normal background worker.
+- Кнопка ЗАПУСТИТЬ включает постоянный Android-сервис с уведомлением в шторке.
+- Пока монитор работает, он проверяет PUMP примерно каждые 2 минуты.
+- Когда появляется новый сигнал ПОКУПКА или ПРОДАЖА, телефон показывает важное уведомление со звуком и вибрацией.
+- Android все равно может ограничивать фоновые процессы из-за батареи, но постоянный сервис надежнее обычной фоновой задачи.
 
-## Backtest
+## Проверка назад
 
-- Backtest screen lets you choose a start date and one of 10 coins.
-- Coins: PUMP, BTC, ETH, SOL, BNB, XRP, ADA, DOGE, TRX, LINK.
-- Backtest uses the same RSI35 strategy on 30-minute candles.
+- На экране проверки можно выбрать дату старта и одну из 10 монет.
+- Монеты: PUMP, BTC, ETH, SOL, BNB, XRP, ADA, DOGE, TRX, LINK.
+- Проверка использует ту же стратегию RSI35 на 30-минутных свечах.
 
-This is not automatic real-money trading. It is a signal and testing app.
+Это не автоматическая торговля реальными деньгами. Это приложение для сигналов и тестов.
