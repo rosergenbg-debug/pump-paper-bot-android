@@ -18,7 +18,7 @@ class PumpBotWorker(
 
     override fun doWork(): Result {
         return try {
-            val json4h = fetch(PumpBotEngine.klineUrl("4h"))
+            val json4h = fetch(PumpBotEngine.klineUrl("30m"))
             val json2h = fetch(PumpBotEngine.klineUrl("2h"))
             PumpBotEngine.sync(
                 context = applicationContext,

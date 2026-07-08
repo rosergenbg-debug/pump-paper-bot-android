@@ -181,8 +181,8 @@ class MainActivity : AppCompatActivity() {
             decisionView = tvExperimentalDecision
         )
 
-        chartPrimary?.setData("PRIMARY 4H", snapshot.primaryChart)
-        chartExperimental?.setData("EXPERIMENT 2H", snapshot.experimentalChart)
+        chartPrimary?.setData("30m RSI", snapshot.primaryChart)
+        chartExperimental?.setData("2h SUPER", snapshot.experimentalChart)
         renderSelectedStats(snapshot)
     }
 
@@ -213,7 +213,7 @@ class MainActivity : AppCompatActivity() {
         tvMode4h?.setBackgroundColor(if (selectedStats == "primary") selectedColor else idleColor)
         tvMode2h?.setBackgroundColor(if (selectedStats == "experiment") selectedColor else idleColor)
 
-        tvSelectedStatsTitle?.text = if (selectedStats == "experiment") "2H EXPERIMENT STATISTICS" else "4H PRIMARY STATISTICS"
+        tvSelectedStatsTitle?.text = if (selectedStats == "experiment") "2h SUPER STATISTICS" else "30m RSI STATISTICS"
         tvSelectedStatsSummary?.text = String.format(
             Locale.US,
             "Started: %s | Invested: %.2f USDT | Now: %.2f USDT | P/L: %+.2f USDT (%+.2f%%)",

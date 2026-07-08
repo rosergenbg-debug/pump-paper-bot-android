@@ -49,8 +49,8 @@ class BacktestActivity : AppCompatActivity() {
         root.addView(dateButton)
 
         val strategyRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        primaryButton = button("4H PRIMARY", "#1F6FEB")
-        experimentButton = button("2H EXPERIMENT", "#30363D")
+        primaryButton = button("30m RSI", "#1F6FEB")
+        experimentButton = button("2h SUPER", "#30363D")
         primaryButton.setOnClickListener {
             strategyId = "primary"
             updateStrategyButtons()
@@ -109,7 +109,7 @@ class BacktestActivity : AppCompatActivity() {
             try {
                 val warmupStart = startTime - TimeUnit.DAYS.toMillis(35)
                 val now = System.currentTimeMillis()
-                val candles4h = fetchCandles("4h", warmupStart, now)
+                val candles4h = fetchCandles("30m", warmupStart, now)
                 val candles2h = fetchCandles("2h", warmupStart, now)
                 val firstData = listOfNotNull(candles4h.firstOrNull()?.openTime, candles2h.firstOrNull()?.openTime).minOrNull()
                 val result = PumpBotEngine.backtest(strategyId, candles4h, candles2h, startTime)
@@ -119,7 +119,7 @@ class BacktestActivity : AppCompatActivity() {
                     } else {
                         ""
                     }
-                    status.text = "Done. Candles: 4H ${candles4h.size}, 2H ${candles2h.size}.$availability"
+                    status.text = "Done. Candles: 30m ${candles4h.size}, 2h ${candles2h.size}.$availability"
                     showResult(result)
                 }
             } catch (e: Exception) {

@@ -14,7 +14,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="PUMP Paper Bot v0.5"
+            android:text="PUMP Paper Bot v0.6"
             android:textColor="#F0F6FC"
             android:textSize="28sp"
             android:textStyle="bold" />
@@ -41,7 +41,7 @@
                 android:layout_weight="1"
                 android:background="#1F6FEB"
                 android:gravity="center"
-                android:text="4H PRIMARY STATS"
+                android:text="30m RSI STATS"
                 android:textColor="#FFFFFF"
                 android:textSize="12sp"
                 android:textStyle="bold" />
@@ -54,7 +54,7 @@
                 android:layout_weight="1"
                 android:background="#30363D"
                 android:gravity="center"
-                android:text="2H EXPERIMENT STATS"
+                android:text="2h SUPER STATS"
                 android:textColor="#FFFFFF"
                 android:textSize="12sp"
                 android:textStyle="bold" />
@@ -74,7 +74,7 @@
                 android:id="@+id/tvSelectedStatsTitle"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="4H PRIMARY STATISTICS"
+                android:text="30m RSI STATISTICS"
                 android:textColor="#F0F6FC"
                 android:textSize="20sp"
                 android:textStyle="bold" />
@@ -119,7 +119,7 @@
                 android:id="@+id/tvPrimaryTitle"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Primary 4H"
+                android:text="30m RSI Recovery"
                 android:textColor="#F0F6FC"
                 android:textSize="18sp"
                 android:textStyle="bold" />
@@ -171,7 +171,7 @@
                 android:id="@+id/tvExperimentalTitle"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Experiment 2H + 4H"
+                android:text="2h Supertrend Trend"
                 android:textColor="#F0F6FC"
                 android:textSize="18sp"
                 android:textStyle="bold" />

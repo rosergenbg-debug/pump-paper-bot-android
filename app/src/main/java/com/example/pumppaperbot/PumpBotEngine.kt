@@ -87,34 +87,33 @@ object PumpBotEngine {
     const val symbol = "PUMPUSDT"
     const val uniqueWorkName = "pump_paper_bot_periodic_monitor"
     const val startBalance = 1000.0
-    const val appVersionName = "0.5"
+    const val appVersionName = "0.6"
 
     private const val prefsName = "PumpPaperBotV2"
-    private const val algorithmVersion = 5
+    private const val algorithmVersion = 6
     private const val keyAlgorithmVersion = "algorithm_version"
     private const val keyRunning = "running"
     private const val keyStartedAt = "started_at"
     private const val keyLastSync = "last_sync"
-    private const val keyMarket4h = "market_4h_json"
-    private const val keyMarket2h = "market_2h_json"
-    private const val primaryFastPeriod = 25
-    private const val primarySlowPeriod = 99
-    private const val experimentFastPeriod = 42
-    private const val experimentSlowPeriod = 144
-    private const val experimentConfirmFastPeriod = 25
-    private const val experimentConfirmSlowPeriod = 144
+    private const val keyMarket4h = "market_primary_json"
+    private const val keyMarket2h = "market_experiment_json"
+    private const val primaryFastPeriod = 50
+    private const val primarySlowPeriod = 200
+    private const val experimentFastPeriod = 34
+    private const val experimentSlowPeriod = 200
     private const val adxPeriod = 14
-    private const val primaryAdxTrendMin = 14.0
-    private const val experimentAdxTrendMin = 14.0
-    private const val primaryMinAtrPercent = 0.45
-    private const val experimentMinAtrPercent = 0.25
-    private const val primaryVolumeFactor = 0.65
-    private const val experimentVolumeFactor = 0.55
+    private const val primaryRsiPeriod = 14
+    private const val primaryBuyRsi = 30.0
+    private const val primarySellRsi = 62.0
+    private const val experimentRsiPeriod = 14
+    private const val experimentSupertrendPeriod = 14
+    private const val experimentSupertrendMultiplier = 2.5
+    private const val experimentMinRsi = 45.0
     const val feeRate = 0.0015
     private const val slippage = 0.0005
     private const val primaryStopLoss = 0.08
+    private const val primaryTrailingStop = 0.04
     private const val experimentStopLoss = 0.04
-    private const val primaryTrailingStop = 0.10
     private const val experimentTrailingStop = 0.04
 
     fun klineUrl(interval: String): String {
@@ -195,8 +194,8 @@ object PumpBotEngine {
             lastSync = p.getLong(keyLastSync, 0L),
             primary = result(primary),
             experimental = result(experimental),
-            primaryChart = ChartBundle(candles4h, ind4h.fast, ind4h.slow, primary.trades, "Primary 4H WMA25/WMA99"),
-            experimentalChart = ChartBundle(candles2h, ind2h.fast, ind2h.slow, experimental.trades, "Experiment 2H WMA42/WMA144; 4H filter WMA25/WMA144")
+            primaryChart = ChartBundle(candles4h, ind4h.fast, ind4h.slow, primary.trades, "30m RSI Recovery: Yellow EMA50 / Purple EMA200"),
+            experimentalChart = ChartBundle(candles2h, ind2h.fast, ind2h.slow, experimental.trades, "2h Supertrend Trend: Yellow EMA34 / Purple EMA200")
         )
     }
 
@@ -258,9 +257,11 @@ object PumpBotEngine {
     }
 
     private fun runPrimary(initial: StrategyState, candles: List<PumpCandle>): StrategyState {
-        if (candles.size < primarySlowPeriod + 10) return initial.withMarketOnly(candles, "Waiting for enough 4H candles")
+        if (candles.size < primarySlowPeriod + 10) return initial.withMarketOnly(candles, "Waiting for enough 30m candles")
 
-        val ind = indicators(candles, primaryFastPeriod, primarySlowPeriod)
+        val closes = candles.map { it.close }
+        val ema200 = ema(closes, primarySlowPeriod)
+        val rsi14 = rsi(closes, primaryRsiPeriod)
         var state = initial.withMarketOnly(candles)
         val first = maxOf(primarySlowPeriod + 4, adxPeriod * 2)
 
@@ -268,18 +269,24 @@ object PumpBotEngine {
             val candle = candles[i]
             if (candle.closeTime <= state.lastProcessedCandle) continue
 
-            val info = filterInfo(candles, ind, i, primaryAdxTrendMin, primaryMinAtrPercent, primaryVolumeFactor)
-            val crossedUp = crossedUp(ind.fast, ind.slow, i)
-            val crossedDown = crossedDown(ind.fast, ind.slow, i)
-            val resumeUp = bullishResume(candles, ind, i)
-            val peakExit = bearishPeakExit(candles, ind, i)
+            val rsiNow = value(rsi14, i)
+            val emaNow = value(ema200, i)
+            val trendOk = candle.close > emaNow
+            val recovered = rsiNow >= primarySellRsi
+            val trendLost = candle.close < emaNow
+            val stop = stopHit(state, candle.close, primaryStopLoss, primaryTrailingStop)
             state = applySignal(
                 state = state,
                 candle = candle,
-                shouldBuy = state.coins <= 0.0 && info.trendOk && (crossedUp || resumeUp),
-                shouldSell = state.coins > 0.0 && (crossedDown || peakExit || stopHit(state, candle.close, primaryStopLoss, primaryTrailingStop) || trendFaded(info)),
-                buyReason = if (crossedUp) "4H WMA crossed up. ${info.text}" else "4H pullback resumed inside trend. ${info.text}",
-                sellReason = sellReason(state, candle.close, crossedDown, peakExit, info, primaryStopLoss, primaryTrailingStop)
+                shouldBuy = state.coins <= 0.0 && trendOk && rsiNow <= primaryBuyRsi,
+                shouldSell = state.coins > 0.0 && (recovered || trendLost || stop),
+                buyReason = String.format(Locale.US, "30m RSI recovery entry: RSI %.1f <= %.0f and price above EMA200", rsiNow, primaryBuyRsi),
+                sellReason = when {
+                    stop -> "30m recovery exit: stop/trailing protection"
+                    recovered -> String.format(Locale.US, "30m recovery exit: RSI %.1f >= %.0f", rsiNow, primarySellRsi)
+                    trendLost -> "30m recovery exit: price lost EMA200"
+                    else -> "No exit"
+                }
             )
         }
 
@@ -287,12 +294,15 @@ object PumpBotEngine {
     }
 
     private fun runExperimental(initial: StrategyState, candles2h: List<PumpCandle>, candles4h: List<PumpCandle>): StrategyState {
-        if (candles2h.size < experimentSlowPeriod + 10 || candles4h.size < experimentConfirmSlowPeriod + 10) {
-            return initial.withMarketOnly(candles2h, "Waiting for enough 2H/4H candles")
+        if (candles2h.size < experimentSlowPeriod + 10) {
+            return initial.withMarketOnly(candles2h, "Waiting for enough 2h candles")
         }
 
-        val ind2h = indicators(candles2h, experimentFastPeriod, experimentSlowPeriod)
-        val ind4h = indicators(candles4h, experimentConfirmFastPeriod, experimentConfirmSlowPeriod)
+        val closes = candles2h.map { it.close }
+        val ema34 = ema(closes, experimentFastPeriod)
+        val ema200 = ema(closes, experimentSlowPeriod)
+        val rsi14 = rsi(closes, experimentRsiPeriod)
+        val st = supertrendTrend(candles2h, experimentSupertrendPeriod, experimentSupertrendMultiplier)
         var state = initial.withMarketOnly(candles2h)
         val first = maxOf(experimentSlowPeriod + 4, adxPeriod * 2)
 
@@ -300,36 +310,22 @@ object PumpBotEngine {
             val candle = candles2h[i]
             if (candle.closeTime <= state.lastProcessedCandle) continue
 
-            val twoHour = filterInfo(candles2h, ind2h, i, experimentAdxTrendMin, experimentMinAtrPercent, experimentVolumeFactor)
-            val fourIndex = candles4h.indexOfLast { it.closeTime <= candle.closeTime }
-            val fourHourFirst = maxOf(experimentConfirmSlowPeriod + 4, adxPeriod * 2)
-            val fourHour = if (fourIndex >= fourHourFirst) {
-                filterInfo(candles4h, ind4h, fourIndex, primaryAdxTrendMin, experimentMinAtrPercent, 0.4)
-            } else {
-                null
-            }
-            val fourHourTrendOk = fourHour != null && candles4h[fourIndex].close > value(ind4h.fast, fourIndex)
-            val fourHourTrendWeak = fourHour == null || value(ind4h.fast, fourIndex) < value(ind4h.slow, fourIndex)
-            val crossedUp2h = crossedUp(ind2h.fast, ind2h.slow, i)
-            val crossedDown2h = crossedDown(ind2h.fast, ind2h.slow, i)
-            val resumeUp2h = bullishResume(candles2h, ind2h, i)
-            val peakExit2h = bearishPeakExit(candles2h, ind2h, i)
+            val trendUp = value(ema34, i) > value(ema200, i)
+            val stTurnedUp = st.getOrElse(i) { 0 } > 0 && st.getOrElse(i - 1) { 0 } < 0
+            val stDown = st.getOrElse(i) { 0 } < 0
+            val rsiOk = value(rsi14, i) >= experimentMinRsi
+            val stop = stopHit(state, candle.close, experimentStopLoss, experimentTrailingStop)
 
             state = applySignal(
                 state = state,
                 candle = candle,
-                shouldBuy = state.coins <= 0.0 && twoHour.trendOk && fourHourTrendOk && (crossedUp2h || resumeUp2h),
-                shouldSell = state.coins > 0.0 && (crossedDown2h || peakExit2h || stopHit(state, candle.close, experimentStopLoss, experimentTrailingStop) || fourHourTrendWeak),
-                buyReason = if (crossedUp2h) {
-                    "2H WMA crossed up with 4H fast-line confirmation. 2H ${twoHour.text}; 4H ${fourHour?.text ?: "not ready"}"
-                } else {
-                    "2H pullback resumed with 4H fast-line confirmation. 2H ${twoHour.text}; 4H ${fourHour?.text ?: "not ready"}"
-                },
+                shouldBuy = state.coins <= 0.0 && stTurnedUp && trendUp && rsiOk,
+                shouldSell = state.coins > 0.0 && (stDown || !trendUp || stop),
+                buyReason = String.format(Locale.US, "2h Supertrend turned up, EMA34 > EMA200, RSI %.1f", value(rsi14, i)),
                 sellReason = when {
-                    stopHit(state, candle.close, experimentStopLoss, experimentTrailingStop) -> sellReason(state, candle.close, false, peakExit2h, twoHour, experimentStopLoss, experimentTrailingStop)
-                    crossedDown2h -> "2H WMA crossed down. ${twoHour.text}"
-                    peakExit2h -> "2H local peak exit. ${twoHour.text}"
-                    fourHourTrendWeak -> "4H trend filter weakened. ${fourHour?.text ?: "4H not ready"}"
+                    stop -> "2h Supertrend exit: stop/trailing protection"
+                    stDown -> "2h Supertrend exit: trend flipped down"
+                    !trendUp -> "2h Supertrend exit: EMA34 fell below EMA200"
                     else -> "No exit"
                 }
             )
@@ -402,8 +398,8 @@ object PumpBotEngine {
     private fun defaultPrimary(): StrategyState {
         return StrategyState(
             id = "primary",
-            title = "Primary 4H",
-            subtitle = "Buy and sell by 4H WMA25/WMA99",
+            title = "30m RSI Recovery",
+            subtitle = "Buy RSI pullbacks above EMA200; sell on recovery or trailing stop",
             cash = startBalance,
             coins = 0.0,
             entryPrice = 0.0,
@@ -423,8 +419,8 @@ object PumpBotEngine {
     private fun defaultExperimental(): StrategyState {
         return StrategyState(
             id = "experiment",
-            title = "Experiment 2H + 4H",
-            subtitle = "2H WMA42/WMA144 entries with 4H WMA25/WMA144 confirmation",
+            title = "2h Supertrend Trend",
+            subtitle = "Buy Supertrend flips with EMA34/EMA200 trend confirmation",
             cash = startBalance,
             coins = 0.0,
             entryPrice = 0.0,
@@ -528,8 +524,8 @@ object PumpBotEngine {
         val closes = candles.map { it.close }
         val volumes = candles.map { it.volume }
         return IndicatorSeries(
-            fast = wma(closes, fastPeriod),
-            slow = wma(closes, slowPeriod),
+            fast = ema(closes, fastPeriod),
+            slow = ema(closes, slowPeriod),
             adx = adx(candles, adxPeriod),
             atr = atr(candles, adxPeriod),
             volumeAverage = sma(volumes, 20)
@@ -602,8 +598,92 @@ object PumpBotEngine {
         return result
     }
 
+    private fun ema(values: List<Double>, period: Int): List<Double?> {
+        val result = MutableList<Double?>(values.size) { null }
+        val multiplier = 2.0 / (period + 1.0)
+        var previous: Double? = null
+
+        for (i in values.indices) {
+            if (i == period - 1) {
+                var sum = 0.0
+                for (j in 0 until period) sum += values[j]
+                previous = sum / period
+                result[i] = previous
+            } else if (i >= period && previous != null) {
+                previous = values[i] * multiplier + previous * (1 - multiplier)
+                result[i] = previous
+            }
+        }
+
+        return result
+    }
+
+    private fun rsi(values: List<Double>, period: Int): List<Double?> {
+        val result = MutableList<Double?>(values.size) { null }
+        var averageGain = 0.0
+        var averageLoss = 0.0
+
+        for (i in 1 until values.size) {
+            val change = values[i] - values[i - 1]
+            val gain = maxOf(change, 0.0)
+            val loss = maxOf(-change, 0.0)
+            if (i <= period) {
+                averageGain += gain
+                averageLoss += loss
+                if (i == period) {
+                    averageGain /= period
+                    averageLoss /= period
+                    result[i] = if (averageLoss == 0.0) 100.0 else 100.0 - 100.0 / (1.0 + averageGain / averageLoss)
+                }
+            } else {
+                averageGain = (averageGain * (period - 1) + gain) / period
+                averageLoss = (averageLoss * (period - 1) + loss) / period
+                result[i] = if (averageLoss == 0.0) 100.0 else 100.0 - 100.0 / (1.0 + averageGain / averageLoss)
+            }
+        }
+
+        return result
+    }
+
+    private fun supertrendTrend(candles: List<PumpCandle>, period: Int, multiplier: Double): List<Int> {
+        val trend = MutableList(candles.size) { 0 }
+        val upper = MutableList<Double?>(candles.size) { null }
+        val lower = MutableList<Double?>(candles.size) { null }
+        val range = trueRanges(candles)
+        val averageRange = ema(range, period)
+
+        for (i in candles.indices) {
+            val atrValue = averageRange[i] ?: continue
+            val midpoint = (candles[i].high + candles[i].low) / 2.0
+            val basicUpper = midpoint + multiplier * atrValue
+            val basicLower = midpoint - multiplier * atrValue
+            if (i == 0 || upper[i - 1] == null || lower[i - 1] == null) {
+                upper[i] = basicUpper
+                lower[i] = basicLower
+                trend[i] = 1
+                continue
+            }
+
+            val previousUpper = upper[i - 1] ?: basicUpper
+            val previousLower = lower[i - 1] ?: basicLower
+            upper[i] = if (basicUpper < previousUpper || candles[i - 1].close > previousUpper) basicUpper else previousUpper
+            lower[i] = if (basicLower > previousLower || candles[i - 1].close < previousLower) basicLower else previousLower
+            trend[i] = when {
+                trend[i - 1] < 0 && candles[i].close > (upper[i] ?: basicUpper) -> 1
+                trend[i - 1] > 0 && candles[i].close < (lower[i] ?: basicLower) -> -1
+                else -> trend[i - 1]
+            }
+        }
+
+        return trend
+    }
+
     private fun atr(candles: List<PumpCandle>, period: Int): List<Double?> {
-        val ranges = candles.mapIndexed { index, candle ->
+        return sma(trueRanges(candles), period)
+    }
+
+    private fun trueRanges(candles: List<PumpCandle>): List<Double> {
+        return candles.mapIndexed { index, candle ->
             if (index == 0) {
                 candle.high - candle.low
             } else {
@@ -615,7 +695,6 @@ object PumpBotEngine {
                 )
             }
         }
-        return sma(ranges, period)
     }
 
     private fun adx(candles: List<PumpCandle>, period: Int): List<Double?> {
