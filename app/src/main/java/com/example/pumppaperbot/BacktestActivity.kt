@@ -44,7 +44,7 @@ class BacktestActivity : AppCompatActivity() {
             setBackgroundColor(Color.parseColor("#0D1117"))
         }
         root.addView(label("ПРОВЕРКА НАЗАД", 24, "#F0F6FC", true))
-        root.addView(label("Выберите PUMP или одну из 10 популярных монет, риск RSI 30/35 и дату старта.", 13, "#8B949E", false))
+        root.addView(label("Выберите PUMP или одну из популярных монет, риск RSI 30/35 и дату старта.", 13, "#8B949E", false))
 
         root.addView(label("Монета", 16, "#F0F6FC", true))
         addCoinGrid(root)
@@ -61,17 +61,17 @@ class BacktestActivity : AppCompatActivity() {
             selectedRisk = 35.0
             updateRiskButtons()
         }
-        riskRow.addView(risk30Button, LinearLayout.LayoutParams(0, dp(58), 1f))
-        riskRow.addView(risk35Button, LinearLayout.LayoutParams(0, dp(58), 1f).apply { leftMargin = dp(8) })
+        riskRow.addView(risk30Button, LinearLayout.LayoutParams(0, dp(54), 1f))
+        riskRow.addView(risk35Button, LinearLayout.LayoutParams(0, dp(54), 1f).apply { leftMargin = dp(8) })
         root.addView(riskRow)
 
         dateButton = button("СТАРТ: ${PumpBotEngine.formatDate(startTime)}", "#30363D")
         dateButton.setOnClickListener { pickDate() }
-        root.addView(dateButton, LinearLayout.LayoutParams(-1, dp(52)).apply { topMargin = dp(10) })
+        root.addView(dateButton, LinearLayout.LayoutParams(-1, dp(50)).apply { topMargin = dp(8) })
 
         val run = button("ЗАПУСТИТЬ ПРОВЕРКУ", "#238636")
         run.setOnClickListener { runBacktest() }
-        root.addView(run, LinearLayout.LayoutParams(-1, dp(54)).apply { topMargin = dp(8) })
+        root.addView(run, LinearLayout.LayoutParams(-1, dp(52)).apply { topMargin = dp(6) })
 
         status = label("Готово.", 13, "#8B949E", false)
         root.addView(status)
@@ -99,15 +99,15 @@ class BacktestActivity : AppCompatActivity() {
                     updateCoinButtons()
                 }
                 coinButtons.add(coinButton)
-                val params = LinearLayout.LayoutParams(0, dp(58), 1f)
+                val params = LinearLayout.LayoutParams(0, dp(54), 1f)
                 if (row.childCount > 0) params.leftMargin = dp(8)
                 row.addView(coinButton, params)
             }
             if (rowCoins.size == 1) {
-                row.addView(View(this), LinearLayout.LayoutParams(0, dp(58), 1f).apply { leftMargin = dp(8) })
+                row.addView(View(this), LinearLayout.LayoutParams(0, dp(54), 1f).apply { leftMargin = dp(8) })
             }
-            val params = LinearLayout.LayoutParams(-1, dp(58))
-            if (rowIndex > 0) params.topMargin = dp(6)
+            val params = LinearLayout.LayoutParams(-1, dp(54))
+            if (rowIndex > 0) params.topMargin = dp(5)
             root.addView(row, params)
         }
     }

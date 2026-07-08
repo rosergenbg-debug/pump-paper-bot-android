@@ -71,7 +71,7 @@ data class LiveSnapshot(
 data class CoinOption(val name: String, val symbol: String)
 
 object PumpBotEngine {
-    const val appVersionName = "1.0"
+    const val appVersionName = "1.1"
     const val startBalance = 1000.0
     const val feeRate = 0.0015
     const val slippage = 0.0005
@@ -115,8 +115,7 @@ object PumpBotEngine {
         CoinOption("Dogecoin", "DOGEUSDT"),
         CoinOption("Cardano", "ADAUSDT"),
         CoinOption("TRON", "TRXUSDT"),
-        CoinOption("Avalanche", "AVAXUSDT"),
-        CoinOption("Chainlink", "LINKUSDT")
+        CoinOption("Avalanche", "AVAXUSDT")
     )
 
     fun prefs(context: Context): SharedPreferences {
