@@ -6,7 +6,7 @@
         android:allowBackup="true"
         android:icon="@drawable/ic_launcher"
         android:roundIcon="@drawable/ic_launcher"
-        android:label="PUMP Paper Bot"
+        android:label="PUMP Bot v0.7"
         android:theme="@style/Theme.PumpPaperBot">
         <activity
             android:name=".BacktestActivity"

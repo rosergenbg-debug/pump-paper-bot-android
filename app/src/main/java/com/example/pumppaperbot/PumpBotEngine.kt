@@ -87,10 +87,10 @@ object PumpBotEngine {
     const val symbol = "PUMPUSDT"
     const val uniqueWorkName = "pump_paper_bot_periodic_monitor"
     const val startBalance = 1000.0
-    const val appVersionName = "0.6"
+    const val appVersionName = "0.7"
 
     private const val prefsName = "PumpPaperBotV2"
-    private const val algorithmVersion = 6
+    private const val algorithmVersion = 7
     private const val keyAlgorithmVersion = "algorithm_version"
     private const val keyRunning = "running"
     private const val keyStartedAt = "started_at"
