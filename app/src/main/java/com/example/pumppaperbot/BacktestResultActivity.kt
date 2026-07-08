@@ -63,7 +63,7 @@ class BacktestResultActivity : AppCompatActivity() {
         status = label("Загружаю свечи 30 минут...", 14, "#8B949E", false)
         root.addView(status)
 
-        val scroll = ScrollView(this).apply { fillViewport = true }
+        val scroll = ScrollView(this).apply { isFillViewport = true }
         resultBox = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(0, dp(8), 0, dp(24))
