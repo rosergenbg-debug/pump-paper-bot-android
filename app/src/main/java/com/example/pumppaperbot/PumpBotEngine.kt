@@ -1,4 +1,4 @@
-package com.example.pumppaperbot
+﻿package com.example.pumppaperbot
 
 import android.content.Context
 import android.content.SharedPreferences
@@ -30,7 +30,11 @@ data class TradeEvent(
     val time: Long,
     val action: String,
     val price: Double,
-    val equity: Double
+    val amount: Double,
+    val fee: Double,
+    val equity: Double,
+    val pnl: Double,
+    val coins: Double
 )
 
 data class StrategyState(
@@ -40,6 +44,7 @@ data class StrategyState(
     val cash: Double,
     val coins: Double,
     val entryPrice: Double,
+    val positionCost: Double,
     val highestClose: Double,
     val lastProcessedCandle: Long,
     val buys: Int,
@@ -55,7 +60,9 @@ data class StrategyResult(
     val state: StrategyState,
     val equity: Double,
     val profit: Double,
-    val profitPercent: Double
+    val profitPercent: Double,
+    val totalFees: Double,
+    val tradeCount: Int
 )
 
 data class ChartBundle(
@@ -68,6 +75,7 @@ data class ChartBundle(
 
 data class BotSnapshot(
     val running: Boolean,
+    val startedAt: Long,
     val lastSync: Long,
     val primary: StrategyResult,
     val experimental: StrategyResult,
@@ -82,6 +90,7 @@ object PumpBotEngine {
 
     private const val prefsName = "PumpPaperBotV2"
     private const val keyRunning = "running"
+    private const val keyStartedAt = "started_at"
     private const val keyLastSync = "last_sync"
     private const val keyMarket4h = "market_4h_json"
     private const val keyMarket2h = "market_2h_json"
@@ -92,7 +101,7 @@ object PumpBotEngine {
     private const val adxExitMin = 16.0
     private const val minAtrPercent = 1.0
     private const val volumeFactor = 1.0
-    private const val feeRate = 0.001
+    const val feeRate = 0.0015
     private const val slippage = 0.0005
     private const val stopLoss = 0.08
     private const val trailingStop = 0.10
@@ -114,6 +123,7 @@ object PumpBotEngine {
         prefs(context).edit()
             .clear()
             .putBoolean(keyRunning, false)
+            .putLong(keyStartedAt, 0L)
             .putStrategy(defaultPrimary())
             .putStrategy(defaultExperimental())
             .putLong(keyLastSync, 0L)
@@ -122,10 +132,14 @@ object PumpBotEngine {
 
     fun setRunning(context: Context, running: Boolean) {
         ensureInitialized(context)
-        prefs(context).edit()
+        val p = prefs(context)
+        val editor = p.edit()
             .putBoolean(keyRunning, running)
             .putLong(keyLastSync, System.currentTimeMillis())
-            .apply()
+        if (running && p.getLong(keyStartedAt, 0L) == 0L) {
+            editor.putLong(keyStartedAt, System.currentTimeMillis())
+        }
+        editor.apply()
     }
 
     fun isRunning(context: Context): Boolean {
@@ -165,6 +179,7 @@ object PumpBotEngine {
 
         return BotSnapshot(
             running = p.getBoolean(keyRunning, false),
+            startedAt = p.getLong(keyStartedAt, 0L),
             lastSync = p.getLong(keyLastSync, 0L),
             primary = result(primary),
             experimental = result(experimental),
@@ -206,7 +221,28 @@ object PumpBotEngine {
             state.cash
         }
         val profit = equity - startBalance
-        return StrategyResult(state, equity, profit, profit / startBalance * 100.0)
+        val totalFees = state.trades.sumOf { it.fee }
+        return StrategyResult(state, equity, profit, profit / startBalance * 100.0, totalFees, state.trades.size)
+    }
+
+    fun backtest(strategyId: String, candles4h: List<PumpCandle>, candles2h: List<PumpCandle>, startTime: Long): StrategyResult {
+        val state = if (strategyId == "experiment") {
+            defaultExperimental().copy(
+                lastProcessedCandle = startTime,
+                lastReason = "Backtest from ${formatTime(startTime)}"
+            )
+        } else {
+            defaultPrimary().copy(
+                lastProcessedCandle = startTime,
+                lastReason = "Backtest from ${formatTime(startTime)}"
+            )
+        }
+        val next = if (strategyId == "experiment") {
+            runExperimental(state, candles2h, candles4h)
+        } else {
+            runPrimary(state, candles4h)
+        }
+        return result(next)
     }
 
     private fun runPrimary(initial: StrategyState, candles: List<PumpCandle>): StrategyState {
@@ -292,28 +328,35 @@ object PumpBotEngine {
 
         if (shouldBuy) {
             val buyPrice = candle.close * (1 + slippage)
-            val coins = next.cash * (1 - feeRate) / buyPrice
+            val amount = next.cash
+            val fee = amount * feeRate
+            val coins = (amount - fee) / buyPrice
             next = next.copy(
                 cash = 0.0,
                 coins = coins,
                 entryPrice = buyPrice,
+                positionCost = amount,
                 highestClose = candle.close,
                 buys = next.buys + 1,
                 lastAction = "BUY",
                 lastReason = buyReason
-            ).addTrade(candle.closeTime, "BUY", buyPrice, coins * buyPrice)
+            ).addTrade(candle.closeTime, "BUY", buyPrice, amount, fee, coins * buyPrice, 0.0, coins)
         } else if (shouldSell) {
             val sellPrice = candle.close * (1 - slippage)
-            val cash = next.coins * sellPrice * (1 - feeRate)
+            val gross = next.coins * sellPrice
+            val fee = gross * feeRate
+            val cash = gross - fee
+            val pnl = cash - next.positionCost
             next = next.copy(
                 cash = cash,
                 coins = 0.0,
                 entryPrice = 0.0,
+                positionCost = 0.0,
                 highestClose = 0.0,
                 sells = next.sells + 1,
                 lastAction = "SELL",
                 lastReason = sellReason
-            ).addTrade(candle.closeTime, "SELL", sellPrice, cash)
+            ).addTrade(candle.closeTime, "SELL", sellPrice, gross, fee, cash, pnl, 0.0)
         } else if (next.coins > 0.0) {
             next = next.copy(
                 highestClose = maxOf(next.highestClose, candle.close),
@@ -333,11 +376,12 @@ object PumpBotEngine {
     private fun defaultPrimary(): StrategyState {
         return StrategyState(
             id = "primary",
-            title = "Основная 4H",
-            subtitle = "Покупка и продажа по 4H WMA25/WMA99",
+            title = "Primary 4H",
+            subtitle = "Buy and sell by 4H WMA25/WMA99",
             cash = startBalance,
             coins = 0.0,
             entryPrice = 0.0,
+            positionCost = 0.0,
             highestClose = 0.0,
             lastProcessedCandle = 0L,
             buys = 0,
@@ -353,11 +397,12 @@ object PumpBotEngine {
     private fun defaultExperimental(): StrategyState {
         return StrategyState(
             id = "experiment",
-            title = "Эксперимент 2H + 4H",
-            subtitle = "Вход/выход по 2H, но только при подтверждении 4H тренда",
+            title = "Experiment 2H + 4H",
+            subtitle = "2H entries and exits with 4H trend confirmation",
             cash = startBalance,
             coins = 0.0,
             entryPrice = 0.0,
+            positionCost = 0.0,
             highestClose = 0.0,
             lastProcessedCandle = 0L,
             buys = 0,
@@ -423,8 +468,17 @@ object PumpBotEngine {
             (close <= state.entryPrice * (1 - stopLoss) || close <= state.highestClose * (1 - trailingStop))
     }
 
-    private fun StrategyState.addTrade(time: Long, action: String, price: Double, equity: Double): StrategyState {
-        val nextTrades = (trades + TradeEvent(time, action, price, equity)).takeLast(80)
+    private fun StrategyState.addTrade(
+        time: Long,
+        action: String,
+        price: Double,
+        amount: Double,
+        fee: Double,
+        equity: Double,
+        pnl: Double,
+        coins: Double
+    ): StrategyState {
+        val nextTrades = (trades + TradeEvent(time, action, price, amount, fee, equity, pnl, coins)).takeLast(200)
         return copy(trades = nextTrades)
     }
 
@@ -544,6 +598,7 @@ object PumpBotEngine {
         putDouble("${prefix}cash", state.cash)
         putDouble("${prefix}coins", state.coins)
         putDouble("${prefix}entry", state.entryPrice)
+        putDouble("${prefix}position_cost", state.positionCost)
         putDouble("${prefix}highest", state.highestClose)
         putLong("${prefix}last_candle", state.lastProcessedCandle)
         putInt("${prefix}buys", state.buys)
@@ -565,6 +620,7 @@ object PumpBotEngine {
             cash = getDouble("${prefix}cash", fallback.cash),
             coins = getDouble("${prefix}coins", fallback.coins),
             entryPrice = getDouble("${prefix}entry", fallback.entryPrice),
+            positionCost = getDouble("${prefix}position_cost", fallback.positionCost),
             highestClose = getDouble("${prefix}highest", fallback.highestClose),
             lastProcessedCandle = getLong("${prefix}last_candle", fallback.lastProcessedCandle),
             buys = getInt("${prefix}buys", fallback.buys),
@@ -585,7 +641,11 @@ object PumpBotEngine {
                     .put("time", trade.time)
                     .put("action", trade.action)
                     .put("price", trade.price)
+                    .put("amount", trade.amount)
+                    .put("fee", trade.fee)
                     .put("equity", trade.equity)
+                    .put("pnl", trade.pnl)
+                    .put("coins", trade.coins)
             )
         }
         return array.toString()
@@ -602,7 +662,11 @@ object PumpBotEngine {
                         time = obj.getLong("time"),
                         action = obj.getString("action"),
                         price = obj.getDouble("price"),
-                        equity = obj.getDouble("equity")
+                        amount = obj.optDouble("amount", obj.optDouble("equity", 0.0)),
+                        fee = obj.optDouble("fee", 0.0),
+                        equity = obj.getDouble("equity"),
+                        pnl = obj.optDouble("pnl", 0.0),
+                        coins = obj.optDouble("coins", 0.0)
                     )
                 )
             }

@@ -1,6 +1,7 @@
 package com.example.pumppaperbot
 
 import android.app.AlertDialog
+import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import android.os.Handler
@@ -40,6 +41,8 @@ class MainActivity : AppCompatActivity() {
     private var btnStop: Button? = null
     private var btnReset: Button? = null
     private var btnCheck: Button? = null
+    private var btnStats: Button? = null
+    private var btnBacktest: Button? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -61,9 +64,13 @@ class MainActivity : AppCompatActivity() {
         btnStop = findViewById(R.id.btnStop)
         btnReset = findViewById(R.id.btnReset)
         btnCheck = findViewById(R.id.btnCheck)
+        btnStats = findViewById(R.id.btnStats)
+        btnBacktest = findViewById(R.id.btnBacktest)
 
         btnStart?.setOnClickListener { startBot() }
         btnCheck?.setOnClickListener { checkNow() }
+        btnStats?.setOnClickListener { startActivity(Intent(this, StatsActivity::class.java)) }
+        btnBacktest?.setOnClickListener { startActivity(Intent(this, BacktestActivity::class.java)) }
         btnStop?.setOnClickListener {
             confirm("Stop simulation?", "Virtual trading will pause. Current balances and positions stay saved.") {
                 stopBot()
