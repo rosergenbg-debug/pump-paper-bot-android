@@ -138,7 +138,7 @@ class BacktestActivity : AppCompatActivity() {
             val request = Request.Builder()
                 .url(url)
                 .header("Accept", "application/json")
-                .header("User-Agent", "PumpPaperBotAndroid/0.4")
+                .header("User-Agent", "PumpPaperBotAndroid/${PumpBotEngine.appVersionName}")
                 .build()
             val body = client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) error("HTTP ${response.code}")

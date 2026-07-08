@@ -87,8 +87,11 @@ object PumpBotEngine {
     const val symbol = "PUMPUSDT"
     const val uniqueWorkName = "pump_paper_bot_periodic_monitor"
     const val startBalance = 1000.0
+    const val appVersionName = "0.5"
 
     private const val prefsName = "PumpPaperBotV2"
+    private const val algorithmVersion = 5
+    private const val keyAlgorithmVersion = "algorithm_version"
     private const val keyRunning = "running"
     private const val keyStartedAt = "started_at"
     private const val keyLastSync = "last_sync"
@@ -96,8 +99,10 @@ object PumpBotEngine {
     private const val keyMarket2h = "market_2h_json"
     private const val primaryFastPeriod = 25
     private const val primarySlowPeriod = 99
-    private const val experimentFastPeriod = 34
-    private const val experimentSlowPeriod = 99
+    private const val experimentFastPeriod = 42
+    private const val experimentSlowPeriod = 144
+    private const val experimentConfirmFastPeriod = 25
+    private const val experimentConfirmSlowPeriod = 144
     private const val adxPeriod = 14
     private const val primaryAdxTrendMin = 14.0
     private const val experimentAdxTrendMin = 14.0
@@ -108,9 +113,9 @@ object PumpBotEngine {
     const val feeRate = 0.0015
     private const val slippage = 0.0005
     private const val primaryStopLoss = 0.08
-    private const val experimentStopLoss = 0.05
+    private const val experimentStopLoss = 0.04
     private const val primaryTrailingStop = 0.10
-    private const val experimentTrailingStop = 0.05
+    private const val experimentTrailingStop = 0.04
 
     fun klineUrl(interval: String): String {
         return "https://data-api.binance.vision/api/v3/klines?symbol=$symbol&interval=$interval&limit=500"
@@ -122,12 +127,13 @@ object PumpBotEngine {
 
     fun ensureInitialized(context: Context) {
         val p = prefs(context)
-        if (!p.contains("primary_cash")) reset(context)
+        if (!p.contains("primary_cash") || p.getInt(keyAlgorithmVersion, 0) != algorithmVersion) reset(context)
     }
 
     fun reset(context: Context) {
         prefs(context).edit()
             .clear()
+            .putInt(keyAlgorithmVersion, algorithmVersion)
             .putBoolean(keyRunning, false)
             .putLong(keyStartedAt, 0L)
             .putStrategy(defaultPrimary())
@@ -190,7 +196,7 @@ object PumpBotEngine {
             primary = result(primary),
             experimental = result(experimental),
             primaryChart = ChartBundle(candles4h, ind4h.fast, ind4h.slow, primary.trades, "Primary 4H WMA25/WMA99"),
-            experimentalChart = ChartBundle(candles2h, ind2h.fast, ind2h.slow, experimental.trades, "Experiment 2H WMA34/WMA99 with 4H fast-line filter")
+            experimentalChart = ChartBundle(candles2h, ind2h.fast, ind2h.slow, experimental.trades, "Experiment 2H WMA42/WMA144; 4H filter WMA25/WMA144")
         )
     }
 
@@ -281,12 +287,12 @@ object PumpBotEngine {
     }
 
     private fun runExperimental(initial: StrategyState, candles2h: List<PumpCandle>, candles4h: List<PumpCandle>): StrategyState {
-        if (candles2h.size < experimentSlowPeriod + 10 || candles4h.size < primarySlowPeriod + 10) {
+        if (candles2h.size < experimentSlowPeriod + 10 || candles4h.size < experimentConfirmSlowPeriod + 10) {
             return initial.withMarketOnly(candles2h, "Waiting for enough 2H/4H candles")
         }
 
         val ind2h = indicators(candles2h, experimentFastPeriod, experimentSlowPeriod)
-        val ind4h = indicators(candles4h, primaryFastPeriod, primarySlowPeriod)
+        val ind4h = indicators(candles4h, experimentConfirmFastPeriod, experimentConfirmSlowPeriod)
         var state = initial.withMarketOnly(candles2h)
         val first = maxOf(experimentSlowPeriod + 4, adxPeriod * 2)
 
@@ -296,7 +302,7 @@ object PumpBotEngine {
 
             val twoHour = filterInfo(candles2h, ind2h, i, experimentAdxTrendMin, experimentMinAtrPercent, experimentVolumeFactor)
             val fourIndex = candles4h.indexOfLast { it.closeTime <= candle.closeTime }
-            val fourHourFirst = maxOf(primarySlowPeriod + 4, adxPeriod * 2)
+            val fourHourFirst = maxOf(experimentConfirmSlowPeriod + 4, adxPeriod * 2)
             val fourHour = if (fourIndex >= fourHourFirst) {
                 filterInfo(candles4h, ind4h, fourIndex, primaryAdxTrendMin, experimentMinAtrPercent, 0.4)
             } else {
@@ -418,7 +424,7 @@ object PumpBotEngine {
         return StrategyState(
             id = "experiment",
             title = "Experiment 2H + 4H",
-            subtitle = "2H WMA34/WMA99 entries with 4H fast-line confirmation",
+            subtitle = "2H WMA42/WMA144 entries with 4H WMA25/WMA144 confirmation",
             cash = startBalance,
             coins = 0.0,
             entryPrice = 0.0,

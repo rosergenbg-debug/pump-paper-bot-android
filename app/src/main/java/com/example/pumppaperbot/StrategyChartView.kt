@@ -89,7 +89,7 @@ class StrategyChartView @JvmOverloads constructor(
         fun y(price: Double): Float = top + ((maxPrice - price) / span).toFloat() * chartHeight
 
         canvas.drawText(title, 24f, 34f, textPaint)
-        canvas.drawText("${data.subtitle}   Yellow WMA25 / Purple WMA99", 24f, 62f, mutedPaint)
+        canvas.drawText("${data.subtitle}   Yellow fast / Purple slow", 24f, 62f, mutedPaint)
 
         for (i in 0..4) {
             val gy = top + chartHeight / 4f * i

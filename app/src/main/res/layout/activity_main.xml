@@ -14,7 +14,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="PUMP Paper Bot"
+            android:text="PUMP Paper Bot v0.5"
             android:textColor="#F0F6FC"
             android:textSize="28sp"
             android:textStyle="bold" />
