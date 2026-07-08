@@ -17,6 +17,9 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
         <activity
+            android:name=".BacktestResultActivity"
+            android:exported="false" />
+        <activity
             android:name=".BacktestActivity"
             android:exported="false" />
         <activity
