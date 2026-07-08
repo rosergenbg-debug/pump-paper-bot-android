@@ -17,27 +17,32 @@ class PumpBotWorker(
         .build()
 
     override fun doWork(): Result {
-        val current = PumpBotEngine.load(applicationContext)
-        if (!current.running) return Result.success()
-
         return try {
-            val request = Request.Builder()
-                .url(PumpBotEngine.klineUrl)
-                .header("Accept", "application/json")
-                .header("User-Agent", "PumpPaperBotAndroid/0.1")
-                .build()
-
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return Result.retry()
-                val json = response.body?.string().orEmpty()
-                val candles = PumpBotEngine.parseCandles(json)
-                val result = PumpBotEngine.evaluate(current, candles)
-                PumpBotEngine.save(applicationContext, result.state)
-            }
+            val json4h = fetch(PumpBotEngine.klineUrl("4h"))
+            val json2h = fetch(PumpBotEngine.klineUrl("2h"))
+            PumpBotEngine.sync(
+                context = applicationContext,
+                json4h = json4h,
+                json2h = json2h,
+                allowTrading = PumpBotEngine.isRunning(applicationContext)
+            )
 
             Result.success()
         } catch (e: Exception) {
             Result.retry()
+        }
+    }
+
+    private fun fetch(url: String): String {
+        val request = Request.Builder()
+            .url(url)
+            .header("Accept", "application/json")
+            .header("User-Agent", "PumpPaperBotAndroid/0.2")
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) error("HTTP ${response.code}")
+            return response.body?.string().orEmpty()
         }
     }
 }

@@ -1,5 +1,6 @@
 package com.example.pumppaperbot
 
+import android.app.AlertDialog
 import android.graphics.Color
 import android.os.Bundle
 import android.os.Handler
@@ -11,8 +12,6 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
-import java.text.SimpleDateFormat
-import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
@@ -25,35 +24,60 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private var tvStatus: TextView? = null
-    private var tvBalance: TextView? = null
-    private var tvProfit: TextView? = null
-    private var tvPosition: TextView? = null
-    private var tvPrice: TextView? = null
-    private var tvTrades: TextView? = null
-    private var tvLastDecision: TextView? = null
+    private var tvGlobalStatus: TextView? = null
+    private var tvPrimaryTitle: TextView? = null
+    private var tvPrimaryBalance: TextView? = null
+    private var tvPrimaryMeta: TextView? = null
+    private var tvPrimaryDecision: TextView? = null
+    private var tvExperimentalTitle: TextView? = null
+    private var tvExperimentalBalance: TextView? = null
+    private var tvExperimentalMeta: TextView? = null
+    private var tvExperimentalDecision: TextView? = null
     private var tvTradeLog: TextView? = null
+    private var chartPrimary: StrategyChartView? = null
+    private var chartExperimental: StrategyChartView? = null
+    private var btnStart: Button? = null
+    private var btnStop: Button? = null
+    private var btnReset: Button? = null
+    private var btnCheck: Button? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        tvStatus = findViewById(R.id.tvStatus)
-        tvBalance = findViewById(R.id.tvBalance)
-        tvProfit = findViewById(R.id.tvProfit)
-        tvPosition = findViewById(R.id.tvPosition)
-        tvPrice = findViewById(R.id.tvPrice)
-        tvTrades = findViewById(R.id.tvTrades)
-        tvLastDecision = findViewById(R.id.tvLastDecision)
+        tvGlobalStatus = findViewById(R.id.tvGlobalStatus)
+        tvPrimaryTitle = findViewById(R.id.tvPrimaryTitle)
+        tvPrimaryBalance = findViewById(R.id.tvPrimaryBalance)
+        tvPrimaryMeta = findViewById(R.id.tvPrimaryMeta)
+        tvPrimaryDecision = findViewById(R.id.tvPrimaryDecision)
+        tvExperimentalTitle = findViewById(R.id.tvExperimentalTitle)
+        tvExperimentalBalance = findViewById(R.id.tvExperimentalBalance)
+        tvExperimentalMeta = findViewById(R.id.tvExperimentalMeta)
+        tvExperimentalDecision = findViewById(R.id.tvExperimentalDecision)
         tvTradeLog = findViewById(R.id.tvTradeLog)
+        chartPrimary = findViewById(R.id.chartPrimary)
+        chartExperimental = findViewById(R.id.chartExperimental)
+        btnStart = findViewById(R.id.btnStart)
+        btnStop = findViewById(R.id.btnStop)
+        btnReset = findViewById(R.id.btnReset)
+        btnCheck = findViewById(R.id.btnCheck)
 
-        findViewById<Button>(R.id.btnStart).setOnClickListener { startBot() }
-        findViewById<Button>(R.id.btnStop).setOnClickListener { stopBot() }
-        findViewById<Button>(R.id.btnReset).setOnClickListener { resetBot() }
-        findViewById<Button>(R.id.btnCheck).setOnClickListener { checkNow() }
+        btnStart?.setOnClickListener { startBot() }
+        btnCheck?.setOnClickListener { checkNow() }
+        btnStop?.setOnClickListener {
+            confirm("Stop simulation?", "Virtual trading will pause. Current balances and positions stay saved.") {
+                stopBot()
+            }
+        }
+        btnReset?.setOnClickListener {
+            confirm("Reset everything?", "Both virtual accounts, positions and trade logs will be cleared.") {
+                resetBot()
+            }
+        }
 
         PumpBotEngine.ensureInitialized(this)
         updateUi()
+        checkNow()
     }
 
     override fun onResume() {
@@ -87,44 +111,91 @@ class MainActivity : AppCompatActivity() {
     private fun resetBot() {
         PumpBotEngine.reset(this)
         WorkManager.getInstance(this).cancelUniqueWork(PumpBotEngine.uniqueWorkName)
-        updateUi()
+        checkNow()
     }
 
     private fun checkNow() {
         WorkManager.getInstance(this).enqueue(OneTimeWorkRequestBuilder<PumpBotWorker>().build())
-        handler.postDelayed({ updateUi() }, 3000)
+        handler.postDelayed({ updateUi() }, 2500)
+        handler.postDelayed({ updateUi() }, 6000)
         updateUi()
     }
 
-    private fun updateUi() {
-        val state = PumpBotEngine.load(this)
-        val result = PumpBotEngine.result(state)
-        val updated = if (state.lastUpdated > 0L) {
-            SimpleDateFormat("dd.MM HH:mm", Locale.GERMAN).format(Date(state.lastUpdated))
-        } else {
-            "-"
-        }
+    private fun confirm(title: String, message: String, action: () -> Unit) {
+        AlertDialog.Builder(this)
+            .setTitle(title)
+            .setMessage(message)
+            .setPositiveButton("Confirm") { _, _ -> action() }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
 
-        tvStatus?.text = if (state.running) {
-            "Status: running, checks about every 15 minutes"
+    private fun updateUi() {
+        val snapshot = PumpBotEngine.snapshot(this)
+        val updated = PumpBotEngine.formatTime(snapshot.lastSync)
+        tvGlobalStatus?.text = if (snapshot.running) {
+            "Status: running. Last sync: $updated. Android checks about every 15 min; missed candles are backfilled."
         } else {
-            "Status: stopped"
+            "Status: stopped. Last sync: $updated. CHECK refreshes charts without virtual trades."
         }
-        tvBalance?.text = String.format(Locale.US, "Balance: %.2f USDT", result.equity)
-        tvProfit?.text = String.format(Locale.US, "Profit/Loss: %+.2f USDT (%+.2f%%)", result.profit, result.profitPercent)
-        tvProfit?.setTextColor(if (result.profit >= 0.0) Color.parseColor("#32C789") else Color.parseColor("#FF4D6D"))
-        tvPosition?.text = if (state.coins > 0.0) {
+        btnStart?.isEnabled = !snapshot.running
+        btnStart?.alpha = if (snapshot.running) 0.45f else 1f
+        btnStop?.isEnabled = snapshot.running
+        btnStop?.alpha = if (snapshot.running) 1f else 0.55f
+
+        renderStrategy(
+            result = snapshot.primary,
+            titleView = tvPrimaryTitle,
+            balanceView = tvPrimaryBalance,
+            metaView = tvPrimaryMeta,
+            decisionView = tvPrimaryDecision
+        )
+        renderStrategy(
+            result = snapshot.experimental,
+            titleView = tvExperimentalTitle,
+            balanceView = tvExperimentalBalance,
+            metaView = tvExperimentalMeta,
+            decisionView = tvExperimentalDecision
+        )
+
+        chartPrimary?.setData("PRIMARY 4H", snapshot.primaryChart)
+        chartExperimental?.setData("EXPERIMENT 2H", snapshot.experimentalChart)
+        tvTradeLog?.text = tradeLog(snapshot)
+    }
+
+    private fun renderStrategy(
+        result: StrategyResult,
+        titleView: TextView?,
+        balanceView: TextView?,
+        metaView: TextView?,
+        decisionView: TextView?
+    ) {
+        val state = result.state
+        titleView?.text = "${state.title}  ${state.buys} BUY / ${state.sells} SELL"
+        balanceView?.text = String.format(Locale.US, "%.2f USDT  (%+.2f%%)", result.equity, result.profitPercent)
+        balanceView?.setTextColor(if (result.profit >= 0.0) Color.parseColor("#32C789") else Color.parseColor("#FF4D6D"))
+        val position = if (state.coins > 0.0) {
             String.format(Locale.US, "Position: %.2f PUMP @ %.8f", state.coins, state.entryPrice)
         } else {
             "Position: none"
         }
-        tvPrice?.text = if (state.lastPrice > 0.0) {
-            String.format(Locale.US, "Last PUMP price: %.8f USDT", state.lastPrice)
-        } else {
-            "Last PUMP price: -"
-        }
-        tvTrades?.text = "Trades: BUY ${state.buys} / SELL ${state.sells}"
-        tvLastDecision?.text = "Last decision: ${state.lastAction} | $updated | ${state.lastReason}"
-        tvTradeLog?.text = state.tradeLog.ifBlank { "Trade log is empty." }
+        metaView?.text = "$position | Last price: ${formatPrice(state.lastPrice)}"
+        decisionView?.text = "${state.lastAction} | ${PumpBotEngine.formatTime(state.lastUpdated)} | ${state.lastReason}"
+    }
+
+    private fun tradeLog(snapshot: BotSnapshot): String {
+        val rows = mutableListOf<String>()
+        rows.add("Recent trades")
+        rows.addAll(snapshot.primary.state.trades.takeLast(6).reversed().map {
+            "4H ${PumpBotEngine.formatTime(it.time)} ${it.action} ${formatPrice(it.price)} equity ${String.format(Locale.US, "%.2f", it.equity)}"
+        })
+        rows.addAll(snapshot.experimental.state.trades.takeLast(6).reversed().map {
+            "2H ${PumpBotEngine.formatTime(it.time)} ${it.action} ${formatPrice(it.price)} equity ${String.format(Locale.US, "%.2f", it.equity)}"
+        })
+        return if (rows.size == 1) "Trade log is empty." else rows.joinToString("\n")
+    }
+
+    private fun formatPrice(value: Double): String {
+        return if (value > 0.0) String.format(Locale.US, "%.8f", value) else "-"
     }
 }

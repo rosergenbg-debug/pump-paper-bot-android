@@ -3,11 +3,13 @@ package com.example.pumppaperbot
 import android.content.Context
 import android.content.SharedPreferences
 import org.json.JSONArray
+import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 data class PumpCandle(
+    val openTime: Long,
     val open: Double,
     val high: Double,
     val low: Double,
@@ -16,85 +18,105 @@ data class PumpCandle(
     val closeTime: Long
 )
 
-data class PumpBotState(
-    val running: Boolean,
+data class IndicatorSeries(
+    val fast: List<Double?>,
+    val slow: List<Double?>,
+    val adx: List<Double?>,
+    val atr: List<Double?>,
+    val volumeAverage: List<Double?>
+)
+
+data class TradeEvent(
+    val time: Long,
+    val action: String,
+    val price: Double,
+    val equity: Double
+)
+
+data class StrategyState(
+    val id: String,
+    val title: String,
+    val subtitle: String,
     val cash: Double,
     val coins: Double,
     val entryPrice: Double,
     val highestClose: Double,
-    val lastCandleTime: Long,
+    val lastProcessedCandle: Long,
     val buys: Int,
     val sells: Int,
     val lastAction: String,
     val lastReason: String,
     val lastPrice: Double,
     val lastUpdated: Long,
-    val tradeLog: String
+    val trades: List<TradeEvent>
 )
 
-data class PumpBotResult(
-    val state: PumpBotState,
+data class StrategyResult(
+    val state: StrategyState,
     val equity: Double,
     val profit: Double,
     val profitPercent: Double
 )
 
-object PumpBotEngine {
-    const val uniqueWorkName = "pump_paper_bot_periodic_monitor"
-    const val symbol = "PUMPUSDT"
-    const val interval = "4h"
-    const val startBalance = 1000.0
-    const val klineUrl = "https://data-api.binance.vision/api/v3/klines?symbol=$symbol&interval=$interval&limit=500"
+data class ChartBundle(
+    val candles: List<PumpCandle>,
+    val fast: List<Double?>,
+    val slow: List<Double?>,
+    val trades: List<TradeEvent>,
+    val subtitle: String
+)
 
-    private const val prefsName = "PumpPaperBot"
+data class BotSnapshot(
+    val running: Boolean,
+    val lastSync: Long,
+    val primary: StrategyResult,
+    val experimental: StrategyResult,
+    val primaryChart: ChartBundle,
+    val experimentalChart: ChartBundle
+)
+
+object PumpBotEngine {
+    const val symbol = "PUMPUSDT"
+    const val uniqueWorkName = "pump_paper_bot_periodic_monitor"
+    const val startBalance = 1000.0
+
+    private const val prefsName = "PumpPaperBotV2"
+    private const val keyRunning = "running"
+    private const val keyLastSync = "last_sync"
+    private const val keyMarket4h = "market_4h_json"
+    private const val keyMarket2h = "market_2h_json"
     private const val fastPeriod = 25
     private const val slowPeriod = 99
-    private const val adxThreshold = 20.0
-    private const val minAtrPercent = 1.2
+    private const val adxPeriod = 14
+    private const val adxTrendMin = 20.0
+    private const val adxExitMin = 16.0
+    private const val minAtrPercent = 1.0
     private const val volumeFactor = 1.0
-    private const val stopLoss = 0.08
-    private const val trailingStop = 0.10
     private const val feeRate = 0.001
     private const val slippage = 0.0005
+    private const val stopLoss = 0.08
+    private const val trailingStop = 0.10
 
-    private const val keyRunning = "running"
-    private const val keyCash = "cash"
-    private const val keyCoins = "coins"
-    private const val keyEntry = "entry"
-    private const val keyHighest = "highest"
-    private const val keyLastCandle = "last_candle"
-    private const val keyBuys = "buys"
-    private const val keySells = "sells"
-    private const val keyAction = "action"
-    private const val keyReason = "reason"
-    private const val keyLastPrice = "last_price"
-    private const val keyUpdated = "updated"
-    private const val keyTradeLog = "trade_log"
+    fun klineUrl(interval: String): String {
+        return "https://data-api.binance.vision/api/v3/klines?symbol=$symbol&interval=$interval&limit=500"
+    }
 
     fun prefs(context: Context): SharedPreferences {
         return context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
     }
 
     fun ensureInitialized(context: Context) {
-        if (!prefs(context).contains(keyCash)) reset(context)
+        val p = prefs(context)
+        if (!p.contains("primary_cash")) reset(context)
     }
 
     fun reset(context: Context) {
         prefs(context).edit()
             .clear()
             .putBoolean(keyRunning, false)
-            .putDouble(keyCash, startBalance)
-            .putDouble(keyCoins, 0.0)
-            .putDouble(keyEntry, 0.0)
-            .putDouble(keyHighest, 0.0)
-            .putLong(keyLastCandle, 0L)
-            .putInt(keyBuys, 0)
-            .putInt(keySells, 0)
-            .putString(keyAction, "RESET")
-            .putString(keyReason, "Virtual account reset to 1000 USDT")
-            .putDouble(keyLastPrice, 0.0)
-            .putLong(keyUpdated, System.currentTimeMillis())
-            .putString(keyTradeLog, "")
+            .putStrategy(defaultPrimary())
+            .putStrategy(defaultExperimental())
+            .putLong(keyLastSync, 0L)
             .apply()
     }
 
@@ -102,48 +124,53 @@ object PumpBotEngine {
         ensureInitialized(context)
         prefs(context).edit()
             .putBoolean(keyRunning, running)
-            .putLong(keyUpdated, System.currentTimeMillis())
-            .putString(keyAction, if (running) "START" else "STOP")
-            .putString(keyReason, if (running) "Monitoring enabled" else "Monitoring stopped")
+            .putLong(keyLastSync, System.currentTimeMillis())
             .apply()
     }
 
-    fun load(context: Context): PumpBotState {
+    fun isRunning(context: Context): Boolean {
+        ensureInitialized(context)
+        return prefs(context).getBoolean(keyRunning, false)
+    }
+
+    fun sync(context: Context, json4h: String, json2h: String, allowTrading: Boolean) {
+        ensureInitialized(context)
+        val candles4h = parseCandles(json4h)
+        val candles2h = parseCandles(json2h)
+        val p = prefs(context)
+
+        val primary = p.getStrategy("primary", defaultPrimary())
+        val experimental = p.getStrategy("experiment", defaultExperimental())
+        val nextPrimary = if (allowTrading) runPrimary(primary, candles4h) else primary.withMarketOnly(candles4h)
+        val nextExperimental = if (allowTrading) runExperimental(experimental, candles2h, candles4h) else experimental.withMarketOnly(candles2h)
+
+        p.edit()
+            .putString(keyMarket4h, json4h)
+            .putString(keyMarket2h, json2h)
+            .putLong(keyLastSync, System.currentTimeMillis())
+            .putStrategy(nextPrimary)
+            .putStrategy(nextExperimental)
+            .apply()
+    }
+
+    fun snapshot(context: Context): BotSnapshot {
         ensureInitialized(context)
         val p = prefs(context)
-        return PumpBotState(
-            running = p.getBoolean(keyRunning, false),
-            cash = p.getDouble(keyCash, startBalance),
-            coins = p.getDouble(keyCoins, 0.0),
-            entryPrice = p.getDouble(keyEntry, 0.0),
-            highestClose = p.getDouble(keyHighest, 0.0),
-            lastCandleTime = p.getLong(keyLastCandle, 0L),
-            buys = p.getInt(keyBuys, 0),
-            sells = p.getInt(keySells, 0),
-            lastAction = p.getString(keyAction, "WAIT").orEmpty(),
-            lastReason = p.getString(keyReason, "No data yet").orEmpty(),
-            lastPrice = p.getDouble(keyLastPrice, 0.0),
-            lastUpdated = p.getLong(keyUpdated, 0L),
-            tradeLog = p.getString(keyTradeLog, "").orEmpty()
-        )
-    }
+        val candles4h = parseSavedCandles(p.getString(keyMarket4h, "").orEmpty())
+        val candles2h = parseSavedCandles(p.getString(keyMarket2h, "").orEmpty())
+        val primary = p.getStrategy("primary", defaultPrimary()).withMarketOnly(candles4h)
+        val experimental = p.getStrategy("experiment", defaultExperimental()).withMarketOnly(candles2h)
+        val ind4h = indicators(candles4h)
+        val ind2h = indicators(candles2h)
 
-    fun save(context: Context, state: PumpBotState) {
-        prefs(context).edit()
-            .putBoolean(keyRunning, state.running)
-            .putDouble(keyCash, state.cash)
-            .putDouble(keyCoins, state.coins)
-            .putDouble(keyEntry, state.entryPrice)
-            .putDouble(keyHighest, state.highestClose)
-            .putLong(keyLastCandle, state.lastCandleTime)
-            .putInt(keyBuys, state.buys)
-            .putInt(keySells, state.sells)
-            .putString(keyAction, state.lastAction)
-            .putString(keyReason, state.lastReason)
-            .putDouble(keyLastPrice, state.lastPrice)
-            .putLong(keyUpdated, state.lastUpdated)
-            .putString(keyTradeLog, state.tradeLog)
-            .apply()
+        return BotSnapshot(
+            running = p.getBoolean(keyRunning, false),
+            lastSync = p.getLong(keyLastSync, 0L),
+            primary = result(primary),
+            experimental = result(experimental),
+            primaryChart = ChartBundle(candles4h, ind4h.fast, ind4h.slow, primary.trades, "Primary 4H WMA25/WMA99"),
+            experimentalChart = ChartBundle(candles2h, ind2h.fast, ind2h.slow, experimental.trades, "Experiment 2H with 4H trend filter")
+        )
     }
 
     fun parseCandles(json: String): List<PumpCandle> {
@@ -157,6 +184,7 @@ object PumpBotEngine {
             if (closeTime < now) {
                 candles.add(
                     PumpCandle(
+                        openTime = row.getLong(0),
                         open = row.getString(1).toDouble(),
                         high = row.getString(2).toDouble(),
                         low = row.getString(3).toDouble(),
@@ -168,131 +196,265 @@ object PumpBotEngine {
             }
         }
 
-        return candles
+        return candles.sortedBy { it.closeTime }
     }
 
-    fun evaluate(previous: PumpBotState, candles: List<PumpCandle>): PumpBotResult {
-        if (candles.size < slowPeriod + 10) {
-            val price = candles.lastOrNull()?.close ?: previous.lastPrice
-            return result(previous.copy(lastPrice = price, lastReason = "Not enough candles for WMA99"))
-        }
-
-        val last = candles.last()
-        if (last.closeTime <= previous.lastCandleTime) {
-            return result(
-                previous.copy(
-                    lastPrice = last.close,
-                    lastUpdated = System.currentTimeMillis(),
-                    lastReason = "No new closed 4H candle"
-                )
-            )
-        }
-
-        val closes = candles.map { it.close }
-        val volumes = candles.map { it.volume }
-        val fast = wma(closes, fastPeriod)
-        val slow = wma(closes, slowPeriod)
-        val adx = adx(candles, 14)
-        val atr = atr(candles, 14)
-        val volumeAverage = sma(volumes, 20)
-        val i = candles.lastIndex
-
-        val slowNow = value(slow, i)
-        val fastNow = value(fast, i)
-        val slowPrev = value(slow, i - 1)
-        val fastPrev = value(fast, i - 1)
-        val slowSlope = slowNow - value(slow, i - 3)
-        val atrPercent = if (value(atr, i) > 0.0) value(atr, i) / last.close * 100.0 else 0.0
-        val volumeOk = value(volumeAverage, i) > 0.0 && last.volume >= value(volumeAverage, i) * volumeFactor
-        val trendOk = value(adx, i) >= adxThreshold &&
-            slowSlope > 0.0 &&
-            last.close > slowNow &&
-            volumeOk &&
-            atrPercent >= minAtrPercent
-        val crossedUp = fastPrev <= slowPrev && fastNow > slowNow
-        val crossedDown = fastPrev >= slowPrev && fastNow < slowNow
-        val filterText = String.format(
-            Locale.US,
-            "ADX %.1f, ATR %.2f%%, volume %s, WMA slope %s",
-            value(adx, i),
-            atrPercent,
-            if (volumeOk) "ok" else "weak",
-            if (slowSlope > 0.0) "up" else "flat/down"
-        )
-
-        var next = previous.copy(
-            lastCandleTime = last.closeTime,
-            lastPrice = last.close,
-            lastUpdated = System.currentTimeMillis()
-        )
-
-        if (previous.coins <= 0.0 && crossedUp && trendOk) {
-            val buyPrice = last.close * (1 + slippage)
-            val coins = previous.cash * (1 - feeRate) / buyPrice
-            next = next.copy(
-                cash = 0.0,
-                coins = coins,
-                entryPrice = buyPrice,
-                highestClose = last.close,
-                buys = previous.buys + 1,
-                lastAction = "BUY",
-                lastReason = "WMA crossed up. $filterText"
-            ).withTrade("BUY", buyPrice, coins * buyPrice)
-        } else if (previous.coins > 0.0) {
-            val highest = maxOf(previous.highestClose, last.close)
-            val stopPrice = previous.entryPrice * (1 - stopLoss)
-            val trailPrice = highest * (1 - trailingStop)
-            val shouldSell = crossedDown || last.close <= stopPrice || last.close <= trailPrice
-
-            if (shouldSell) {
-                val sellPrice = last.close * (1 - slippage)
-                val cash = previous.coins * sellPrice * (1 - feeRate)
-                val reason = when {
-                    last.close <= stopPrice -> "Stop-loss"
-                    last.close <= trailPrice -> "Trailing stop"
-                    else -> "WMA crossed down"
-                }
-                next = next.copy(
-                    cash = cash,
-                    coins = 0.0,
-                    entryPrice = 0.0,
-                    highestClose = 0.0,
-                    sells = previous.sells + 1,
-                    lastAction = "SELL",
-                    lastReason = "$reason. $filterText"
-                ).withTrade("SELL", sellPrice, cash)
-            } else {
-                next = next.copy(
-                    highestClose = highest,
-                    lastAction = "HOLD",
-                    lastReason = "Position remains open. $filterText"
-                )
-            }
-        } else {
-            next = next.copy(
-                lastAction = "WAIT",
-                lastReason = if (crossedUp) "Signal rejected. $filterText" else "No entry signal. $filterText"
-            )
-        }
-
-        return result(next)
-    }
-
-    fun result(state: PumpBotState): PumpBotResult {
+    fun result(state: StrategyState): StrategyResult {
         val equity = if (state.coins > 0.0 && state.lastPrice > 0.0) {
             state.coins * state.lastPrice * (1 - feeRate)
         } else {
             state.cash
         }
         val profit = equity - startBalance
-        return PumpBotResult(state, equity, profit, profit / startBalance * 100.0)
+        return StrategyResult(state, equity, profit, profit / startBalance * 100.0)
     }
 
-    private fun PumpBotState.withTrade(action: String, price: Double, equity: Double): PumpBotState {
-        val stamp = SimpleDateFormat("dd.MM HH:mm", Locale.GERMAN).format(Date())
-        val line = String.format(Locale.US, "%s %s %.8f equity %.2f", stamp, action, price, equity)
-        val merged = (line + "\n" + tradeLog).lines().filter { it.isNotBlank() }.take(12).joinToString("\n")
-        return copy(tradeLog = merged)
+    private fun runPrimary(initial: StrategyState, candles: List<PumpCandle>): StrategyState {
+        if (candles.size < slowPeriod + 10) return initial.withMarketOnly(candles, "Waiting for enough 4H candles")
+
+        val ind = indicators(candles)
+        var state = initial.withMarketOnly(candles)
+        val first = maxOf(slowPeriod + 4, adxPeriod * 2)
+
+        for (i in first until candles.size) {
+            val candle = candles[i]
+            if (candle.closeTime <= state.lastProcessedCandle) continue
+
+            val info = filterInfo(candles, ind, i)
+            val crossedUp = crossedUp(ind.fast, ind.slow, i)
+            val crossedDown = crossedDown(ind.fast, ind.slow, i)
+            state = applySignal(
+                state = state,
+                candle = candle,
+                shouldBuy = state.coins <= 0.0 && crossedUp && info.trendOk,
+                shouldSell = state.coins > 0.0 && (crossedDown || stopHit(state, candle.close) || trendFaded(info)),
+                buyReason = "4H WMA crossed up. ${info.text}",
+                sellReason = sellReason(state, candle.close, crossedDown, info)
+            )
+        }
+
+        return state
+    }
+
+    private fun runExperimental(initial: StrategyState, candles2h: List<PumpCandle>, candles4h: List<PumpCandle>): StrategyState {
+        if (candles2h.size < slowPeriod + 10 || candles4h.size < slowPeriod + 10) {
+            return initial.withMarketOnly(candles2h, "Waiting for enough 2H/4H candles")
+        }
+
+        val ind2h = indicators(candles2h)
+        val ind4h = indicators(candles4h)
+        var state = initial.withMarketOnly(candles2h)
+        val first = maxOf(slowPeriod + 4, adxPeriod * 2)
+
+        for (i in first until candles2h.size) {
+            val candle = candles2h[i]
+            if (candle.closeTime <= state.lastProcessedCandle) continue
+
+            val twoHour = filterInfo(candles2h, ind2h, i, adxMin = 18.0)
+            val fourIndex = candles4h.indexOfLast { it.closeTime <= candle.closeTime }
+            val fourHour = if (fourIndex >= first) filterInfo(candles4h, ind4h, fourIndex) else null
+            val fourHourTrendOk = fourHour?.trendOk == true && value(ind4h.fast, fourIndex) > value(ind4h.slow, fourIndex)
+            val fourHourTrendWeak = fourHour == null || !fourHour.directionOk || value(ind4h.adx, fourIndex) < adxExitMin
+            val crossedUp2h = crossedUp(ind2h.fast, ind2h.slow, i)
+            val crossedDown2h = crossedDown(ind2h.fast, ind2h.slow, i)
+
+            state = applySignal(
+                state = state,
+                candle = candle,
+                shouldBuy = state.coins <= 0.0 && crossedUp2h && twoHour.trendOk && fourHourTrendOk,
+                shouldSell = state.coins > 0.0 && (crossedDown2h || stopHit(state, candle.close) || fourHourTrendWeak),
+                buyReason = "2H WMA crossed up with 4H trend confirmation. 2H ${twoHour.text}; 4H ${fourHour?.text ?: "not ready"}",
+                sellReason = when {
+                    stopHit(state, candle.close) -> sellReason(state, candle.close, false, twoHour)
+                    crossedDown2h -> "2H WMA crossed down. ${twoHour.text}"
+                    fourHourTrendWeak -> "4H trend filter weakened. ${fourHour?.text ?: "4H not ready"}"
+                    else -> "No exit"
+                }
+            )
+        }
+
+        return state
+    }
+
+    private fun applySignal(
+        state: StrategyState,
+        candle: PumpCandle,
+        shouldBuy: Boolean,
+        shouldSell: Boolean,
+        buyReason: String,
+        sellReason: String
+    ): StrategyState {
+        var next = state.copy(
+            lastProcessedCandle = candle.closeTime,
+            lastPrice = candle.close,
+            lastUpdated = System.currentTimeMillis()
+        )
+
+        if (shouldBuy) {
+            val buyPrice = candle.close * (1 + slippage)
+            val coins = next.cash * (1 - feeRate) / buyPrice
+            next = next.copy(
+                cash = 0.0,
+                coins = coins,
+                entryPrice = buyPrice,
+                highestClose = candle.close,
+                buys = next.buys + 1,
+                lastAction = "BUY",
+                lastReason = buyReason
+            ).addTrade(candle.closeTime, "BUY", buyPrice, coins * buyPrice)
+        } else if (shouldSell) {
+            val sellPrice = candle.close * (1 - slippage)
+            val cash = next.coins * sellPrice * (1 - feeRate)
+            next = next.copy(
+                cash = cash,
+                coins = 0.0,
+                entryPrice = 0.0,
+                highestClose = 0.0,
+                sells = next.sells + 1,
+                lastAction = "SELL",
+                lastReason = sellReason
+            ).addTrade(candle.closeTime, "SELL", sellPrice, cash)
+        } else if (next.coins > 0.0) {
+            next = next.copy(
+                highestClose = maxOf(next.highestClose, candle.close),
+                lastAction = "HOLD",
+                lastReason = "Position stays open"
+            )
+        } else {
+            next = next.copy(
+                lastAction = "WAIT",
+                lastReason = "No valid entry signal"
+            )
+        }
+
+        return next
+    }
+
+    private fun defaultPrimary(): StrategyState {
+        return StrategyState(
+            id = "primary",
+            title = "Основная 4H",
+            subtitle = "Покупка и продажа по 4H WMA25/WMA99",
+            cash = startBalance,
+            coins = 0.0,
+            entryPrice = 0.0,
+            highestClose = 0.0,
+            lastProcessedCandle = 0L,
+            buys = 0,
+            sells = 0,
+            lastAction = "WAIT",
+            lastReason = "Press START to begin",
+            lastPrice = 0.0,
+            lastUpdated = 0L,
+            trades = emptyList()
+        )
+    }
+
+    private fun defaultExperimental(): StrategyState {
+        return StrategyState(
+            id = "experiment",
+            title = "Эксперимент 2H + 4H",
+            subtitle = "Вход/выход по 2H, но только при подтверждении 4H тренда",
+            cash = startBalance,
+            coins = 0.0,
+            entryPrice = 0.0,
+            highestClose = 0.0,
+            lastProcessedCandle = 0L,
+            buys = 0,
+            sells = 0,
+            lastAction = "WAIT",
+            lastReason = "Press START to begin",
+            lastPrice = 0.0,
+            lastUpdated = 0L,
+            trades = emptyList()
+        )
+    }
+
+    private fun StrategyState.withMarketOnly(candles: List<PumpCandle>, reason: String? = null): StrategyState {
+        val latest = candles.lastOrNull()?.close ?: lastPrice
+        return copy(
+            lastPrice = latest,
+            lastUpdated = if (latest > 0.0) System.currentTimeMillis() else lastUpdated,
+            lastReason = reason ?: lastReason
+        )
+    }
+
+    private data class FilterInfo(
+        val trendOk: Boolean,
+        val directionOk: Boolean,
+        val text: String
+    )
+
+    private fun filterInfo(candles: List<PumpCandle>, ind: IndicatorSeries, i: Int, adxMin: Double = adxTrendMin): FilterInfo {
+        val candle = candles[i]
+        val slowNow = value(ind.slow, i)
+        val slowSlope = slowNow - value(ind.slow, i - 3)
+        val atrPercent = if (value(ind.atr, i) > 0.0) value(ind.atr, i) / candle.close * 100.0 else 0.0
+        val volumeOk = value(ind.volumeAverage, i) > 0.0 && candle.volume >= value(ind.volumeAverage, i) * volumeFactor
+        val directionOk = slowSlope > 0.0 && candle.close > slowNow
+        val trendOk = value(ind.adx, i) >= adxMin && directionOk && volumeOk && atrPercent >= minAtrPercent
+        val text = String.format(
+            Locale.US,
+            "ADX %.1f, ATR %.2f%%, volume %s, slow WMA %s",
+            value(ind.adx, i),
+            atrPercent,
+            if (volumeOk) "ok" else "weak",
+            if (slowSlope > 0.0) "up" else "flat/down"
+        )
+        return FilterInfo(trendOk, directionOk, text)
+    }
+
+    private fun sellReason(state: StrategyState, close: Double, crossedDown: Boolean, info: FilterInfo): String {
+        return when {
+            close <= state.entryPrice * (1 - stopLoss) -> "Stop-loss. ${info.text}"
+            close <= state.highestClose * (1 - trailingStop) -> "Trailing stop. ${info.text}"
+            crossedDown -> "WMA crossed down. ${info.text}"
+            trendFaded(info) -> "Trend faded into sideways/weak market. ${info.text}"
+            else -> "No exit"
+        }
+    }
+
+    private fun trendFaded(info: FilterInfo): Boolean {
+        return !info.directionOk
+    }
+
+    private fun stopHit(state: StrategyState, close: Double): Boolean {
+        return state.coins > 0.0 &&
+            (close <= state.entryPrice * (1 - stopLoss) || close <= state.highestClose * (1 - trailingStop))
+    }
+
+    private fun StrategyState.addTrade(time: Long, action: String, price: Double, equity: Double): StrategyState {
+        val nextTrades = (trades + TradeEvent(time, action, price, equity)).takeLast(80)
+        return copy(trades = nextTrades)
+    }
+
+    private fun indicators(candles: List<PumpCandle>): IndicatorSeries {
+        val closes = candles.map { it.close }
+        val volumes = candles.map { it.volume }
+        return IndicatorSeries(
+            fast = wma(closes, fastPeriod),
+            slow = wma(closes, slowPeriod),
+            adx = adx(candles, adxPeriod),
+            atr = atr(candles, adxPeriod),
+            volumeAverage = sma(volumes, 20)
+        )
+    }
+
+    private fun parseSavedCandles(json: String): List<PumpCandle> {
+        if (json.isBlank()) return emptyList()
+        return try {
+            parseCandles(json)
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun crossedUp(fast: List<Double?>, slow: List<Double?>, i: Int): Boolean {
+        return value(fast, i - 1) <= value(slow, i - 1) && value(fast, i) > value(slow, i)
+    }
+
+    private fun crossedDown(fast: List<Double?>, slow: List<Double?>, i: Int): Boolean {
+        return value(fast, i - 1) >= value(slow, i - 1) && value(fast, i) < value(slow, i)
     }
 
     private fun value(values: List<Double?>, index: Int): Double {
@@ -327,9 +489,15 @@ object PumpBotEngine {
 
     private fun atr(candles: List<PumpCandle>, period: Int): List<Double?> {
         val ranges = candles.mapIndexed { index, candle ->
-            if (index == 0) candle.high - candle.low else {
+            if (index == 0) {
+                candle.high - candle.low
+            } else {
                 val previousClose = candles[index - 1].close
-                maxOf(candle.high - candle.low, kotlin.math.abs(candle.high - previousClose), kotlin.math.abs(candle.low - previousClose))
+                maxOf(
+                    candle.high - candle.low,
+                    kotlin.math.abs(candle.high - previousClose),
+                    kotlin.math.abs(candle.low - previousClose)
+                )
             }
         }
         return sma(ranges, period)
@@ -345,7 +513,11 @@ object PumpBotEngine {
             val downMove = candles[i - 1].low - candles[i].low
             plusDm[i] = if (upMove > downMove && upMove > 0.0) upMove else 0.0
             minusDm[i] = if (downMove > upMove && downMove > 0.0) downMove else 0.0
-            ranges[i] = maxOf(candles[i].high - candles[i].low, kotlin.math.abs(candles[i].high - candles[i - 1].close), kotlin.math.abs(candles[i].low - candles[i - 1].close))
+            ranges[i] = maxOf(
+                candles[i].high - candles[i].low,
+                kotlin.math.abs(candles[i].high - candles[i - 1].close),
+                kotlin.math.abs(candles[i].low - candles[i - 1].close)
+            )
         }
 
         val tr = sma(ranges, period)
@@ -363,6 +535,86 @@ object PumpBotEngine {
         }
 
         return sma(dx, period)
+    }
+
+    private fun SharedPreferences.Editor.putStrategy(state: StrategyState): SharedPreferences.Editor {
+        val prefix = "${state.id}_"
+        putString("${prefix}title", state.title)
+        putString("${prefix}subtitle", state.subtitle)
+        putDouble("${prefix}cash", state.cash)
+        putDouble("${prefix}coins", state.coins)
+        putDouble("${prefix}entry", state.entryPrice)
+        putDouble("${prefix}highest", state.highestClose)
+        putLong("${prefix}last_candle", state.lastProcessedCandle)
+        putInt("${prefix}buys", state.buys)
+        putInt("${prefix}sells", state.sells)
+        putString("${prefix}action", state.lastAction)
+        putString("${prefix}reason", state.lastReason)
+        putDouble("${prefix}last_price", state.lastPrice)
+        putLong("${prefix}updated", state.lastUpdated)
+        putString("${prefix}trades", tradesToJson(state.trades))
+        return this
+    }
+
+    private fun SharedPreferences.getStrategy(id: String, fallback: StrategyState): StrategyState {
+        val prefix = "${id}_"
+        return StrategyState(
+            id = id,
+            title = getString("${prefix}title", fallback.title).orEmpty(),
+            subtitle = getString("${prefix}subtitle", fallback.subtitle).orEmpty(),
+            cash = getDouble("${prefix}cash", fallback.cash),
+            coins = getDouble("${prefix}coins", fallback.coins),
+            entryPrice = getDouble("${prefix}entry", fallback.entryPrice),
+            highestClose = getDouble("${prefix}highest", fallback.highestClose),
+            lastProcessedCandle = getLong("${prefix}last_candle", fallback.lastProcessedCandle),
+            buys = getInt("${prefix}buys", fallback.buys),
+            sells = getInt("${prefix}sells", fallback.sells),
+            lastAction = getString("${prefix}action", fallback.lastAction).orEmpty(),
+            lastReason = getString("${prefix}reason", fallback.lastReason).orEmpty(),
+            lastPrice = getDouble("${prefix}last_price", fallback.lastPrice),
+            lastUpdated = getLong("${prefix}updated", fallback.lastUpdated),
+            trades = jsonToTrades(getString("${prefix}trades", "[]").orEmpty())
+        )
+    }
+
+    private fun tradesToJson(trades: List<TradeEvent>): String {
+        val array = JSONArray()
+        trades.forEach { trade ->
+            array.put(
+                JSONObject()
+                    .put("time", trade.time)
+                    .put("action", trade.action)
+                    .put("price", trade.price)
+                    .put("equity", trade.equity)
+            )
+        }
+        return array.toString()
+    }
+
+    private fun jsonToTrades(json: String): List<TradeEvent> {
+        return try {
+            val array = JSONArray(json)
+            val result = ArrayList<TradeEvent>()
+            for (i in 0 until array.length()) {
+                val obj = array.getJSONObject(i)
+                result.add(
+                    TradeEvent(
+                        time = obj.getLong("time"),
+                        action = obj.getString("action"),
+                        price = obj.getDouble("price"),
+                        equity = obj.getDouble("equity")
+                    )
+                )
+            }
+            result
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    fun formatTime(time: Long): String {
+        if (time <= 0L) return "-"
+        return SimpleDateFormat("dd.MM HH:mm", Locale.GERMAN).format(Date(time))
     }
 
     private fun SharedPreferences.Editor.putDouble(key: String, value: Double): SharedPreferences.Editor {
