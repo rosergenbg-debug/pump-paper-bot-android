@@ -37,6 +37,8 @@ class MainActivity : AppCompatActivity() {
     private var tvReason: TextView? = null
     private var tvPosition: TextView? = null
     private var chart: StrategyChartView? = null
+    private var btnRisk30: Button? = null
+    private var btnRisk35: Button? = null
     private var btnStart: Button? = null
     private var btnCheck: Button? = null
     private var btnStop: Button? = null
@@ -57,6 +59,8 @@ class MainActivity : AppCompatActivity() {
         tvReason = findViewById(R.id.tvReason)
         tvPosition = findViewById(R.id.tvPosition)
         chart = findViewById(R.id.chart)
+        btnRisk30 = findViewById(R.id.btnRisk30)
+        btnRisk35 = findViewById(R.id.btnRisk35)
         btnStart = findViewById(R.id.btnStart)
         btnCheck = findViewById(R.id.btnCheck)
         btnStop = findViewById(R.id.btnStop)
@@ -68,6 +72,16 @@ class MainActivity : AppCompatActivity() {
         PumpBotEngine.ensureInitialized(this)
         requestNotificationPermission()
 
+        btnRisk30?.setOnClickListener {
+            PumpBotEngine.setBuyRsi(this, 30.0)
+            updateUi()
+            checkNow()
+        }
+        btnRisk35?.setOnClickListener {
+            PumpBotEngine.setBuyRsi(this, 35.0)
+            updateUi()
+            checkNow()
+        }
         btnStart?.setOnClickListener { startMonitor() }
         btnCheck?.setOnClickListener { checkNow() }
         btnStop?.setOnClickListener {
@@ -102,8 +116,7 @@ class MainActivity : AppCompatActivity() {
     private fun startMonitor() {
         PumpBotEngine.setRunning(this, true)
         PumpAlert.ensureChannels(this)
-        val serviceIntent = Intent(this, PumpSignalService::class.java)
-        ContextCompat.startForegroundService(this, serviceIntent)
+        ContextCompat.startForegroundService(this, Intent(this, PumpSignalService::class.java))
         val request = PeriodicWorkRequestBuilder<PumpBotWorker>(15, TimeUnit.MINUTES).build()
         WorkManager.getInstance(this).enqueueUniquePeriodicWork(
             PumpBotEngine.uniqueWorkName,
@@ -170,11 +183,12 @@ class MainActivity : AppCompatActivity() {
         val active = snapshot.signalAction == snapshot.waitMode &&
             (snapshot.signalAction == "BUY" || snapshot.signalAction == "SELL")
         val status = if (snapshot.running) "РАБОТАЕТ" else "ОСТАНОВЛЕНО"
-        tvStatus?.text = "$status | Последняя проверка: ${PumpBotEngine.formatTime(snapshot.lastSync)} | При запуске проверяет примерно каждые 2 минуты"
+        tvStatus?.text = "$status | Последняя проверка: ${PumpBotEngine.formatTime(snapshot.lastSync)} | риск RSI ${snapshot.buyRsi.toInt()}"
         tvMode?.text = if (snapshot.waitMode == "BUY") "Режим: жду покупку" else "Режим: жду продажу"
         tvMode?.setTextColor(if (active) Color.WHITE else Color.parseColor("#C9D1D9"))
         tvMode?.setBackgroundColor(if (active) Color.parseColor("#DA3633") else Color.parseColor("#30363D"))
 
+        renderRiskButtons(snapshot.buyRsi)
         renderSignalBox(tvBuySignal, "BUY", snapshot.buySignal, snapshot.waitMode == "BUY")
         renderSignalBox(tvSellSignal, "SELL", snapshot.sellSignal, snapshot.waitMode == "SELL")
 
@@ -201,7 +215,16 @@ class MainActivity : AppCompatActivity() {
         btnStop?.alpha = if (snapshot.running) 1f else 0.65f
         btnManual?.text = if (snapshot.waitMode == "BUY") "Я КУПИЛ - ЖДАТЬ ПРОДАЖУ" else "Я ПРОДАЛ - ЖДАТЬ ПОКУПКУ"
         btnToggleMode?.text = if (snapshot.waitMode == "BUY") "ЖДАТЬ ПРОДАЖУ" else "ЖДАТЬ ПОКУПКУ"
-        chart?.setData("PUMP RSI35", snapshot.chart)
+        chart?.setData("PUMP RSI${snapshot.buyRsi.toInt()}", snapshot.chart)
+    }
+
+    private fun renderRiskButtons(buyRsi: Double) {
+        val selected = Color.parseColor("#238636")
+        val idle = Color.parseColor("#30363D")
+        btnRisk30?.setBackgroundColor(if (buyRsi <= 30.0) selected else idle)
+        btnRisk35?.setBackgroundColor(if (buyRsi > 30.0) selected else idle)
+        btnRisk30?.text = "РИСК 30\nОсторожно"
+        btnRisk35?.text = "РИСК 35\nАктивно"
     }
 
     private fun renderSignalBox(view: TextView?, label: String, signal: Boolean, selectedMode: Boolean) {

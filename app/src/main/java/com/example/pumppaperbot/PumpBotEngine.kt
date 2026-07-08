@@ -32,6 +32,7 @@ data class TradeEvent(
 data class BacktestResult(
     val assetName: String,
     val symbol: String,
+    val buyRsi: Double,
     val equity: Double,
     val profit: Double,
     val profitPercent: Double,
@@ -52,6 +53,7 @@ data class ChartBundle(
 data class LiveSnapshot(
     val running: Boolean,
     val waitMode: String,
+    val buyRsi: Double,
     val lastSync: Long,
     val lastCandle: Long,
     val lastPrice: Double,
@@ -69,25 +71,26 @@ data class LiveSnapshot(
 data class CoinOption(val name: String, val symbol: String)
 
 object PumpBotEngine {
-    const val appVersionName = "0.9"
+    const val appVersionName = "1.0"
     const val startBalance = 1000.0
     const val feeRate = 0.0015
     const val slippage = 0.0005
     const val rsiPeriod = 14
-    const val buyRsi = 35.0
+    const val defaultBuyRsi = 35.0
     const val sellRsi = 62.0
     const val emaFastPeriod = 50
     const val emaSlowPeriod = 200
     const val stopLoss = 0.08
     const val trailingStop = 0.04
     const val pumpSymbol = "PUMPUSDT"
-    const val uniqueWorkName = "pump_rsi35_periodic_monitor"
+    const val uniqueWorkName = "pump_rsi_risk_periodic_monitor"
 
-    private const val prefsName = "PumpRsi35BotV8"
-    private const val algorithmVersion = 8
+    private const val prefsName = "PumpRsiRiskBotV10"
+    private const val algorithmVersion = 10
     private const val keyVersion = "algorithm_version"
     private const val keyRunning = "running"
     private const val keyWaitMode = "wait_mode"
+    private const val keyBuyRsi = "buy_rsi"
     private const val keyLastSync = "last_sync"
     private const val keyLastCandle = "last_candle"
     private const val keyLastPrice = "last_price"
@@ -109,9 +112,10 @@ object PumpBotEngine {
         CoinOption("Solana", "SOLUSDT"),
         CoinOption("BNB", "BNBUSDT"),
         CoinOption("XRP", "XRPUSDT"),
-        CoinOption("Cardano", "ADAUSDT"),
         CoinOption("Dogecoin", "DOGEUSDT"),
+        CoinOption("Cardano", "ADAUSDT"),
         CoinOption("TRON", "TRXUSDT"),
+        CoinOption("Avalanche", "AVAXUSDT"),
         CoinOption("Chainlink", "LINKUSDT")
     )
 
@@ -130,6 +134,7 @@ object PumpBotEngine {
             .putInt(keyVersion, algorithmVersion)
             .putBoolean(keyRunning, false)
             .putString(keyWaitMode, "BUY")
+            .putDouble(keyBuyRsi, defaultBuyRsi)
             .putLong(keyLastSync, 0L)
             .putLong(keyLastCandle, 0L)
             .putDouble(keyLastPrice, 0.0)
@@ -164,6 +169,14 @@ object PumpBotEngine {
         val clean = if (mode == "SELL") "SELL" else "BUY"
         prefs(context).edit()
             .putString(keyWaitMode, clean)
+            .putString(keyLastAlertKey, "")
+            .apply()
+    }
+
+    fun setBuyRsi(context: Context, value: Double) {
+        ensureInitialized(context)
+        prefs(context).edit()
+            .putDouble(keyBuyRsi, normalizeBuyRsi(value))
             .putString(keyLastAlertKey, "")
             .apply()
     }
@@ -204,6 +217,7 @@ object PumpBotEngine {
         val evaluation = evaluateLive(
             candles = candles,
             waitMode = p.getString(keyWaitMode, "BUY").orEmpty(),
+            buyRsi = selectedBuyRsi(p),
             entryPrice = p.getDouble(keyEntryPrice, 0.0),
             storedHighest = p.getDouble(keyHighestClose, 0.0)
         )
@@ -230,9 +244,11 @@ object PumpBotEngine {
         val closes = candles.map { it.close }
         val fast = ema(closes, emaFastPeriod)
         val slow = ema(closes, emaSlowPeriod)
+        val buyRsi = selectedBuyRsi(p)
         return LiveSnapshot(
             running = p.getBoolean(keyRunning, false),
             waitMode = p.getString(keyWaitMode, "BUY").orEmpty().ifBlank { "BUY" },
+            buyRsi = buyRsi,
             lastSync = p.getLong(keyLastSync, 0L),
             lastCandle = p.getLong(keyLastCandle, 0L),
             lastPrice = p.getDouble(keyLastPrice, 0.0),
@@ -244,12 +260,18 @@ object PumpBotEngine {
             signalReason = p.getString(keySignalReason, "Сигнала нет").orEmpty(),
             entryPrice = p.getDouble(keyEntryPrice, 0.0),
             highestClose = p.getDouble(keyHighestClose, 0.0),
-            chart = ChartBundle(candles, fast, slow, emptyList(), "RSI 35 на 30-минутных свечах. Желтая EMA50 / фиолетовая EMA200")
+            chart = ChartBundle(
+                candles,
+                fast,
+                slow,
+                emptyList(),
+                "RSI ${buyRsi.toInt()} на 30-минутных свечах. Желтая EMA50 / фиолетовая EMA200"
+            )
         )
     }
 
     fun alertKey(snapshot: LiveSnapshot): String {
-        return "${snapshot.signalAction}:${snapshot.lastCandle}"
+        return "${snapshot.signalAction}:${snapshot.lastCandle}:${snapshot.buyRsi.toInt()}"
     }
 
     fun shouldAlert(context: Context, snapshot: LiveSnapshot): Boolean {
@@ -264,9 +286,10 @@ object PumpBotEngine {
         prefs(context).edit().putString(keyLastAlertKey, alertKey(snapshot)).apply()
     }
 
-    fun backtest(asset: CoinOption, candles: List<PumpCandle>, startTime: Long): BacktestResult {
+    fun backtest(asset: CoinOption, candles: List<PumpCandle>, startTime: Long, buyThreshold: Double): BacktestResult {
+        val buyRsi = normalizeBuyRsi(buyThreshold)
         if (candles.isEmpty()) {
-            return BacktestResult(asset.name, asset.symbol, startBalance, 0.0, 0.0, 0.0, emptyList(), 0L, 0L)
+            return BacktestResult(asset.name, asset.symbol, buyRsi, startBalance, 0.0, 0.0, 0.0, emptyList(), 0L, 0L)
         }
 
         val closes = candles.map { it.close }
@@ -322,6 +345,7 @@ object PumpBotEngine {
         return BacktestResult(
             assetName = asset.name,
             symbol = asset.symbol,
+            buyRsi = buyRsi,
             equity = equity,
             profit = profit,
             profitPercent = profit / startBalance * 100.0,
@@ -372,6 +396,7 @@ object PumpBotEngine {
     private fun evaluateLive(
         candles: List<PumpCandle>,
         waitMode: String,
+        buyRsi: Double,
         entryPrice: Double,
         storedHighest: Double
     ): LiveEvaluation {
@@ -475,6 +500,14 @@ object PumpBotEngine {
 
     private fun value(values: List<Double?>, index: Int): Double {
         return values.getOrNull(index) ?: 0.0
+    }
+
+    private fun selectedBuyRsi(prefs: SharedPreferences): Double {
+        return normalizeBuyRsi(prefs.getDouble(keyBuyRsi, defaultBuyRsi))
+    }
+
+    private fun normalizeBuyRsi(value: Double): Double {
+        return if (value <= 30.0) 30.0 else 35.0
     }
 
     private fun SharedPreferences.Editor.putDouble(key: String, value: Double): SharedPreferences.Editor {

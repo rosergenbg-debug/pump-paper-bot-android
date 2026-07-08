@@ -56,7 +56,7 @@ class PumpSignalService : Service() {
                 val request = Request.Builder()
                     .url(PumpBotEngine.klineUrl(PumpBotEngine.pumpSymbol, "30m"))
                     .header("Accept", "application/json")
-                    .header("User-Agent", "PumpRsi35BotAndroid/${PumpBotEngine.appVersionName}")
+                    .header("User-Agent", "PumpRsiRiskBotAndroid/${PumpBotEngine.appVersionName}")
                     .build()
                 val json = client.newCall(request).execute().use { response ->
                     if (!response.isSuccessful) error("HTTP ${response.code}")

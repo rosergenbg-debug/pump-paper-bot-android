@@ -14,8 +14,8 @@ import android.os.VibratorManager
 import androidx.core.app.NotificationCompat
 
 object PumpAlert {
-    private const val monitorChannelId = "pump_rsi35_monitor"
-    private const val signalChannelId = "pump_rsi35_signals"
+    private const val monitorChannelId = "pump_rsi_risk_monitor"
+    private const val signalChannelId = "pump_rsi_risk_signals"
     private const val monitorNotificationId = 3501
     private const val signalNotificationId = 3502
 
@@ -30,12 +30,12 @@ object PumpAlert {
             .build()
         val monitor = NotificationChannel(
             monitorChannelId,
-            "PUMP RSI35 монитор",
+            "PUMP RSI монитор",
             NotificationManager.IMPORTANCE_LOW
         )
         val signal = NotificationChannel(
             signalChannelId,
-            "PUMP RSI35 сигналы покупки и продажи",
+            "PUMP RSI сигналы покупки и продажи",
             NotificationManager.IMPORTANCE_HIGH
         ).apply {
             enableVibration(true)
@@ -49,7 +49,7 @@ object PumpAlert {
     fun monitorNotification(context: Context, text: String) =
         NotificationCompat.Builder(context, monitorChannelId)
             .setSmallIcon(R.drawable.ic_launcher)
-            .setContentTitle("PUMP RSI35 работает")
+            .setContentTitle("PUMP RSI монитор работает")
             .setContentText(text)
             .setOngoing(true)
             .setContentIntent(openAppIntent(context))
@@ -59,7 +59,7 @@ object PumpAlert {
     fun showSignal(context: Context, snapshot: LiveSnapshot) {
         ensureChannels(context)
         val title = if (snapshot.signalAction == "BUY") "PUMP: сигнал ПОКУПКА" else "PUMP: сигнал ПРОДАЖА"
-        val text = "${snapshot.signalReason}. Цена ${formatPrice(snapshot.lastPrice)}"
+        val text = "${snapshot.signalReason}. Риск RSI ${snapshot.buyRsi.toInt()}. Цена ${formatPrice(snapshot.lastPrice)}"
         val notification = NotificationCompat.Builder(context, signalChannelId)
             .setSmallIcon(R.drawable.ic_launcher)
             .setContentTitle(title)

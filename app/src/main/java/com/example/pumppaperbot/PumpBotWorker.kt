@@ -35,7 +35,7 @@ class PumpBotWorker(
         val request = Request.Builder()
             .url(url)
             .header("Accept", "application/json")
-            .header("User-Agent", "PumpRsi35BotAndroid/${PumpBotEngine.appVersionName}")
+            .header("User-Agent", "PumpRsiRiskBotAndroid/${PumpBotEngine.appVersionName}")
             .build()
 
         client.newCall(request).execute().use { response ->
