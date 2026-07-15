@@ -30,22 +30,22 @@ jobs:
         run: gradle assembleDebug
 
       - name: Prepare named APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk PumpSignal-Visual-v1.6.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk PumpSignal-MultiStage-v1.7.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: PumpSignal-Visual-v1.6-APK
-          path: PumpSignal-Visual-v1.6.apk
+          name: PumpSignal-MultiStage-v1.7-APK
+          path: PumpSignal-MultiStage-v1.7.apk
           retention-days: 30
 
-      - name: Publish v1.6 release
+      - name: Publish v1.7 release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.6
-          name: PUMP Сигнал v1.6
+          tag_name: v1.7
+          name: PUMP Сигнал v1.7
           prerelease: true
           body: |
-            Вертикальный график с крупными синими стрелками входа/выхода, навигацией по точкам, масштабом и отдельной шкалой ±100. Звонок на готовности 99 с рабочим расписанием или режимом 24 часа.
+            Четырёхэтапный анализ: серия падений, подтверждение разворота, поток покупателей spot/futures и фильтр общего рынка BTC+ETH+SOL. Профили «Строгий» и «Чувствительный», исторические точки на вертикальном графике и звонок на готовности 99.
             Комиссия 0,15% на вход и 0,15% на выход. Исторические результаты не гарантируют будущую прибыль.
-          files: PumpSignal-Visual-v1.6.apk
+          files: PumpSignal-MultiStage-v1.7.apk

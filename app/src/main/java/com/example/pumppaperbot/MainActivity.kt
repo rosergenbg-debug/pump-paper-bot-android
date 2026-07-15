@@ -164,7 +164,9 @@ class MainActivity : AppCompatActivity() {
                 updateUi()
             }
         } else if (snapshot.signalAction == StrategyV2.ACTION_SELL_HALF && !snapshot.partialTaken) {
-            confirm("Подтвердить продажу 50%?", "Оставшаяся половина будет защищена безубытком и trailing-stop 4%.") {
+            val percent = if (snapshot.strategyMode == StrategyV2.MODE_EXHAUSTION) 40 else 50
+            val remains = 100 - percent
+            confirm("Подтвердить продажу $percent%?", "Оставшиеся $remains% будут защищены трейлингом 4%.") {
                 PumpBotEngine.confirmPartialSold(this)
                 updateUi()
             }
@@ -178,10 +180,14 @@ class MainActivity : AppCompatActivity() {
 
     private fun showSignalInfo() {
         val snapshot = PumpBotEngine.snapshot(this)
-        val profile = if (snapshot.aggressive) "Агрессивный: осторожный вход + вход после шока" else "Осторожный: только трендовый вход"
+        val profile = if (snapshot.aggressive) {
+            "Чувствительный: четыре этапа, допускает вход после восстановления до −3% от максимума"
+        } else {
+            "Строгий: четыре этапа, вход после серии падений только рядом с дном (до −6%)"
+        }
         val details = if (snapshot.waitMode == "BUY") {
-            "Осторожный вход: ${snapshot.trendReadiness}/100\n" +
-                if (snapshot.aggressive) "Вход после шока: ${snapshot.shockReadiness}/100\n" else ""
+            "Базовый тренд: ${snapshot.trendReadiness}/100\n" +
+                "Серия падений + разворот + покупатели + рынок: ${snapshot.shockReadiness}/100\n"
         } else {
             "Готовность к продаже: ${kotlin.math.abs(snapshot.readinessScore)}/100\n"
         }
@@ -249,7 +255,7 @@ class MainActivity : AppCompatActivity() {
         tvPosition?.text = if (snapshot.waitMode == "SELL" && snapshot.entryPrice > 0.0) {
             String.format(
                 Locale.US,
-                "Позиция: %s | вход %.8f EUR | максимум %.8f | 50%% продано: %s",
+                "Позиция: %s | вход %.8f EUR | максимум %.8f | частично продано: %s",
                 friendlyMode(snapshot.strategyMode),
                 snapshot.entryPrice,
                 snapshot.highestClose,
@@ -266,11 +272,13 @@ class MainActivity : AppCompatActivity() {
         btnStop?.alpha = if (snapshot.running) 1f else 0.65f
         btnManual?.text = when {
             snapshot.waitMode == "BUY" -> "Я КУПИЛ — ЖДУ ПРОДАЖУ"
-            snapshot.signalAction == StrategyV2.ACTION_SELL_HALF && !snapshot.partialTaken -> "Я ПРОДАЛ 50% — ВЕСТИ ОСТАТОК"
+            snapshot.signalAction == StrategyV2.ACTION_SELL_HALF && !snapshot.partialTaken -> {
+                if (snapshot.strategyMode == StrategyV2.MODE_EXHAUSTION) "Я ПРОДАЛ 40% — ВЕСТИ 60%" else "Я ПРОДАЛ 50% — ВЕСТИ ОСТАТОК"
+            }
             else -> "Я ПРОДАЛ — ЖДУ ПОКУПКУ"
         }
         btnToggleMode?.text = "ПОЧЕМУ ТАКОЙ СИГНАЛ?"
-        chart?.setData("PUMP/EUR V2", snapshot.chart)
+        chart?.setData("PUMP/EUR • 4 ЭТАПА", snapshot.chart)
     }
 
     private fun renderReadiness(snapshot: LiveSnapshot) {
@@ -300,14 +308,15 @@ class MainActivity : AppCompatActivity() {
         btnRisk35?.backgroundTintList = ColorStateList.valueOf(Color.parseColor(if (aggressive) "#B62324" else "#30363D"))
         btnRisk30?.alpha = if (!aggressive) 1f else 0.72f
         btnRisk35?.alpha = if (aggressive) 1f else 0.72f
-        btnRisk30?.text = "ОСТОРОЖНЫЙ\n1 ТИП ВХОДА\nВСЯ ПРОДАЖА +8%"
-        btnRisk35?.text = "АГРЕССИВНЫЙ\n2 ТИПА ВХОДА\n50% ПРИ +6%"
+        btnRisk30?.text = "СТРОГИЙ\nБЛИЖЕ КО ДНУ\nМЕНЬШЕ ВХОДОВ"
+        btnRisk35?.text = "ЧУВСТВИТЕЛЬНЫЙ\nЛОВИТ РАЗВОРОТ\nБОЛЬШЕ ВХОДОВ"
     }
 
     private fun friendlyMode(mode: String): String {
         return when (mode) {
-            StrategyV2.MODE_SHOCK -> "агрессивный вход"
-            StrategyV2.MODE_TREND -> "осторожный вход"
+            StrategyV2.MODE_EXHAUSTION -> "4-этапный разворот"
+            StrategyV2.MODE_SHOCK -> "импульс после падения"
+            StrategyV2.MODE_TREND -> "трендовый вход"
             else -> "ожидание"
         }
     }

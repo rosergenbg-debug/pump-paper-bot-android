@@ -38,8 +38,8 @@ object SignalGaugeDialog {
             text = buildString {
                 append(direction)
                 if (snapshot.waitMode == "BUY") {
-                    append("\nОсторожный: ${snapshot.trendReadiness}/100")
-                    if (snapshot.aggressive) append(" • после шока: ${snapshot.shockReadiness}/100")
+                    append("\nБазовый тренд: ${snapshot.trendReadiness}/100")
+                    append(" • 4 этапа: ${snapshot.shockReadiness}/100")
                 }
                 append("\n\n+100 и −100 — полное выполнение правил стратегии, а не гарантия результата.")
             }

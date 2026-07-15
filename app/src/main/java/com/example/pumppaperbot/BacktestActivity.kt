@@ -29,15 +29,15 @@ class BacktestActivity : AppCompatActivity() {
         }
         root.addView(button("< Главное меню", "#30363D").apply { setOnClickListener { finish() } }, LinearLayout.LayoutParams(-1, dp(44)))
         root.addView(label("ПРОВЕРКА НАЗАД PUMP/EUR", 24, "#F0F6FC", true))
-        root.addView(label("Выберите тот же профиль, который хотите использовать в live. Проверяются PUMP, BTC и funding.", 14, "#8B949E", false))
+        root.addView(label("Проверяются PUMP/EUR, BTC, ETH, SOL, spot/futures-покупатели, premium и funding.", 14, "#8B949E", false))
         root.addView(label("Комиссия 0,15% на вход и 0,15% на выход. Проскальзывание 0,05%. Стоп цены 4,4%.", 14, "#C9D1D9", false))
-        root.addView(label("Другие монеты отключены: этот V2-алгоритм подтвердился только на истории PUMP.", 14, "#F0B72F", true))
+        root.addView(label("Другие монеты отключены: параметры проверены именно на истории PUMP.", 14, "#F0B72F", true))
 
         val profileRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        cautiousButton = button("ОСТОРОЖНЫЙ\n1 вход • +8%", "#30363D").apply {
+        cautiousButton = button("СТРОГИЙ\nближе ко дну", "#30363D").apply {
             setOnClickListener { aggressive = false; renderProfiles() }
         }
-        aggressiveButton = button("АГРЕССИВНЫЙ\n2 входа • 50%", "#30363D").apply {
+        aggressiveButton = button("ЧУВСТВИТЕЛЬНЫЙ\nбольше входов", "#30363D").apply {
             setOnClickListener { aggressive = true; renderProfiles() }
         }
         profileRow.addView(cautiousButton, LinearLayout.LayoutParams(0, dp(72), 1f))
@@ -47,7 +47,7 @@ class BacktestActivity : AppCompatActivity() {
 
         dateButton = button("СТАРТ: ${PumpBotEngine.formatDate(startTime)}", "#30363D").apply { setOnClickListener { pickDate() } }
         root.addView(dateButton, LinearLayout.LayoutParams(-1, dp(52)).apply { topMargin = dp(14) })
-        root.addView(button("ЗАПУСТИТЬ V2 BACKTEST", "#238636").apply {
+        root.addView(button("ЗАПУСТИТЬ ПРОВЕРКУ 4 ЭТАПОВ", "#238636").apply {
             setOnClickListener {
                 startActivity(
                     Intent(this@BacktestActivity, BacktestResultActivity::class.java)

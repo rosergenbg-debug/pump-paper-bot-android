@@ -403,15 +403,17 @@ class StrategyChartView @JvmOverloads constructor(
         var activeMode = StrategyV2.MODE_TREND
         trades.sortedBy { it.time }.forEach { trade ->
             if (trade.action == "BUY") {
-                activeMode = if (trade.reason.contains("Агрессив", ignoreCase = true) ||
-                    trade.reason.contains("шок", ignoreCase = true)
-                ) StrategyV2.MODE_SHOCK else StrategyV2.MODE_TREND
+                activeMode = when {
+                    trade.reason.contains("Чувствитель", ignoreCase = true) -> StrategyV2.MODE_EXHAUSTION
+                    trade.reason.contains("шок", ignoreCase = true) || trade.reason.contains("импульс", ignoreCase = true) -> StrategyV2.MODE_SHOCK
+                    else -> StrategyV2.MODE_TREND
+                }
             }
             val index = candles.indexOfLast { it.closeTime <= trade.time }
             if (index < 0) return@forEach
             val cx = x(index)
             val cy = y(trade.price)
-            val modePaint = if (activeMode == StrategyV2.MODE_SHOCK) sellPaint else buyPaint
+            val modePaint = if (activeMode == StrategyV2.MODE_EXHAUSTION || activeMode == StrategyV2.MODE_SHOCK) sellPaint else buyPaint
             if (trade.action == "BUY") {
                 canvas.drawCircle(cx, cy + 34f, 9f, modePaint)
                 canvas.drawLine(cx, cy + 34f, cx, cy + 9f, arrowPaint)
@@ -433,7 +435,8 @@ class StrategyChartView @JvmOverloads constructor(
                     close()
                 }
                 canvas.drawPath(arrow, arrowPaint)
-                canvas.drawText(if (trade.action == "SELL_HALF") "ВЫХОД 50%" else "ВЫХОД", cx, cy - 48f, markerTextPaint)
+                val partialLabel = if (trade.reason.startsWith("40%")) "ВЫХОД 40%" else "ВЫХОД 50%"
+                canvas.drawText(if (trade.action == "SELL_HALF") partialLabel else "ВЫХОД", cx, cy - 48f, markerTextPaint)
                 if (trade.action != "SELL_HALF") activeMode = StrategyV2.MODE_TREND
             }
         }

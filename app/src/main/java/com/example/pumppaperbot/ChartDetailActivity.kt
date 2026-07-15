@@ -21,7 +21,7 @@ class ChartDetailActivity : AppCompatActivity() {
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(35, TimeUnit.SECONDS)
         .build()
-    private val executor = Executors.newFixedThreadPool(4)
+    private val executor = Executors.newFixedThreadPool(8)
 
     private lateinit var chart: StrategyChartView
     private lateinit var status: TextView
@@ -37,6 +37,10 @@ class ChartDetailActivity : AppCompatActivity() {
     private var startTime = 0L
     private var allCandles: List<PumpCandle> = emptyList()
     private var btcCandles: List<PumpCandle> = emptyList()
+    private var ethCandles: List<PumpCandle> = emptyList()
+    private var solCandles: List<PumpCandle> = emptyList()
+    private var futuresCandles: List<PumpCandle> = emptyList()
+    private var premiumCandles: List<PumpCandle> = emptyList()
     private var funding: List<FundingPoint> = emptyList()
     private var signalPoints: List<TradeEvent> = emptyList()
     private var activePointIndex = -1
@@ -71,8 +75,8 @@ class ChartDetailActivity : AppCompatActivity() {
         root.addView(status)
 
         val profiles = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        cautiousButton = button("ОСТОРОЖНЫЙ", "#30363D").apply { setOnClickListener { selectProfile(false) } }
-        aggressiveButton = button("АГРЕССИВНЫЙ", "#30363D").apply { setOnClickListener { selectProfile(true) } }
+        cautiousButton = button("СТРОГИЙ", "#30363D").apply { setOnClickListener { selectProfile(false) } }
+        aggressiveButton = button("ЧУВСТВИТЕЛЬНЫЙ", "#30363D").apply { setOnClickListener { selectProfile(true) } }
         profiles.addView(cautiousButton, LinearLayout.LayoutParams(0, dp(48), 1f))
         profiles.addView(aggressiveButton, LinearLayout.LayoutParams(0, dp(48), 1f).apply { leftMargin = dp(8) })
         root.addView(profiles)
@@ -145,9 +149,9 @@ class ChartDetailActivity : AppCompatActivity() {
         cautiousButton.backgroundTintList = ColorStateList.valueOf(Color.parseColor(if (!aggressive) "#238636" else "#30363D"))
         aggressiveButton.backgroundTintList = ColorStateList.valueOf(Color.parseColor(if (aggressive) "#B62324" else "#30363D"))
         profileStatus.text = if (aggressive) {
-            "Агрессивный: зелёные осторожные входы + красные входы после шока"
+            "Чувствительный: допускает более позднее подтверждение после серии падений"
         } else {
-            "Осторожный: только зелёные входы"
+            "Строгий: вход после серии падений только пока цена остается близко ко дну"
         }
     }
 
@@ -184,7 +188,7 @@ class ChartDetailActivity : AppCompatActivity() {
         chart.centerOnTime(trade.time)
         val action = when (trade.action) {
             "BUY" -> "ВХОД"
-            "SELL_HALF" -> "ВЫХОД 50%"
+            "SELL_HALF" -> if (trade.reason.startsWith("40%")) "ВЫХОД 40%" else "ВЫХОД 50%"
             else -> "ВЫХОД"
         }
         pointStatus.text = String.format(
@@ -206,12 +210,20 @@ class ChartDetailActivity : AppCompatActivity() {
         val pumpFuture = executor.submit<List<PumpCandle>> { fetchCandles(PumpBotEngine.pumpSymbol, warmupStart, endTime) }
         val eurFuture = executor.submit<List<PumpCandle>> { fetchCandles(PumpBotEngine.eurSymbol, warmupStart, endTime) }
         val btcFuture = executor.submit<List<PumpCandle>> { fetchCandles(PumpBotEngine.btcSymbol, warmupStart, endTime) }
+        val ethFuture = executor.submit<List<PumpCandle>> { fetchCandles(PumpBotEngine.ethSymbol, warmupStart, endTime) }
+        val solFuture = executor.submit<List<PumpCandle>> { fetchCandles(PumpBotEngine.solSymbol, warmupStart, endTime) }
+        val futuresFuture = executor.submit<List<PumpCandle>> { fetchDerivativeCandles(warmupStart, endTime, false) }
+        val premiumFuture = executor.submit<List<PumpCandle>> { fetchDerivativeCandles(warmupStart, endTime, true) }
         val fundingFuture = executor.submit<List<FundingPoint>> { fetchFunding(warmupStart, endTime) }
 
         executor.execute {
             try {
                 allCandles = StrategyV2.synthesizeEur(pumpFuture.get(), eurFuture.get())
                 btcCandles = btcFuture.get()
+                ethCandles = ethFuture.get()
+                solCandles = solFuture.get()
+                futuresCandles = futuresFuture.get()
+                premiumCandles = premiumFuture.get()
                 funding = fundingFuture.get()
                 runOnUiThread { renderHistory(focusLastSignal = true) }
             } catch (e: Exception) {
@@ -224,7 +236,10 @@ class ChartDetailActivity : AppCompatActivity() {
     }
 
     private fun renderHistory(focusLastSignal: Boolean) {
-        val result = StrategyV2.backtest(allCandles, btcCandles, funding, startTime, aggressive)
+        val result = StrategyV2.backtest(
+            allCandles, btcCandles, funding, startTime, aggressive,
+            ethCandles, solCandles, futuresCandles, premiumCandles
+        )
         val closes = allCandles.map { it.close }
         val fast = ema(closes, PumpBotEngine.emaFastPeriod)
         val slow = ema(closes, PumpBotEngine.emaSlowPeriod)
@@ -280,6 +295,25 @@ class ChartDetailActivity : AppCompatActivity() {
             cursor = next
         }
         return all.distinctBy { it.time }.sortedBy { it.time }
+    }
+
+    private fun fetchDerivativeCandles(start: Long, end: Long, premium: Boolean): List<PumpCandle> {
+        val all = ArrayList<PumpCandle>()
+        var cursor = start
+        while (cursor < end && !Thread.currentThread().isInterrupted) {
+            val url = if (premium) {
+                PumpBotEngine.historicalPremiumKlineUrl(PumpBotEngine.pumpSymbol, "30m", cursor, end)
+            } else {
+                PumpBotEngine.historicalFuturesKlineUrl(PumpBotEngine.pumpSymbol, "30m", cursor, end)
+            }
+            val batch = PumpBotEngine.parseCandles(request(url))
+            if (batch.isEmpty()) break
+            all.addAll(batch)
+            val next = batch.last().closeTime + 1L
+            if (next <= cursor || batch.size < 1000) break
+            cursor = next
+        }
+        return all.distinctBy { it.closeTime }.sortedBy { it.closeTime }
     }
 
     private fun request(url: String): String {

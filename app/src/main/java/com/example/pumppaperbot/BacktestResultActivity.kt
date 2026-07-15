@@ -12,6 +12,7 @@ import androidx.appcompat.app.AppCompatActivity
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.Locale
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
@@ -55,7 +56,7 @@ class BacktestResultActivity : AppCompatActivity() {
         root.addView(navRow)
 
         root.addView(label("РЕЗУЛЬТАТ ПРОВЕРКИ", 23, "#F0F6FC", true))
-        val profile = if (aggressive) "Агрессивный: 2 входа" else "Осторожный: 1 вход"
+        val profile = if (aggressive) "Чувствительный" else "Строгий"
         root.addView(label("PUMP/EUR | $profile | старт ${PumpBotEngine.formatDate(startTime)}", 13, "#8B949E", false))
 
         status = label("Загружаю свечи 30 минут...", 14, "#8B949E", false)
@@ -72,17 +73,25 @@ class BacktestResultActivity : AppCompatActivity() {
     }
 
     private fun runBacktest() {
-        status.text = "Загружаю PUMP, EUR, BTC и funding..."
+        status.text = "Загружаю PUMP, BTC, ETH, SOL, spot/futures и funding..."
         thread {
+            val pool = Executors.newFixedThreadPool(8)
             try {
                 val warmupStart = startTime - TimeUnit.DAYS.toMillis(14)
                 val end = System.currentTimeMillis()
-                val pump = fetchCandles(PumpBotEngine.pumpSymbol, warmupStart, end)
-                val eur = fetchCandles(PumpBotEngine.eurSymbol, warmupStart, end)
-                val btc = fetchCandles(PumpBotEngine.btcSymbol, warmupStart, end)
-                val funding = fetchFunding(warmupStart, end)
-                val candles = StrategyV2.synthesizeEur(pump, eur)
-                val result = StrategyV2.backtest(candles, btc, funding, startTime, aggressive)
+                val pump = pool.submit<List<PumpCandle>> { fetchCandles(PumpBotEngine.pumpSymbol, warmupStart, end) }
+                val eur = pool.submit<List<PumpCandle>> { fetchCandles(PumpBotEngine.eurSymbol, warmupStart, end) }
+                val btc = pool.submit<List<PumpCandle>> { fetchCandles(PumpBotEngine.btcSymbol, warmupStart, end) }
+                val eth = pool.submit<List<PumpCandle>> { fetchCandles(PumpBotEngine.ethSymbol, warmupStart, end) }
+                val sol = pool.submit<List<PumpCandle>> { fetchCandles(PumpBotEngine.solSymbol, warmupStart, end) }
+                val futures = pool.submit<List<PumpCandle>> { fetchDerivativeCandles(warmupStart, end, false) }
+                val premium = pool.submit<List<PumpCandle>> { fetchDerivativeCandles(warmupStart, end, true) }
+                val funding = pool.submit<List<FundingPoint>> { fetchFunding(warmupStart, end) }
+                val candles = StrategyV2.synthesizeEur(pump.get(), eur.get())
+                val result = StrategyV2.backtest(
+                    candles, btc.get(), funding.get(), startTime, aggressive,
+                    eth.get(), sol.get(), futures.get(), premium.get()
+                )
                 runOnUiThread {
                     val note = if (result.firstCandleTime > 0L && startTime < result.firstCandleTime) {
                         " Первые данные: ${PumpBotEngine.formatDate(result.firstCandleTime)}."
@@ -96,6 +105,8 @@ class BacktestResultActivity : AppCompatActivity() {
                 runOnUiThread {
                     status.text = "Проверка не удалась: ${e.message}"
                 }
+            } finally {
+                pool.shutdownNow()
             }
         }
     }
@@ -146,6 +157,34 @@ class BacktestResultActivity : AppCompatActivity() {
         return all.distinctBy { it.time }.sortedBy { it.time }
     }
 
+    private fun fetchDerivativeCandles(start: Long, end: Long, premium: Boolean): List<PumpCandle> {
+        val all = ArrayList<PumpCandle>()
+        var cursor = start
+        while (cursor < end) {
+            val url = if (premium) {
+                PumpBotEngine.historicalPremiumKlineUrl(PumpBotEngine.pumpSymbol, "30m", cursor, end)
+            } else {
+                PumpBotEngine.historicalFuturesKlineUrl(PumpBotEngine.pumpSymbol, "30m", cursor, end)
+            }
+            val request = Request.Builder()
+                .url(url)
+                .header("Accept", "application/json")
+                .header("User-Agent", "PumpSignalAndroid/${PumpBotEngine.appVersionName}")
+                .build()
+            val body = client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) error("Futures HTTP ${response.code}")
+                response.body?.string().orEmpty()
+            }
+            val batch = PumpBotEngine.parseCandles(body)
+            if (batch.isEmpty()) break
+            all.addAll(batch)
+            val next = batch.last().closeTime + 1L
+            if (next <= cursor || batch.size < 1000) break
+            cursor = next
+        }
+        return all.distinctBy { it.closeTime }.sortedBy { it.closeTime }
+    }
+
     private fun showResult(result: BacktestResult) {
         resultBox.removeAllViews()
         resultBox.addView(summary(result))
@@ -180,7 +219,7 @@ class BacktestResultActivity : AppCompatActivity() {
         val color = if (trade.action == "BUY") "#32C789" else "#FF4D6D"
         val action = when (trade.action) {
             "BUY" -> "ПОКУПКА"
-            "SELL_HALF" -> "ПРОДАЖА 50%"
+            "SELL_HALF" -> if (trade.reason.startsWith("40%")) "ПРОДАЖА 40%" else "ПРОДАЖА 50%"
             else -> "ПРОДАЖА"
         }
         val pnl = if (trade.action != "BUY") String.format(Locale.US, " | результат %+.2f", trade.pnl) else ""

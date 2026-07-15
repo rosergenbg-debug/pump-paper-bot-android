@@ -68,7 +68,7 @@
                 android:backgroundTint="#30363D"
                 android:includeFontPadding="false"
                 android:padding="4dp"
-                android:text="ОСТОРОЖНЫЙ"
+                android:text="СТРОГИЙ"
                 android:textColor="#FFFFFF"
                 android:textSize="12sp"
                 android:textStyle="bold" />
@@ -82,7 +82,7 @@
                 android:backgroundTint="#238636"
                 android:includeFontPadding="false"
                 android:padding="4dp"
-                android:text="АГРЕССИВНЫЙ"
+                android:text="ЧУВСТВИТЕЛЬНЫЙ"
                 android:textColor="#FFFFFF"
                 android:textSize="12sp"
                 android:textStyle="bold" />

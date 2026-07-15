@@ -15,7 +15,10 @@ data class PumpCandle(
     val low: Double,
     val close: Double,
     val volume: Double,
-    val closeTime: Long
+    val closeTime: Long,
+    val quoteVolume: Double = 0.0,
+    val tradeCount: Int = 0,
+    val takerBuyVolume: Double = 0.0
 )
 
 data class TradeEvent(
@@ -48,7 +51,7 @@ data class BacktestResult(
 ) {
     companion object {
         fun empty(startTime: Long = 0L) = BacktestResult(
-            "PUMP", "PUMP/EUR", "Профиль V2", PumpBotEngine.startBalance,
+            "PUMP", "PUMP/EUR", "Профиль 4 этапа", PumpBotEngine.startBalance,
             0.0, 0.0, 0.0, emptyList(), startTime, startTime, 0, 0.0, 0.0, 0
         )
     }
@@ -95,7 +98,7 @@ data class LiveSnapshot(
 data class CoinOption(val name: String, val symbol: String)
 
 object PumpBotEngine {
-    const val appVersionName = "1.6"
+    const val appVersionName = "1.7"
     const val startBalance = 1000.0
     const val feeRate = 0.0015
     const val slippage = 0.0005
@@ -108,11 +111,13 @@ object PumpBotEngine {
     const val trailingStop = 0.04
     const val pumpSymbol = "PUMPUSDT"
     const val btcSymbol = "BTCUSDT"
+    const val ethSymbol = "ETHUSDT"
+    const val solSymbol = "SOLUSDT"
     const val eurSymbol = "EURUSDT"
     const val uniqueWorkName = "pump_rsi_risk_periodic_monitor"
 
-    private const val prefsName = "PumpSignalV15"
-    private const val algorithmVersion = 15
+    private const val prefsName = "PumpSignalV17"
+    private const val algorithmVersion = 17
     private const val keyVersion = "algorithm_version"
     private const val keyRunning = "running"
     private const val keyWaitMode = "wait_mode"
@@ -142,6 +147,10 @@ object PumpBotEngine {
     private const val keyMarketJson = "market_json"
     private const val keyEurJson = "eur_json"
     private const val keyBtcJson = "btc_json"
+    private const val keyEthJson = "eth_json"
+    private const val keySolJson = "sol_json"
+    private const val keyFuturesJson = "futures_json"
+    private const val keyPremiumJson = "premium_json"
     private const val keyFundingJson = "funding_json"
 
     val coinOptions = listOf(CoinOption("PUMP", "PUMPUSDT"))
@@ -187,6 +196,10 @@ object PumpBotEngine {
             .putString(keyMarketJson, "")
             .putString(keyEurJson, "")
             .putString(keyBtcJson, "")
+            .putString(keyEthJson, "")
+            .putString(keySolJson, "")
+            .putString(keyFuturesJson, "")
+            .putString(keyPremiumJson, "")
             .putString(keyFundingJson, "")
             .apply()
     }
@@ -237,9 +250,10 @@ object PumpBotEngine {
     fun confirmBought(context: Context) {
         val s = snapshot(context)
         val confirmedMode = when {
+            s.strategyMode == StrategyV2.MODE_EXHAUSTION -> StrategyV2.MODE_EXHAUSTION
             s.strategyMode == StrategyV2.MODE_SHOCK -> StrategyV2.MODE_SHOCK
             s.strategyMode == StrategyV2.MODE_TREND -> StrategyV2.MODE_TREND
-            s.aggressive && s.shockReadiness > s.trendReadiness -> StrategyV2.MODE_SHOCK
+            s.shockReadiness > s.trendReadiness -> StrategyV2.MODE_EXHAUSTION
             else -> StrategyV2.MODE_TREND
         }
         prefs(context).edit()
@@ -292,15 +306,53 @@ object PumpBotEngine {
         return "https://fapi.binance.com/fapi/v1/fundingRate?symbol=$encoded$range&limit=1000"
     }
 
-    fun syncMarket(context: Context, pumpJson: String, eurJson: String, btcJson: String, fundingJson: String) {
+    fun futuresKlineUrl(symbol: String = pumpSymbol, interval: String = "30m", limit: Int = 1000): String {
+        val encoded = URLEncoder.encode(symbol, "UTF-8")
+        return "https://fapi.binance.com/fapi/v1/klines?symbol=$encoded&interval=$interval&limit=$limit"
+    }
+
+    fun historicalFuturesKlineUrl(symbol: String, interval: String, start: Long, end: Long): String {
+        val encoded = URLEncoder.encode(symbol, "UTF-8")
+        return "https://fapi.binance.com/fapi/v1/klines?symbol=$encoded&interval=$interval&startTime=$start&endTime=$end&limit=1500"
+    }
+
+    fun premiumKlineUrl(symbol: String = pumpSymbol, interval: String = "30m", limit: Int = 1000): String {
+        val encoded = URLEncoder.encode(symbol, "UTF-8")
+        return "https://fapi.binance.com/fapi/v1/premiumIndexKlines?symbol=$encoded&interval=$interval&limit=$limit"
+    }
+
+    fun historicalPremiumKlineUrl(symbol: String, interval: String, start: Long, end: Long): String {
+        val encoded = URLEncoder.encode(symbol, "UTF-8")
+        return "https://fapi.binance.com/fapi/v1/premiumIndexKlines?symbol=$encoded&interval=$interval&startTime=$start&endTime=$end&limit=1500"
+    }
+
+    fun syncMarket(
+        context: Context,
+        pumpJson: String,
+        eurJson: String,
+        btcJson: String,
+        ethJson: String,
+        solJson: String,
+        futuresJson: String,
+        premiumJson: String,
+        fundingJson: String
+    ) {
         ensureInitialized(context)
         val candles = StrategyV2.synthesizeEur(parseCandles(pumpJson), parseCandles(eurJson))
         val btc = parseCandles(btcJson)
+        val eth = parseCandles(ethJson)
+        val sol = parseCandles(solJson)
+        val futures = parseCandles(futuresJson)
+        val premium = parseCandles(premiumJson)
         val funding = parseFunding(fundingJson)
         val p = prefs(context)
         val evaluation = evaluateLive(
             candles = candles,
             btcCandles = btc,
+            ethCandles = eth,
+            solCandles = sol,
+            futuresCandles = futures,
+            premiumCandles = premium,
             funding = funding,
             waitMode = p.getString(keyWaitMode, "BUY").orEmpty(),
             entryPrice = p.getDouble(keyEntryPrice, 0.0),
@@ -316,6 +368,10 @@ object PumpBotEngine {
             .putString(keyMarketJson, pumpJson)
             .putString(keyEurJson, eurJson)
             .putString(keyBtcJson, btcJson)
+            .putString(keyEthJson, ethJson)
+            .putString(keySolJson, solJson)
+            .putString(keyFuturesJson, futuresJson)
+            .putString(keyPremiumJson, premiumJson)
             .putString(keyFundingJson, fundingJson)
             .putLong(keyLastSync, System.currentTimeMillis())
             .putLong(keyLastCandle, evaluation.lastCandle)
@@ -439,7 +495,10 @@ object PumpBotEngine {
                         low = row.getString(3).toDouble(),
                         close = row.getString(4).toDouble(),
                         volume = row.getString(5).toDouble(),
-                        closeTime = closeTime
+                        closeTime = closeTime,
+                        quoteVolume = row.optString(7, "0").toDoubleOrNull() ?: 0.0,
+                        tradeCount = row.optInt(8, 0),
+                        takerBuyVolume = row.optString(9, "0").toDoubleOrNull() ?: 0.0
                     )
                 )
             }
@@ -482,6 +541,10 @@ object PumpBotEngine {
     private fun evaluateLive(
         candles: List<PumpCandle>,
         btcCandles: List<PumpCandle>,
+        ethCandles: List<PumpCandle>,
+        solCandles: List<PumpCandle>,
+        futuresCandles: List<PumpCandle>,
+        premiumCandles: List<PumpCandle>,
         funding: List<FundingPoint>,
         waitMode: String,
         entryPrice: Double,
@@ -510,9 +573,12 @@ object PumpBotEngine {
         val latestFunding = funding.lastOrNull { it.time <= candle.closeTime }?.rate ?: 0.0
 
         if (waitMode == "BUY") {
-            val entry = StrategyV2.latestEntrySignal(candles, btcCandles, funding, aggressive)
+            val entry = StrategyV2.latestEntrySignal(
+                candles, btcCandles, funding, aggressive,
+                ethCandles, solCandles, futuresCandles, premiumCandles
+            )
             val action = if (entry.active) "BUY" else "WAIT"
-            val readiness = if (aggressive) maxOf(entry.trendReadiness, entry.shockReadiness) else entry.trendReadiness
+            val readiness = maxOf(entry.trendReadiness, entry.shockReadiness)
             return LiveEvaluation(
                 candle.closeTime, candle.close, entry.rsi, entry.ema200, entry.funding, entry.mode,
                 entry.active, false, action, entry.reason, storedHighest,

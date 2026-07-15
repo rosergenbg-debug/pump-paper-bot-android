@@ -66,6 +66,7 @@ object PumpAlert {
             score == 99 -> "PUMP/EUR: ГОТОВНОСТЬ К ПОКУПКЕ 99/100"
             score == -99 -> "PUMP/EUR: ГОТОВНОСТЬ К ПРОДАЖЕ 99/100"
             snapshot.signalAction == "BUY" -> "PUMP/EUR: +100 — ПОКУПАТЬ"
+            snapshot.signalAction == StrategyV2.ACTION_SELL_HALF && snapshot.strategyMode == StrategyV2.MODE_EXHAUSTION -> "PUMP/EUR: −100 — ПРОДАТЬ 40%"
             snapshot.signalAction == StrategyV2.ACTION_SELL_HALF -> "PUMP/EUR: −100 — ПРОДАТЬ 50%"
             else -> "PUMP/EUR: −100 — ПРОДАВАТЬ"
         }
