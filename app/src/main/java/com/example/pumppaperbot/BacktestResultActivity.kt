@@ -23,15 +23,11 @@ class BacktestResultActivity : AppCompatActivity() {
 
     private lateinit var status: TextView
     private lateinit var resultBox: LinearLayout
-    private var coinIndex = 0
-    private var selectedRisk = 35.0
     private var startTime = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        coinIndex = intent.getIntExtra(extraCoinIndex, 0)
-        selectedRisk = intent.getDoubleExtra(extraRisk, 35.0)
-        startTime = intent.getLongExtra(extraStartTime, System.currentTimeMillis() - TimeUnit.DAYS.toMillis(180))
+        startTime = intent.getLongExtra(extraStartTime, System.currentTimeMillis() - TimeUnit.DAYS.toMillis(365))
         render()
         runBacktest()
     }
@@ -56,9 +52,8 @@ class BacktestResultActivity : AppCompatActivity() {
         navRow.addView(mainButton, LinearLayout.LayoutParams(0, dp(44), 1f).apply { leftMargin = dp(8) })
         root.addView(navRow)
 
-        val selected = PumpBotEngine.coinOptions.getOrElse(coinIndex) { PumpBotEngine.coinOptions.first() }
         root.addView(label("РЕЗУЛЬТАТ ПРОВЕРКИ", 23, "#F0F6FC", true))
-        root.addView(label("${selected.name} ${selected.symbol} | RSI ${selectedRisk.toInt()} | старт ${PumpBotEngine.formatDate(startTime)}", 13, "#8B949E", false))
+        root.addView(label("PUMP/EUR | V2 тренд + шок | старт ${PumpBotEngine.formatDate(startTime)}", 13, "#8B949E", false))
 
         status = label("Загружаю свечи 30 минут...", 14, "#8B949E", false)
         root.addView(status)
@@ -74,13 +69,17 @@ class BacktestResultActivity : AppCompatActivity() {
     }
 
     private fun runBacktest() {
-        val selected = PumpBotEngine.coinOptions.getOrElse(coinIndex) { PumpBotEngine.coinOptions.first() }
-        status.text = "Загружаю ${selected.symbol}, свечи 30 минут..."
+        status.text = "Загружаю PUMP, EUR, BTC и funding..."
         thread {
             try {
                 val warmupStart = startTime - TimeUnit.DAYS.toMillis(14)
-                val candles = fetchCandles(selected.symbol, warmupStart, System.currentTimeMillis())
-                val result = PumpBotEngine.backtest(selected, candles, startTime, selectedRisk)
+                val end = System.currentTimeMillis()
+                val pump = fetchCandles(PumpBotEngine.pumpSymbol, warmupStart, end)
+                val eur = fetchCandles(PumpBotEngine.eurSymbol, warmupStart, end)
+                val btc = fetchCandles(PumpBotEngine.btcSymbol, warmupStart, end)
+                val funding = fetchFunding(warmupStart, end)
+                val candles = StrategyV2.synthesizeEur(pump, eur)
+                val result = StrategyV2.backtest(candles, btc, funding, startTime)
                 runOnUiThread {
                     val note = if (result.firstCandleTime > 0L && startTime < result.firstCandleTime) {
                         " Первые данные: ${PumpBotEngine.formatDate(result.firstCandleTime)}."
@@ -121,6 +120,29 @@ class BacktestResultActivity : AppCompatActivity() {
         return all.distinctBy { it.closeTime }.sortedBy { it.closeTime }
     }
 
+    private fun fetchFunding(start: Long, end: Long): List<FundingPoint> {
+        val all = ArrayList<FundingPoint>()
+        var cursor = start
+        while (cursor < end) {
+            val request = Request.Builder()
+                .url(PumpBotEngine.fundingUrl(PumpBotEngine.pumpSymbol, cursor, end))
+                .header("Accept", "application/json")
+                .header("User-Agent", "PumpSignalAndroid/${PumpBotEngine.appVersionName}")
+                .build()
+            val body = client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) error("Funding HTTP ${response.code}")
+                response.body?.string().orEmpty()
+            }
+            val batch = PumpBotEngine.parseFunding(body)
+            if (batch.isEmpty()) break
+            all.addAll(batch)
+            val next = batch.last().time + 1L
+            if (next <= cursor || batch.size < 1000) break
+            cursor = next
+        }
+        return all.distinctBy { it.time }.sortedBy { it.time }
+    }
+
     private fun showResult(result: BacktestResult) {
         resultBox.removeAllViews()
         resultBox.addView(summary(result))
@@ -140,21 +162,27 @@ class BacktestResultActivity : AppCompatActivity() {
             setPadding(dp(12), dp(12), dp(12), dp(12))
             setBackgroundColor(Color.parseColor("#161B22"))
             addView(label("${result.assetName} ${result.symbol}", 19, "#F0F6FC", true))
-            addView(label("Риск: RSI <= ${result.buyRsi.toInt()}", 14, "#F0F6FC", true))
+            addView(label(result.strategyName, 14, "#F0F6FC", true))
             addView(label("Старт: ${PumpBotEngine.formatDate(startTime)}", 13, "#8B949E", false))
-            addView(label(String.format(Locale.US, "Вложили: %.2f USDT", PumpBotEngine.startBalance), 15, "#C9D1D9", false))
-            addView(label(String.format(Locale.US, "Сейчас: %.2f USDT | результат %+.2f USDT (%+.2f%%)", result.equity, result.profit, result.profitPercent), 19, if (result.profit >= 0) "#32C789" else "#FF4D6D", true))
-            addView(label(String.format(Locale.US, "Сделок: %d | комиссии: %.2f USDT | комиссия за операцию: %.2f%%", result.trades.size, result.totalFees, PumpBotEngine.feeRate * 100.0), 14, "#F0F6FC", false))
+            addView(label(String.format(Locale.US, "Вложили: %.2f EUR", PumpBotEngine.startBalance), 15, "#C9D1D9", false))
+            addView(label(String.format(Locale.US, "Сейчас: %.2f EUR | результат %+.2f EUR (%+.2f%%)", result.equity, result.profit, result.profitPercent), 19, if (result.profit >= 0) "#32C789" else "#FF4D6D", true))
+            addView(label(String.format(Locale.US, "Сделок: %d | прибыльных %.1f%% | полных стопов: %d", result.roundTrips, result.winRatePercent, result.stopCount), 14, "#F0F6FC", false))
+            addView(label(String.format(Locale.US, "Закрытая просадка: %.2f%% | комиссии: %.2f EUR | 0,15%% за операцию", result.maxDrawdownPercent, result.totalFees), 14, "#F0F6FC", false))
+            addView(label("Результат исторический и не гарантирует будущую прибыль.", 13, "#F0B72F", true))
             addView(label("Данные до: ${PumpBotEngine.formatDate(result.lastCandleTime)}", 13, "#8B949E", false))
         }
     }
 
     private fun tradeRow(trade: TradeEvent): TextView {
         val color = if (trade.action == "BUY") "#32C789" else "#FF4D6D"
-        val action = if (trade.action == "BUY") "ПОКУПКА" else "ПРОДАЖА"
-        val pnl = if (trade.action == "SELL") String.format(Locale.US, " | результат %+.2f", trade.pnl) else ""
+        val action = when (trade.action) {
+            "BUY" -> "ПОКУПКА"
+            "SELL_HALF" -> "ПРОДАЖА 50%"
+            else -> "ПРОДАЖА"
+        }
+        val pnl = if (trade.action != "BUY") String.format(Locale.US, " | результат %+.2f", trade.pnl) else ""
         return label(
-            String.format(Locale.US, "%s %s\nцена %.8f | сумма %.2f | комиссия %.2f | баланс %.2f%s\nмонет %.2f", PumpBotEngine.formatTime(trade.time), action, trade.price, trade.amount, trade.fee, trade.equity, pnl, trade.coins),
+            String.format(Locale.US, "%s %s — %s\nцена %.8f EUR | сумма %.2f | комиссия %.2f | баланс %.2f%s\nмонет %.2f", PumpBotEngine.formatTime(trade.time), action, trade.reason, trade.price, trade.amount, trade.fee, trade.equity, pnl, trade.coins),
             14,
             color,
             false
@@ -197,8 +225,6 @@ class BacktestResultActivity : AppCompatActivity() {
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     companion object {
-        const val extraCoinIndex = "coin_index"
-        const val extraRisk = "risk"
         const val extraStartTime = "start_time"
     }
 }

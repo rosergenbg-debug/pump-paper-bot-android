@@ -5,8 +5,6 @@ import android.content.Intent
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
-import okhttp3.OkHttpClient
-import okhttp3.Request
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -14,10 +12,7 @@ import java.util.concurrent.TimeUnit
 class PumpSignalService : Service() {
     private val handler = Handler(Looper.getMainLooper())
     private val executor: ExecutorService = Executors.newSingleThreadExecutor()
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(12, TimeUnit.SECONDS)
-        .readTimeout(20, TimeUnit.SECONDS)
-        .build()
+    private val market = MarketSyncClient()
 
     private val loop = object : Runnable {
         override fun run() {
@@ -53,16 +48,7 @@ class PumpSignalService : Service() {
     private fun checkNow() {
         executor.execute {
             try {
-                val request = Request.Builder()
-                    .url(PumpBotEngine.klineUrl(PumpBotEngine.pumpSymbol, "30m"))
-                    .header("Accept", "application/json")
-                    .header("User-Agent", "PumpRsiRiskBotAndroid/${PumpBotEngine.appVersionName}")
-                    .build()
-                val json = client.newCall(request).execute().use { response ->
-                    if (!response.isSuccessful) error("HTTP ${response.code}")
-                    response.body?.string().orEmpty()
-                }
-                PumpBotEngine.syncPump(this, json)
+                market.sync(this)
                 val snapshot = PumpBotEngine.snapshot(this)
                 if (PumpBotEngine.shouldAlert(this, snapshot)) {
                     PumpAlert.showSignal(this, snapshot)

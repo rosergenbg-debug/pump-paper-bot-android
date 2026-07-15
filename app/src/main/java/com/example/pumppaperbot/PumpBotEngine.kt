@@ -26,21 +26,33 @@ data class TradeEvent(
     val fee: Double,
     val equity: Double,
     val pnl: Double,
-    val coins: Double
+    val coins: Double,
+    val reason: String = ""
 )
 
 data class BacktestResult(
     val assetName: String,
     val symbol: String,
-    val buyRsi: Double,
+    val strategyName: String,
     val equity: Double,
     val profit: Double,
     val profitPercent: Double,
     val totalFees: Double,
     val trades: List<TradeEvent>,
     val firstCandleTime: Long,
-    val lastCandleTime: Long
-)
+    val lastCandleTime: Long,
+    val roundTrips: Int,
+    val winRatePercent: Double,
+    val maxDrawdownPercent: Double,
+    val stopCount: Int
+) {
+    companion object {
+        fun empty(startTime: Long = 0L) = BacktestResult(
+            "PUMP", "PUMP/EUR", "V2: тренд + шок", PumpBotEngine.startBalance,
+            0.0, 0.0, 0.0, emptyList(), startTime, startTime, 0, 0.0, 0.0, 0
+        )
+    }
+}
 
 data class ChartBundle(
     val candles: List<PumpCandle>,
@@ -59,6 +71,9 @@ data class LiveSnapshot(
     val lastPrice: Double,
     val lastRsi: Double,
     val lastEma200: Double,
+    val fundingRate: Double,
+    val strategyMode: String,
+    val partialTaken: Boolean,
     val buySignal: Boolean,
     val sellSignal: Boolean,
     val signalAction: String,
@@ -71,22 +86,24 @@ data class LiveSnapshot(
 data class CoinOption(val name: String, val symbol: String)
 
 object PumpBotEngine {
-    const val appVersionName = "1.2"
+    const val appVersionName = "1.3"
     const val startBalance = 1000.0
     const val feeRate = 0.0015
     const val slippage = 0.0005
     const val rsiPeriod = 14
-    const val defaultBuyRsi = 35.0
+    const val defaultBuyRsi = 45.0
     const val sellRsi = 62.0
     const val emaFastPeriod = 50
     const val emaSlowPeriod = 200
-    const val stopLoss = 0.08
+    const val stopLoss = StrategyV2.PRICE_STOP
     const val trailingStop = 0.04
     const val pumpSymbol = "PUMPUSDT"
+    const val btcSymbol = "BTCUSDT"
+    const val eurSymbol = "EURUSDT"
     const val uniqueWorkName = "pump_rsi_risk_periodic_monitor"
 
-    private const val prefsName = "PumpRsiRiskBotV10"
-    private const val algorithmVersion = 10
+    private const val prefsName = "PumpSignalV13"
+    private const val algorithmVersion = 13
     private const val keyVersion = "algorithm_version"
     private const val keyRunning = "running"
     private const val keyWaitMode = "wait_mode"
@@ -96,6 +113,12 @@ object PumpBotEngine {
     private const val keyLastPrice = "last_price"
     private const val keyLastRsi = "last_rsi"
     private const val keyLastEma200 = "last_ema200"
+    private const val keyFundingRate = "funding_rate"
+    private const val keyStrategyMode = "strategy_mode"
+    private const val keyPendingMode = "pending_mode"
+    private const val keyEntryTime = "entry_time"
+    private const val keyPartialTaken = "partial_taken"
+    private const val keyPartialCandle = "partial_candle"
     private const val keyBuySignal = "buy_signal"
     private const val keySellSignal = "sell_signal"
     private const val keySignalAction = "signal_action"
@@ -104,6 +127,9 @@ object PumpBotEngine {
     private const val keyHighestClose = "highest_close"
     private const val keyLastAlertKey = "last_alert_key"
     private const val keyMarketJson = "market_json"
+    private const val keyEurJson = "eur_json"
+    private const val keyBtcJson = "btc_json"
+    private const val keyFundingJson = "funding_json"
 
     val coinOptions = listOf(
         CoinOption("PUMP", "PUMPUSDT"),
@@ -139,6 +165,12 @@ object PumpBotEngine {
             .putDouble(keyLastPrice, 0.0)
             .putDouble(keyLastRsi, 0.0)
             .putDouble(keyLastEma200, 0.0)
+            .putDouble(keyFundingRate, 0.0)
+            .putString(keyStrategyMode, StrategyV2.MODE_NONE)
+            .putString(keyPendingMode, StrategyV2.MODE_NONE)
+            .putLong(keyEntryTime, 0L)
+            .putBoolean(keyPartialTaken, false)
+            .putLong(keyPartialCandle, 0L)
             .putBoolean(keyBuySignal, false)
             .putBoolean(keySellSignal, false)
             .putString(keySignalAction, "WAIT")
@@ -147,6 +179,9 @@ object PumpBotEngine {
             .putDouble(keyHighestClose, 0.0)
             .putString(keyLastAlertKey, "")
             .putString(keyMarketJson, "")
+            .putString(keyEurJson, "")
+            .putString(keyBtcJson, "")
+            .putString(keyFundingJson, "")
             .apply()
     }
 
@@ -186,6 +221,19 @@ object PumpBotEngine {
             .putString(keyWaitMode, "SELL")
             .putDouble(keyEntryPrice, if (s.lastPrice > 0.0) s.lastPrice else s.entryPrice)
             .putDouble(keyHighestClose, if (s.lastPrice > 0.0) s.lastPrice else s.highestClose)
+            .putLong(keyEntryTime, s.lastCandle)
+            .putString(keyStrategyMode, s.strategyMode)
+            .putBoolean(keyPartialTaken, false)
+            .putLong(keyPartialCandle, 0L)
+            .putString(keyLastAlertKey, "")
+            .apply()
+    }
+
+    fun confirmPartialSold(context: Context) {
+        val s = snapshot(context)
+        prefs(context).edit()
+            .putBoolean(keyPartialTaken, true)
+            .putLong(keyPartialCandle, s.lastCandle)
             .putString(keyLastAlertKey, "")
             .apply()
     }
@@ -195,6 +243,10 @@ object PumpBotEngine {
             .putString(keyWaitMode, "BUY")
             .putDouble(keyEntryPrice, 0.0)
             .putDouble(keyHighestClose, 0.0)
+            .putLong(keyEntryTime, 0L)
+            .putString(keyStrategyMode, StrategyV2.MODE_NONE)
+            .putBoolean(keyPartialTaken, false)
+            .putLong(keyPartialCandle, 0L)
             .putString(keyLastAlertKey, "")
             .apply()
     }
@@ -209,25 +261,43 @@ object PumpBotEngine {
         return "https://data-api.binance.vision/api/v3/klines?symbol=$encoded&interval=$interval&startTime=$start&endTime=$end&limit=1000"
     }
 
-    fun syncPump(context: Context, json: String) {
+    fun fundingUrl(symbol: String = pumpSymbol, start: Long? = null, end: Long? = null): String {
+        val encoded = URLEncoder.encode(symbol, "UTF-8")
+        val range = if (start != null && end != null) "&startTime=$start&endTime=$end" else ""
+        return "https://fapi.binance.com/fapi/v1/fundingRate?symbol=$encoded$range&limit=1000"
+    }
+
+    fun syncMarket(context: Context, pumpJson: String, eurJson: String, btcJson: String, fundingJson: String) {
         ensureInitialized(context)
-        val candles = parseCandles(json)
+        val candles = StrategyV2.synthesizeEur(parseCandles(pumpJson), parseCandles(eurJson))
+        val btc = parseCandles(btcJson)
+        val funding = parseFunding(fundingJson)
         val p = prefs(context)
         val evaluation = evaluateLive(
             candles = candles,
+            btcCandles = btc,
+            funding = funding,
             waitMode = p.getString(keyWaitMode, "BUY").orEmpty(),
-            buyRsi = selectedBuyRsi(p),
             entryPrice = p.getDouble(keyEntryPrice, 0.0),
+            entryTime = p.getLong(keyEntryTime, 0L),
+            positionMode = p.getString(keyStrategyMode, StrategyV2.MODE_NONE).orEmpty(),
+            partialTaken = p.getBoolean(keyPartialTaken, false),
+            partialCandle = p.getLong(keyPartialCandle, 0L),
             storedHighest = p.getDouble(keyHighestClose, 0.0)
         )
 
         p.edit()
-            .putString(keyMarketJson, json)
+            .putString(keyMarketJson, pumpJson)
+            .putString(keyEurJson, eurJson)
+            .putString(keyBtcJson, btcJson)
+            .putString(keyFundingJson, fundingJson)
             .putLong(keyLastSync, System.currentTimeMillis())
             .putLong(keyLastCandle, evaluation.lastCandle)
             .putDouble(keyLastPrice, evaluation.lastPrice)
             .putDouble(keyLastRsi, evaluation.lastRsi)
             .putDouble(keyLastEma200, evaluation.lastEma200)
+            .putDouble(keyFundingRate, evaluation.fundingRate)
+            .putString(keyPendingMode, evaluation.strategyMode)
             .putBoolean(keyBuySignal, evaluation.buySignal)
             .putBoolean(keySellSignal, evaluation.sellSignal)
             .putString(keySignalAction, evaluation.signalAction)
@@ -239,7 +309,10 @@ object PumpBotEngine {
     fun snapshot(context: Context): LiveSnapshot {
         ensureInitialized(context)
         val p = prefs(context)
-        val candles = parseSavedCandles(p.getString(keyMarketJson, "").orEmpty())
+        val candles = StrategyV2.synthesizeEur(
+            parseSavedCandles(p.getString(keyMarketJson, "").orEmpty()),
+            parseSavedCandles(p.getString(keyEurJson, "").orEmpty())
+        )
         val closes = candles.map { it.close }
         val fast = ema(closes, emaFastPeriod)
         val slow = ema(closes, emaSlowPeriod)
@@ -253,6 +326,13 @@ object PumpBotEngine {
             lastPrice = p.getDouble(keyLastPrice, 0.0),
             lastRsi = p.getDouble(keyLastRsi, 0.0),
             lastEma200 = p.getDouble(keyLastEma200, 0.0),
+            fundingRate = p.getDouble(keyFundingRate, 0.0),
+            strategyMode = if (p.getString(keyWaitMode, "BUY") == "SELL") {
+                p.getString(keyStrategyMode, StrategyV2.MODE_NONE).orEmpty()
+            } else {
+                p.getString(keyPendingMode, StrategyV2.MODE_NONE).orEmpty()
+            },
+            partialTaken = p.getBoolean(keyPartialTaken, false),
             buySignal = p.getBoolean(keyBuySignal, false),
             sellSignal = p.getBoolean(keySellSignal, false),
             signalAction = p.getString(keySignalAction, "WAIT").orEmpty(),
@@ -264,95 +344,27 @@ object PumpBotEngine {
                 fast,
                 slow,
                 emptyList(),
-                "RSI ${buyRsi.toInt()} на 30-минутных свечах. Желтая EMA50 / фиолетовая EMA200"
+                "V2 PUMP/EUR, 30 минут. Желтая EMA50 / фиолетовая EMA200"
             )
         )
     }
 
     fun alertKey(snapshot: LiveSnapshot): String {
-        return "${snapshot.signalAction}:${snapshot.lastCandle}:${snapshot.buyRsi.toInt()}"
+        return "${snapshot.signalAction}:${snapshot.lastCandle}:${snapshot.strategyMode}"
     }
 
     fun shouldAlert(context: Context, snapshot: LiveSnapshot): Boolean {
         if (!snapshot.running) return false
-        if (snapshot.signalAction != snapshot.waitMode) return false
-        if (snapshot.signalAction != "BUY" && snapshot.signalAction != "SELL") return false
+        val expected = (snapshot.waitMode == "BUY" && snapshot.signalAction == "BUY") ||
+            (snapshot.waitMode == "SELL" &&
+                (snapshot.signalAction == "SELL" || snapshot.signalAction == StrategyV2.ACTION_SELL_HALF))
+        if (!expected) return false
         val key = alertKey(snapshot)
         return key.isNotBlank() && key != prefs(context).getString(keyLastAlertKey, "")
     }
 
     fun markAlerted(context: Context, snapshot: LiveSnapshot) {
         prefs(context).edit().putString(keyLastAlertKey, alertKey(snapshot)).apply()
-    }
-
-    fun backtest(asset: CoinOption, candles: List<PumpCandle>, startTime: Long, buyThreshold: Double): BacktestResult {
-        val buyRsi = normalizeBuyRsi(buyThreshold)
-        if (candles.isEmpty()) {
-            return BacktestResult(asset.name, asset.symbol, buyRsi, startBalance, 0.0, 0.0, 0.0, emptyList(), 0L, 0L)
-        }
-
-        val closes = candles.map { it.close }
-        val rsi = rsi(closes, rsiPeriod)
-        val ema200 = ema(closes, emaSlowPeriod)
-        var cash = startBalance
-        var coins = 0.0
-        var entryPrice = 0.0
-        var positionCost = 0.0
-        var highestClose = 0.0
-        val trades = ArrayList<TradeEvent>()
-        val first = maxOf(emaSlowPeriod + 1, rsiPeriod + 1)
-
-        for (i in first until candles.size) {
-            val candle = candles[i]
-            if (candle.closeTime < startTime) continue
-            val rsiNow = value(rsi, i)
-            val emaNow = value(ema200, i)
-            val buy = coins <= 0.0 && rsiNow <= buyRsi && candle.close > emaNow
-            val stop = coins > 0.0 &&
-                (candle.close <= entryPrice * (1 - stopLoss) || candle.close <= highestClose * (1 - trailingStop))
-            val sell = coins > 0.0 && (rsiNow >= sellRsi || candle.close < emaNow || stop)
-
-            if (buy) {
-                val buyPrice = candle.close * (1 + slippage)
-                val amount = cash
-                val fee = amount * feeRate
-                coins = (amount - fee) / buyPrice
-                cash = 0.0
-                entryPrice = buyPrice
-                positionCost = amount
-                highestClose = candle.close
-                trades.add(TradeEvent(candle.closeTime, "BUY", buyPrice, amount, fee, coins * buyPrice, 0.0, coins))
-            } else if (sell) {
-                val sellPrice = candle.close * (1 - slippage)
-                val gross = coins * sellPrice
-                val fee = gross * feeRate
-                cash = gross - fee
-                val pnl = cash - positionCost
-                trades.add(TradeEvent(candle.closeTime, "SELL", sellPrice, gross, fee, cash, pnl, 0.0))
-                coins = 0.0
-                entryPrice = 0.0
-                positionCost = 0.0
-                highestClose = 0.0
-            } else if (coins > 0.0) {
-                highestClose = maxOf(highestClose, candle.close)
-            }
-        }
-
-        val lastPrice = candles.lastOrNull()?.close ?: 0.0
-        val equity = if (coins > 0.0 && lastPrice > 0.0) coins * lastPrice * (1 - feeRate) else cash
-        val profit = equity - startBalance
-        return BacktestResult(
-            assetName = asset.name,
-            symbol = asset.symbol,
-            buyRsi = buyRsi,
-            equity = equity,
-            profit = profit,
-            profitPercent = profit / startBalance * 100.0,
-            totalFees = trades.sumOf { it.fee },
-            trades = trades,
-            firstCandleTime = candles.firstOrNull()?.openTime ?: 0L,
-            lastCandleTime = candles.lastOrNull()?.closeTime ?: 0L
-        )
     }
 
     fun parseCandles(json: String): List<PumpCandle> {
@@ -380,11 +392,28 @@ object PumpBotEngine {
         return candles.distinctBy { it.closeTime }.sortedBy { it.closeTime }
     }
 
+    fun parseFunding(json: String): List<FundingPoint> {
+        if (json.isBlank()) return emptyList()
+        return try {
+            val rows = JSONArray(json)
+            (0 until rows.length()).mapNotNull { index ->
+                val row = rows.optJSONObject(index) ?: return@mapNotNull null
+                val time = row.optLong("fundingTime", 0L)
+                val rate = row.optString("fundingRate", "").toDoubleOrNull() ?: return@mapNotNull null
+                if (time > 0L) FundingPoint(time, rate) else null
+            }.distinctBy { it.time }.sortedBy { it.time }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
     private data class LiveEvaluation(
         val lastCandle: Long,
         val lastPrice: Double,
         val lastRsi: Double,
         val lastEma200: Double,
+        val fundingRate: Double,
+        val strategyMode: String,
         val buySignal: Boolean,
         val sellSignal: Boolean,
         val signalAction: String,
@@ -394,13 +423,21 @@ object PumpBotEngine {
 
     private fun evaluateLive(
         candles: List<PumpCandle>,
+        btcCandles: List<PumpCandle>,
+        funding: List<FundingPoint>,
         waitMode: String,
-        buyRsi: Double,
         entryPrice: Double,
+        entryTime: Long,
+        positionMode: String,
+        partialTaken: Boolean,
+        partialCandle: Long,
         storedHighest: Double
     ): LiveEvaluation {
-        if (candles.size < emaSlowPeriod + 5) {
-            return LiveEvaluation(0L, 0.0, 0.0, 0.0, false, false, "WAIT", "Ждем достаточно 30-минутных свечей", storedHighest)
+        if (candles.size < emaSlowPeriod + 36 || btcCandles.size < emaSlowPeriod + 7) {
+            return LiveEvaluation(
+                0L, 0.0, 0.0, 0.0, 0.0, StrategyV2.MODE_NONE,
+                false, false, "WAIT", "Ждем достаточно свечей PUMP/EUR и BTC", storedHighest
+            )
         }
 
         val closes = candles.map { it.close }
@@ -410,30 +447,32 @@ object PumpBotEngine {
         val candle = candles[i]
         val rsiNow = value(rsi, i)
         val emaNow = value(ema200, i)
-        val trendOk = candle.close > emaNow
-        val highest = if (waitMode == "SELL") maxOf(storedHighest, candle.close) else storedHighest
-        val stop = waitMode == "SELL" && entryPrice > 0.0 &&
-            (candle.close <= entryPrice * (1 - stopLoss) || candle.close <= highest * (1 - trailingStop))
-        val buy = trendOk && rsiNow <= buyRsi
-        val sell = rsiNow >= sellRsi || !trendOk || stop
+        val latestFunding = funding.lastOrNull { it.time <= candle.closeTime }?.rate ?: 0.0
 
-        val action = when {
-            waitMode == "BUY" && buy -> "BUY"
-            waitMode == "SELL" && sell -> "SELL"
-            else -> "WAIT"
-        }
-        val reason = when (action) {
-            "BUY" -> String.format(Locale.US, "ПОКУПКА: RSI %.1f <= %.0f и цена выше EMA200", rsiNow, buyRsi)
-            "SELL" -> when {
-                stop -> "ПРОДАЖА: сработала защита стоп/трейлинг"
-                rsiNow >= sellRsi -> String.format(Locale.US, "ПРОДАЖА: RSI %.1f >= %.0f", rsiNow, sellRsi)
-                !trendOk -> "ПРОДАЖА: цена ушла ниже EMA200"
-                else -> "ПРОДАЖА: есть сигнал"
-            }
-            else -> String.format(Locale.US, "ЖДЕМ: RSI %.1f, EMA200 %.8f", rsiNow, emaNow)
+        if (waitMode == "BUY") {
+            val entry = StrategyV2.latestEntrySignal(candles, btcCandles, funding)
+            val action = if (entry.active) "BUY" else "WAIT"
+            return LiveEvaluation(
+                candle.closeTime, candle.close, entry.rsi, entry.ema200, entry.funding, entry.mode,
+                entry.active, false, action, entry.reason, storedHighest
+            )
         }
 
-        return LiveEvaluation(candle.closeTime, candle.close, rsiNow, emaNow, buy, sell, action, reason, highest)
+        if (candle.closeTime <= entryTime || (partialTaken && candle.closeTime <= partialCandle)) {
+            return LiveEvaluation(
+                candle.closeTime, candle.close, rsiNow, emaNow, latestFunding, positionMode,
+                false, false, "WAIT", "Позиция подтверждена. Ждем закрытия следующей свечи", storedHighest
+            )
+        }
+
+        val exit = StrategyV2.evaluateExit(
+            candle, positionMode, entryPrice, entryTime, partialTaken, storedHighest
+        )
+        val sell = exit.action == StrategyV2.ACTION_SELL || exit.action == StrategyV2.ACTION_SELL_HALF
+        return LiveEvaluation(
+            candle.closeTime, candle.close, rsiNow, emaNow, latestFunding, positionMode,
+            false, sell, exit.action, exit.reason, exit.highestHigh
+        )
     }
 
     private fun parseSavedCandles(json: String): List<PumpCandle> {
@@ -506,7 +545,7 @@ object PumpBotEngine {
     }
 
     private fun normalizeBuyRsi(value: Double): Double {
-        return if (value <= 30.0) 30.0 else 35.0
+        return 45.0
     }
 
     private fun SharedPreferences.Editor.putDouble(key: String, value: Double): SharedPreferences.Editor {

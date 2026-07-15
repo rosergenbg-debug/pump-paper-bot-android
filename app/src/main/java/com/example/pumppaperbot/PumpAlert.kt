@@ -58,8 +58,12 @@ object PumpAlert {
 
     fun showSignal(context: Context, snapshot: LiveSnapshot) {
         ensureChannels(context)
-        val title = if (snapshot.signalAction == "BUY") "PUMP: сигнал ПОКУПКА" else "PUMP: сигнал ПРОДАЖА"
-        val text = "${snapshot.signalReason}. Риск RSI ${snapshot.buyRsi.toInt()}. Цена ${formatPrice(snapshot.lastPrice)}"
+        val title = when (snapshot.signalAction) {
+            "BUY" -> "PUMP/EUR V2: ПОКУПКА"
+            StrategyV2.ACTION_SELL_HALF -> "PUMP/EUR V2: ПРОДАТЬ 50%"
+            else -> "PUMP/EUR V2: ПРОДАЖА"
+        }
+        val text = "${snapshot.signalReason}. Цена €${formatPrice(snapshot.lastPrice)}"
         val notification = NotificationCompat.Builder(context, signalChannelId)
             .setSmallIcon(R.drawable.ic_launcher)
             .setContentTitle(title)

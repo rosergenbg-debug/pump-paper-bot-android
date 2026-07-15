@@ -72,16 +72,8 @@ class MainActivity : AppCompatActivity() {
         PumpBotEngine.ensureInitialized(this)
         requestNotificationPermission()
 
-        btnRisk30?.setOnClickListener {
-            PumpBotEngine.setBuyRsi(this, 30.0)
-            updateUi()
-            checkNow()
-        }
-        btnRisk35?.setOnClickListener {
-            PumpBotEngine.setBuyRsi(this, 35.0)
-            updateUi()
-            checkNow()
-        }
+        btnRisk30?.isEnabled = false
+        btnRisk35?.isEnabled = false
         btnStart?.setOnClickListener { startMonitor() }
         btnCheck?.setOnClickListener { checkNow() }
         btnStop?.setOnClickListener {
@@ -150,8 +142,13 @@ class MainActivity : AppCompatActivity() {
     private fun confirmManualAction() {
         val snapshot = PumpBotEngine.snapshot(this)
         if (snapshot.waitMode == "BUY") {
-            confirm("Подтвердить покупку?", "Приложение запомнит текущую цену и начнет ждать сигнал на продажу.") {
+            confirm("Подтвердить покупку?", "Приложение запомнит цену PUMP/EUR и режим ${snapshot.strategyMode}.") {
                 PumpBotEngine.confirmBought(this)
+                updateUi()
+            }
+        } else if (snapshot.signalAction == StrategyV2.ACTION_SELL_HALF && !snapshot.partialTaken) {
+            confirm("Подтвердить продажу 50%?", "Оставшаяся половина будет защищена безубытком и trailing-stop 4%.") {
+                PumpBotEngine.confirmPartialSold(this)
                 updateUi()
             }
         } else {
@@ -180,31 +177,40 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateUi() {
         val snapshot = PumpBotEngine.snapshot(this)
-        val active = snapshot.signalAction == snapshot.waitMode &&
-            (snapshot.signalAction == "BUY" || snapshot.signalAction == "SELL")
+        val active = (snapshot.waitMode == "BUY" && snapshot.signalAction == "BUY") ||
+            (snapshot.waitMode == "SELL" &&
+                (snapshot.signalAction == "SELL" || snapshot.signalAction == StrategyV2.ACTION_SELL_HALF))
         val status = if (snapshot.running) "РАБОТАЕТ" else "ОСТАНОВЛЕНО"
-        tvStatus?.text = "$status | Последняя проверка: ${PumpBotEngine.formatTime(snapshot.lastSync)} | риск RSI ${snapshot.buyRsi.toInt()}"
+        tvStatus?.text = "$status | V2 1.3 | Проверка: ${PumpBotEngine.formatTime(snapshot.lastSync)}"
         tvMode?.text = if (snapshot.waitMode == "BUY") "Режим: жду покупку" else "Режим: жду продажу"
         tvMode?.setTextColor(if (active) Color.WHITE else Color.parseColor("#C9D1D9"))
         tvMode?.setBackgroundColor(if (active) Color.parseColor("#DA3633") else Color.parseColor("#30363D"))
 
-        renderRiskButtons(snapshot.buyRsi)
+        renderStrategyButtons()
         renderSignalBox(tvBuySignal, "BUY", snapshot.buySignal, snapshot.waitMode == "BUY")
         renderSignalBox(tvSellSignal, "SELL", snapshot.sellSignal, snapshot.waitMode == "SELL")
 
         tvPrice?.text = String.format(
             Locale.US,
-            "PUMP цена %.8f | RSI %.1f | EMA200 %.8f | свеча %s",
+            "PUMP/EUR %.8f | RSI %.1f | EMA200 %.8f | funding %+.5f%% | %s",
             snapshot.lastPrice,
             snapshot.lastRsi,
             snapshot.lastEma200,
+            snapshot.fundingRate * 100.0,
             PumpBotEngine.formatTime(snapshot.lastCandle)
         )
         tvReason?.text = snapshot.signalReason
         tvReason?.setTextColor(if (active) Color.parseColor("#FF4D6D") else Color.parseColor("#8B949E"))
 
         tvPosition?.text = if (snapshot.waitMode == "SELL" && snapshot.entryPrice > 0.0) {
-            String.format(Locale.US, "Позиция: куплено около %.8f | максимум после входа %.8f", snapshot.entryPrice, snapshot.highestClose)
+            String.format(
+                Locale.US,
+                "Позиция: %s | вход %.8f EUR | максимум %.8f | 50%% продано: %s",
+                snapshot.strategyMode,
+                snapshot.entryPrice,
+                snapshot.highestClose,
+                if (snapshot.partialTaken) "да" else "нет"
+            )
         } else {
             "Позиция: нет"
         }
@@ -213,18 +219,20 @@ class MainActivity : AppCompatActivity() {
         btnStart?.alpha = if (snapshot.running) 0.45f else 1f
         btnStop?.isEnabled = snapshot.running
         btnStop?.alpha = if (snapshot.running) 1f else 0.65f
-        btnManual?.text = if (snapshot.waitMode == "BUY") "Я КУПИЛ - ЖДАТЬ ПРОДАЖУ" else "Я ПРОДАЛ - ЖДАТЬ ПОКУПКУ"
+        btnManual?.text = when {
+            snapshot.waitMode == "BUY" -> "Я КУПИЛ - ЗАПОМНИТЬ ВХОД"
+            snapshot.signalAction == StrategyV2.ACTION_SELL_HALF && !snapshot.partialTaken -> "Я ПРОДАЛ 50% - ВЕСТИ ОСТАТОК"
+            else -> "Я ПРОДАЛ ВСЁ - ЖДАТЬ ПОКУПКУ"
+        }
         btnToggleMode?.text = if (snapshot.waitMode == "BUY") "ЖДАТЬ ПРОДАЖУ" else "ЖДАТЬ ПОКУПКУ"
-        chart?.setData("PUMP RSI${snapshot.buyRsi.toInt()}", snapshot.chart)
+        chart?.setData("PUMP/EUR V2", snapshot.chart)
     }
 
-    private fun renderRiskButtons(buyRsi: Double) {
-        val selected = Color.parseColor("#238636")
-        val idle = Color.parseColor("#30363D")
-        btnRisk30?.setBackgroundColor(if (buyRsi <= 30.0) selected else idle)
-        btnRisk35?.setBackgroundColor(if (buyRsi > 30.0) selected else idle)
-        btnRisk30?.text = "РИСК 30\nОсторожно"
-        btnRisk35?.text = "РИСК 35\nАктивно"
+    private fun renderStrategyButtons() {
+        btnRisk30?.setBackgroundColor(Color.parseColor("#1F6FEB"))
+        btnRisk35?.setBackgroundColor(Color.parseColor("#8957E5"))
+        btnRisk30?.text = "V2 ТРЕНД\nцель +8%"
+        btnRisk35?.text = "V2 ШОК\n50% при +6%"
     }
 
     private fun renderSignalBox(view: TextView?, label: String, signal: Boolean, selectedMode: Boolean) {
