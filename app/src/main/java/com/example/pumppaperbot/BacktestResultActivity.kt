@@ -24,10 +24,12 @@ class BacktestResultActivity : AppCompatActivity() {
     private lateinit var status: TextView
     private lateinit var resultBox: LinearLayout
     private var startTime = 0L
+    private var aggressive = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         startTime = intent.getLongExtra(extraStartTime, System.currentTimeMillis() - TimeUnit.DAYS.toMillis(365))
+        aggressive = intent.getBooleanExtra(extraAggressive, false)
         render()
         runBacktest()
     }
@@ -53,7 +55,8 @@ class BacktestResultActivity : AppCompatActivity() {
         root.addView(navRow)
 
         root.addView(label("РЕЗУЛЬТАТ ПРОВЕРКИ", 23, "#F0F6FC", true))
-        root.addView(label("PUMP/EUR | V2 тренд + шок | старт ${PumpBotEngine.formatDate(startTime)}", 13, "#8B949E", false))
+        val profile = if (aggressive) "Агрессивный: 2 входа" else "Осторожный: 1 вход"
+        root.addView(label("PUMP/EUR | $profile | старт ${PumpBotEngine.formatDate(startTime)}", 13, "#8B949E", false))
 
         status = label("Загружаю свечи 30 минут...", 14, "#8B949E", false)
         root.addView(status)
@@ -79,7 +82,7 @@ class BacktestResultActivity : AppCompatActivity() {
                 val btc = fetchCandles(PumpBotEngine.btcSymbol, warmupStart, end)
                 val funding = fetchFunding(warmupStart, end)
                 val candles = StrategyV2.synthesizeEur(pump, eur)
-                val result = StrategyV2.backtest(candles, btc, funding, startTime)
+                val result = StrategyV2.backtest(candles, btc, funding, startTime, aggressive)
                 runOnUiThread {
                     val note = if (result.firstCandleTime > 0L && startTime < result.firstCandleTime) {
                         " Первые данные: ${PumpBotEngine.formatDate(result.firstCandleTime)}."
@@ -226,5 +229,6 @@ class BacktestResultActivity : AppCompatActivity() {
 
     companion object {
         const val extraStartTime = "start_time"
+        const val extraAggressive = "aggressive"
     }
 }

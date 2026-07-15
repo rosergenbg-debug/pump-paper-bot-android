@@ -3,6 +3,7 @@ package com.example.pumppaperbot
 import android.Manifest
 import android.app.AlertDialog
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.os.Build
@@ -33,6 +34,7 @@ class MainActivity : AppCompatActivity() {
     private var tvBuySignal: TextView? = null
     private var tvSellSignal: TextView? = null
     private var tvMode: TextView? = null
+    private var tvReadiness: TextView? = null
     private var tvPrice: TextView? = null
     private var tvReason: TextView? = null
     private var tvPosition: TextView? = null
@@ -55,6 +57,7 @@ class MainActivity : AppCompatActivity() {
         tvBuySignal = findViewById(R.id.tvBuySignal)
         tvSellSignal = findViewById(R.id.tvSellSignal)
         tvMode = findViewById(R.id.tvMode)
+        tvReadiness = findViewById(R.id.tvReadiness)
         tvPrice = findViewById(R.id.tvPrice)
         tvReason = findViewById(R.id.tvReason)
         tvPosition = findViewById(R.id.tvPosition)
@@ -72,8 +75,16 @@ class MainActivity : AppCompatActivity() {
         PumpBotEngine.ensureInitialized(this)
         requestNotificationPermission()
 
-        btnRisk30?.isEnabled = false
-        btnRisk35?.isEnabled = false
+        btnRisk30?.setOnClickListener {
+            PumpBotEngine.setAggressive(this, false)
+            updateUi()
+            checkNow()
+        }
+        btnRisk35?.setOnClickListener {
+            PumpBotEngine.setAggressive(this, true)
+            updateUi()
+            checkNow()
+        }
         btnStart?.setOnClickListener { startMonitor() }
         btnCheck?.setOnClickListener { checkNow() }
         btnStop?.setOnClickListener {
@@ -87,7 +98,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
         btnManual?.setOnClickListener { confirmManualAction() }
-        btnToggleMode?.setOnClickListener { toggleMode() }
+        btnToggleMode?.setOnClickListener { showSignalInfo() }
         btnBacktest?.setOnClickListener { startActivity(Intent(this, BacktestActivity::class.java)) }
 
         updateUi()
@@ -159,11 +170,24 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun toggleMode() {
+    private fun showSignalInfo() {
         val snapshot = PumpBotEngine.snapshot(this)
-        val next = if (snapshot.waitMode == "BUY") "SELL" else "BUY"
-        PumpBotEngine.setWaitMode(this, next)
-        updateUi()
+        val profile = if (snapshot.aggressive) "Агрессивный: осторожный вход + вход после шока" else "Осторожный: только трендовый вход"
+        val details = if (snapshot.waitMode == "BUY") {
+            "Осторожный вход: ${snapshot.trendReadiness}/100\n" +
+                if (snapshot.aggressive) "Вход после шока: ${snapshot.shockReadiness}/100\n" else ""
+        } else {
+            "Готовность к продаже: ${kotlin.math.abs(snapshot.readinessScore)}/100\n"
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Как рассчитан сигнал")
+            .setMessage(
+                "$profile\n\n$details\n${snapshot.signalReason}\n\n" +
+                    "95 — приготовиться. 100 — условия стратегии полностью выполнены. " +
+                    "Это готовность правил, а не вероятность прибыли."
+            )
+            .setPositiveButton("Понятно", null)
+            .show()
     }
 
     private fun confirm(title: String, message: String, action: () -> Unit) {
@@ -177,22 +201,29 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateUi() {
         val snapshot = PumpBotEngine.snapshot(this)
-        val active = (snapshot.waitMode == "BUY" && snapshot.signalAction == "BUY") ||
-            (snapshot.waitMode == "SELL" &&
-                (snapshot.signalAction == "SELL" || snapshot.signalAction == StrategyV2.ACTION_SELL_HALF))
+        val active = kotlin.math.abs(snapshot.readinessScore) >= 95
         val status = if (snapshot.running) "РАБОТАЕТ" else "ОСТАНОВЛЕНО"
-        tvStatus?.text = "$status | V2 1.3 | Проверка: ${PumpBotEngine.formatTime(snapshot.lastSync)}"
-        tvMode?.text = if (snapshot.waitMode == "BUY") "Режим: жду покупку" else "Режим: жду продажу"
+        val profile = if (snapshot.aggressive) "Агрессивный" else "Осторожный"
+        tvStatus?.text = "$status | v1.4 | $profile | Проверка: ${PumpBotEngine.formatTime(snapshot.lastSync)}"
+        tvMode?.text = if (snapshot.waitMode == "BUY") "Сейчас: жду покупку" else "Сейчас: куплено, жду продажу"
         tvMode?.setTextColor(if (active) Color.WHITE else Color.parseColor("#C9D1D9"))
-        tvMode?.setBackgroundColor(if (active) Color.parseColor("#DA3633") else Color.parseColor("#30363D"))
+        tvMode?.setBackgroundColor(
+            when {
+                snapshot.readinessScore >= 95 -> Color.parseColor("#238636")
+                snapshot.readinessScore <= -95 -> Color.parseColor("#DA3633")
+                else -> Color.parseColor("#30363D")
+            }
+        )
 
-        renderStrategyButtons()
+        renderReadiness(snapshot)
+
+        renderStrategyButtons(snapshot.aggressive)
         renderSignalBox(tvBuySignal, "BUY", snapshot.buySignal, snapshot.waitMode == "BUY")
         renderSignalBox(tvSellSignal, "SELL", snapshot.sellSignal, snapshot.waitMode == "SELL")
 
         tvPrice?.text = String.format(
             Locale.US,
-            "PUMP/EUR %.8f | RSI %.1f | EMA200 %.8f | funding %+.5f%% | %s",
+            "PUMP/EUR %.8f | RSI %.1f | EMA200 %.8f | funding %+.5f%% | свеча %s",
             snapshot.lastPrice,
             snapshot.lastRsi,
             snapshot.lastEma200,
@@ -206,7 +237,7 @@ class MainActivity : AppCompatActivity() {
             String.format(
                 Locale.US,
                 "Позиция: %s | вход %.8f EUR | максимум %.8f | 50%% продано: %s",
-                snapshot.strategyMode,
+                friendlyMode(snapshot.strategyMode),
                 snapshot.entryPrice,
                 snapshot.highestClose,
                 if (snapshot.partialTaken) "да" else "нет"
@@ -220,19 +251,49 @@ class MainActivity : AppCompatActivity() {
         btnStop?.isEnabled = snapshot.running
         btnStop?.alpha = if (snapshot.running) 1f else 0.65f
         btnManual?.text = when {
-            snapshot.waitMode == "BUY" -> "Я КУПИЛ - ЗАПОМНИТЬ ВХОД"
-            snapshot.signalAction == StrategyV2.ACTION_SELL_HALF && !snapshot.partialTaken -> "Я ПРОДАЛ 50% - ВЕСТИ ОСТАТОК"
-            else -> "Я ПРОДАЛ ВСЁ - ЖДАТЬ ПОКУПКУ"
+            snapshot.waitMode == "BUY" -> "Я КУПИЛ — ЖДУ ПРОДАЖУ"
+            snapshot.signalAction == StrategyV2.ACTION_SELL_HALF && !snapshot.partialTaken -> "Я ПРОДАЛ 50% — ВЕСТИ ОСТАТОК"
+            else -> "Я ПРОДАЛ — ЖДУ ПОКУПКУ"
         }
-        btnToggleMode?.text = if (snapshot.waitMode == "BUY") "ЖДАТЬ ПРОДАЖУ" else "ЖДАТЬ ПОКУПКУ"
+        btnToggleMode?.text = "ПОЧЕМУ ТАКОЙ СИГНАЛ?"
         chart?.setData("PUMP/EUR V2", snapshot.chart)
     }
 
-    private fun renderStrategyButtons() {
-        btnRisk30?.setBackgroundColor(Color.parseColor("#1F6FEB"))
-        btnRisk35?.setBackgroundColor(Color.parseColor("#8957E5"))
-        btnRisk30?.text = "V2 ТРЕНД\nцель +8%"
-        btnRisk35?.text = "V2 ШОК\n50% при +6%"
+    private fun renderReadiness(snapshot: LiveSnapshot) {
+        val score = snapshot.readinessScore
+        tvReadiness?.text = when {
+            score >= 100 -> "+100  ПОКУПАТЬ\nУСЛОВИЯ ПОДТВЕРЖДЕНЫ"
+            score >= 95 -> "+$score  ПРИГОТОВИТЬСЯ К ПОКУПКЕ\nждем полного подтверждения 100"
+            score <= -100 -> "−100  ПРОДАВАТЬ\nУСЛОВИЯ ПОДТВЕРЖДЕНЫ"
+            score <= -95 -> "−${kotlin.math.abs(score)}  ПРИГОТОВИТЬСЯ К ПРОДАЖЕ\nждем полного подтверждения −100"
+            score < 0 -> "ДВИЖЕНИЕ К ПРОДАЖЕ  −${kotlin.math.abs(score)}/100"
+            else -> "ДВИЖЕНИЕ К ПОКУПКЕ  +$score/100"
+        }
+        tvReadiness?.setTextColor(
+            when {
+                score >= 95 -> Color.parseColor("#7EE787")
+                score <= -95 -> Color.parseColor("#FF7B72")
+                else -> Color.parseColor("#F0B72F")
+            }
+        )
+        tvReadiness?.setBackgroundColor(if (kotlin.math.abs(score) >= 95) Color.parseColor("#202A22") else Color.parseColor("#161B22"))
+    }
+
+    private fun renderStrategyButtons(aggressive: Boolean) {
+        btnRisk30?.backgroundTintList = ColorStateList.valueOf(Color.parseColor(if (!aggressive) "#238636" else "#30363D"))
+        btnRisk35?.backgroundTintList = ColorStateList.valueOf(Color.parseColor(if (aggressive) "#B62324" else "#30363D"))
+        btnRisk30?.alpha = if (!aggressive) 1f else 0.72f
+        btnRisk35?.alpha = if (aggressive) 1f else 0.72f
+        btnRisk30?.text = "ОСТОРОЖНЫЙ\n1 вход • цель +8%"
+        btnRisk35?.text = "АГРЕССИВНЫЙ\n2 входа • 50% при +6%"
+    }
+
+    private fun friendlyMode(mode: String): String {
+        return when (mode) {
+            StrategyV2.MODE_SHOCK -> "агрессивный вход"
+            StrategyV2.MODE_TREND -> "осторожный вход"
+            else -> "ожидание"
+        }
     }
 
     private fun renderSignalBox(view: TextView?, label: String, signal: Boolean, selectedMode: Boolean) {

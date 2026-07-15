@@ -48,7 +48,7 @@ data class BacktestResult(
 ) {
     companion object {
         fun empty(startTime: Long = 0L) = BacktestResult(
-            "PUMP", "PUMP/EUR", "V2: тренд + шок", PumpBotEngine.startBalance,
+            "PUMP", "PUMP/EUR", "Профиль V2", PumpBotEngine.startBalance,
             0.0, 0.0, 0.0, emptyList(), startTime, startTime, 0, 0.0, 0.0, 0
         )
     }
@@ -59,7 +59,11 @@ data class ChartBundle(
     val fast: List<Double?>,
     val slow: List<Double?>,
     val trades: List<TradeEvent>,
-    val subtitle: String
+    val subtitle: String,
+    val readinessScore: Int = 0,
+    val trendReadiness: Int = 0,
+    val shockReadiness: Int = 0,
+    val aggressive: Boolean = false
 )
 
 data class LiveSnapshot(
@@ -73,6 +77,10 @@ data class LiveSnapshot(
     val lastEma200: Double,
     val fundingRate: Double,
     val strategyMode: String,
+    val aggressive: Boolean,
+    val readinessScore: Int,
+    val trendReadiness: Int,
+    val shockReadiness: Int,
     val partialTaken: Boolean,
     val buySignal: Boolean,
     val sellSignal: Boolean,
@@ -86,7 +94,7 @@ data class LiveSnapshot(
 data class CoinOption(val name: String, val symbol: String)
 
 object PumpBotEngine {
-    const val appVersionName = "1.3"
+    const val appVersionName = "1.4"
     const val startBalance = 1000.0
     const val feeRate = 0.0015
     const val slippage = 0.0005
@@ -102,8 +110,8 @@ object PumpBotEngine {
     const val eurSymbol = "EURUSDT"
     const val uniqueWorkName = "pump_rsi_risk_periodic_monitor"
 
-    private const val prefsName = "PumpSignalV13"
-    private const val algorithmVersion = 13
+    private const val prefsName = "PumpSignalV14"
+    private const val algorithmVersion = 14
     private const val keyVersion = "algorithm_version"
     private const val keyRunning = "running"
     private const val keyWaitMode = "wait_mode"
@@ -114,6 +122,10 @@ object PumpBotEngine {
     private const val keyLastRsi = "last_rsi"
     private const val keyLastEma200 = "last_ema200"
     private const val keyFundingRate = "funding_rate"
+    private const val keyAggressive = "aggressive"
+    private const val keyReadinessScore = "readiness_score"
+    private const val keyTrendReadiness = "trend_readiness"
+    private const val keyShockReadiness = "shock_readiness"
     private const val keyStrategyMode = "strategy_mode"
     private const val keyPendingMode = "pending_mode"
     private const val keyEntryTime = "entry_time"
@@ -131,18 +143,7 @@ object PumpBotEngine {
     private const val keyBtcJson = "btc_json"
     private const val keyFundingJson = "funding_json"
 
-    val coinOptions = listOf(
-        CoinOption("PUMP", "PUMPUSDT"),
-        CoinOption("Bitcoin", "BTCUSDT"),
-        CoinOption("Ethereum", "ETHUSDT"),
-        CoinOption("Solana", "SOLUSDT"),
-        CoinOption("BNB", "BNBUSDT"),
-        CoinOption("XRP", "XRPUSDT"),
-        CoinOption("Dogecoin", "DOGEUSDT"),
-        CoinOption("Cardano", "ADAUSDT"),
-        CoinOption("TRON", "TRXUSDT"),
-        CoinOption("Avalanche", "AVAXUSDT")
-    )
+    val coinOptions = listOf(CoinOption("PUMP", "PUMPUSDT"))
 
     fun prefs(context: Context): SharedPreferences {
         return context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
@@ -166,6 +167,10 @@ object PumpBotEngine {
             .putDouble(keyLastRsi, 0.0)
             .putDouble(keyLastEma200, 0.0)
             .putDouble(keyFundingRate, 0.0)
+            .putBoolean(keyAggressive, false)
+            .putInt(keyReadinessScore, 0)
+            .putInt(keyTrendReadiness, 0)
+            .putInt(keyShockReadiness, 0)
             .putString(keyStrategyMode, StrategyV2.MODE_NONE)
             .putString(keyPendingMode, StrategyV2.MODE_NONE)
             .putLong(keyEntryTime, 0L)
@@ -215,14 +220,33 @@ object PumpBotEngine {
             .apply()
     }
 
+    fun setAggressive(context: Context, aggressive: Boolean) {
+        ensureInitialized(context)
+        prefs(context).edit()
+            .putBoolean(keyAggressive, aggressive)
+            .putString(keyLastAlertKey, "")
+            .apply()
+    }
+
+    fun isAggressive(context: Context): Boolean {
+        ensureInitialized(context)
+        return prefs(context).getBoolean(keyAggressive, false)
+    }
+
     fun confirmBought(context: Context) {
         val s = snapshot(context)
+        val confirmedMode = when {
+            s.strategyMode == StrategyV2.MODE_SHOCK -> StrategyV2.MODE_SHOCK
+            s.strategyMode == StrategyV2.MODE_TREND -> StrategyV2.MODE_TREND
+            s.aggressive && s.shockReadiness > s.trendReadiness -> StrategyV2.MODE_SHOCK
+            else -> StrategyV2.MODE_TREND
+        }
         prefs(context).edit()
             .putString(keyWaitMode, "SELL")
             .putDouble(keyEntryPrice, if (s.lastPrice > 0.0) s.lastPrice else s.entryPrice)
             .putDouble(keyHighestClose, if (s.lastPrice > 0.0) s.lastPrice else s.highestClose)
             .putLong(keyEntryTime, s.lastCandle)
-            .putString(keyStrategyMode, s.strategyMode)
+            .putString(keyStrategyMode, confirmedMode)
             .putBoolean(keyPartialTaken, false)
             .putLong(keyPartialCandle, 0L)
             .putString(keyLastAlertKey, "")
@@ -251,7 +275,7 @@ object PumpBotEngine {
             .apply()
     }
 
-    fun klineUrl(symbol: String, interval: String, limit: Int = 500): String {
+    fun klineUrl(symbol: String, interval: String, limit: Int = 1000): String {
         val encoded = URLEncoder.encode(symbol, "UTF-8")
         return "https://data-api.binance.vision/api/v3/klines?symbol=$encoded&interval=$interval&limit=$limit"
     }
@@ -283,10 +307,11 @@ object PumpBotEngine {
             positionMode = p.getString(keyStrategyMode, StrategyV2.MODE_NONE).orEmpty(),
             partialTaken = p.getBoolean(keyPartialTaken, false),
             partialCandle = p.getLong(keyPartialCandle, 0L),
-            storedHighest = p.getDouble(keyHighestClose, 0.0)
+            storedHighest = p.getDouble(keyHighestClose, 0.0),
+            aggressive = p.getBoolean(keyAggressive, false)
         )
 
-        p.edit()
+        val editor = p.edit()
             .putString(keyMarketJson, pumpJson)
             .putString(keyEurJson, eurJson)
             .putString(keyBtcJson, btcJson)
@@ -297,13 +322,17 @@ object PumpBotEngine {
             .putDouble(keyLastRsi, evaluation.lastRsi)
             .putDouble(keyLastEma200, evaluation.lastEma200)
             .putDouble(keyFundingRate, evaluation.fundingRate)
+            .putInt(keyReadinessScore, evaluation.readinessScore)
+            .putInt(keyTrendReadiness, evaluation.trendReadiness)
+            .putInt(keyShockReadiness, evaluation.shockReadiness)
             .putString(keyPendingMode, evaluation.strategyMode)
             .putBoolean(keyBuySignal, evaluation.buySignal)
             .putBoolean(keySellSignal, evaluation.sellSignal)
             .putString(keySignalAction, evaluation.signalAction)
             .putString(keySignalReason, evaluation.signalReason)
             .putDouble(keyHighestClose, evaluation.highestClose)
-            .apply()
+        if (kotlin.math.abs(evaluation.readinessScore) < 90) editor.putString(keyLastAlertKey, "")
+        editor.apply()
     }
 
     fun snapshot(context: Context): LiveSnapshot {
@@ -332,6 +361,10 @@ object PumpBotEngine {
             } else {
                 p.getString(keyPendingMode, StrategyV2.MODE_NONE).orEmpty()
             },
+            aggressive = p.getBoolean(keyAggressive, false),
+            readinessScore = p.getInt(keyReadinessScore, 0),
+            trendReadiness = p.getInt(keyTrendReadiness, 0),
+            shockReadiness = p.getInt(keyShockReadiness, 0),
             partialTaken = p.getBoolean(keyPartialTaken, false),
             buySignal = p.getBoolean(keyBuySignal, false),
             sellSignal = p.getBoolean(keySellSignal, false),
@@ -344,20 +377,25 @@ object PumpBotEngine {
                 fast,
                 slow,
                 emptyList(),
-                "V2 PUMP/EUR, 30 минут. Желтая EMA50 / фиолетовая EMA200"
+                "PUMP/EUR, 30 минут. Желтая EMA50 / фиолетовая EMA200",
+                p.getInt(keyReadinessScore, 0),
+                p.getInt(keyTrendReadiness, 0),
+                p.getInt(keyShockReadiness, 0),
+                p.getBoolean(keyAggressive, false)
             )
         )
     }
 
     fun alertKey(snapshot: LiveSnapshot): String {
-        return "${snapshot.signalAction}:${snapshot.lastCandle}:${snapshot.strategyMode}"
+        val band = if (kotlin.math.abs(snapshot.readinessScore) >= 100) 100 else 95
+        val profile = if (snapshot.aggressive) "AGGRESSIVE" else "CAREFUL"
+        return "${snapshot.waitMode}:$band:$profile:${snapshot.strategyMode}"
     }
 
     fun shouldAlert(context: Context, snapshot: LiveSnapshot): Boolean {
         if (!snapshot.running) return false
-        val expected = (snapshot.waitMode == "BUY" && snapshot.signalAction == "BUY") ||
-            (snapshot.waitMode == "SELL" &&
-                (snapshot.signalAction == "SELL" || snapshot.signalAction == StrategyV2.ACTION_SELL_HALF))
+        val expected = (snapshot.waitMode == "BUY" && snapshot.readinessScore >= 95) ||
+            (snapshot.waitMode == "SELL" && snapshot.readinessScore <= -95)
         if (!expected) return false
         val key = alertKey(snapshot)
         return key.isNotBlank() && key != prefs(context).getString(keyLastAlertKey, "")
@@ -418,7 +456,10 @@ object PumpBotEngine {
         val sellSignal: Boolean,
         val signalAction: String,
         val signalReason: String,
-        val highestClose: Double
+        val highestClose: Double,
+        val readinessScore: Int,
+        val trendReadiness: Int,
+        val shockReadiness: Int
     )
 
     private fun evaluateLive(
@@ -431,12 +472,14 @@ object PumpBotEngine {
         positionMode: String,
         partialTaken: Boolean,
         partialCandle: Long,
-        storedHighest: Double
+        storedHighest: Double,
+        aggressive: Boolean
     ): LiveEvaluation {
         if (candles.size < emaSlowPeriod + 36 || btcCandles.size < emaSlowPeriod + 7) {
             return LiveEvaluation(
                 0L, 0.0, 0.0, 0.0, 0.0, StrategyV2.MODE_NONE,
-                false, false, "WAIT", "Ждем достаточно свечей PUMP/EUR и BTC", storedHighest
+                false, false, "WAIT", "Ждем достаточно свечей PUMP/EUR и BTC", storedHighest,
+                0, 0, 0
             )
         }
 
@@ -450,18 +493,23 @@ object PumpBotEngine {
         val latestFunding = funding.lastOrNull { it.time <= candle.closeTime }?.rate ?: 0.0
 
         if (waitMode == "BUY") {
-            val entry = StrategyV2.latestEntrySignal(candles, btcCandles, funding)
+            val entry = StrategyV2.latestEntrySignal(candles, btcCandles, funding, aggressive)
             val action = if (entry.active) "BUY" else "WAIT"
+            val readiness = if (aggressive) maxOf(entry.trendReadiness, entry.shockReadiness) else entry.trendReadiness
             return LiveEvaluation(
                 candle.closeTime, candle.close, entry.rsi, entry.ema200, entry.funding, entry.mode,
-                entry.active, false, action, entry.reason, storedHighest
+                entry.active, false, action, entry.reason, storedHighest,
+                if (entry.active) 100 else readiness.coerceIn(0, 99),
+                entry.trendReadiness,
+                entry.shockReadiness
             )
         }
 
         if (candle.closeTime <= entryTime || (partialTaken && candle.closeTime <= partialCandle)) {
             return LiveEvaluation(
                 candle.closeTime, candle.close, rsiNow, emaNow, latestFunding, positionMode,
-                false, false, "WAIT", "Позиция подтверждена. Ждем закрытия следующей свечи", storedHighest
+                false, false, "WAIT", "Позиция подтверждена. Ждем закрытия следующей свечи", storedHighest,
+                0, 0, 0
             )
         }
 
@@ -471,7 +519,10 @@ object PumpBotEngine {
         val sell = exit.action == StrategyV2.ACTION_SELL || exit.action == StrategyV2.ACTION_SELL_HALF
         return LiveEvaluation(
             candle.closeTime, candle.close, rsiNow, emaNow, latestFunding, positionMode,
-            false, sell, exit.action, exit.reason, exit.highestHigh
+            false, sell, exit.action, exit.reason, exit.highestHigh,
+            if (sell) -100 else -exit.readiness.coerceIn(0, 99),
+            0,
+            0
         )
     }
 

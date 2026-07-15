@@ -2,6 +2,7 @@ package com.example.pumppaperbot
 
 import java.util.Locale
 import kotlin.math.max
+import kotlin.math.roundToInt
 
 data class FundingPoint(val time: Long, val rate: Double)
 
@@ -11,7 +12,9 @@ data class V2EntrySignal(
     val rsi: Double,
     val ema200: Double,
     val funding: Double,
-    val candleTime: Long
+    val candleTime: Long,
+    val trendReadiness: Int = 0,
+    val shockReadiness: Int = 0
 ) {
     val active: Boolean get() = mode == StrategyV2.MODE_TREND || mode == StrategyV2.MODE_SHOCK
 }
@@ -19,7 +22,8 @@ data class V2EntrySignal(
 data class V2ExitSignal(
     val action: String,
     val reason: String,
-    val highestHigh: Double
+    val highestHigh: Double,
+    val readiness: Int = 0
 )
 
 object StrategyV2 {
@@ -63,13 +67,14 @@ object StrategyV2 {
     fun latestEntrySignal(
         pumpEur: List<PumpCandle>,
         btcUsdt: List<PumpCandle>,
-        funding: List<FundingPoint>
+        funding: List<FundingPoint>,
+        aggressive: Boolean = true
     ): V2EntrySignal {
         if (pumpEur.size < EMA_SLOW + SHOCK_ARM_BARS || btcUsdt.size < EMA_SLOW + 7) {
             return V2EntrySignal(MODE_NONE, "Ждем достаточно 30-минутных свечей", 0.0, 0.0, 0.0, 0L)
         }
         val indicators = indicators(pumpEur, btcUsdt)
-        return entrySignalAt(pumpEur.lastIndex, pumpEur, funding, indicators)
+        return entrySignalAt(pumpEur.lastIndex, pumpEur, funding, indicators, aggressive)
     }
 
     fun evaluateExit(
@@ -87,6 +92,10 @@ object StrategyV2 {
         val highestAfter = max(highestBefore, candle.high)
         val hardStopPrice = entryPrice * (1.0 - PRICE_STOP)
         val timedOut = candle.closeTime - entryTime >= MAX_HOLD_MILLIS
+        val timeReadiness = ((candle.closeTime - entryTime).toDouble() / MAX_HOLD_MILLIS * 100.0)
+            .roundToInt().coerceIn(0, 99)
+        val stopReadiness = ((entryPrice - candle.close) / (entryPrice * PRICE_STOP) * 100.0)
+            .roundToInt().coerceIn(0, 99)
 
         if (positionMode == MODE_SHOCK) {
             if (!partialTaken) {
@@ -102,7 +111,12 @@ object StrategyV2 {
                         highestAfter
                     )
                     timedOut -> V2ExitSignal(ACTION_SELL, "ШОК: прошло 24 часа — закрыть позицию", highestAfter)
-                    else -> V2ExitSignal(ACTION_WAIT, "ШОК: ждем +6% или защитный стоп", highestAfter)
+                    else -> {
+                        val targetReadiness = ((candle.close / entryPrice - 1.0) / SHOCK_FIRST_TARGET * 100.0)
+                            .roundToInt().coerceIn(0, 99)
+                        val readiness = max(max(targetReadiness, stopReadiness), timeReadiness)
+                        V2ExitSignal(ACTION_WAIT, "АГРЕССИВНЫЙ: ждем +6% или защитный стоп", highestAfter, readiness)
+                    }
                 }
             }
             val runnerStop = max(entryPrice, highestBefore * (1.0 - RUNNER_TRAIL))
@@ -113,7 +127,17 @@ object StrategyV2 {
                     highestAfter
                 )
                 timedOut -> V2ExitSignal(ACTION_SELL, "ОСТАТОК: прошло 24 часа — закрыть", highestAfter)
-                else -> V2ExitSignal(ACTION_WAIT, "ОСТАТОК 50%: действует трейлинг 4%", highestAfter)
+                else -> {
+                    val runnerRange = max(highestBefore - runnerStop, entryPrice * 0.001)
+                    val runnerReadiness = ((highestBefore - candle.close) / runnerRange * 100.0)
+                        .roundToInt().coerceIn(0, 99)
+                    V2ExitSignal(
+                        ACTION_WAIT,
+                        "ОСТАТОК 50%: действует трейлинг 4%",
+                        highestAfter,
+                        max(runnerReadiness, timeReadiness)
+                    )
+                }
             }
         }
 
@@ -129,7 +153,12 @@ object StrategyV2 {
                 highestAfter
             )
             timedOut -> V2ExitSignal(ACTION_SELL, "ТРЕНД: прошло 24 часа — закрыть позицию", highestAfter)
-            else -> V2ExitSignal(ACTION_WAIT, "ТРЕНД: ждем +8% или защитный стоп", highestAfter)
+            else -> {
+                val targetReadiness = ((candle.close / entryPrice - 1.0) / TREND_TARGET * 100.0)
+                    .roundToInt().coerceIn(0, 99)
+                val readiness = max(max(targetReadiness, stopReadiness), timeReadiness)
+                V2ExitSignal(ACTION_WAIT, "ОСТОРОЖНЫЙ: ждем +8% или защитный стоп", highestAfter, readiness)
+            }
         }
     }
 
@@ -137,7 +166,8 @@ object StrategyV2 {
         pumpEur: List<PumpCandle>,
         btcUsdt: List<PumpCandle>,
         funding: List<FundingPoint>,
-        startTime: Long
+        startTime: Long,
+        aggressive: Boolean = true
     ): BacktestResult {
         if (pumpEur.isEmpty()) return BacktestResult.empty(startTime)
         val indicators = indicators(pumpEur, btcUsdt)
@@ -155,7 +185,7 @@ object StrategyV2 {
                 i++
                 continue
             }
-            val signal = entrySignalAt(i, pumpEur, funding, indicators)
+            val signal = entrySignalAt(i, pumpEur, funding, indicators, aggressive)
             if (!signal.active) {
                 i++
                 continue
@@ -177,7 +207,7 @@ object StrategyV2 {
                 equity = coins * entryPrice,
                 pnl = 0.0,
                 coins = coins,
-                reason = if (signal.mode == MODE_SHOCK) "V2 ШОК" else "V2 ТРЕНД"
+                reason = if (signal.mode == MODE_SHOCK) "Агрессивный вход после шока" else "Осторожный трендовый вход"
             )
 
             var partialTaken = false
@@ -278,7 +308,7 @@ object StrategyV2 {
         return BacktestResult(
             assetName = "PUMP",
             symbol = "PUMP/EUR",
-            strategyName = "V2: тренд + шок",
+            strategyName = if (aggressive) "Агрессивный: тренд + шок" else "Осторожный: только тренд",
             equity = cash,
             profit = profit,
             profitPercent = profit / PumpBotEngine.startBalance * 100.0,
@@ -333,7 +363,8 @@ object StrategyV2 {
         index: Int,
         pump: List<PumpCandle>,
         funding: List<FundingPoint>,
-        indicators: Indicators
+        indicators: Indicators,
+        aggressive: Boolean
     ): V2EntrySignal {
         val candle = pump.getOrNull(index) ?: return V2EntrySignal(MODE_NONE, "Нет свечи", 0.0, 0.0, 0.0, 0L)
         val rsiNow = indicators.rsi.getOrNull(index) ?: 0.0
@@ -351,6 +382,12 @@ object StrategyV2 {
         val trend = trendArmed && rsiNow >= 45.0 && rsiPrevious < 45.0 &&
             candle.close > emaNow && btcAbove && btcSlope && rate <= 0.0 && noChase
 
+        val rsiReadiness = (((rsiNow - 35.0) / 10.0) * 20.0).roundToInt().coerceIn(0, 20)
+        val emaReadiness = if (emaNow > 0.0) {
+            val distance = candle.close / emaNow - 1.0
+            if (distance >= 0.0) 20 else ((1.0 + distance / 0.02) * 20.0).roundToInt().coerceIn(0, 20)
+        } else 0
+
         var shockArmed = false
         for (j in max(1, index - SHOCK_ARM_BARS + 1)..index) {
             if (indicators.ret1[j] <= -0.03 && indicators.volumeRatio[j] >= 3.0 &&
@@ -362,30 +399,65 @@ object StrategyV2 {
         val previousReady = rsiPrevious >= 45.0 && pump.getOrNull(index - 1)?.close?.let { it > previousEma } == true
         val shock = shockArmed && ready && !previousReady && btcAbove && noChase
 
+        var trendReadiness = (if (trendArmed) 20 else 0) + rsiReadiness + emaReadiness +
+            (if (btcAbove) 10 else 0) + (if (btcSlope) 10 else 0) +
+            (if (rate <= 0.0) 10 else 0) + (if (noChase) 10 else 0)
+        if (!trend) trendReadiness = minOf(trendReadiness, 99)
+
+        var shockReadiness = if (aggressive) {
+            (if (shockArmed) 40 else 0) + rsiReadiness + emaReadiness +
+                (if (btcAbove) 10 else 0) + (if (noChase) 10 else 0)
+        } else 0
+        if (!shock) shockReadiness = minOf(shockReadiness, 99)
+
         return when {
-            shock -> V2EntrySignal(
+            aggressive && shock -> V2EntrySignal(
                 MODE_SHOCK,
-                "ПОКУПКА V2 ШОК: падение ≥3% на объеме ≥3x, затем возврат выше EMA200; BTC выше EMA200",
+                "ПОКУПКА АГРЕССИВНАЯ: падение ≥3% на объеме ≥3x, затем возврат выше EMA200; BTC выше EMA200",
                 rsiNow,
                 emaNow,
                 rate,
-                candle.closeTime
+                candle.closeTime,
+                trendReadiness,
+                100
             )
             trend -> V2EntrySignal(
                 MODE_TREND,
-                "ПОКУПКА V2 ТРЕНД: RSI восстановился выше 45; PUMP и BTC в восходящем режиме; funding ≤ 0",
+                "ПОКУПКА ОСТОРОЖНАЯ: RSI восстановился выше 45; PUMP и BTC в восходящем режиме; funding ≤ 0",
                 rsiNow,
                 emaNow,
                 rate,
-                candle.closeTime
+                candle.closeTime,
+                100,
+                shockReadiness
             )
             else -> V2EntrySignal(
                 MODE_NONE,
-                String.format(Locale.US, "ЖДЕМ V2: RSI %.1f, EMA200 %.8f, funding %+.5f%%", rsiNow, emaNow, rate * 100.0),
+                if (aggressive) {
+                    String.format(
+                        Locale.US,
+                        "ЖДЕМ: осторожный %d/100, вход после шока %d/100; RSI %.1f, funding %+.5f%%",
+                        trendReadiness,
+                        shockReadiness,
+                        rsiNow,
+                        rate * 100.0
+                    )
+                } else {
+                    String.format(
+                        Locale.US,
+                        "ЖДЕМ: осторожный вход %d/100; RSI %.1f, EMA200 %.8f, funding %+.5f%%",
+                        trendReadiness,
+                        rsiNow,
+                        emaNow,
+                        rate * 100.0
+                    )
+                },
                 rsiNow,
                 emaNow,
                 rate,
-                candle.closeTime
+                candle.closeTime,
+                trendReadiness,
+                shockReadiness
             )
         }
     }

@@ -58,12 +58,18 @@ object PumpAlert {
 
     fun showSignal(context: Context, snapshot: LiveSnapshot) {
         ensureChannels(context)
-        val title = when (snapshot.signalAction) {
-            "BUY" -> "PUMP/EUR V2: ПОКУПКА"
-            StrategyV2.ACTION_SELL_HALF -> "PUMP/EUR V2: ПРОДАТЬ 50%"
-            else -> "PUMP/EUR V2: ПРОДАЖА"
+        val score = snapshot.readinessScore
+        val title = when {
+            score in 95..99 -> "PUMP/EUR: ГОТОВНОСТЬ К ПОКУПКЕ $score/100"
+            score in -99..-95 -> "PUMP/EUR: ГОТОВНОСТЬ К ПРОДАЖЕ ${kotlin.math.abs(score)}/100"
+            snapshot.signalAction == "BUY" -> "PUMP/EUR: +100 — ПОКУПАТЬ"
+            snapshot.signalAction == StrategyV2.ACTION_SELL_HALF -> "PUMP/EUR: −100 — ПРОДАТЬ 50%"
+            else -> "PUMP/EUR: −100 — ПРОДАВАТЬ"
         }
-        val text = "${snapshot.signalReason}. Цена €${formatPrice(snapshot.lastPrice)}"
+        val preparation = if (kotlin.math.abs(score) in 95..99) {
+            "Приготовьтесь и ждите 100. Это готовность условий, не вероятность прибыли. "
+        } else ""
+        val text = "$preparation${snapshot.signalReason}. Цена €${formatPrice(snapshot.lastPrice)}"
         val notification = NotificationCompat.Builder(context, signalChannelId)
             .setSmallIcon(R.drawable.ic_launcher)
             .setContentTitle(title)
