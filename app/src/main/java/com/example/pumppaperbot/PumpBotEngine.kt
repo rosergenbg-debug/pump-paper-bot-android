@@ -33,6 +33,45 @@ data class TradeEvent(
     val reason: String = ""
 )
 
+data class TradeConnection(
+    val entry: TradeEvent,
+    val exit: TradeEvent,
+    val partialExits: List<TradeEvent>
+) {
+    val profitEur: Double
+        get() = exit.pnl
+
+    val profitPercent: Double
+        get() = if (entry.amount > 0.0) profitEur / entry.amount * 100.0 else 0.0
+
+    val durationMillis: Long
+        get() = (exit.time - entry.time).coerceAtLeast(0L)
+}
+
+fun completedTradeConnections(events: List<TradeEvent>): List<TradeConnection> {
+    val result = ArrayList<TradeConnection>()
+    var entry: TradeEvent? = null
+    val partials = ArrayList<TradeEvent>()
+    events.sortedBy { it.time }.forEach { event ->
+        when (event.action) {
+            "BUY" -> {
+                entry = event
+                partials.clear()
+            }
+            "SELL_HALF" -> if (entry != null) partials += event
+            "SELL" -> {
+                val activeEntry = entry
+                if (activeEntry != null) {
+                    result += TradeConnection(activeEntry, event, partials.toList())
+                }
+                entry = null
+                partials.clear()
+            }
+        }
+    }
+    return result
+}
+
 data class BacktestResult(
     val assetName: String,
     val symbol: String,
@@ -98,7 +137,7 @@ data class LiveSnapshot(
 data class CoinOption(val name: String, val symbol: String)
 
 object PumpBotEngine {
-    const val appVersionName = "1.7"
+    const val appVersionName = "1.8"
     const val startBalance = 1000.0
     const val feeRate = 0.0015
     const val slippage = 0.0005

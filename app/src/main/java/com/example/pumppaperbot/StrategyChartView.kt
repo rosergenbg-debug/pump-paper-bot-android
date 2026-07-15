@@ -76,6 +76,33 @@ class StrategyChartView @JvmOverloads constructor(
         style = Paint.Style.FILL_AND_STROKE
         strokeCap = Paint.Cap.ROUND
     }
+    private val connectionPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#E879F9")
+        strokeWidth = 5f
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+    }
+    private val partialConnectionPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#A855F7")
+        strokeWidth = 3f
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+        pathEffect = DashPathEffect(floatArrayOf(12f, 8f), 0f)
+    }
+    private val connectionTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        textSize = 17f
+        textAlign = Paint.Align.CENTER
+        isFakeBoldText = true
+    }
+    private val profitBadgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#B8238636")
+        style = Paint.Style.FILL
+    }
+    private val lossBadgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#B8B62324")
+        style = Paint.Style.FILL
+    }
     private val buyPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#32C789")
         style = Paint.Style.FILL
@@ -145,6 +172,27 @@ class StrategyChartView @JvmOverloads constructor(
         val visible = visibleBars(data)
         val desiredEnd = (index + visible / 2).coerceIn(visible, data.candles.size)
         setHistoryOffsetBars(data.candles.size - desiredEnd)
+    }
+
+    fun focusOnTimeRange(startTime: Long, endTime: Long): Int {
+        val data = bundle ?: return visibleBarLimit
+        if (data.candles.isEmpty()) return visibleBarLimit
+        val startIndex = data.candles.indexOfFirst { it.closeTime >= startTime }
+            .let { if (it < 0) data.candles.lastIndex else it }
+        val endIndex = data.candles.indexOfFirst { it.closeTime >= endTime }
+            .let { if (it < 0) data.candles.lastIndex else it }
+        val required = (endIndex - startIndex + 17).coerceAtLeast(24)
+        visibleBarLimit = when {
+            required <= 30 -> 30
+            required <= 60 -> 60
+            required <= 120 -> 120
+            else -> 240
+        }.coerceAtMost(data.candles.size)
+        val desiredEnd = (endIndex + 9).coerceIn(visibleBarLimit, data.candles.size)
+        historyOffsetBars = (data.candles.size - desiredEnd).coerceIn(0, maxHistoryOffset())
+        invalidate()
+        notifyHistoryChanged()
+        return visibleBarLimit
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -400,6 +448,37 @@ class StrategyChartView @JvmOverloads constructor(
         x: (Int) -> Float,
         y: (Double) -> Float
     ) {
+        fun visibleIndex(time: Long): Int? {
+            if (candles.isEmpty() || time < candles.first().openTime || time > candles.last().closeTime) return null
+            val index = candles.indexOfFirst { it.closeTime >= time }
+            return index.takeIf { it >= 0 }
+        }
+
+        completedTradeConnections(trades).forEachIndexed { connectionIndex, connection ->
+            val entryIndex = visibleIndex(connection.entry.time) ?: return@forEachIndexed
+            val exitIndex = visibleIndex(connection.exit.time) ?: return@forEachIndexed
+            val entryX = x(entryIndex)
+            val entryY = y(connection.entry.price)
+            val exitX = x(exitIndex)
+            val exitY = y(connection.exit.price)
+            canvas.drawLine(entryX, entryY, exitX, exitY, connectionPaint)
+
+            connection.partialExits.forEach { partial ->
+                val partialIndex = visibleIndex(partial.time) ?: return@forEach
+                canvas.drawLine(entryX, entryY, x(partialIndex), y(partial.price), partialConnectionPaint)
+            }
+
+            val duration = formatDuration(connection.durationMillis)
+            val label = String.format(Locale.GERMAN, "%+.2f%% • %s", connection.profitPercent, duration)
+            val halfWidth = connectionTextPaint.measureText(label) / 2f + 10f
+            val centerX = ((entryX + exitX) / 2f).coerceIn(halfWidth + 8f, width - halfWidth - 8f)
+            val baseY = ((entryY + exitY) / 2f + if (connectionIndex % 2 == 0) -26f else 32f)
+                .coerceIn(108f, height - 78f)
+            bodyRect.set(centerX - halfWidth, baseY - 20f, centerX + halfWidth, baseY + 7f)
+            canvas.drawRoundRect(bodyRect, 8f, 8f, if (connection.profitEur >= 0.0) profitBadgePaint else lossBadgePaint)
+            canvas.drawText(label, centerX, baseY, connectionTextPaint)
+        }
+
         var activeMode = StrategyV2.MODE_TREND
         trades.sortedBy { it.time }.forEach { trade ->
             if (trade.action == "BUY") {
@@ -409,8 +488,7 @@ class StrategyChartView @JvmOverloads constructor(
                     else -> StrategyV2.MODE_TREND
                 }
             }
-            val index = candles.indexOfLast { it.closeTime <= trade.time }
-            if (index < 0) return@forEach
+            val index = visibleIndex(trade.time) ?: return@forEach
             val cx = x(index)
             val cy = y(trade.price)
             val modePaint = if (activeMode == StrategyV2.MODE_EXHAUSTION || activeMode == StrategyV2.MODE_SHOCK) sellPaint else buyPaint
@@ -439,6 +517,18 @@ class StrategyChartView @JvmOverloads constructor(
                 canvas.drawText(if (trade.action == "SELL_HALF") partialLabel else "ВЫХОД", cx, cy - 48f, markerTextPaint)
                 if (trade.action != "SELL_HALF") activeMode = StrategyV2.MODE_TREND
             }
+        }
+    }
+
+    private fun formatDuration(durationMillis: Long): String {
+        val totalMinutes = durationMillis / 60_000L
+        val days = totalMinutes / (24L * 60L)
+        val hours = totalMinutes / 60L % 24L
+        val minutes = totalMinutes % 60L
+        return when {
+            days > 0L -> "${days}д ${hours}ч"
+            hours > 0L -> "${hours}ч ${minutes}м"
+            else -> "${minutes}м"
         }
     }
 }

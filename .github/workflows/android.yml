@@ -30,22 +30,22 @@ jobs:
         run: gradle assembleDebug
 
       - name: Prepare named APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk PumpSignal-MultiStage-v1.7.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk PumpSignal-TradeLinks-v1.8.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: PumpSignal-MultiStage-v1.7-APK
-          path: PumpSignal-MultiStage-v1.7.apk
+          name: PumpSignal-TradeLinks-v1.8-APK
+          path: PumpSignal-TradeLinks-v1.8.apk
           retention-days: 30
 
-      - name: Publish v1.7 release
+      - name: Publish v1.8 release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.7
-          name: PUMP Сигнал v1.7
+          tag_name: v1.8
+          name: PUMP Сигнал v1.8
           prerelease: true
           body: |
-            Четырёхэтапный анализ: серия падений, подтверждение разворота, поток покупателей spot/futures и фильтр общего рынка BTC+ETH+SOL. Профили «Строгий» и «Чувствительный», исторические точки на вертикальном графике и звонок на готовности 99.
+            Четырёхэтапный анализ v1.7 сохранён. На историческом графике завершённые сделки соединены фиолетовыми линиями; для каждой сделки показаны результат в процентах и евро, а также время нахождения денег в позиции.
             Комиссия 0,15% на вход и 0,15% на выход. Исторические результаты не гарантируют будущую прибыль.
-          files: PumpSignal-MultiStage-v1.7.apk
+          files: PumpSignal-TradeLinks-v1.8.apk

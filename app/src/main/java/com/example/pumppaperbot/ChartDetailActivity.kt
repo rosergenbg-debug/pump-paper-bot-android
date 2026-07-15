@@ -43,6 +43,7 @@ class ChartDetailActivity : AppCompatActivity() {
     private var premiumCandles: List<PumpCandle> = emptyList()
     private var funding: List<FundingPoint> = emptyList()
     private var signalPoints: List<TradeEvent> = emptyList()
+    private var completedTrades: List<TradeConnection> = emptyList()
     private var activePointIndex = -1
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -98,11 +99,11 @@ class ChartDetailActivity : AppCompatActivity() {
             }
         }, LinearLayout.LayoutParams(-1, dp(42)).apply { topMargin = dp(4) })
 
-        pointStatus = label("После загрузки откроется последняя историческая точка.", 13, "#58A6FF", true)
+        pointStatus = label("После загрузки откроется последняя историческая сделка.", 13, "#58A6FF", true)
         root.addView(pointStatus)
-        root.addView(label("Синяя стрелка снизу — ВХОД. Синяя стрелка сверху — ВЫХОД.", 12, "#C9D1D9", false))
+        root.addView(label("Синие стрелки — вход и выход. Фиолетовая линия соединяет одну сделку; пунктир ведёт к частичной продаже.", 12, "#C9D1D9", false))
 
-        chart = StrategyChartView(this).apply { setVisibleBarLimit(60) }
+        chart = StrategyChartView(this).apply { setVisibleBarLimit(120) }
         root.addView(chart, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(3) })
 
         range = label("Период на экране: —", 13, "#C9D1D9", true)
@@ -163,11 +164,7 @@ class ChartDetailActivity : AppCompatActivity() {
         }
         chart.setVisibleBarLimit(next)
         if (activePointIndex in signalPoints.indices) chart.centerOnTime(signalPoints[activePointIndex].time)
-        zoomButton.text = when (next) {
-            30 -> "МАСШТАБ ×4"
-            60 -> "МАСШТАБ ×2"
-            else -> "МАСШТАБ ×1"
-        }
+        updateZoomButton(next)
     }
 
     private fun moveSignal(delta: Int) {
@@ -185,22 +182,47 @@ class ChartDetailActivity : AppCompatActivity() {
 
     private fun focusActiveSignal() {
         val trade = signalPoints.getOrNull(activePointIndex) ?: return
-        chart.centerOnTime(trade.time)
+        val connection = completedTrades.firstOrNull {
+            it.entry == trade || it.exit == trade || trade in it.partialExits
+        }
+        if (connection != null) {
+            updateZoomButton(chart.focusOnTimeRange(connection.entry.time, connection.exit.time))
+        } else {
+            chart.centerOnTime(trade.time)
+        }
         val action = when (trade.action) {
             "BUY" -> "ВХОД"
             "SELL_HALF" -> if (trade.reason.startsWith("40%")) "ВЫХОД 40%" else "ВЫХОД 50%"
             else -> "ВЫХОД"
         }
-        pointStatus.text = String.format(
-            Locale.US,
-            "Точка %d из %d • %s • %s • €%.8f\n%s",
-            activePointIndex + 1,
-            signalPoints.size,
-            PumpBotEngine.formatDate(trade.time),
-            action,
-            trade.price,
-            trade.reason
-        )
+        pointStatus.text = if (connection != null) {
+            val tradeNumber = completedTrades.indexOf(connection) + 1
+            String.format(
+                Locale.GERMAN,
+                "Сделка %d из %d: %+.2f%% (%+.2f EUR) • деньги работали %s\nВход %s → выход %s\nВыбрана точка: %s • %s • €%.8f",
+                tradeNumber,
+                completedTrades.size,
+                connection.profitPercent,
+                connection.profitEur,
+                formatDuration(connection.durationMillis),
+                PumpBotEngine.formatDate(connection.entry.time),
+                PumpBotEngine.formatDate(connection.exit.time),
+                action,
+                PumpBotEngine.formatDate(trade.time),
+                trade.price
+            )
+        } else {
+            String.format(
+                Locale.GERMAN,
+                "Точка %d из %d • %s • %s • €%.8f\n%s",
+                activePointIndex + 1,
+                signalPoints.size,
+                PumpBotEngine.formatDate(trade.time),
+                action,
+                trade.price,
+                trade.reason
+            )
+        }
     }
 
     private fun loadSixMonths() {
@@ -246,6 +268,7 @@ class ChartDetailActivity : AppCompatActivity() {
         val first = allCandles.indexOfFirst { it.closeTime >= startTime }.let { if (it < 0) 0 else it }
         val displayCandles = allCandles.drop(first)
         signalPoints = result.trades.sortedBy { it.time }
+        completedTrades = completedTradeConnections(signalPoints)
         val bundle = ChartBundle(
             candles = displayCandles,
             fast = fast.drop(first),
@@ -255,7 +278,13 @@ class ChartDetailActivity : AppCompatActivity() {
             aggressive = aggressive,
             showReadinessGauge = false
         )
-        status.text = "PUMP/EUR • ${displayCandles.size} свечей • ${result.roundTrips} исторических сделок"
+        status.text = String.format(
+            Locale.GERMAN,
+            "PUMP/EUR • %d сделок • итог %+.2f%% (%+.2f EUR)",
+            result.roundTrips,
+            result.profitPercent,
+            result.profit
+        )
         chart.setData("PUMP/EUR — ВХОДЫ И ВЫХОДЫ", bundle)
         seek.max = chart.maxHistoryOffset().coerceAtLeast(1)
         seek.progress = seek.max
@@ -348,6 +377,27 @@ class ChartDetailActivity : AppCompatActivity() {
         textSize = 11f
         isAllCaps = false
         setPadding(dp(3), 0, dp(3), 0)
+    }
+
+    private fun updateZoomButton(limit: Int) {
+        zoomButton.text = when (limit) {
+            in 0..30 -> "ВИД: 15 ЧАСОВ"
+            in 31..60 -> "ВИД: 30 ЧАСОВ"
+            in 61..120 -> "ВИД: 2,5 ДНЯ"
+            else -> "ВИД: 5 ДНЕЙ"
+        }
+    }
+
+    private fun formatDuration(durationMillis: Long): String {
+        val totalMinutes = durationMillis / 60_000L
+        val days = totalMinutes / (24L * 60L)
+        val hours = totalMinutes / 60L % 24L
+        val minutes = totalMinutes % 60L
+        return when {
+            days > 0L -> "${days} д ${hours} ч ${minutes} мин"
+            hours > 0L -> "${hours} ч ${minutes} мин"
+            else -> "${minutes} мин"
+        }
     }
 
     private fun label(text: String, size: Int, color: String, bold: Boolean) = TextView(this).apply {
