@@ -5,6 +5,9 @@ on:
     branches: [ "main" ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -26,9 +29,23 @@ jobs:
       - name: Build APK
         run: gradle assembleDebug
 
+      - name: Prepare named APK
+        run: cp app/build/outputs/apk/debug/app-debug.apk PumpSignal-V2-v1.3.apk
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: PumpSignal-V2-v1.3-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: PumpSignal-V2-v1.3.apk
           retention-days: 30
+
+      - name: Publish v1.3 release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.3
+          name: PUMP Сигнал V2 v1.3
+          prerelease: true
+          body: |
+            Экспериментальная версия V2 для PUMP/EUR.
+            Комиссия 0,15% на вход и 0,15% на выход. Исторические результаты не гарантируют будущую прибыль.
+          files: PumpSignal-V2-v1.3.apk
