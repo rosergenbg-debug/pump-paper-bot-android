@@ -88,6 +88,27 @@
                 android:textStyle="bold" />
         </LinearLayout>
 
+        <TextView
+            android:id="@+id/tvAlertStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:background="#161B22"
+            android:padding="10dp"
+            android:text="Звонок: рабочий режим 06:00–23:00"
+            android:textColor="#C9D1D9"
+            android:textSize="13sp" />
+
+        <Button
+            android:id="@+id/btnAlertSettings"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:layout_marginTop="6dp"
+            android:backgroundTint="#1F6FEB"
+            android:text="ВРЕМЯ И РЕЖИМ ЗВОНКА"
+            android:textColor="#FFFFFF"
+            android:textStyle="bold" />
+
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

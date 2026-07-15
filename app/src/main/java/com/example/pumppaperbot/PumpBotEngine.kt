@@ -63,7 +63,8 @@ data class ChartBundle(
     val readinessScore: Int = 0,
     val trendReadiness: Int = 0,
     val shockReadiness: Int = 0,
-    val aggressive: Boolean = false
+    val aggressive: Boolean = false,
+    val showReadinessGauge: Boolean = true
 )
 
 data class LiveSnapshot(
@@ -94,7 +95,7 @@ data class LiveSnapshot(
 data class CoinOption(val name: String, val symbol: String)
 
 object PumpBotEngine {
-    const val appVersionName = "1.5"
+    const val appVersionName = "1.6"
     const val startBalance = 1000.0
     const val feeRate = 0.0015
     const val slippage = 0.0005
@@ -386,23 +387,39 @@ object PumpBotEngine {
         )
     }
 
-    fun alertKey(snapshot: LiveSnapshot): String {
-        val band = if (kotlin.math.abs(snapshot.readinessScore) >= 100) 100 else 95
+    fun alertKey(context: Context, snapshot: LiveSnapshot): String {
+        val band = if (kotlin.math.abs(snapshot.readinessScore) >= 100) 100 else 99
         val profile = if (snapshot.aggressive) "AGGRESSIVE" else "CAREFUL"
-        return "${snapshot.waitMode}:$band:$profile:${snapshot.strategyMode}"
+        return "${snapshot.waitMode}:$band:$profile:${snapshot.strategyMode}${AlertSchedule.alertKeySuffix(context)}"
     }
 
     fun shouldAlert(context: Context, snapshot: LiveSnapshot): Boolean {
         if (!snapshot.running) return false
-        val expected = (snapshot.waitMode == "BUY" && snapshot.readinessScore >= 95) ||
-            (snapshot.waitMode == "SELL" && snapshot.readinessScore <= -95)
+        val expected = (snapshot.waitMode == "BUY" && snapshot.readinessScore >= 99) ||
+            (snapshot.waitMode == "SELL" && snapshot.readinessScore <= -99)
+        if (expected && !AlertSchedule.isAllowedNow(context)) {
+            AlertSchedule.rememberBlocked(context, snapshot)
+            return false
+        }
+        if (AlertSchedule.isAllowedNow(context)) {
+            when (AlertSchedule.resolvePending(context, snapshot)) {
+                DelayedSignalState.POSSIBLE -> {
+                    val delayedKey = alertKey(context, snapshot)
+                    return delayedKey != prefs(context).getString(keyLastAlertKey, "")
+                }
+                DelayedSignalState.MISSED -> return false
+                DelayedSignalState.NONE -> Unit
+            }
+        }
         if (!expected) return false
-        val key = alertKey(snapshot)
+        val key = alertKey(context, snapshot)
         return key.isNotBlank() && key != prefs(context).getString(keyLastAlertKey, "")
     }
 
     fun markAlerted(context: Context, snapshot: LiveSnapshot) {
-        prefs(context).edit().putString(keyLastAlertKey, alertKey(snapshot)).apply()
+        val key = alertKey(context, snapshot)
+        prefs(context).edit().putString(keyLastAlertKey, key).apply()
+        if (AlertSchedule.pendingTime(context) > 0L) AlertSchedule.markDelivered(context)
     }
 
     fun parseCandles(json: String): List<PumpCandle> {

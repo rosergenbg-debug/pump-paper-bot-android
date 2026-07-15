@@ -38,6 +38,7 @@ class MainActivity : AppCompatActivity() {
     private var tvPrice: TextView? = null
     private var tvReason: TextView? = null
     private var tvPosition: TextView? = null
+    private var tvAlertStatus: TextView? = null
     private var chart: StrategyChartView? = null
     private var btnRisk30: Button? = null
     private var btnRisk35: Button? = null
@@ -48,6 +49,7 @@ class MainActivity : AppCompatActivity() {
     private var btnManual: Button? = null
     private var btnToggleMode: Button? = null
     private var btnBacktest: Button? = null
+    private var btnAlertSettings: Button? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -61,6 +63,7 @@ class MainActivity : AppCompatActivity() {
         tvPrice = findViewById(R.id.tvPrice)
         tvReason = findViewById(R.id.tvReason)
         tvPosition = findViewById(R.id.tvPosition)
+        tvAlertStatus = findViewById(R.id.tvAlertStatus)
         chart = findViewById(R.id.chart)
         btnRisk30 = findViewById(R.id.btnRisk30)
         btnRisk35 = findViewById(R.id.btnRisk35)
@@ -71,6 +74,7 @@ class MainActivity : AppCompatActivity() {
         btnManual = findViewById(R.id.btnManual)
         btnToggleMode = findViewById(R.id.btnToggleMode)
         btnBacktest = findViewById(R.id.btnBacktest)
+        btnAlertSettings = findViewById(R.id.btnAlertSettings)
 
         PumpBotEngine.ensureInitialized(this)
         requestNotificationPermission()
@@ -100,6 +104,7 @@ class MainActivity : AppCompatActivity() {
         btnManual?.setOnClickListener { confirmManualAction() }
         btnToggleMode?.setOnClickListener { showSignalInfo() }
         btnBacktest?.setOnClickListener { startActivity(Intent(this, BacktestActivity::class.java)) }
+        btnAlertSettings?.setOnClickListener { startActivity(Intent(this, AlertSettingsActivity::class.java)) }
         chart?.setOnClickListener { startActivity(Intent(this, ChartDetailActivity::class.java)) }
 
         updateUi()
@@ -184,7 +189,8 @@ class MainActivity : AppCompatActivity() {
             .setTitle("Как рассчитан сигнал")
             .setMessage(
                 "$profile\n\n$details\n${snapshot.signalReason}\n\n" +
-                    "95 — приготовиться. 100 — условия стратегии полностью выполнены. " +
+                    "95–98 — только отображение приближения без звонка. 99 — звук и вибрация. " +
+                    "100 — условия стратегии полностью выполнены. " +
                     "Это готовность правил, а не вероятность прибыли."
             )
             .setPositiveButton("Понятно", null)
@@ -252,6 +258,7 @@ class MainActivity : AppCompatActivity() {
         } else {
             "Сделка: не открыта"
         }
+        tvAlertStatus?.text = AlertSchedule.statusText(this)
 
         btnStart?.isEnabled = !snapshot.running
         btnStart?.alpha = if (snapshot.running) 0.45f else 1f
@@ -270,9 +277,11 @@ class MainActivity : AppCompatActivity() {
         val score = snapshot.readinessScore
         tvReadiness?.text = when {
             score >= 100 -> "+100  ПОКУПАТЬ\nУСЛОВИЯ ПОДТВЕРЖДЕНЫ"
-            score >= 95 -> "+$score  ПРИГОТОВИТЬСЯ К ПОКУПКЕ\nждем полного подтверждения 100"
+            score == 99 -> "+99  ЗВОНОК: ПРИГОТОВИТЬСЯ\nдо покупки остался 1 балл"
+            score >= 95 -> "+$score  СИГНАЛ ПРИБЛИЖАЕТСЯ\nзвонок будет на 99"
             score <= -100 -> "−100  ПРОДАВАТЬ\nУСЛОВИЯ ПОДТВЕРЖДЕНЫ"
-            score <= -95 -> "−${kotlin.math.abs(score)}  ПРИГОТОВИТЬСЯ К ПРОДАЖЕ\nждем полного подтверждения −100"
+            score == -99 -> "−99  ЗВОНОК: ПРИГОТОВИТЬСЯ\nдо продажи остался 1 балл"
+            score <= -95 -> "−${kotlin.math.abs(score)}  СИГНАЛ ПРИБЛИЖАЕТСЯ\nзвонок будет на −99"
             score < 0 -> "ПРОДАЖА НЕ ПОДТВЕРЖДЕНА\nготовность ${kotlin.math.abs(score)}/100"
             else -> "ПОКУПКА НЕ ПОДТВЕРЖДЕНА\nготовность $score/100"
         }

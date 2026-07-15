@@ -30,22 +30,22 @@ jobs:
         run: gradle assembleDebug
 
       - name: Prepare named APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk PumpSignal-History-v1.5.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk PumpSignal-Visual-v1.6.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: PumpSignal-History-v1.5-APK
-          path: PumpSignal-History-v1.5.apk
+          name: PumpSignal-Visual-v1.6-APK
+          path: PumpSignal-Visual-v1.6.apk
           retention-days: 30
 
-      - name: Publish v1.5 release
+      - name: Publish v1.6 release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.5
-          name: PUMP Сигнал v1.5
+          tag_name: v1.6
+          name: PUMP Сигнал v1.6
           prerelease: true
           body: |
-            Исправлена ложная готовность 99 на вершине. Добавлен полноэкранный график за 6 месяцев с датами и историческими точками входа/выхода.
+            Вертикальный график с крупными синими стрелками входа/выхода, навигацией по точкам, масштабом и отдельной шкалой ±100. Звонок на готовности 99 с рабочим расписанием или режимом 24 часа.
             Комиссия 0,15% на вход и 0,15% на выход. Исторические результаты не гарантируют будущую прибыль.
-          files: PumpSignal-History-v1.5.apk
+          files: PumpSignal-Visual-v1.6.apk

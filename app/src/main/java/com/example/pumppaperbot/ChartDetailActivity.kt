@@ -1,7 +1,6 @@
 package com.example.pumppaperbot
 
-import android.content.pm.ActivityInfo
-import android.content.res.Configuration
+import android.content.res.ColorStateList
 import android.graphics.Color
 import android.os.Bundle
 import android.widget.Button
@@ -26,13 +25,25 @@ class ChartDetailActivity : AppCompatActivity() {
 
     private lateinit var chart: StrategyChartView
     private lateinit var status: TextView
+    private lateinit var profileStatus: TextView
+    private lateinit var pointStatus: TextView
     private lateinit var range: TextView
     private lateinit var seek: SeekBar
-    private lateinit var rotateButton: Button
+    private lateinit var cautiousButton: Button
+    private lateinit var aggressiveButton: Button
+    private lateinit var zoomButton: Button
     private var adjustingSeek = false
+    private var aggressive = false
+    private var startTime = 0L
+    private var allCandles: List<PumpCandle> = emptyList()
+    private var btcCandles: List<PumpCandle> = emptyList()
+    private var funding: List<FundingPoint> = emptyList()
+    private var signalPoints: List<TradeEvent> = emptyList()
+    private var activePointIndex = -1
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        aggressive = PumpBotEngine.isAggressive(this)
         render()
         loadSixMonths()
     }
@@ -40,15 +51,6 @@ class ChartDetailActivity : AppCompatActivity() {
     override fun onDestroy() {
         executor.shutdownNow()
         super.onDestroy()
-    }
-
-    override fun onConfigurationChanged(newConfig: Configuration) {
-        super.onConfigurationChanged(newConfig)
-        rotateButton.text = if (newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE) {
-            "ВЕРТИКАЛЬНО"
-        } else {
-            "ПОВЕРНУТЬ БОКОМ"
-        }
     }
 
     private fun render() {
@@ -59,20 +61,45 @@ class ChartDetailActivity : AppCompatActivity() {
         }
 
         val nav = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        nav.addView(button("← НАЗАД", "#30363D").apply { setOnClickListener { finish() } }, LinearLayout.LayoutParams(0, dp(46), 1f))
-        rotateButton = button("ПОВЕРНУТЬ БОКОМ", "#1F6FEB").apply { setOnClickListener { rotateChart() } }
-        nav.addView(rotateButton, LinearLayout.LayoutParams(0, dp(46), 1f).apply { leftMargin = dp(8) })
+        nav.addView(button("← НАЗАД", "#30363D").apply { setOnClickListener { finish() } }, LinearLayout.LayoutParams(0, dp(48), 1f))
+        nav.addView(button("БОЛЬШАЯ ШКАЛА ±100", "#1F6FEB").apply {
+            setOnClickListener { SignalGaugeDialog.show(this@ChartDetailActivity, PumpBotEngine.snapshot(this@ChartDetailActivity)) }
+        }, LinearLayout.LayoutParams(0, dp(48), 1.35f).apply { leftMargin = dp(8) })
         root.addView(nav)
 
-        val aggressive = PumpBotEngine.isAggressive(this)
-        val profile = if (aggressive) "Агрессивный: зелёные и красные входы" else "Осторожный: только зелёные входы"
         status = label("Загружаю историю PUMP/EUR за 6 месяцев…", 14, "#F0F6FC", true)
         root.addView(status)
-        root.addView(label(profile, 13, if (aggressive) "#FF7B72" else "#7EE787", true))
-        root.addView(label("● В — вход: зелёный осторожный, красный после шока   ▲ П — продажа", 12, "#C9D1D9", false))
 
-        chart = StrategyChartView(this)
-        root.addView(chart, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(4) })
+        val profiles = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        cautiousButton = button("ОСТОРОЖНЫЙ", "#30363D").apply { setOnClickListener { selectProfile(false) } }
+        aggressiveButton = button("АГРЕССИВНЫЙ", "#30363D").apply { setOnClickListener { selectProfile(true) } }
+        profiles.addView(cautiousButton, LinearLayout.LayoutParams(0, dp(48), 1f))
+        profiles.addView(aggressiveButton, LinearLayout.LayoutParams(0, dp(48), 1f).apply { leftMargin = dp(8) })
+        root.addView(profiles)
+        profileStatus = label("", 13, "#C9D1D9", true)
+        root.addView(profileStatus)
+        renderProfileButtons()
+
+        val controls = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        controls.addView(button("← ТОЧКА", "#1F6FEB").apply { setOnClickListener { moveSignal(-1) } }, LinearLayout.LayoutParams(0, dp(46), 1f))
+        zoomButton = button("МАСШТАБ ×2", "#30363D").apply { setOnClickListener { cycleZoom() } }
+        controls.addView(zoomButton, LinearLayout.LayoutParams(0, dp(46), 1.15f).apply { leftMargin = dp(6) })
+        controls.addView(button("ТОЧКА →", "#1F6FEB").apply { setOnClickListener { moveSignal(1) } }, LinearLayout.LayoutParams(0, dp(46), 1f).apply { leftMargin = dp(6) })
+        root.addView(controls, LinearLayout.LayoutParams(-1, dp(46)).apply { topMargin = dp(4) })
+        root.addView(button("ПОКАЗАТЬ ПОСЛЕДНИЕ СВЕЧИ", "#30363D").apply {
+            setOnClickListener {
+                activePointIndex = -1
+                chart.setHistoryOffsetBars(0)
+                pointStatus.text = "Показаны последние свечи. Если стрелок нет, в этом периоде сигналов не было."
+            }
+        }, LinearLayout.LayoutParams(-1, dp(42)).apply { topMargin = dp(4) })
+
+        pointStatus = label("После загрузки откроется последняя историческая точка.", 13, "#58A6FF", true)
+        root.addView(pointStatus)
+        root.addView(label("Синяя стрелка снизу — ВХОД. Синяя стрелка сверху — ВЫХОД.", 12, "#C9D1D9", false))
+
+        chart = StrategyChartView(this).apply { setVisibleBarLimit(60) }
+        root.addView(chart, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(3) })
 
         range = label("Период на экране: —", 13, "#C9D1D9", true)
         root.addView(range)
@@ -82,14 +109,18 @@ class ChartDetailActivity : AppCompatActivity() {
             progress = 1
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                    if (fromUser && !adjustingSeek) chart.setHistoryOffsetBars(chart.maxHistoryOffset() - progress)
+                    if (fromUser && !adjustingSeek) {
+                        activePointIndex = -1
+                        chart.setHistoryOffsetBars(chart.maxHistoryOffset() - progress)
+                        pointStatus.text = "Период выбран вручную. Синие стрелки видны только там, где была сделка."
+                    }
                 }
                 override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
                 override fun onStopTrackingTouch(seekBar: SeekBar?) = Unit
             })
         }
-        root.addView(seek, LinearLayout.LayoutParams(-1, dp(42)))
-        root.addView(label("Слева — 6 месяцев назад, справа — последние свечи. График можно также тянуть пальцем.", 12, "#8B949E", false))
+        root.addView(seek, LinearLayout.LayoutParams(-1, dp(38)))
+        root.addView(label("Слева — 6 месяцев назад, справа — последние свечи.", 12, "#8B949E", false))
 
         chart.setOnHistoryWindowChanged { offset, start, end ->
             val format = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.GERMAN)
@@ -103,20 +134,75 @@ class ChartDetailActivity : AppCompatActivity() {
         setContentView(root)
     }
 
-    private fun rotateChart() {
-        requestedOrientation = if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) {
-            ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+    private fun selectProfile(value: Boolean) {
+        aggressive = value
+        PumpBotEngine.setAggressive(this, value)
+        renderProfileButtons()
+        if (allCandles.isNotEmpty()) renderHistory(focusLastSignal = true)
+    }
+
+    private fun renderProfileButtons() {
+        cautiousButton.backgroundTintList = ColorStateList.valueOf(Color.parseColor(if (!aggressive) "#238636" else "#30363D"))
+        aggressiveButton.backgroundTintList = ColorStateList.valueOf(Color.parseColor(if (aggressive) "#B62324" else "#30363D"))
+        profileStatus.text = if (aggressive) {
+            "Агрессивный: зелёные осторожные входы + красные входы после шока"
         } else {
-            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            "Осторожный: только зелёные входы"
         }
     }
 
+    private fun cycleZoom() {
+        val next = when (chart.currentVisibleBarLimit()) {
+            in 0..30 -> 120
+            in 31..60 -> 30
+            else -> 60
+        }
+        chart.setVisibleBarLimit(next)
+        if (activePointIndex in signalPoints.indices) chart.centerOnTime(signalPoints[activePointIndex].time)
+        zoomButton.text = when (next) {
+            30 -> "МАСШТАБ ×4"
+            60 -> "МАСШТАБ ×2"
+            else -> "МАСШТАБ ×1"
+        }
+    }
+
+    private fun moveSignal(delta: Int) {
+        if (signalPoints.isEmpty()) {
+            pointStatus.text = "Для выбранного профиля исторических точек нет."
+            return
+        }
+        activePointIndex = if (activePointIndex !in signalPoints.indices) {
+            if (delta < 0) signalPoints.lastIndex else 0
+        } else {
+            (activePointIndex + delta).coerceIn(0, signalPoints.lastIndex)
+        }
+        focusActiveSignal()
+    }
+
+    private fun focusActiveSignal() {
+        val trade = signalPoints.getOrNull(activePointIndex) ?: return
+        chart.centerOnTime(trade.time)
+        val action = when (trade.action) {
+            "BUY" -> "ВХОД"
+            "SELL_HALF" -> "ВЫХОД 50%"
+            else -> "ВЫХОД"
+        }
+        pointStatus.text = String.format(
+            Locale.US,
+            "Точка %d из %d • %s • %s • €%.8f\n%s",
+            activePointIndex + 1,
+            signalPoints.size,
+            PumpBotEngine.formatDate(trade.time),
+            action,
+            trade.price,
+            trade.reason
+        )
+    }
+
     private fun loadSixMonths() {
-        val startTime = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(183)
+        startTime = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(183)
         val warmupStart = startTime - TimeUnit.DAYS.toMillis(14)
         val endTime = System.currentTimeMillis()
-        val aggressive = PumpBotEngine.isAggressive(this)
-
         val pumpFuture = executor.submit<List<PumpCandle>> { fetchCandles(PumpBotEngine.pumpSymbol, warmupStart, endTime) }
         val eurFuture = executor.submit<List<PumpCandle>> { fetchCandles(PumpBotEngine.eurSymbol, warmupStart, endTime) }
         val btcFuture = executor.submit<List<PumpCandle>> { fetchCandles(PumpBotEngine.btcSymbol, warmupStart, endTime) }
@@ -124,32 +210,10 @@ class ChartDetailActivity : AppCompatActivity() {
 
         executor.execute {
             try {
-                val allCandles = StrategyV2.synthesizeEur(pumpFuture.get(), eurFuture.get())
-                val result = StrategyV2.backtest(allCandles, btcFuture.get(), fundingFuture.get(), startTime, aggressive)
-                val live = PumpBotEngine.snapshot(this)
-                val closes = allCandles.map { it.close }
-                val fast = ema(closes, PumpBotEngine.emaFastPeriod)
-                val slow = ema(closes, PumpBotEngine.emaSlowPeriod)
-                val first = allCandles.indexOfFirst { it.closeTime >= startTime }.let { if (it < 0) 0 else it }
-                val displayCandles = allCandles.drop(first)
-                val bundle = ChartBundle(
-                    candles = displayCandles,
-                    fast = fast.drop(first),
-                    slow = slow.drop(first),
-                    trades = result.trades,
-                    subtitle = "6 месяцев • 30 минут • EMA50/EMA200",
-                    readinessScore = live.readinessScore,
-                    trendReadiness = live.trendReadiness,
-                    shockReadiness = live.shockReadiness,
-                    aggressive = aggressive
-                )
-                runOnUiThread {
-                    status.text = "PUMP/EUR • ${displayCandles.size} закрытых свечей • ${result.roundTrips} исторических сделок"
-                    chart.setData("PUMP/EUR — ИСТОРИЯ СИГНАЛОВ", bundle)
-                    seek.max = chart.maxHistoryOffset().coerceAtLeast(1)
-                    seek.progress = seek.max
-                    seek.isEnabled = chart.maxHistoryOffset() > 0
-                }
+                allCandles = StrategyV2.synthesizeEur(pumpFuture.get(), eurFuture.get())
+                btcCandles = btcFuture.get()
+                funding = fundingFuture.get()
+                runOnUiThread { renderHistory(focusLastSignal = true) }
             } catch (e: Exception) {
                 runOnUiThread {
                     status.text = "Не удалось загрузить историю: ${e.message ?: "ошибка сети"}"
@@ -159,12 +223,42 @@ class ChartDetailActivity : AppCompatActivity() {
         }
     }
 
+    private fun renderHistory(focusLastSignal: Boolean) {
+        val result = StrategyV2.backtest(allCandles, btcCandles, funding, startTime, aggressive)
+        val closes = allCandles.map { it.close }
+        val fast = ema(closes, PumpBotEngine.emaFastPeriod)
+        val slow = ema(closes, PumpBotEngine.emaSlowPeriod)
+        val first = allCandles.indexOfFirst { it.closeTime >= startTime }.let { if (it < 0) 0 else it }
+        val displayCandles = allCandles.drop(first)
+        signalPoints = result.trades.sortedBy { it.time }
+        val bundle = ChartBundle(
+            candles = displayCandles,
+            fast = fast.drop(first),
+            slow = slow.drop(first),
+            trades = signalPoints,
+            subtitle = "6 месяцев • 30 минут • EMA50/EMA200",
+            aggressive = aggressive,
+            showReadinessGauge = false
+        )
+        status.text = "PUMP/EUR • ${displayCandles.size} свечей • ${result.roundTrips} исторических сделок"
+        chart.setData("PUMP/EUR — ВХОДЫ И ВЫХОДЫ", bundle)
+        seek.max = chart.maxHistoryOffset().coerceAtLeast(1)
+        seek.progress = seek.max
+        seek.isEnabled = chart.maxHistoryOffset() > 0
+        if (focusLastSignal && signalPoints.isNotEmpty()) {
+            activePointIndex = signalPoints.lastIndex
+            focusActiveSignal()
+        } else if (signalPoints.isEmpty()) {
+            activePointIndex = -1
+            pointStatus.text = "За выбранный период сделок не найдено."
+        }
+    }
+
     private fun fetchCandles(symbol: String, start: Long, end: Long): List<PumpCandle> {
         val all = ArrayList<PumpCandle>()
         var cursor = start
         while (cursor < end && !Thread.currentThread().isInterrupted) {
-            val body = request(PumpBotEngine.historicalKlineUrl(symbol, "30m", cursor, end))
-            val batch = PumpBotEngine.parseCandles(body)
+            val batch = PumpBotEngine.parseCandles(request(PumpBotEngine.historicalKlineUrl(symbol, "30m", cursor, end)))
             if (batch.isEmpty()) break
             all.addAll(batch)
             val next = batch.last().closeTime + 1L
@@ -217,16 +311,16 @@ class ChartDetailActivity : AppCompatActivity() {
         this.text = text
         setTextColor(Color.WHITE)
         setBackgroundColor(Color.parseColor(color))
-        textSize = 12f
+        textSize = 11f
         isAllCaps = false
-        setPadding(dp(4), 0, dp(4), 0)
+        setPadding(dp(3), 0, dp(3), 0)
     }
 
     private fun label(text: String, size: Int, color: String, bold: Boolean) = TextView(this).apply {
         this.text = text
         textSize = size.toFloat()
         setTextColor(Color.parseColor(color))
-        setPadding(0, dp(3), 0, dp(3))
+        setPadding(0, dp(2), 0, dp(2))
         if (bold) setTypeface(typeface, android.graphics.Typeface.BOLD)
     }
 

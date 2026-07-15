@@ -24,9 +24,11 @@
             android:exported="false" />
         <activity
             android:name=".ChartDetailActivity"
-            android:configChanges="orientation|screenSize"
             android:exported="false"
-            android:screenOrientation="sensor" />
+            android:screenOrientation="portrait" />
+        <activity
+            android:name=".AlertSettingsActivity"
+            android:exported="false" />
         <activity
             android:name=".MainActivity"
             android:exported="true">

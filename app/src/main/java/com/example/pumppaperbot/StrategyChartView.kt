@@ -70,6 +70,12 @@ class StrategyChartView @JvmOverloads constructor(
         textAlign = Paint.Align.CENTER
         isFakeBoldText = true
     }
+    private val arrowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#2F81F7")
+        strokeWidth = 6f
+        style = Paint.Style.FILL_AND_STROKE
+        strokeCap = Paint.Cap.ROUND
+    }
     private val buyPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#32C789")
         style = Paint.Style.FILL
@@ -92,6 +98,7 @@ class StrategyChartView @JvmOverloads constructor(
     private var dragStartOffset = 0
     private var draggingHorizontally = false
     private var historyListener: ((Int, Long, Long) -> Unit)? = null
+    private var visibleBarLimit = 120
 
     init {
         isClickable = true
@@ -120,6 +127,24 @@ class StrategyChartView @JvmOverloads constructor(
     fun setOnHistoryWindowChanged(listener: ((Int, Long, Long) -> Unit)?) {
         historyListener = listener
         notifyHistoryChanged()
+    }
+
+    fun setVisibleBarLimit(limit: Int) {
+        visibleBarLimit = limit.coerceIn(24, 240)
+        historyOffsetBars = historyOffsetBars.coerceIn(0, maxHistoryOffset())
+        invalidate()
+        notifyHistoryChanged()
+    }
+
+    fun currentVisibleBarLimit(): Int = visibleBarLimit
+
+    fun centerOnTime(time: Long) {
+        val data = bundle ?: return
+        if (data.candles.isEmpty()) return
+        val index = data.candles.indexOfFirst { it.closeTime >= time }.let { if (it < 0) data.candles.lastIndex else it }
+        val visible = visibleBars(data)
+        val desiredEnd = (index + visible / 2).coerceIn(visible, data.candles.size)
+        setHistoryOffsetBars(data.candles.size - desiredEnd)
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -184,7 +209,7 @@ class StrategyChartView @JvmOverloads constructor(
         val left = 24f
         val top = 82f
         val gaugeLeft = width - 98f
-        val right = gaugeLeft - 12f
+        val right = if (data.showReadinessGauge) gaugeLeft - 12f else width - 20f
         val bottom = height - 62f
         val chartHeight = bottom - top
         val chartWidth = right - left
@@ -245,11 +270,11 @@ class StrategyChartView @JvmOverloads constructor(
         drawTrades(canvas, data.trades, candles, ::x, ::y)
         drawDates(canvas, candles, ::x, bottom + 25f)
         if (historyOffsetBars == 0) drawScenario(canvas, data, start, visibleCount, step, candleRight, ::x, ::y)
-        drawReadinessGauge(canvas, data, gaugeLeft, top, width - 8f, bottom)
+        if (data.showReadinessGauge) drawReadinessGauge(canvas, data, gaugeLeft, top, width - 8f, bottom)
         postInvalidateDelayed(850L)
     }
 
-    private fun visibleBars(data: ChartBundle): Int = min(120, data.candles.size)
+    private fun visibleBars(data: ChartBundle): Int = min(visibleBarLimit, data.candles.size)
 
     private fun notifyHistoryChanged() {
         val data = bundle ?: return
@@ -388,16 +413,27 @@ class StrategyChartView @JvmOverloads constructor(
             val cy = y(trade.price)
             val modePaint = if (activeMode == StrategyV2.MODE_SHOCK) sellPaint else buyPaint
             if (trade.action == "BUY") {
-                canvas.drawCircle(cx, cy, 13f, modePaint)
-                canvas.drawText("В", cx, cy + 6f, markerTextPaint)
+                canvas.drawCircle(cx, cy + 34f, 9f, modePaint)
+                canvas.drawLine(cx, cy + 34f, cx, cy + 9f, arrowPaint)
+                val arrow = Path().apply {
+                    moveTo(cx, cy)
+                    lineTo(cx - 12f, cy + 15f)
+                    lineTo(cx + 12f, cy + 15f)
+                    close()
+                }
+                canvas.drawPath(arrow, arrowPaint)
+                canvas.drawText("ВХОД", cx, cy + 58f, markerTextPaint)
             } else {
-                val path = Path()
-                path.moveTo(cx, cy + 14f)
-                path.lineTo(cx - 14f, cy - 11f)
-                path.lineTo(cx + 14f, cy - 11f)
-                path.close()
-                canvas.drawPath(path, modePaint)
-                canvas.drawText("П", cx, cy + 6f, markerTextPaint)
+                canvas.drawCircle(cx, cy - 34f, 9f, modePaint)
+                canvas.drawLine(cx, cy - 34f, cx, cy - 9f, arrowPaint)
+                val arrow = Path().apply {
+                    moveTo(cx, cy)
+                    lineTo(cx - 12f, cy - 15f)
+                    lineTo(cx + 12f, cy - 15f)
+                    close()
+                }
+                canvas.drawPath(arrow, arrowPaint)
+                canvas.drawText(if (trade.action == "SELL_HALF") "ВЫХОД 50%" else "ВЫХОД", cx, cy - 48f, markerTextPaint)
                 if (trade.action != "SELL_HALF") activeMode = StrategyV2.MODE_TREND
             }
         }

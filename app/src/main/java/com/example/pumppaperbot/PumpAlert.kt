@@ -59,14 +59,19 @@ object PumpAlert {
     fun showSignal(context: Context, snapshot: LiveSnapshot) {
         ensureChannels(context)
         val score = snapshot.readinessScore
+        val delayed = AlertSchedule.hasDelayedPossible(context)
         val title = when {
-            score in 95..99 -> "PUMP/EUR: ГОТОВНОСТЬ К ПОКУПКЕ $score/100"
-            score in -99..-95 -> "PUMP/EUR: ГОТОВНОСТЬ К ПРОДАЖЕ ${kotlin.math.abs(score)}/100"
+            delayed && AlertSchedule.pendingDirection(context) == "BUY" -> "PUMP/EUR: НОЧНОЙ СИГНАЛ — ВХОД ЕЩЁ ВОЗМОЖЕН"
+            delayed -> "PUMP/EUR: НОЧНОЙ СИГНАЛ — ПРОВЕРЬТЕ ВЫХОД"
+            score == 99 -> "PUMP/EUR: ГОТОВНОСТЬ К ПОКУПКЕ 99/100"
+            score == -99 -> "PUMP/EUR: ГОТОВНОСТЬ К ПРОДАЖЕ 99/100"
             snapshot.signalAction == "BUY" -> "PUMP/EUR: +100 — ПОКУПАТЬ"
             snapshot.signalAction == StrategyV2.ACTION_SELL_HALF -> "PUMP/EUR: −100 — ПРОДАТЬ 50%"
             else -> "PUMP/EUR: −100 — ПРОДАВАТЬ"
         }
-        val preparation = if (kotlin.math.abs(score) in 95..99) {
+        val preparation = if (delayed) {
+            "${AlertSchedule.delayedNotificationText(context)} "
+        } else if (kotlin.math.abs(score) == 99) {
             "Приготовьтесь и ждите 100. Это готовность условий, не вероятность прибыли. "
         } else ""
         val text = "$preparation${snapshot.signalReason}. Цена €${formatPrice(snapshot.lastPrice)}"
