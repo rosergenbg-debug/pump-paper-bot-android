@@ -30,22 +30,22 @@ jobs:
         run: gradle assembleDebug
 
       - name: Prepare named APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk PumpSignal-Friendly-v1.4.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk PumpSignal-History-v1.5.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: PumpSignal-Friendly-v1.4-APK
-          path: PumpSignal-Friendly-v1.4.apk
+          name: PumpSignal-History-v1.5-APK
+          path: PumpSignal-History-v1.5.apk
           retention-days: 30
 
-      - name: Publish v1.4 release
+      - name: Publish v1.5 release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.4
-          name: PUMP Сигнал v1.4
+          tag_name: v1.5
+          name: PUMP Сигнал v1.5
           prerelease: true
           body: |
-            Дружелюбный интерфейс PUMP/EUR: профили «Осторожный» и «Агрессивный», готовность сигнала ±100, предупреждение на 95 и прокручиваемый живой график.
+            Исправлена ложная готовность 99 на вершине. Добавлен полноэкранный график за 6 месяцев с датами и историческими точками входа/выхода.
             Комиссия 0,15% на вход и 0,15% на выход. Исторические результаты не гарантируют будущую прибыль.
-          files: PumpSignal-Friendly-v1.4.apk
+          files: PumpSignal-History-v1.5.apk

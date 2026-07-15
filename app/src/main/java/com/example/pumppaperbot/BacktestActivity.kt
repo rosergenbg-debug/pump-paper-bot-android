@@ -40,9 +40,9 @@ class BacktestActivity : AppCompatActivity() {
         aggressiveButton = button("АГРЕССИВНЫЙ\n2 входа • 50%", "#30363D").apply {
             setOnClickListener { aggressive = true; renderProfiles() }
         }
-        profileRow.addView(cautiousButton, LinearLayout.LayoutParams(0, dp(58), 1f))
-        profileRow.addView(aggressiveButton, LinearLayout.LayoutParams(0, dp(58), 1f).apply { leftMargin = dp(8) })
-        root.addView(profileRow, LinearLayout.LayoutParams(-1, dp(58)).apply { topMargin = dp(10) })
+        profileRow.addView(cautiousButton, LinearLayout.LayoutParams(0, dp(72), 1f))
+        profileRow.addView(aggressiveButton, LinearLayout.LayoutParams(0, dp(72), 1f).apply { leftMargin = dp(8) })
+        root.addView(profileRow, LinearLayout.LayoutParams(-1, dp(72)).apply { topMargin = dp(10) })
         renderProfiles()
 
         dateButton = button("СТАРТ: ${PumpBotEngine.formatDate(startTime)}", "#30363D").apply { setOnClickListener { pickDate() } }
@@ -83,6 +83,7 @@ class BacktestActivity : AppCompatActivity() {
         setBackgroundColor(Color.parseColor(color))
         textSize = 13f
         isAllCaps = false
+        setPadding(dp(4), 0, dp(4), 0)
     }
 
     private fun label(text: String, size: Int, color: String, bold: Boolean) = TextView(this).apply {

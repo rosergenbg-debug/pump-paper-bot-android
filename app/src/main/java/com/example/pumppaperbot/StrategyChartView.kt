@@ -13,7 +13,11 @@ import android.view.View
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.ln
 import kotlin.math.sin
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class StrategyChartView @JvmOverloads constructor(
     context: Context,
@@ -55,6 +59,17 @@ class StrategyChartView @JvmOverloads constructor(
         textSize = 19f
         textAlign = Paint.Align.CENTER
     }
+    private val datePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#8B949E")
+        textSize = 18f
+        textAlign = Paint.Align.CENTER
+    }
+    private val markerTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        textSize = 16f
+        textAlign = Paint.Align.CENTER
+        isFakeBoldText = true
+    }
     private val buyPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#32C789")
         style = Paint.Style.FILL
@@ -76,6 +91,7 @@ class StrategyChartView @JvmOverloads constructor(
     private var downY = 0f
     private var dragStartOffset = 0
     private var draggingHorizontally = false
+    private var historyListener: ((Int, Long, Long) -> Unit)? = null
 
     init {
         isClickable = true
@@ -87,6 +103,23 @@ class StrategyChartView @JvmOverloads constructor(
         this.bundle = data
         historyOffsetBars = historyOffsetBars.coerceIn(0, max(0, data.candles.size - visibleBars(data)))
         invalidate()
+        post { notifyHistoryChanged() }
+    }
+
+    fun maxHistoryOffset(): Int {
+        val data = bundle ?: return 0
+        return max(0, data.candles.size - visibleBars(data))
+    }
+
+    fun setHistoryOffsetBars(offset: Int) {
+        historyOffsetBars = offset.coerceIn(0, maxHistoryOffset())
+        invalidate()
+        notifyHistoryChanged()
+    }
+
+    fun setOnHistoryWindowChanged(listener: ((Int, Long, Long) -> Unit)?) {
+        historyListener = listener
+        notifyHistoryChanged()
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -113,6 +146,7 @@ class StrategyChartView @JvmOverloads constructor(
                     historyOffsetBars = (dragStartOffset + movedBars)
                         .coerceIn(0, max(0, data.candles.size - visibleBars(data)))
                     invalidate()
+                    notifyHistoryChanged()
                 }
                 return true
             }
@@ -151,7 +185,7 @@ class StrategyChartView @JvmOverloads constructor(
         val top = 82f
         val gaugeLeft = width - 98f
         val right = gaugeLeft - 12f
-        val bottom = height - 38f
+        val bottom = height - 62f
         val chartHeight = bottom - top
         val chartWidth = right - left
         val visibleCount = visibleBars(data)
@@ -168,10 +202,22 @@ class StrategyChartView @JvmOverloads constructor(
         val padding = max((maxPrice - minPrice) * 0.08, 0.00000001)
         val paddedMin = minPrice - padding
         val paddedMax = maxPrice + padding
-        val span = max(paddedMax - paddedMin, 0.00000001)
+        val logarithmic = paddedMin > 0.0 && paddedMax / paddedMin > 1.35
+        val span = if (logarithmic) {
+            max(ln(paddedMax) - ln(paddedMin), 0.00000001)
+        } else {
+            max(paddedMax - paddedMin, 0.00000001)
+        }
 
         fun x(index: Int): Float = left + index * step + step / 2f
-        fun y(price: Double): Float = top + ((paddedMax - price) / span).toFloat() * chartHeight
+        fun y(price: Double): Float {
+            val fraction = if (logarithmic && price > 0.0) {
+                (ln(paddedMax) - ln(price)) / span
+            } else {
+                (paddedMax - price) / span
+            }
+            return top + fraction.toFloat() * chartHeight
+        }
 
         canvas.drawText(title, 24f, 31f, textPaint)
         val scrollText = if (historyOffsetBars > 0) "назад: $historyOffsetBars свечей • тяните ↔" else "живой край • тяните график назад ↔"
@@ -197,12 +243,35 @@ class StrategyChartView @JvmOverloads constructor(
         drawIndicator(canvas, data.fast, start, visibleCount, ::x, ::y, fastPaint)
         drawIndicator(canvas, data.slow, start, visibleCount, ::x, ::y, slowPaint)
         drawTrades(canvas, data.trades, candles, ::x, ::y)
+        drawDates(canvas, candles, ::x, bottom + 25f)
         if (historyOffsetBars == 0) drawScenario(canvas, data, start, visibleCount, step, candleRight, ::x, ::y)
         drawReadinessGauge(canvas, data, gaugeLeft, top, width - 8f, bottom)
         postInvalidateDelayed(850L)
     }
 
     private fun visibleBars(data: ChartBundle): Int = min(120, data.candles.size)
+
+    private fun notifyHistoryChanged() {
+        val data = bundle ?: return
+        if (data.candles.isEmpty()) return
+        val visible = visibleBars(data)
+        val endExclusive = (data.candles.size - historyOffsetBars).coerceIn(visible, data.candles.size)
+        val start = (endExclusive - visible).coerceAtLeast(0)
+        historyListener?.invoke(
+            historyOffsetBars,
+            data.candles[start].openTime,
+            data.candles[endExclusive - 1].closeTime
+        )
+    }
+
+    private fun drawDates(canvas: Canvas, candles: List<PumpCandle>, x: (Int) -> Float, y: Float) {
+        if (candles.isEmpty()) return
+        val formatter = SimpleDateFormat("dd.MM", Locale.GERMAN)
+        val indexes = listOf(0, candles.lastIndex / 3, candles.lastIndex * 2 / 3, candles.lastIndex).distinct()
+        indexes.forEach { index ->
+            canvas.drawText(formatter.format(Date(candles[index].closeTime)), x(index), y, datePaint)
+        }
+    }
 
     private fun drawScenario(
         canvas: Canvas,
@@ -306,20 +375,30 @@ class StrategyChartView @JvmOverloads constructor(
         x: (Int) -> Float,
         y: (Double) -> Float
     ) {
-        trades.forEach { trade ->
+        var activeMode = StrategyV2.MODE_TREND
+        trades.sortedBy { it.time }.forEach { trade ->
+            if (trade.action == "BUY") {
+                activeMode = if (trade.reason.contains("Агрессив", ignoreCase = true) ||
+                    trade.reason.contains("шок", ignoreCase = true)
+                ) StrategyV2.MODE_SHOCK else StrategyV2.MODE_TREND
+            }
             val index = candles.indexOfLast { it.closeTime <= trade.time }
             if (index < 0) return@forEach
             val cx = x(index)
             val cy = y(trade.price)
+            val modePaint = if (activeMode == StrategyV2.MODE_SHOCK) sellPaint else buyPaint
             if (trade.action == "BUY") {
-                canvas.drawCircle(cx, cy, 10f, buyPaint)
+                canvas.drawCircle(cx, cy, 13f, modePaint)
+                canvas.drawText("В", cx, cy + 6f, markerTextPaint)
             } else {
                 val path = Path()
-                path.moveTo(cx, cy + 11f)
-                path.lineTo(cx - 11f, cy - 9f)
-                path.lineTo(cx + 11f, cy - 9f)
+                path.moveTo(cx, cy + 14f)
+                path.lineTo(cx - 14f, cy - 11f)
+                path.lineTo(cx + 14f, cy - 11f)
                 path.close()
-                canvas.drawPath(path, sellPaint)
+                canvas.drawPath(path, modePaint)
+                canvas.drawText("П", cx, cy + 6f, markerTextPaint)
+                if (trade.action != "SELL_HALF") activeMode = StrategyV2.MODE_TREND
             }
         }
     }

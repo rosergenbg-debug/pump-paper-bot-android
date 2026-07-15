@@ -373,20 +373,35 @@ object StrategyV2 {
         val btcAbove = indicators.btcAbove200[candle.closeTime] == true
         val btcSlope = indicators.btcSlopePositive[candle.closeTime] == true
         val rate = fundingRateAt(funding, candle.closeTime)
-        val noChase = indicators.ret1.getOrElse(index) { 0.0 } < 0.04
+        val extension = if (emaNow > 0.0) candle.close / emaNow - 1.0 else Double.POSITIVE_INFINITY
+        val recentReturn6 = pump.getOrNull(index - 6)?.close?.takeIf { it > 0.0 }
+            ?.let { candle.close / it - 1.0 } ?: 0.0
+        val noChase = indicators.ret1.getOrElse(index) { 0.0 } < 0.04 &&
+            recentReturn6 < 0.08 && extension <= 0.035
 
         var trendArmed = false
         for (j in max(0, index - TREND_ARM_BARS + 1)..index) {
             if ((indicators.rsi.getOrNull(j) ?: 100.0) <= 40.0) trendArmed = true
         }
-        val trend = trendArmed && rsiNow >= 45.0 && rsiPrevious < 45.0 &&
-            candle.close > emaNow && btcAbove && btcSlope && rate <= 0.0 && noChase
+        val rsiCrossedNow = rsiNow in 45.0..55.0 && rsiPrevious < 45.0
+        val priceReady = extension in 0.0..0.035
+        val trend = trendArmed && rsiCrossedNow && priceReady &&
+            btcAbove && btcSlope && rate <= 0.0 && noChase
 
-        val rsiReadiness = (((rsiNow - 35.0) / 10.0) * 20.0).roundToInt().coerceIn(0, 20)
-        val emaReadiness = if (emaNow > 0.0) {
-            val distance = candle.close / emaNow - 1.0
-            if (distance >= 0.0) 20 else ((1.0 + distance / 0.02) * 20.0).roundToInt().coerceIn(0, 20)
-        } else 0
+        val rsiApproach = when {
+            rsiNow > 55.0 -> 0
+            rsiNow >= 45.0 -> if (rsiPrevious < 45.0) 20 else 8
+            rsiNow >= 35.0 && rsiNow > rsiPrevious ->
+                (((rsiNow - 35.0) / 10.0) * 20.0).roundToInt().coerceIn(0, 20)
+            rsiNow >= 35.0 -> (((rsiNow - 35.0) / 10.0) * 10.0).roundToInt().coerceIn(0, 10)
+            else -> 0
+        }
+        val priceApproach = when {
+            extension > 0.035 -> 0
+            extension >= 0.0 -> 20
+            extension >= -0.02 -> (((extension + 0.02) / 0.02) * 20.0).roundToInt().coerceIn(0, 20)
+            else -> 0
+        }
 
         var shockArmed = false
         for (j in max(1, index - SHOCK_ARM_BARS + 1)..index) {
@@ -394,21 +409,42 @@ object StrategyV2 {
                 (indicators.rsi.getOrNull(j) ?: 100.0) <= 40.0
             ) shockArmed = true
         }
-        val ready = rsiNow >= 45.0 && candle.close > emaNow
+        val ready = rsiNow in 45.0..55.0 && priceReady
         val previousEma = indicators.ema200.getOrNull(index - 1) ?: 0.0
-        val previousReady = rsiPrevious >= 45.0 && pump.getOrNull(index - 1)?.close?.let { it > previousEma } == true
+        val previousClose = pump.getOrNull(index - 1)?.close ?: 0.0
+        val previousExtension = if (previousEma > 0.0) previousClose / previousEma - 1.0 else Double.POSITIVE_INFINITY
+        val previousReady = rsiPrevious in 45.0..55.0 && previousExtension in 0.0..0.035
         val shock = shockArmed && ready && !previousReady && btcAbove && noChase
 
-        var trendReadiness = (if (trendArmed) 20 else 0) + rsiReadiness + emaReadiness +
-            (if (btcAbove) 10 else 0) + (if (btcSlope) 10 else 0) +
-            (if (rate <= 0.0) 10 else 0) + (if (noChase) 10 else 0)
-        if (!trend) trendReadiness = minOf(trendReadiness, 99)
+        val trendRaw = (if (trendArmed) 20 else 0) + rsiApproach + priceApproach +
+            (if (btcAbove) 15 else 0) + (if (btcSlope) 10 else 0) +
+            (if (rate <= 0.0) 5 else 0) + (if (noChase) 10 else 0)
+        val trendPreparing = trendArmed && !trend && rsiNow >= 42.0 && rsiNow < 45.0 &&
+            rsiNow > rsiPrevious && extension in -0.01..0.035 &&
+            btcAbove && btcSlope && rate <= 0.0 && noChase
+        val trendReadiness = when {
+            trend -> 100
+            trendPreparing -> 95 + (((rsiNow - 42.0) / 3.0) * 4.0).roundToInt().coerceIn(0, 4)
+            else -> minOf(trendRaw, 94)
+        }
 
-        var shockReadiness = if (aggressive) {
-            (if (shockArmed) 40 else 0) + rsiReadiness + emaReadiness +
-                (if (btcAbove) 10 else 0) + (if (noChase) 10 else 0)
+        val shockRaw = if (aggressive) {
+            (if (shockArmed) 25 else 0) + rsiApproach + priceApproach +
+                (if (btcAbove) 15 else 0) + (if (noChase) 20 else 0)
         } else 0
-        if (!shock) shockReadiness = minOf(shockReadiness, 99)
+        val shockPreparing = aggressive && shockArmed && !shock && !previousReady &&
+            rsiNow in 42.0..55.0 && extension in -0.01..0.035 &&
+            btcAbove && noChase && (rsiNow < 45.0 || extension < 0.0)
+        val shockReadiness = when {
+            !aggressive -> 0
+            shock -> 100
+            shockPreparing -> {
+                val rsiProgress = (((rsiNow.coerceAtMost(45.0) - 42.0) / 3.0) * 4.0).roundToInt()
+                val priceProgress = (((extension + 0.01) / 0.01) * 4.0).roundToInt()
+                95 + max(rsiProgress, priceProgress).coerceIn(0, 4)
+            }
+            else -> minOf(shockRaw, 94)
+        }
 
         return when {
             aggressive && shock -> V2EntrySignal(
@@ -433,24 +469,39 @@ object StrategyV2 {
             )
             else -> V2EntrySignal(
                 MODE_NONE,
-                if (aggressive) {
+                when {
+                    extension > 0.035 -> String.format(
+                        Locale.US,
+                        "СЕЙЧАС НЕ ПОКУПАТЬ: цена уже на %.1f%% выше EMA200. Ждем откат и новое подтверждение снизу.",
+                        extension * 100.0
+                    )
+                    rsiNow > 55.0 -> String.format(
+                        Locale.US,
+                        "СЕЙЧАС НЕ ПОКУПАТЬ: RSI %.1f слишком высокий. Ждем охлаждение рынка и новый вход снизу.",
+                        rsiNow
+                    )
+                    recentReturn6 >= 0.08 -> String.format(
+                        Locale.US,
+                        "СЕЙЧАС НЕ ПОКУПАТЬ: за 3 часа цена уже выросла на %.1f%%. Не догоняем движение.",
+                        recentReturn6 * 100.0
+                    )
+                    aggressive -> {
                     String.format(
                         Locale.US,
-                        "ЖДЕМ: осторожный %d/100, вход после шока %d/100; RSI %.1f, funding %+.5f%%",
+                        "Покупка не подтверждена. Осторожный %d/100; после шока %d/100. RSI %.1f.",
                         trendReadiness,
                         shockReadiness,
-                        rsiNow,
-                        rate * 100.0
+                        rsiNow
                     )
-                } else {
+                    }
+                    else -> {
                     String.format(
                         Locale.US,
-                        "ЖДЕМ: осторожный вход %d/100; RSI %.1f, EMA200 %.8f, funding %+.5f%%",
+                        "Покупка не подтверждена. Осторожный вход %d/100; RSI %.1f.",
                         trendReadiness,
-                        rsiNow,
-                        emaNow,
-                        rate * 100.0
+                        rsiNow
                     )
+                    }
                 },
                 rsiNow,
                 emaNow,

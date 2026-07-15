@@ -100,6 +100,7 @@ class MainActivity : AppCompatActivity() {
         btnManual?.setOnClickListener { confirmManualAction() }
         btnToggleMode?.setOnClickListener { showSignalInfo() }
         btnBacktest?.setOnClickListener { startActivity(Intent(this, BacktestActivity::class.java)) }
+        chart?.setOnClickListener { startActivity(Intent(this, ChartDetailActivity::class.java)) }
 
         updateUi()
         checkNow()
@@ -201,19 +202,18 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateUi() {
         val snapshot = PumpBotEngine.snapshot(this)
-        val active = kotlin.math.abs(snapshot.readinessScore) >= 95
-        val status = if (snapshot.running) "РАБОТАЕТ" else "ОСТАНОВЛЕНО"
-        val profile = if (snapshot.aggressive) "Агрессивный" else "Осторожный"
-        tvStatus?.text = "$status | v1.4 | $profile | Проверка: ${PumpBotEngine.formatTime(snapshot.lastSync)}"
-        tvMode?.text = if (snapshot.waitMode == "BUY") "Сейчас: жду покупку" else "Сейчас: куплено, жду продажу"
-        tvMode?.setTextColor(if (active) Color.WHITE else Color.parseColor("#C9D1D9"))
-        tvMode?.setBackgroundColor(
-            when {
-                snapshot.readinessScore >= 95 -> Color.parseColor("#238636")
-                snapshot.readinessScore <= -95 -> Color.parseColor("#DA3633")
-                else -> Color.parseColor("#30363D")
-            }
-        )
+        tvStatus?.text = if (snapshot.running) {
+            "Монитор включён • обновлено ${PumpBotEngine.formatTime(snapshot.lastSync)}"
+        } else {
+            "Монитор остановлен • последнее обновление ${PumpBotEngine.formatTime(snapshot.lastSync)}"
+        }
+        tvMode?.text = if (snapshot.waitMode == "BUY") {
+            "ЖДЁМ НОВЫЙ ВХОД СНИЗУ"
+        } else {
+            "МОНЕТА КУПЛЕНА — ЖДЁМ ВЫХОД"
+        }
+        tvMode?.setTextColor(Color.parseColor("#F0F6FC"))
+        tvMode?.setBackgroundColor(Color.parseColor("#30363D"))
 
         renderReadiness(snapshot)
 
@@ -223,15 +223,22 @@ class MainActivity : AppCompatActivity() {
 
         tvPrice?.text = String.format(
             Locale.US,
-            "PUMP/EUR %.8f | RSI %.1f | EMA200 %.8f | funding %+.5f%% | свеча %s",
+            "Цена €%.8f • свеча %s\nRSI %.1f • EMA200 %.8f • funding %+.5f%%",
             snapshot.lastPrice,
+            PumpBotEngine.formatTime(snapshot.lastCandle),
             snapshot.lastRsi,
             snapshot.lastEma200,
-            snapshot.fundingRate * 100.0,
-            PumpBotEngine.formatTime(snapshot.lastCandle)
+            snapshot.fundingRate * 100.0
         )
         tvReason?.text = snapshot.signalReason
-        tvReason?.setTextColor(if (active) Color.parseColor("#FF4D6D") else Color.parseColor("#8B949E"))
+        tvReason?.setTextColor(
+            when {
+                snapshot.signalReason.startsWith("СЕЙЧАС НЕ ПОКУПАТЬ") -> Color.parseColor("#FF7B72")
+                snapshot.readinessScore >= 95 -> Color.parseColor("#7EE787")
+                snapshot.readinessScore <= -95 -> Color.parseColor("#FF7B72")
+                else -> Color.parseColor("#C9D1D9")
+            }
+        )
 
         tvPosition?.text = if (snapshot.waitMode == "SELL" && snapshot.entryPrice > 0.0) {
             String.format(
@@ -243,7 +250,7 @@ class MainActivity : AppCompatActivity() {
                 if (snapshot.partialTaken) "да" else "нет"
             )
         } else {
-            "Позиция: нет"
+            "Сделка: не открыта"
         }
 
         btnStart?.isEnabled = !snapshot.running
@@ -266,8 +273,8 @@ class MainActivity : AppCompatActivity() {
             score >= 95 -> "+$score  ПРИГОТОВИТЬСЯ К ПОКУПКЕ\nждем полного подтверждения 100"
             score <= -100 -> "−100  ПРОДАВАТЬ\nУСЛОВИЯ ПОДТВЕРЖДЕНЫ"
             score <= -95 -> "−${kotlin.math.abs(score)}  ПРИГОТОВИТЬСЯ К ПРОДАЖЕ\nждем полного подтверждения −100"
-            score < 0 -> "ДВИЖЕНИЕ К ПРОДАЖЕ  −${kotlin.math.abs(score)}/100"
-            else -> "ДВИЖЕНИЕ К ПОКУПКЕ  +$score/100"
+            score < 0 -> "ПРОДАЖА НЕ ПОДТВЕРЖДЕНА\nготовность ${kotlin.math.abs(score)}/100"
+            else -> "ПОКУПКА НЕ ПОДТВЕРЖДЕНА\nготовность $score/100"
         }
         tvReadiness?.setTextColor(
             when {
@@ -284,8 +291,8 @@ class MainActivity : AppCompatActivity() {
         btnRisk35?.backgroundTintList = ColorStateList.valueOf(Color.parseColor(if (aggressive) "#B62324" else "#30363D"))
         btnRisk30?.alpha = if (!aggressive) 1f else 0.72f
         btnRisk35?.alpha = if (aggressive) 1f else 0.72f
-        btnRisk30?.text = "ОСТОРОЖНЫЙ\n1 вход • цель +8%"
-        btnRisk35?.text = "АГРЕССИВНЫЙ\n2 входа • 50% при +6%"
+        btnRisk30?.text = "ОСТОРОЖНЫЙ\n1 ТИП ВХОДА\nВСЯ ПРОДАЖА +8%"
+        btnRisk35?.text = "АГРЕССИВНЫЙ\n2 ТИПА ВХОДА\n50% ПРИ +6%"
     }
 
     private fun friendlyMode(mode: String): String {
@@ -305,7 +312,7 @@ class MainActivity : AppCompatActivity() {
         }
         view?.setBackgroundColor(Color.parseColor(color))
         val display = if (label == "BUY") "Покупка" else "Продажа"
-        view?.text = if (signal) "$display СЕЙЧАС" else "$display: нет"
+        view?.text = if (signal) "$display: СИГНАЛ" else "$display: нет"
         view?.setTextColor(if (signal) Color.WHITE else Color.parseColor("#8B949E"))
     }
 

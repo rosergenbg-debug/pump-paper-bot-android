@@ -94,7 +94,7 @@ data class LiveSnapshot(
 data class CoinOption(val name: String, val symbol: String)
 
 object PumpBotEngine {
-    const val appVersionName = "1.4"
+    const val appVersionName = "1.5"
     const val startBalance = 1000.0
     const val feeRate = 0.0015
     const val slippage = 0.0005
@@ -110,8 +110,8 @@ object PumpBotEngine {
     const val eurSymbol = "EURUSDT"
     const val uniqueWorkName = "pump_rsi_risk_periodic_monitor"
 
-    private const val prefsName = "PumpSignalV14"
-    private const val algorithmVersion = 14
+    private const val prefsName = "PumpSignalV15"
+    private const val algorithmVersion = 15
     private const val keyVersion = "algorithm_version"
     private const val keyRunning = "running"
     private const val keyWaitMode = "wait_mode"

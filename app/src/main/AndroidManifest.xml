@@ -23,6 +23,11 @@
             android:name=".BacktestActivity"
             android:exported="false" />
         <activity
+            android:name=".ChartDetailActivity"
+            android:configChanges="orientation|screenSize"
+            android:exported="false"
+            android:screenOrientation="sensor" />
+        <activity
             android:name=".MainActivity"
             android:exported="true">
             <intent-filter>
