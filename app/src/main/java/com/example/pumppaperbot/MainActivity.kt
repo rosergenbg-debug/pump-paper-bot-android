@@ -35,6 +35,12 @@ class MainActivity : AppCompatActivity() {
     private var tvSellSignal: TextView? = null
     private var tvMode: TextView? = null
     private var tvReadiness: TextView? = null
+    private var tvBreathingState: TextView? = null
+    private var tvEnergy: TextView? = null
+    private var tvDirection: TextView? = null
+    private var tvConfidence: TextView? = null
+    private var tvLateRisk: TextView? = null
+    private var tvMicrostructure: TextView? = null
     private var tvPrice: TextView? = null
     private var tvReason: TextView? = null
     private var tvPosition: TextView? = null
@@ -60,6 +66,12 @@ class MainActivity : AppCompatActivity() {
         tvSellSignal = findViewById(R.id.tvSellSignal)
         tvMode = findViewById(R.id.tvMode)
         tvReadiness = findViewById(R.id.tvReadiness)
+        tvBreathingState = findViewById(R.id.tvBreathingState)
+        tvEnergy = findViewById(R.id.tvEnergy)
+        tvDirection = findViewById(R.id.tvDirection)
+        tvConfidence = findViewById(R.id.tvConfidence)
+        tvLateRisk = findViewById(R.id.tvLateRisk)
+        tvMicrostructure = findViewById(R.id.tvMicrostructure)
         tvPrice = findViewById(R.id.tvPrice)
         tvReason = findViewById(R.id.tvReason)
         tvPosition = findViewById(R.id.tvPosition)
@@ -195,8 +207,10 @@ class MainActivity : AppCompatActivity() {
             .setTitle("Как рассчитан сигнал")
             .setMessage(
                 "$profile\n\n$details\n${snapshot.signalReason}\n\n" +
-                    "Защита от вершины: если PUMP, BTC и SOL одновременно входят в самые сильные 10% часовых подъёмов за предыдущие 30 дней, а объём каждого выше 115% обычного, покупка ставится на паузу до новой свечи.\n\n" +
-                    "95–98 — только отображение приближения без звонка. 99 — звук и вибрация. " +
+                    "Дыхание: ${snapshot.breathingState}.\n${snapshot.breathingExplanation}\n\n" +
+                    "АКТИВНОСТЬ показывает силу текущего расширения, но не направление. ПОТОК показывает согласованное направление цены и taker-покупок. СОГЛАСОВАНО — качество и согласие доступных данных, а не вероятность прибыли. ПОЗДНИЙ ВХОД показывает риск покупки после уже прошедшего импульса.\n\n" +
+                    "Новая защита PUMP работает самостоятельно: высокий риск позднего входа блокирует покупку даже тогда, когда BTC и SOL не растут. Старый общерыночный фильтр остаётся дополнительной страховкой.\n\n" +
+                    "95–98 — только отображение приближения без звонка. 99 — звук и вибрация только при допустимом риске позднего входа и достаточной согласованности данных. " +
                     "100 — условия стратегии полностью выполнены. " +
                     "Это готовность правил, а не вероятность прибыли."
             )
@@ -220,7 +234,9 @@ class MainActivity : AppCompatActivity() {
         } else {
             "Монитор остановлен • последнее обновление ${PumpBotEngine.formatTime(snapshot.lastSync)}"
         }
-        tvMode?.text = if (snapshot.marketGateActive && snapshot.waitMode == "BUY") {
+        tvMode?.text = if (snapshot.lateEntryBlocked && snapshot.waitMode == "BUY") {
+            "ВХОД ЗАБЛОКИРОВАН — ЦЕНА УЖЕ ВЫСОКО"
+        } else if (snapshot.marketGateActive && snapshot.waitMode == "BUY") {
             "РЫНОК ПЕРЕГРЕТ — НЕ ДОГОНЯЕМ ЦЕНУ"
         } else if (snapshot.waitMode == "BUY") {
             "ЖДЁМ НОВЫЙ ВХОД СНИЗУ"
@@ -229,10 +245,11 @@ class MainActivity : AppCompatActivity() {
         }
         tvMode?.setTextColor(Color.parseColor("#F0F6FC"))
         tvMode?.setBackgroundColor(
-            Color.parseColor(if (snapshot.marketGateActive) "#9E6A03" else "#30363D")
+            Color.parseColor(if (snapshot.marketGateActive || snapshot.lateEntryBlocked) "#9E2A2B" else "#30363D")
         )
 
         renderReadiness(snapshot)
+        renderBreathing(snapshot)
 
         renderStrategyButtons(snapshot.aggressive)
         renderSignalBox(tvBuySignal, "BUY", snapshot.buySignal, snapshot.waitMode == "BUY")
@@ -284,11 +301,48 @@ class MainActivity : AppCompatActivity() {
             else -> "Я ПРОДАЛ — ЖДУ ПОКУПКУ"
         }
         btnToggleMode?.text = "ПОЧЕМУ ТАКОЙ СИГНАЛ?"
-        chart?.setData("PUMP/EUR • 4 ЭТАПА", snapshot.chart)
+        chart?.setData("PUMP/EUR • ДЫХАНИЕ РЫНКА", snapshot.chart)
+    }
+
+    private fun renderBreathing(snapshot: LiveSnapshot) {
+        tvBreathingState?.text = "ДЫХАНИЕ: ${snapshot.breathingState}\n${snapshot.marketRelation}"
+        tvBreathingState?.setTextColor(
+            Color.parseColor(
+                when {
+                    snapshot.lateEntryBlocked -> "#FF7B72"
+                    snapshot.directionScore >= 25 -> "#7EE787"
+                    snapshot.directionScore <= -25 -> "#FF7B72"
+                    else -> "#79C0FF"
+                }
+            )
+        )
+        tvEnergy?.text = "АКТИВНОСТЬ\n${snapshot.energyScore}/100\nсжатие ${snapshot.compressionScore}"
+        val direction = if (snapshot.directionScore >= 0) "+${snapshot.directionScore}" else "−${kotlin.math.abs(snapshot.directionScore)}"
+        tvDirection?.text = "ПОТОК\n$direction/100\n${if (snapshot.directionScore >= 0) "вверх" else "вниз"}"
+        tvDirection?.setTextColor(Color.parseColor(if (snapshot.directionScore >= 20) "#7EE787" else if (snapshot.directionScore <= -20) "#FF7B72" else "#C9D1D9"))
+        tvConfidence?.text = "СОГЛАСОВАНО\n${snapshot.breathingConfidence}/100\nне шанс прибыли"
+        tvLateRisk?.text = "ПОЗДНИЙ ВХОД\n${snapshot.lateEntryRisk}/100\n${if (snapshot.lateEntryBlocked) "ЗАПРЕЩЁН" else "допустимо"}"
+        tvLateRisk?.setTextColor(Color.parseColor(if (snapshot.lateEntryBlocked) "#FF7B72" else if (snapshot.lateEntryRisk >= 45) "#F0B72F" else "#7EE787"))
+
+        val book = snapshot.bookImbalance?.let {
+            val side = if (it >= 0.0) "покупатели" else "продавцы"
+            "стакан: $side ${String.format(Locale.GERMAN, "%+.0f%%", it * 100.0)}"
+        } ?: "стакан: нет данных"
+        val spread = snapshot.spreadPercent?.let { "spread ${String.format(Locale.GERMAN, "%.3f%%", it)}" } ?: "spread —"
+        val oi = snapshot.openInterestChangePercent?.let { "OI ${String.format(Locale.GERMAN, "%+.2f%%", it)} с прошлой проверки" }
+            ?: snapshot.openInterest?.let { "OI собирается для сравнения" }
+            ?: "OI: нет данных"
+        tvMicrostructure?.text = "$book • $spread • $oi\nСнимок стакана — дополнительное наблюдение, не самостоятельный приказ купить."
     }
 
     private fun renderReadiness(snapshot: LiveSnapshot) {
         val score = snapshot.readinessScore
+        if (snapshot.lateEntryBlocked && snapshot.waitMode == "BUY") {
+            tvReadiness?.text = "ПОКУПКА ЗАПРЕЩЕНА\nРИСК ПОЗДНЕГО ВХОДА ${snapshot.lateEntryRisk}/100\nждём новый вход снизу"
+            tvReadiness?.setTextColor(Color.parseColor("#FF7B72"))
+            tvReadiness?.setBackgroundColor(Color.parseColor("#321A1D"))
+            return
+        }
         if (snapshot.marketGateActive) {
             tvReadiness?.text = "ПАУЗА ПОКУПКИ\nPUMP + BTC + SOL резко выросли за 1 час\nждём новую закрытую свечу"
             tvReadiness?.setTextColor(Color.parseColor("#F0B72F"))

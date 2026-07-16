@@ -26,7 +26,7 @@ class AlertSettingsActivity : AppCompatActivity() {
         }
         root.addView(button("← НАЗАД", "#30363D").apply { setOnClickListener { finish() } }, LinearLayout.LayoutParams(-1, dp(48)))
         root.addView(label("ВРЕМЯ ЗВОНКА", 25, "#F0F6FC", true))
-        root.addView(label("Звук и вибрация срабатывают только при готовности 99 или 100.", 15, "#C9D1D9", true))
+        root.addView(label("Звук и вибрация срабатывают при готовности 99 или 100 только если поздний вход не запрещён и данные достаточно согласованы.", 15, "#C9D1D9", true))
 
         val modes = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         workButton = button("РАБОЧИЙ РЕЖИМ", "#30363D").apply {

@@ -372,7 +372,7 @@ class StrategyChartView @JvmOverloads constructor(
         canvas.drawText("сценарий", candleRight + 4f, y(lastClose) - 8f, mutedPaint)
 
         val pulse = (9f + 4f * ((sin(System.currentTimeMillis() / 350.0) + 1.0) / 2.0)).toFloat()
-        val markerPaint = if (data.readinessScore < 0) sellPaint else buyPaint
+        val markerPaint = if (data.directionScore < 0) sellPaint else buyPaint
         canvas.drawCircle(x(visibleCount - 1), y(lastClose), pulse, markerPaint)
     }
 
@@ -392,30 +392,21 @@ class StrategyChartView @JvmOverloads constructor(
         canvas.drawText("−100", (left + right) / 2f, bottom - 7f, gaugeTextPaint)
 
         val usable = (bottom - top) / 2f - 26f
-        if (data.readinessScore < 0) {
-            val amount = abs(data.readinessScore).coerceIn(0, 100) / 100f * usable
-            bodyRect.set(left + 27f, middle, right - 27f, middle + amount)
+        val score = data.directionScore.coerceIn(-100, 100)
+        val amount = abs(score) / 100f * usable
+        if (score > 0) {
+            bodyRect.set(left + 24f, middle - amount, right - 24f, middle)
+            canvas.drawRoundRect(bodyRect, 5f, 5f, buyPaint)
+        } else if (score < 0) {
+            bodyRect.set(left + 24f, middle, right - 24f, middle + amount)
             canvas.drawRoundRect(bodyRect, 5f, 5f, sellPaint)
-            canvas.drawText("В", (left + right) / 2f, bottom - 28f, gaugeTextPaint)
-        } else if (data.aggressive) {
-            drawBuyColumn(canvas, left + 12f, middle, usable, data.trendReadiness, "О")
-            drawBuyColumn(canvas, right - 32f, middle, usable, data.shockReadiness, "А")
-        } else {
-            drawBuyColumn(canvas, (left + right) / 2f - 10f, middle, usable, data.trendReadiness, "О")
         }
-
-        val score = data.readinessScore.coerceIn(-100, 100)
+        canvas.drawText("Э${data.energyScore}", (left + right) / 2f, top + 43f, gaugeTextPaint)
+        canvas.drawText("Р${data.lateEntryRisk}", (left + right) / 2f, bottom - 28f, gaugeTextPaint)
         val markerY = if (score >= 0) middle - usable * score / 100f else middle + usable * abs(score) / 100f
         val markerPaint = if (score < 0) sellPaint else buyPaint
         val pulse = (7f + 2f * ((sin(System.currentTimeMillis() / 350.0) + 1.0) / 2.0)).toFloat()
         canvas.drawCircle(right - 10f, markerY, pulse, markerPaint)
-    }
-
-    private fun drawBuyColumn(canvas: Canvas, x: Float, middle: Float, usable: Float, value: Int, label: String) {
-        val amount = value.coerceIn(0, 100) / 100f * usable
-        bodyRect.set(x, middle - amount, x + 20f, middle)
-        canvas.drawRoundRect(bodyRect, 5f, 5f, buyPaint)
-        canvas.drawText(label, x + 10f, middle + 27f, gaugeTextPaint)
     }
 
     private fun drawIndicator(

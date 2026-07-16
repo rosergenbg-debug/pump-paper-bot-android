@@ -16,7 +16,9 @@ data class V2EntrySignal(
     val trendReadiness: Int = 0,
     val shockReadiness: Int = 0,
     val marketGateActive: Boolean = false,
-    val marketGateBlockedEntry: Boolean = false
+    val marketGateBlockedEntry: Boolean = false,
+    val lateEntryBlocked: Boolean = false,
+    val breathing: MarketBreathingSnapshot = MarketBreathingSnapshot.unknown()
 ) {
     val active: Boolean get() = mode == StrategyV2.MODE_TREND ||
         mode == StrategyV2.MODE_SHOCK || mode == StrategyV2.MODE_EXHAUSTION
@@ -110,14 +112,29 @@ object StrategyV2 {
         ethUsdt: List<PumpCandle> = emptyList(),
         solUsdt: List<PumpCandle> = emptyList(),
         pumpFutures: List<PumpCandle> = emptyList(),
-        premium: List<PumpCandle> = emptyList()
+        premium: List<PumpCandle> = emptyList(),
+        orderBook: OrderBookMetrics? = null,
+        openInterest: Double? = null,
+        openInterestChangePercent: Double? = null
     ): V2EntrySignal {
         if (pumpEur.size < EMA_SLOW + SHOCK_ARM_BARS || btcUsdt.size < EMA_SLOW + 7) {
             return V2EntrySignal(MODE_NONE, "Ждем достаточно закрытых 30-минутных свечей", 0.0, 0.0, 0.0, 0L)
         }
         val indicators = indicators(pumpEur, btcUsdt, ethUsdt, solUsdt, pumpFutures, premium)
+        val breathing = MarketBreathingAnalyzer.analyzeAt(
+            pumpEur.lastIndex,
+            pumpEur,
+            btcUsdt,
+            solUsdt,
+            pumpFutures,
+            indicators.rsi,
+            indicators.ema20,
+            orderBook,
+            openInterest,
+            openInterestChangePercent
+        )
         return entrySignalAt(
-            pumpEur.lastIndex, pumpEur, btcUsdt, solUsdt, funding, indicators, aggressive
+            pumpEur.lastIndex, pumpEur, btcUsdt, solUsdt, funding, indicators, aggressive, breathing
         )
     }
 
@@ -248,7 +265,14 @@ object StrategyV2 {
                 continue
             }
             val signal = entrySignalAt(
-                i, pumpEur, btcUsdt, solUsdt, funding, indicators, aggressive
+                i,
+                pumpEur,
+                btcUsdt,
+                solUsdt,
+                funding,
+                indicators,
+                aggressive,
+                MarketBreathingAnalyzer.riskOnlyAt(i, pumpEur, indicators.rsi, indicators.ema20)
             )
             if (!signal.active) {
                 if (signal.marketGateBlockedEntry) overheatBlocks++
@@ -551,7 +575,8 @@ object StrategyV2 {
         sol: List<PumpCandle>,
         funding: List<FundingPoint>,
         indicators: Indicators,
-        aggressive: Boolean
+        aggressive: Boolean,
+        breathing: MarketBreathingSnapshot
     ): V2EntrySignal {
         val candle = pump.getOrNull(index) ?: return V2EntrySignal(MODE_NONE, "Нет свечи", 0.0, 0.0, 0.0, 0L)
         val rsiNow = indicators.rsi.getOrNull(index) ?: 0.0
@@ -626,6 +651,28 @@ object StrategyV2 {
         val baseShockReadiness = if (baseShock) 100 else if (baseShockArmed && rsiNow in 42.0..55.0 && btcAbove && noChase) 94 else 0
         val shockReadiness = max(baseShockReadiness, exhaustionReadiness)
         val entryWouldBeActive = exhaustion || baseShock || trend
+        val lateRiskLimit = if (aggressive) 70 else 60
+        val lateEntryBlocked = breathing.lateEntryRisk >= lateRiskLimit &&
+            (entryWouldBeActive || max(trendReadiness, shockReadiness) >= 90)
+        if (lateEntryBlocked) {
+            return V2EntrySignal(
+                MODE_NONE,
+                String.format(
+                    Locale.US,
+                    "СЕЙЧАС НЕ ПОКУПАТЬ: риск позднего входа %d/100. Цена находится высоко в суточном диапазоне и/или импульс уже прошёл. Ждём новый вход снизу.",
+                    breathing.lateEntryRisk
+                ),
+                rsiNow,
+                emaNow,
+                rate,
+                candle.closeTime,
+                trendReadiness.coerceAtMost(70),
+                shockReadiness.coerceAtMost(70),
+                marketGateBlockedEntry = entryWouldBeActive,
+                lateEntryBlocked = true,
+                breathing = breathing
+            )
+        }
         val marketGate = if (entryWouldBeActive || max(trendReadiness, shockReadiness) >= 95) {
             marketOverheatGateAt(index, pump, btc, sol)
         } else {
@@ -649,7 +696,8 @@ object StrategyV2 {
                 trendReadiness.coerceAtMost(90),
                 shockReadiness.coerceAtMost(90),
                 marketGateActive = true,
-                marketGateBlockedEntry = entryWouldBeActive
+                marketGateBlockedEntry = entryWouldBeActive,
+                breathing = breathing
             )
         }
 
@@ -657,17 +705,20 @@ object StrategyV2 {
             exhaustion -> V2EntrySignal(
                 MODE_EXHAUSTION,
                 "ПОКУПКА: 3 падения подтверждены разворотом, spot/futures-покупателями и безопасным режимом BTC+ETH+SOL",
-                rsiNow, emaNow, rate, candle.closeTime, trendReadiness, 100
+                rsiNow, emaNow, rate, candle.closeTime, trendReadiness, 100,
+                breathing = breathing
             )
             baseShock -> V2EntrySignal(
                 MODE_SHOCK,
                 "ПОКУПКА: базовый импульс после сильного падения; PUMP вернулся выше EMA200, BTC не слабый",
-                rsiNow, emaNow, rate, candle.closeTime, trendReadiness, 100
+                rsiNow, emaNow, rate, candle.closeTime, trendReadiness, 100,
+                breathing = breathing
             )
             trend -> V2EntrySignal(
                 MODE_TREND,
                 "ПОКУПКА: RSI восстановился, PUMP и BTC подтвердили восходящий режим",
-                rsiNow, emaNow, rate, candle.closeTime, 100, shockReadiness
+                rsiNow, emaNow, rate, candle.closeTime, 100, shockReadiness,
+                breathing = breathing
             )
             else -> V2EntrySignal(
                 MODE_NONE,
@@ -676,7 +727,8 @@ object StrategyV2 {
                     exhaustionArmed, priceConfirmation, flowReady, riskReady,
                     indicators.drawdown36h[index], currentDrawdownLimit
                 ),
-                rsiNow, emaNow, rate, candle.closeTime, trendReadiness, shockReadiness
+                rsiNow, emaNow, rate, candle.closeTime, trendReadiness, shockReadiness,
+                breathing = breathing
             )
         }
     }
