@@ -86,7 +86,8 @@ data class BacktestResult(
     val roundTrips: Int,
     val winRatePercent: Double,
     val maxDrawdownPercent: Double,
-    val stopCount: Int
+    val stopCount: Int,
+    val blockedOverheatCount: Int = 0
 ) {
     companion object {
         fun empty(startTime: Long = 0L) = BacktestResult(
@@ -131,13 +132,14 @@ data class LiveSnapshot(
     val signalReason: String,
     val entryPrice: Double,
     val highestClose: Double,
-    val chart: ChartBundle
+    val chart: ChartBundle,
+    val marketGateActive: Boolean = false
 )
 
 data class CoinOption(val name: String, val symbol: String)
 
 object PumpBotEngine {
-    const val appVersionName = "1.8"
+    const val appVersionName = "1.9"
     const val startBalance = 1000.0
     const val feeRate = 0.0015
     const val slippage = 0.0005
@@ -156,7 +158,7 @@ object PumpBotEngine {
     const val uniqueWorkName = "pump_rsi_risk_periodic_monitor"
 
     private const val prefsName = "PumpSignalV17"
-    private const val algorithmVersion = 17
+    private const val algorithmVersion = 18
     private const val keyVersion = "algorithm_version"
     private const val keyRunning = "running"
     private const val keyWaitMode = "wait_mode"
@@ -171,6 +173,7 @@ object PumpBotEngine {
     private const val keyReadinessScore = "readiness_score"
     private const val keyTrendReadiness = "trend_readiness"
     private const val keyShockReadiness = "shock_readiness"
+    private const val keyMarketGateActive = "market_gate_active"
     private const val keyStrategyMode = "strategy_mode"
     private const val keyPendingMode = "pending_mode"
     private const val keyEntryTime = "entry_time"
@@ -200,7 +203,11 @@ object PumpBotEngine {
 
     fun ensureInitialized(context: Context) {
         val p = prefs(context)
-        if (p.getInt(keyVersion, 0) != algorithmVersion) reset(context)
+        when (p.getInt(keyVersion, 0)) {
+            algorithmVersion -> Unit
+            17 -> p.edit().putInt(keyVersion, algorithmVersion).apply()
+            else -> reset(context)
+        }
     }
 
     fun reset(context: Context) {
@@ -220,6 +227,7 @@ object PumpBotEngine {
             .putInt(keyReadinessScore, 0)
             .putInt(keyTrendReadiness, 0)
             .putInt(keyShockReadiness, 0)
+            .putBoolean(keyMarketGateActive, false)
             .putString(keyStrategyMode, StrategyV2.MODE_NONE)
             .putString(keyPendingMode, StrategyV2.MODE_NONE)
             .putLong(keyEntryTime, 0L)
@@ -421,13 +429,16 @@ object PumpBotEngine {
             .putInt(keyReadinessScore, evaluation.readinessScore)
             .putInt(keyTrendReadiness, evaluation.trendReadiness)
             .putInt(keyShockReadiness, evaluation.shockReadiness)
+            .putBoolean(keyMarketGateActive, evaluation.marketGateActive)
             .putString(keyPendingMode, evaluation.strategyMode)
             .putBoolean(keyBuySignal, evaluation.buySignal)
             .putBoolean(keySellSignal, evaluation.sellSignal)
             .putString(keySignalAction, evaluation.signalAction)
             .putString(keySignalReason, evaluation.signalReason)
             .putDouble(keyHighestClose, evaluation.highestClose)
-        if (kotlin.math.abs(evaluation.readinessScore) < 90) editor.putString(keyLastAlertKey, "")
+        if (evaluation.marketGateActive || kotlin.math.abs(evaluation.readinessScore) < 90) {
+            editor.putString(keyLastAlertKey, "")
+        }
         editor.apply()
     }
 
@@ -473,12 +484,17 @@ object PumpBotEngine {
                 fast,
                 slow,
                 emptyList(),
-                "PUMP/EUR, 30 минут. Желтая EMA50 / фиолетовая EMA200",
+                if (p.getBoolean(keyMarketGateActive, false)) {
+                    "ПАУЗА ВХОДА: PUMP + BTC + SOL перегреты за 1 час"
+                } else {
+                    "PUMP/EUR, 30 минут. Желтая EMA50 / фиолетовая EMA200"
+                },
                 p.getInt(keyReadinessScore, 0),
                 p.getInt(keyTrendReadiness, 0),
                 p.getInt(keyShockReadiness, 0),
                 p.getBoolean(keyAggressive, false)
-            )
+            ),
+            marketGateActive = p.getBoolean(keyMarketGateActive, false)
         )
     }
 
@@ -574,7 +590,8 @@ object PumpBotEngine {
         val highestClose: Double,
         val readinessScore: Int,
         val trendReadiness: Int,
-        val shockReadiness: Int
+        val shockReadiness: Int,
+        val marketGateActive: Boolean = false
     )
 
     private fun evaluateLive(
@@ -623,7 +640,8 @@ object PumpBotEngine {
                 entry.active, false, action, entry.reason, storedHighest,
                 if (entry.active) 100 else readiness.coerceIn(0, 99),
                 entry.trendReadiness,
-                entry.shockReadiness
+                entry.shockReadiness,
+                entry.marketGateActive
             )
         }
 

@@ -181,9 +181,9 @@ class MainActivity : AppCompatActivity() {
     private fun showSignalInfo() {
         val snapshot = PumpBotEngine.snapshot(this)
         val profile = if (snapshot.aggressive) {
-            "Чувствительный: четыре этапа, допускает вход после восстановления до −3% от максимума"
+            "Активный: четыре этапа, допускает вход после восстановления до −3% от максимума"
         } else {
-            "Строгий: четыре этапа, вход после серии падений только рядом с дном (до −6%)"
+            "Осторожный: четыре этапа, вход после серии падений только рядом с дном (до −6%)"
         }
         val details = if (snapshot.waitMode == "BUY") {
             "Базовый тренд: ${snapshot.trendReadiness}/100\n" +
@@ -195,6 +195,7 @@ class MainActivity : AppCompatActivity() {
             .setTitle("Как рассчитан сигнал")
             .setMessage(
                 "$profile\n\n$details\n${snapshot.signalReason}\n\n" +
+                    "Защита от вершины: если PUMP, BTC и SOL одновременно входят в самые сильные 10% часовых подъёмов за предыдущие 30 дней, а объём каждого выше 115% обычного, покупка ставится на паузу до новой свечи.\n\n" +
                     "95–98 — только отображение приближения без звонка. 99 — звук и вибрация. " +
                     "100 — условия стратегии полностью выполнены. " +
                     "Это готовность правил, а не вероятность прибыли."
@@ -219,13 +220,17 @@ class MainActivity : AppCompatActivity() {
         } else {
             "Монитор остановлен • последнее обновление ${PumpBotEngine.formatTime(snapshot.lastSync)}"
         }
-        tvMode?.text = if (snapshot.waitMode == "BUY") {
+        tvMode?.text = if (snapshot.marketGateActive && snapshot.waitMode == "BUY") {
+            "РЫНОК ПЕРЕГРЕТ — НЕ ДОГОНЯЕМ ЦЕНУ"
+        } else if (snapshot.waitMode == "BUY") {
             "ЖДЁМ НОВЫЙ ВХОД СНИЗУ"
         } else {
             "МОНЕТА КУПЛЕНА — ЖДЁМ ВЫХОД"
         }
         tvMode?.setTextColor(Color.parseColor("#F0F6FC"))
-        tvMode?.setBackgroundColor(Color.parseColor("#30363D"))
+        tvMode?.setBackgroundColor(
+            Color.parseColor(if (snapshot.marketGateActive) "#9E6A03" else "#30363D")
+        )
 
         renderReadiness(snapshot)
 
@@ -245,6 +250,7 @@ class MainActivity : AppCompatActivity() {
         tvReason?.text = snapshot.signalReason
         tvReason?.setTextColor(
             when {
+                snapshot.marketGateActive -> Color.parseColor("#F0B72F")
                 snapshot.signalReason.startsWith("СЕЙЧАС НЕ ПОКУПАТЬ") -> Color.parseColor("#FF7B72")
                 snapshot.readinessScore >= 95 -> Color.parseColor("#7EE787")
                 snapshot.readinessScore <= -95 -> Color.parseColor("#FF7B72")
@@ -283,6 +289,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun renderReadiness(snapshot: LiveSnapshot) {
         val score = snapshot.readinessScore
+        if (snapshot.marketGateActive) {
+            tvReadiness?.text = "ПАУЗА ПОКУПКИ\nPUMP + BTC + SOL резко выросли за 1 час\nждём новую закрытую свечу"
+            tvReadiness?.setTextColor(Color.parseColor("#F0B72F"))
+            tvReadiness?.setBackgroundColor(Color.parseColor("#2D240F"))
+            return
+        }
         tvReadiness?.text = when {
             score >= 100 -> "+100  ПОКУПАТЬ\nУСЛОВИЯ ПОДТВЕРЖДЕНЫ"
             score == 99 -> "+99  ЗВОНОК: ПРИГОТОВИТЬСЯ\nдо покупки остался 1 балл"
@@ -308,8 +320,8 @@ class MainActivity : AppCompatActivity() {
         btnRisk35?.backgroundTintList = ColorStateList.valueOf(Color.parseColor(if (aggressive) "#B62324" else "#30363D"))
         btnRisk30?.alpha = if (!aggressive) 1f else 0.72f
         btnRisk35?.alpha = if (aggressive) 1f else 0.72f
-        btnRisk30?.text = "СТРОГИЙ\nБЛИЖЕ КО ДНУ\nМЕНЬШЕ ВХОДОВ"
-        btnRisk35?.text = "ЧУВСТВИТЕЛЬНЫЙ\nЛОВИТ РАЗВОРОТ\nБОЛЬШЕ ВХОДОВ"
+        btnRisk30?.text = "ОСТОРОЖНЫЙ\nБЛИЖЕ КО ДНУ\nМЕНЬШЕ ВХОДОВ"
+        btnRisk35?.text = "АКТИВНЫЙ\nЛОВИТ РАЗВОРОТ\nБОЛЬШЕ ВХОДОВ"
     }
 
     private fun friendlyMode(mode: String): String {

@@ -14,11 +14,21 @@ data class V2EntrySignal(
     val funding: Double,
     val candleTime: Long,
     val trendReadiness: Int = 0,
-    val shockReadiness: Int = 0
+    val shockReadiness: Int = 0,
+    val marketGateActive: Boolean = false,
+    val marketGateBlockedEntry: Boolean = false
 ) {
     val active: Boolean get() = mode == StrategyV2.MODE_TREND ||
         mode == StrategyV2.MODE_SHOCK || mode == StrategyV2.MODE_EXHAUSTION
 }
+
+data class MarketOverheatGate(
+    val active: Boolean,
+    val pumpReturn: Double = 0.0,
+    val btcReturn: Double = 0.0,
+    val solReturn: Double = 0.0,
+    val historySamples: Int = 0
+)
 
 data class V2ExitSignal(
     val action: String,
@@ -59,6 +69,11 @@ object StrategyV2 {
     const val LOSS_COOLDOWN_BARS = 12
     const val BASE_MAX_HOLD_MILLIS = 24L * 60L * 60L * 1000L
     const val EXHAUSTION_MAX_HOLD_MILLIS = 48L * 60L * 60L * 1000L
+    const val MARKET_GATE_LOOKBACK_BARS = 30 * 48
+    const val MARKET_GATE_MIN_HISTORY = 360
+    const val MARKET_GATE_HORIZON_BARS = 2
+    const val MARKET_GATE_RETURN_QUANTILE = 0.90
+    const val MARKET_GATE_VOLUME_FLOOR = 1.15
 
     private const val RSI_PERIOD = 14
     private const val EMA_FAST = 50
@@ -101,7 +116,9 @@ object StrategyV2 {
             return V2EntrySignal(MODE_NONE, "Ждем достаточно закрытых 30-минутных свечей", 0.0, 0.0, 0.0, 0L)
         }
         val indicators = indicators(pumpEur, btcUsdt, ethUsdt, solUsdt, pumpFutures, premium)
-        return entrySignalAt(pumpEur.lastIndex, pumpEur, funding, indicators, aggressive)
+        return entrySignalAt(
+            pumpEur.lastIndex, pumpEur, btcUsdt, solUsdt, funding, indicators, aggressive
+        )
     }
 
     fun evaluateExit(
@@ -220,6 +237,7 @@ object StrategyV2 {
         var wins = 0
         var stops = 0
         var roundTrips = 0
+        var overheatBlocks = 0
         var i = max(EMA_SLOW + SHOCK_ARM_BARS, RSI_PERIOD + 2)
         var cooldownUntil = -1
 
@@ -229,8 +247,11 @@ object StrategyV2 {
                 i++
                 continue
             }
-            val signal = entrySignalAt(i, pumpEur, funding, indicators, aggressive)
+            val signal = entrySignalAt(
+                i, pumpEur, btcUsdt, solUsdt, funding, indicators, aggressive
+            )
             if (!signal.active) {
+                if (signal.marketGateBlockedEntry) overheatBlocks++
                 i++
                 continue
             }
@@ -242,7 +263,7 @@ object StrategyV2 {
             val buyFee = cash * PumpBotEngine.feeRate
             var coins = (cash - buyFee) / entryPrice
             cash = 0.0
-            val profileWord = if (aggressive) "Чувствительный" else "Строгий"
+            val profileWord = if (aggressive) "Активный" else "Осторожный"
             val buyReason = when (signal.mode) {
                 MODE_EXHAUSTION -> "$profileWord вход после 3 падений: разворот + поток покупателей"
                 MODE_SHOCK -> "Базовый вход после сильного импульса вниз"
@@ -369,9 +390,9 @@ object StrategyV2 {
             assetName = "PUMP",
             symbol = "PUMP/EUR",
             strategyName = if (aggressive) {
-                "Чувствительный: 4 этапа, вход разрешен после восстановления до −3% от максимума"
+                "Активный: 4 этапа + защита от часового перегрева PUMP/BTC/SOL"
             } else {
-                "Строгий: 4 этапа, вход только пока цена не выше −6% от 36-часового максимума"
+                "Осторожный: 4 этапа + защита от часового перегрева PUMP/BTC/SOL"
             },
             equity = cash,
             profit = profit,
@@ -383,7 +404,8 @@ object StrategyV2 {
             roundTrips = roundTrips,
             winRatePercent = if (roundTrips > 0) wins.toDouble() / roundTrips * 100.0 else 0.0,
             maxDrawdownPercent = maxDrawdown * 100.0,
-            stopCount = stops
+            stopCount = stops,
+            blockedOverheatCount = overheatBlocks
         )
     }
 
@@ -525,6 +547,8 @@ object StrategyV2 {
     private fun entrySignalAt(
         index: Int,
         pump: List<PumpCandle>,
+        btc: List<PumpCandle>,
+        sol: List<PumpCandle>,
         funding: List<FundingPoint>,
         indicators: Indicators,
         aggressive: Boolean
@@ -601,6 +625,33 @@ object StrategyV2 {
         )
         val baseShockReadiness = if (baseShock) 100 else if (baseShockArmed && rsiNow in 42.0..55.0 && btcAbove && noChase) 94 else 0
         val shockReadiness = max(baseShockReadiness, exhaustionReadiness)
+        val entryWouldBeActive = exhaustion || baseShock || trend
+        val marketGate = if (entryWouldBeActive || max(trendReadiness, shockReadiness) >= 95) {
+            marketOverheatGateAt(index, pump, btc, sol)
+        } else {
+            MarketOverheatGate(false)
+        }
+
+        if (marketGate.active) {
+            return V2EntrySignal(
+                MODE_NONE,
+                String.format(
+                    Locale.US,
+                    "ПАУЗА ПОКУПКИ: за 1 час одновременно резко выросли PUMP %+.1f%%, BTC %+.1f%% и SOL %+.1f%%. Не догоняем цену; ждем следующую закрытую свечу и новый безопасный вход.",
+                    marketGate.pumpReturn * 100.0,
+                    marketGate.btcReturn * 100.0,
+                    marketGate.solReturn * 100.0
+                ),
+                rsiNow,
+                emaNow,
+                rate,
+                candle.closeTime,
+                trendReadiness.coerceAtMost(90),
+                shockReadiness.coerceAtMost(90),
+                marketGateActive = true,
+                marketGateBlockedEntry = entryWouldBeActive
+            )
+        }
 
         return when {
             exhaustion -> V2EntrySignal(
@@ -628,6 +679,115 @@ object StrategyV2 {
                 rsiNow, emaNow, rate, candle.closeTime, trendReadiness, shockReadiness
             )
         }
+    }
+
+    /**
+     * Rare late-entry veto found in the historical research.  The current closed
+     * 30-minute candle is compared with one-hour return and volume distributions
+     * built only from earlier candles.  No future candle participates.
+     */
+    internal fun marketOverheatGateAt(
+        index: Int,
+        pump: List<PumpCandle>,
+        btc: List<PumpCandle>,
+        sol: List<PumpCandle>
+    ): MarketOverheatGate {
+        if (index < MARKET_GATE_MIN_HISTORY + MARKET_GATE_HORIZON_BARS) {
+            return MarketOverheatGate(false)
+        }
+        val btcByTime = btc.associateBy { it.closeTime }
+        val solByTime = sol.associateBy { it.closeTime }
+        val start = max(MARKET_GATE_HORIZON_BARS, index - MARKET_GATE_LOOKBACK_BARS)
+        val pumpReturns = ArrayList<Double>()
+        val btcReturns = ArrayList<Double>()
+        val solReturns = ArrayList<Double>()
+        val pumpVolumes = ArrayList<Double>()
+        val btcVolumes = ArrayList<Double>()
+        val solVolumes = ArrayList<Double>()
+
+        for (sampleIndex in start until index) {
+            val sample = alignedHourSample(sampleIndex, pump, btcByTime, solByTime) ?: continue
+            pumpReturns += sample.pumpReturn
+            btcReturns += sample.btcReturn
+            solReturns += sample.solReturn
+            pumpVolumes += sample.pumpVolume
+            btcVolumes += sample.btcVolume
+            solVolumes += sample.solVolume
+        }
+        if (pumpReturns.size < MARKET_GATE_MIN_HISTORY) return MarketOverheatGate(false)
+        val current = alignedHourSample(index, pump, btcByTime, solByTime)
+            ?: return MarketOverheatGate(false)
+        val pumpHot = isHotAsset(current.pumpReturn, current.pumpVolume, pumpReturns, pumpVolumes)
+        val btcHot = isHotAsset(current.btcReturn, current.btcVolume, btcReturns, btcVolumes)
+        val solHot = isHotAsset(current.solReturn, current.solVolume, solReturns, solVolumes)
+        return MarketOverheatGate(
+            active = pumpHot && btcHot && solHot,
+            pumpReturn = current.pumpReturn,
+            btcReturn = current.btcReturn,
+            solReturn = current.solReturn,
+            historySamples = pumpReturns.size
+        )
+    }
+
+    private data class AlignedHourSample(
+        val pumpReturn: Double,
+        val btcReturn: Double,
+        val solReturn: Double,
+        val pumpVolume: Double,
+        val btcVolume: Double,
+        val solVolume: Double
+    )
+
+    private fun alignedHourSample(
+        index: Int,
+        pump: List<PumpCandle>,
+        btcByTime: Map<Long, PumpCandle>,
+        solByTime: Map<Long, PumpCandle>
+    ): AlignedHourSample? {
+        if (index < MARKET_GATE_HORIZON_BARS) return null
+        val currentPump = pump.getOrNull(index) ?: return null
+        val previousPump = pump.getOrNull(index - 1) ?: return null
+        val oldPump = pump.getOrNull(index - MARKET_GATE_HORIZON_BARS) ?: return null
+        if (oldPump.close <= 0.0) return null
+        val currentBtc = btcByTime[currentPump.closeTime] ?: return null
+        val previousBtc = btcByTime[previousPump.closeTime] ?: return null
+        val oldBtc = btcByTime[oldPump.closeTime] ?: return null
+        val currentSol = solByTime[currentPump.closeTime] ?: return null
+        val previousSol = solByTime[previousPump.closeTime] ?: return null
+        val oldSol = solByTime[oldPump.closeTime] ?: return null
+        if (oldBtc.close <= 0.0 || oldSol.close <= 0.0) return null
+        return AlignedHourSample(
+            pumpReturn = currentPump.close / oldPump.close - 1.0,
+            btcReturn = currentBtc.close / oldBtc.close - 1.0,
+            solReturn = currentSol.close / oldSol.close - 1.0,
+            pumpVolume = currentPump.volume + previousPump.volume,
+            btcVolume = currentBtc.volume + previousBtc.volume,
+            solVolume = currentSol.volume + previousSol.volume
+        )
+    }
+
+    private fun isHotAsset(
+        currentReturn: Double,
+        currentVolume: Double,
+        historicalReturns: List<Double>,
+        historicalVolumes: List<Double>
+    ): Boolean {
+        if (currentReturn <= 0.0 || currentVolume <= 0.0) return false
+        val returnThreshold = percentile(historicalReturns, MARKET_GATE_RETURN_QUANTILE)
+        val volumeMedian = percentile(historicalVolumes, 0.50)
+        return currentReturn >= returnThreshold &&
+            volumeMedian > 0.0 && currentVolume >= MARKET_GATE_VOLUME_FLOOR * volumeMedian
+    }
+
+    private fun percentile(values: List<Double>, quantile: Double): Double {
+        if (values.isEmpty()) return Double.NaN
+        val sorted = values.sorted()
+        val position = (sorted.size - 1) * quantile.coerceIn(0.0, 1.0)
+        val lower = kotlin.math.floor(position).toInt()
+        val upper = kotlin.math.ceil(position).toInt()
+        if (lower == upper) return sorted[lower]
+        val fraction = position - lower
+        return sorted[lower] * (1.0 - fraction) + sorted[upper] * fraction
     }
 
     private fun baselineReadiness(

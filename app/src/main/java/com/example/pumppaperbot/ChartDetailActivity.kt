@@ -76,8 +76,8 @@ class ChartDetailActivity : AppCompatActivity() {
         root.addView(status)
 
         val profiles = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        cautiousButton = button("СТРОГИЙ", "#30363D").apply { setOnClickListener { selectProfile(false) } }
-        aggressiveButton = button("ЧУВСТВИТЕЛЬНЫЙ", "#30363D").apply { setOnClickListener { selectProfile(true) } }
+        cautiousButton = button("ОСТОРОЖНЫЙ", "#30363D").apply { setOnClickListener { selectProfile(false) } }
+        aggressiveButton = button("АКТИВНЫЙ", "#30363D").apply { setOnClickListener { selectProfile(true) } }
         profiles.addView(cautiousButton, LinearLayout.LayoutParams(0, dp(48), 1f))
         profiles.addView(aggressiveButton, LinearLayout.LayoutParams(0, dp(48), 1f).apply { leftMargin = dp(8) })
         root.addView(profiles)
@@ -150,9 +150,9 @@ class ChartDetailActivity : AppCompatActivity() {
         cautiousButton.backgroundTintList = ColorStateList.valueOf(Color.parseColor(if (!aggressive) "#238636" else "#30363D"))
         aggressiveButton.backgroundTintList = ColorStateList.valueOf(Color.parseColor(if (aggressive) "#B62324" else "#30363D"))
         profileStatus.text = if (aggressive) {
-            "Чувствительный: допускает более позднее подтверждение после серии падений"
+            "Активный: допускает более позднее подтверждение после серии падений"
         } else {
-            "Строгий: вход после серии падений только пока цена остается близко ко дну"
+            "Осторожный: вход после серии падений только пока цена остаётся близко ко дну"
         }
     }
 
@@ -227,7 +227,7 @@ class ChartDetailActivity : AppCompatActivity() {
 
     private fun loadSixMonths() {
         startTime = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(183)
-        val warmupStart = startTime - TimeUnit.DAYS.toMillis(14)
+        val warmupStart = startTime - TimeUnit.DAYS.toMillis(45)
         val endTime = System.currentTimeMillis()
         val pumpFuture = executor.submit<List<PumpCandle>> { fetchCandles(PumpBotEngine.pumpSymbol, warmupStart, endTime) }
         val eurFuture = executor.submit<List<PumpCandle>> { fetchCandles(PumpBotEngine.eurSymbol, warmupStart, endTime) }
@@ -280,10 +280,11 @@ class ChartDetailActivity : AppCompatActivity() {
         )
         status.text = String.format(
             Locale.GERMAN,
-            "PUMP/EUR • %d сделок • итог %+.2f%% (%+.2f EUR)",
+            "PUMP/EUR • %d сделок • итог %+.2f%% (%+.2f EUR) • защита остановила %d входов",
             result.roundTrips,
             result.profitPercent,
-            result.profit
+            result.profit,
+            result.blockedOverheatCount
         )
         chart.setData("PUMP/EUR — ВХОДЫ И ВЫХОДЫ", bundle)
         seek.max = chart.maxHistoryOffset().coerceAtLeast(1)

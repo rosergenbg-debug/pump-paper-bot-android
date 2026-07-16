@@ -34,10 +34,10 @@ class BacktestActivity : AppCompatActivity() {
         root.addView(label("Другие монеты отключены: параметры проверены именно на истории PUMP.", 14, "#F0B72F", true))
 
         val profileRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        cautiousButton = button("СТРОГИЙ\nближе ко дну", "#30363D").apply {
+        cautiousButton = button("ОСТОРОЖНЫЙ\nближе ко дну", "#30363D").apply {
             setOnClickListener { aggressive = false; renderProfiles() }
         }
-        aggressiveButton = button("ЧУВСТВИТЕЛЬНЫЙ\nбольше входов", "#30363D").apply {
+        aggressiveButton = button("АКТИВНЫЙ\nбольше входов", "#30363D").apply {
             setOnClickListener { aggressive = true; renderProfiles() }
         }
         profileRow.addView(cautiousButton, LinearLayout.LayoutParams(0, dp(72), 1f))
