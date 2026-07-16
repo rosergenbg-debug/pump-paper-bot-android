@@ -3,6 +3,8 @@ name: Android Build
 on:
   push:
     branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
   workflow_dispatch:
 
 permissions:
@@ -40,6 +42,7 @@ jobs:
           retention-days: 30
 
       - name: Publish v1.9 release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.9
