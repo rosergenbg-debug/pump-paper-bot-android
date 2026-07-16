@@ -3,6 +3,7 @@ package com.example.pumppaperbot
 import android.content.Context
 import android.content.SharedPreferences
 import org.json.JSONArray
+import org.json.JSONObject
 import java.net.URLEncoder
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -107,7 +108,11 @@ data class ChartBundle(
     val trendReadiness: Int = 0,
     val shockReadiness: Int = 0,
     val aggressive: Boolean = false,
-    val showReadinessGauge: Boolean = true
+    val showReadinessGauge: Boolean = true,
+    val energyScore: Int = 0,
+    val directionScore: Int = 0,
+    val confidenceScore: Int = 0,
+    val lateEntryRisk: Int = 0
 )
 
 data class LiveSnapshot(
@@ -133,13 +138,26 @@ data class LiveSnapshot(
     val entryPrice: Double,
     val highestClose: Double,
     val chart: ChartBundle,
-    val marketGateActive: Boolean = false
+    val marketGateActive: Boolean = false,
+    val lateEntryBlocked: Boolean = false,
+    val breathingState: String = "НЕДОСТАТОЧНО ДАННЫХ",
+    val energyScore: Int = 0,
+    val compressionScore: Int = 0,
+    val directionScore: Int = 0,
+    val breathingConfidence: Int = 0,
+    val lateEntryRisk: Int = 0,
+    val marketRelation: String = "",
+    val breathingExplanation: String = "",
+    val bookImbalance: Double? = null,
+    val spreadPercent: Double? = null,
+    val openInterest: Double? = null,
+    val openInterestChangePercent: Double? = null
 )
 
 data class CoinOption(val name: String, val symbol: String)
 
 object PumpBotEngine {
-    const val appVersionName = "1.9"
+    const val appVersionName = "2.0"
     const val startBalance = 1000.0
     const val feeRate = 0.0015
     const val slippage = 0.0005
@@ -158,7 +176,7 @@ object PumpBotEngine {
     const val uniqueWorkName = "pump_rsi_risk_periodic_monitor"
 
     private const val prefsName = "PumpSignalV17"
-    private const val algorithmVersion = 18
+    private const val algorithmVersion = 20
     private const val keyVersion = "algorithm_version"
     private const val keyRunning = "running"
     private const val keyWaitMode = "wait_mode"
@@ -174,6 +192,19 @@ object PumpBotEngine {
     private const val keyTrendReadiness = "trend_readiness"
     private const val keyShockReadiness = "shock_readiness"
     private const val keyMarketGateActive = "market_gate_active"
+    private const val keyLateEntryBlocked = "late_entry_blocked"
+    private const val keyBreathingState = "breathing_state"
+    private const val keyEnergyScore = "energy_score"
+    private const val keyCompressionScore = "compression_score"
+    private const val keyDirectionScore = "direction_score"
+    private const val keyBreathingConfidence = "breathing_confidence"
+    private const val keyLateEntryRisk = "late_entry_risk"
+    private const val keyMarketRelation = "market_relation"
+    private const val keyBreathingExplanation = "breathing_explanation"
+    private const val keyBookImbalance = "book_imbalance"
+    private const val keySpreadPercent = "spread_percent"
+    private const val keyOpenInterest = "open_interest"
+    private const val keyOpenInterestChange = "open_interest_change"
     private const val keyStrategyMode = "strategy_mode"
     private const val keyPendingMode = "pending_mode"
     private const val keyEntryTime = "entry_time"
@@ -205,7 +236,16 @@ object PumpBotEngine {
         val p = prefs(context)
         when (p.getInt(keyVersion, 0)) {
             algorithmVersion -> Unit
-            17 -> p.edit().putInt(keyVersion, algorithmVersion).apply()
+            17, 18, 19 -> p.edit()
+                .putInt(keyVersion, algorithmVersion)
+                .putBoolean(keyLateEntryBlocked, false)
+                .putString(keyBreathingState, "ЖДЁМ НОВЫЙ РАСЧЁТ")
+                .putInt(keyEnergyScore, 0)
+                .putInt(keyCompressionScore, 0)
+                .putInt(keyDirectionScore, 0)
+                .putInt(keyBreathingConfidence, 0)
+                .putInt(keyLateEntryRisk, 0)
+                .apply()
             else -> reset(context)
         }
     }
@@ -228,6 +268,19 @@ object PumpBotEngine {
             .putInt(keyTrendReadiness, 0)
             .putInt(keyShockReadiness, 0)
             .putBoolean(keyMarketGateActive, false)
+            .putBoolean(keyLateEntryBlocked, false)
+            .putString(keyBreathingState, "НЕДОСТАТОЧНО ДАННЫХ")
+            .putInt(keyEnergyScore, 0)
+            .putInt(keyCompressionScore, 0)
+            .putInt(keyDirectionScore, 0)
+            .putInt(keyBreathingConfidence, 0)
+            .putInt(keyLateEntryRisk, 0)
+            .putString(keyMarketRelation, "")
+            .putString(keyBreathingExplanation, "")
+            .putDouble(keyBookImbalance, Double.NaN)
+            .putDouble(keySpreadPercent, Double.NaN)
+            .putDouble(keyOpenInterest, Double.NaN)
+            .putDouble(keyOpenInterestChange, Double.NaN)
             .putString(keyStrategyMode, StrategyV2.MODE_NONE)
             .putString(keyPendingMode, StrategyV2.MODE_NONE)
             .putLong(keyEntryTime, 0L)
@@ -347,6 +400,16 @@ object PumpBotEngine {
         return "https://data-api.binance.vision/api/v3/klines?symbol=$encoded&interval=$interval&startTime=$start&endTime=$end&limit=1000"
     }
 
+    fun depthUrl(symbol: String = pumpSymbol, limit: Int = 20): String {
+        val encoded = URLEncoder.encode(symbol, "UTF-8")
+        return "https://data-api.binance.vision/api/v3/depth?symbol=$encoded&limit=$limit"
+    }
+
+    fun openInterestUrl(symbol: String = pumpSymbol): String {
+        val encoded = URLEncoder.encode(symbol, "UTF-8")
+        return "https://fapi.binance.com/fapi/v1/openInterest?symbol=$encoded"
+    }
+
     fun fundingUrl(symbol: String = pumpSymbol, start: Long? = null, end: Long? = null): String {
         val encoded = URLEncoder.encode(symbol, "UTF-8")
         val range = if (start != null && end != null) "&startTime=$start&endTime=$end" else ""
@@ -382,7 +445,9 @@ object PumpBotEngine {
         solJson: String,
         futuresJson: String,
         premiumJson: String,
-        fundingJson: String
+        fundingJson: String,
+        depthJson: String,
+        openInterestJson: String
     ) {
         ensureInitialized(context)
         val candles = StrategyV2.synthesizeEur(parseCandles(pumpJson), parseCandles(eurJson))
@@ -392,7 +457,13 @@ object PumpBotEngine {
         val futures = parseCandles(futuresJson)
         val premium = parseCandles(premiumJson)
         val funding = parseFunding(fundingJson)
+        val orderBook = parseOrderBook(depthJson)
+        val openInterest = parseOpenInterest(openInterestJson)
         val p = prefs(context)
+        val previousOpenInterest = p.getDouble(keyOpenInterest, Double.NaN).takeIf { it.isFinite() && it > 0.0 }
+        val openInterestChange = if (openInterest != null && previousOpenInterest != null) {
+            (openInterest / previousOpenInterest - 1.0) * 100.0
+        } else null
         val evaluation = evaluateLive(
             candles = candles,
             btcCandles = btc,
@@ -408,7 +479,10 @@ object PumpBotEngine {
             partialTaken = p.getBoolean(keyPartialTaken, false),
             partialCandle = p.getLong(keyPartialCandle, 0L),
             storedHighest = p.getDouble(keyHighestClose, 0.0),
-            aggressive = p.getBoolean(keyAggressive, false)
+            aggressive = p.getBoolean(keyAggressive, false),
+            orderBook = orderBook,
+            openInterest = openInterest,
+            openInterestChangePercent = openInterestChange
         )
 
         val editor = p.edit()
@@ -430,6 +504,19 @@ object PumpBotEngine {
             .putInt(keyTrendReadiness, evaluation.trendReadiness)
             .putInt(keyShockReadiness, evaluation.shockReadiness)
             .putBoolean(keyMarketGateActive, evaluation.marketGateActive)
+            .putBoolean(keyLateEntryBlocked, evaluation.lateEntryBlocked)
+            .putString(keyBreathingState, evaluation.breathing.state)
+            .putInt(keyEnergyScore, evaluation.breathing.energyScore)
+            .putInt(keyCompressionScore, evaluation.breathing.compressionScore)
+            .putInt(keyDirectionScore, evaluation.breathing.directionScore)
+            .putInt(keyBreathingConfidence, evaluation.breathing.confidenceScore)
+            .putInt(keyLateEntryRisk, evaluation.breathing.lateEntryRisk)
+            .putString(keyMarketRelation, evaluation.breathing.marketRelation)
+            .putString(keyBreathingExplanation, evaluation.breathing.explanation)
+            .putDouble(keyBookImbalance, evaluation.breathing.bookImbalance ?: Double.NaN)
+            .putDouble(keySpreadPercent, evaluation.breathing.spreadPercent ?: Double.NaN)
+            .putDouble(keyOpenInterest, evaluation.breathing.openInterest ?: Double.NaN)
+            .putDouble(keyOpenInterestChange, evaluation.breathing.openInterestChangePercent ?: Double.NaN)
             .putString(keyPendingMode, evaluation.strategyMode)
             .putBoolean(keyBuySignal, evaluation.buySignal)
             .putBoolean(keySellSignal, evaluation.sellSignal)
@@ -440,6 +527,7 @@ object PumpBotEngine {
             editor.putString(keyLastAlertKey, "")
         }
         editor.apply()
+        MarketObservationLog.append(context, snapshot(context))
     }
 
     fun snapshot(context: Context): LiveSnapshot {
@@ -484,7 +572,9 @@ object PumpBotEngine {
                 fast,
                 slow,
                 emptyList(),
-                if (p.getBoolean(keyMarketGateActive, false)) {
+                if (p.getBoolean(keyLateEntryBlocked, false)) {
+                    "ПАУЗА ВХОДА: PUMP уже высоко — не догоняем"
+                } else if (p.getBoolean(keyMarketGateActive, false)) {
                     "ПАУЗА ВХОДА: PUMP + BTC + SOL перегреты за 1 час"
                 } else {
                     "PUMP/EUR, 30 минут. Желтая EMA50 / фиолетовая EMA200"
@@ -492,9 +582,26 @@ object PumpBotEngine {
                 p.getInt(keyReadinessScore, 0),
                 p.getInt(keyTrendReadiness, 0),
                 p.getInt(keyShockReadiness, 0),
-                p.getBoolean(keyAggressive, false)
+                p.getBoolean(keyAggressive, false),
+                energyScore = p.getInt(keyEnergyScore, 0),
+                directionScore = p.getInt(keyDirectionScore, 0),
+                confidenceScore = p.getInt(keyBreathingConfidence, 0),
+                lateEntryRisk = p.getInt(keyLateEntryRisk, 0)
             ),
-            marketGateActive = p.getBoolean(keyMarketGateActive, false)
+            marketGateActive = p.getBoolean(keyMarketGateActive, false),
+            lateEntryBlocked = p.getBoolean(keyLateEntryBlocked, false),
+            breathingState = p.getString(keyBreathingState, "НЕДОСТАТОЧНО ДАННЫХ").orEmpty(),
+            energyScore = p.getInt(keyEnergyScore, 0),
+            compressionScore = p.getInt(keyCompressionScore, 0),
+            directionScore = p.getInt(keyDirectionScore, 0),
+            breathingConfidence = p.getInt(keyBreathingConfidence, 0),
+            lateEntryRisk = p.getInt(keyLateEntryRisk, 0),
+            marketRelation = p.getString(keyMarketRelation, "").orEmpty(),
+            breathingExplanation = p.getString(keyBreathingExplanation, "").orEmpty(),
+            bookImbalance = p.nullableDouble(keyBookImbalance),
+            spreadPercent = p.nullableDouble(keySpreadPercent),
+            openInterest = p.nullableDouble(keyOpenInterest),
+            openInterestChangePercent = p.nullableDouble(keyOpenInterestChange)
         )
     }
 
@@ -508,6 +615,9 @@ object PumpBotEngine {
         if (!snapshot.running) return false
         val expected = (snapshot.waitMode == "BUY" && snapshot.readinessScore >= 99) ||
             (snapshot.waitMode == "SELL" && snapshot.readinessScore <= -99)
+        if (snapshot.waitMode == "BUY" &&
+            (snapshot.lateEntryBlocked || snapshot.breathingConfidence < 50)
+        ) return false
         if (expected && !AlertSchedule.isAllowedNow(context)) {
             AlertSchedule.rememberBlocked(context, snapshot)
             return false
@@ -561,6 +671,44 @@ object PumpBotEngine {
         return candles.distinctBy { it.closeTime }.sortedBy { it.closeTime }
     }
 
+    fun parseOrderBook(json: String): OrderBookMetrics? {
+        if (json.isBlank()) return null
+        return runCatching {
+            val root = JSONObject(json)
+            val bids = root.getJSONArray("bids")
+            val asks = root.getJSONArray("asks")
+            if (bids.length() == 0 || asks.length() == 0) return@runCatching null
+            var bidNotional = 0.0
+            var askNotional = 0.0
+            for (index in 0 until bids.length()) {
+                val level = bids.getJSONArray(index)
+                bidNotional += level.getString(0).toDouble() * level.getString(1).toDouble()
+            }
+            for (index in 0 until asks.length()) {
+                val level = asks.getJSONArray(index)
+                askNotional += level.getString(0).toDouble() * level.getString(1).toDouble()
+            }
+            val bestBid = bids.getJSONArray(0).getString(0).toDouble()
+            val bestAsk = asks.getJSONArray(0).getString(0).toDouble()
+            val total = bidNotional + askNotional
+            val middle = (bestBid + bestAsk) / 2.0
+            if (total <= 0.0 || middle <= 0.0) return@runCatching null
+            OrderBookMetrics(
+                imbalance = (bidNotional - askNotional) / total,
+                spreadPercent = (bestAsk - bestBid) / middle * 100.0,
+                bidNotional = bidNotional,
+                askNotional = askNotional
+            )
+        }.getOrNull()
+    }
+
+    fun parseOpenInterest(json: String): Double? {
+        if (json.isBlank()) return null
+        return runCatching {
+            JSONObject(json).optString("openInterest", "").toDoubleOrNull()
+        }.getOrNull()?.takeIf { it.isFinite() && it >= 0.0 }
+    }
+
     fun parseFunding(json: String): List<FundingPoint> {
         if (json.isBlank()) return emptyList()
         return try {
@@ -591,7 +739,9 @@ object PumpBotEngine {
         val readinessScore: Int,
         val trendReadiness: Int,
         val shockReadiness: Int,
-        val marketGateActive: Boolean = false
+        val marketGateActive: Boolean = false,
+        val lateEntryBlocked: Boolean = false,
+        val breathing: MarketBreathingSnapshot = MarketBreathingSnapshot.unknown()
     )
 
     private fun evaluateLive(
@@ -609,7 +759,10 @@ object PumpBotEngine {
         partialTaken: Boolean,
         partialCandle: Long,
         storedHighest: Double,
-        aggressive: Boolean
+        aggressive: Boolean,
+        orderBook: OrderBookMetrics?,
+        openInterest: Double?,
+        openInterestChangePercent: Double?
     ): LiveEvaluation {
         if (candles.size < emaSlowPeriod + 36 || btcCandles.size < emaSlowPeriod + 7) {
             return LiveEvaluation(
@@ -621,6 +774,7 @@ object PumpBotEngine {
 
         val closes = candles.map { it.close }
         val rsi = rsi(closes, rsiPeriod)
+        val ema20 = ema(closes, 20)
         val ema200 = ema(closes, emaSlowPeriod)
         val i = candles.lastIndex
         val candle = candles[i]
@@ -631,7 +785,8 @@ object PumpBotEngine {
         if (waitMode == "BUY") {
             val entry = StrategyV2.latestEntrySignal(
                 candles, btcCandles, funding, aggressive,
-                ethCandles, solCandles, futuresCandles, premiumCandles
+                ethCandles, solCandles, futuresCandles, premiumCandles,
+                orderBook, openInterest, openInterestChangePercent
             )
             val action = if (entry.active) "BUY" else "WAIT"
             val readiness = maxOf(entry.trendReadiness, entry.shockReadiness)
@@ -641,15 +796,30 @@ object PumpBotEngine {
                 if (entry.active) 100 else readiness.coerceIn(0, 99),
                 entry.trendReadiness,
                 entry.shockReadiness,
-                entry.marketGateActive
+                entry.marketGateActive,
+                entry.lateEntryBlocked,
+                entry.breathing
             )
         }
 
+        val breathing = MarketBreathingAnalyzer.analyzeAt(
+            i,
+            candles,
+            btcCandles,
+            solCandles,
+            futuresCandles,
+            rsi,
+            ema20,
+            orderBook,
+            openInterest,
+            openInterestChangePercent
+        )
         if (candle.closeTime <= entryTime || (partialTaken && candle.closeTime <= partialCandle)) {
             return LiveEvaluation(
                 candle.closeTime, candle.close, rsiNow, emaNow, latestFunding, positionMode,
                 false, false, "WAIT", "Позиция подтверждена. Ждем закрытия следующей свечи", storedHighest,
-                0, 0, 0
+                0, 0, 0,
+                breathing = breathing
             )
         }
 
@@ -662,7 +832,8 @@ object PumpBotEngine {
             false, sell, exit.action, exit.reason, exit.highestHigh,
             if (sell) -100 else -exit.readiness.coerceIn(0, 99),
             0,
-            0
+            0,
+            breathing = breathing
         )
     }
 
@@ -682,6 +853,10 @@ object PumpBotEngine {
     fun formatDate(time: Long): String {
         if (time <= 0L) return "-"
         return SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.GERMAN).format(Date(time))
+    }
+
+    private fun SharedPreferences.nullableDouble(key: String): Double? {
+        return getDouble(key, Double.NaN).takeIf { it.isFinite() }
     }
 
     private fun ema(values: List<Double>, period: Int): List<Double?> {

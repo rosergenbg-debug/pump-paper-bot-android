@@ -15,7 +15,7 @@ class MarketSyncClient {
         .build()
 
     fun sync(context: Context) {
-        val pool = Executors.newFixedThreadPool(8)
+        val pool = Executors.newFixedThreadPool(10)
         try {
             val pump = pool.submit<String> { fetchRecentSpot(PumpBotEngine.pumpSymbol) }
             val eur = pool.submit<String> { fetchRecentSpot(PumpBotEngine.eurSymbol) }
@@ -25,10 +25,12 @@ class MarketSyncClient {
             val futures = pool.submit<String> { fetch(PumpBotEngine.futuresKlineUrl()) }
             val premium = pool.submit<String> { fetch(PumpBotEngine.premiumKlineUrl()) }
             val funding = pool.submit<String> { fetch(PumpBotEngine.fundingUrl()) }
+            val depth = pool.submit<String> { runCatching { fetch(PumpBotEngine.depthUrl()) }.getOrDefault("") }
+            val openInterest = pool.submit<String> { runCatching { fetch(PumpBotEngine.openInterestUrl()) }.getOrDefault("") }
             PumpBotEngine.syncMarket(
                 context,
                 pump.get(), eur.get(), btc.get(), eth.get(), sol.get(),
-                futures.get(), premium.get(), funding.get()
+                futures.get(), premium.get(), funding.get(), depth.get(), openInterest.get()
             )
         } finally {
             pool.shutdownNow()

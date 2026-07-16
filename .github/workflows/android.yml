@@ -28,28 +28,29 @@ jobs:
         with:
           gradle-version: '8.5'
 
-      - name: Build APK
-        run: gradle assembleDebug
+      - name: Test and build APK
+        run: gradle testDebugUnitTest assembleDebug
 
       - name: Prepare named APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk PumpSignal-MarketGuard-v1.9.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk PumpSignal-MarketBreathing-v2.0.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: PumpSignal-MarketGuard-v1.9-APK
-          path: PumpSignal-MarketGuard-v1.9.apk
+          name: PumpSignal-MarketBreathing-v2.0-APK
+          path: PumpSignal-MarketBreathing-v2.0.apk
           retention-days: 30
 
-      - name: Publish v1.9 release
+      - name: Publish v2.0 release
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.9
-          name: PUMP Сигнал v1.9
+          tag_name: v2.0
+          name: PUMP Сигнал v2.0 — Дыхание рынка
           prerelease: true
           body: |
-            Перед покупкой добавлена защита от погони за общерыночной вершиной: приложение сравнивает часовой рост и объём PUMP, BTC и SOL только с предыдущими 30 днями. Если все три актива одновременно перегреты, текущий вход отменяется и пересчитывается после следующей закрытой свечи.
-            Профили называются «Осторожный» и «Активный». Проверка назад показывает, сколько входов остановил защитный фильтр. Исторический график сделок с фиолетовыми связями, результатом и временем позиции сохранён.
+            Добавлен причинный анализ состояния PUMP: активность/сжатие, направление потока, согласованность данных и отдельный риск позднего входа. Высокий риск по самому PUMP блокирует покупку, даже если прежняя готовность стратегии приблизилась к 99 и BTC/SOL не перегреты.
+            Добавлены публичный снимок стакана Binance, открытый интерес PUMP futures и локальный исследовательский журнал. Эти данные пока используются осторожно: они уточняют состояние, но не являются самостоятельным приказом купить.
+            Профили «Осторожный» и «Активный», вертикальный исторический график, точки и связи сделок сохранены. Звонок на 99 работает только при допустимом риске позднего входа и достаточной согласованности доступных данных.
             Комиссия 0,15% на вход и 0,15% на выход. Исторические результаты не гарантируют будущую прибыль.
-          files: PumpSignal-MarketGuard-v1.9.apk
+          files: PumpSignal-MarketBreathing-v2.0.apk

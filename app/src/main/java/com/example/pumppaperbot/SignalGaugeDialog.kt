@@ -19,29 +19,30 @@ object SignalGaugeDialog {
             setBackgroundColor(Color.parseColor("#161B22"))
         }
         root.addView(TextView(context).apply {
-            text = "КРУПНАЯ ШКАЛА СИГНАЛА"
+            text = "КРУПНАЯ ШКАЛА ПОТОКА"
             textSize = 20f
             setTextColor(Color.WHITE)
             setTypeface(typeface, android.graphics.Typeface.BOLD)
             gravity = android.view.Gravity.CENTER
         })
         root.addView(LargeSignalGaugeView(context).apply { setSnapshot(snapshot) }, LinearLayout.LayoutParams(-1, dp(context, 390)))
-        val score = snapshot.readinessScore
+        val score = snapshot.directionScore
         val direction = when {
-            score >= 99 -> "Сигнал почти подтверждён: покупка"
-            score > 0 -> "Тенденция ближе к покупке: +$score/100"
-            score <= -99 -> "Сигнал почти подтверждён: продажа"
-            score < 0 -> "Тенденция ближе к продаже: −${abs(score)}/100"
-            else -> "Нейтрально: подтверждённого направления нет"
+            score >= 25 -> "Поток направлен вверх: +$score/100"
+            score > 0 -> "Слабый перевес вверх: +$score/100"
+            score <= -25 -> "Поток направлен вниз: −${abs(score)}/100"
+            score < 0 -> "Слабый перевес вниз: −${abs(score)}/100"
+            else -> "Поток нейтрален"
         }
         root.addView(TextView(context).apply {
             text = buildString {
                 append(direction)
-                if (snapshot.waitMode == "BUY") {
-                    append("\nБазовый тренд: ${snapshot.trendReadiness}/100")
-                    append(" • 4 этапа: ${snapshot.shockReadiness}/100")
-                }
-                append("\n\n+100 и −100 — полное выполнение правил стратегии, а не гарантия результата.")
+                append("\nАктивность: ${snapshot.energyScore}/100")
+                append(" • сжатие: ${snapshot.compressionScore}/100")
+                append("\nСогласованность данных: ${snapshot.breathingConfidence}/100")
+                append(" • поздний вход: ${snapshot.lateEntryRisk}/100")
+                append("\n${snapshot.breathingState}")
+                append("\n\nЭта шкала показывает наблюдаемый поток, а не вероятность прибыли и не приказ купить.")
             }
             textSize = 15f
             setTextColor(Color.parseColor("#C9D1D9"))
@@ -76,11 +77,11 @@ private class LargeSignalGaugeView(context: Context) : View(context) {
     private var score = 0
 
     init {
-        contentDescription = "Крупная шкала готовности от плюс ста для покупки до минус ста для продажи"
+        contentDescription = "Крупная шкала направления рыночного потока от плюс ста вверх до минус ста вниз"
     }
 
     fun setSnapshot(snapshot: LiveSnapshot) {
-        score = snapshot.readinessScore.coerceIn(-100, 100)
+        score = snapshot.directionScore.coerceIn(-100, 100)
         invalidate()
     }
 
@@ -102,10 +103,10 @@ private class LargeSignalGaugeView(context: Context) : View(context) {
         canvas.drawLine(centerX - 76f, markerY, centerX + 76f, markerY, blue.apply { strokeWidth = 8f })
 
         canvas.drawText("+100", centerX, 35f, text)
-        canvas.drawText("ПОКУПКА", centerX + 125f, top + 12f, small)
+        canvas.drawText("ПОТОК ВВЕРХ", centerX + 135f, top + 12f, small)
         canvas.drawText("0", centerX + 72f, middle + 8f, small)
         canvas.drawText("−100", centerX, height - 20f, text)
-        canvas.drawText("ПРОДАЖА", centerX + 125f, bottom, small)
+        canvas.drawText("ПОТОК ВНИЗ", centerX + 135f, bottom, small)
         val current = if (score >= 0) "+$score" else "−${abs(score)}"
         canvas.drawText(current, centerX - 105f, markerY + 10f, text)
     }

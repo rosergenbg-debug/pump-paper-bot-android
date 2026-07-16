@@ -75,7 +75,9 @@ object PumpAlert {
         } else if (kotlin.math.abs(score) == 99) {
             "Приготовьтесь и ждите 100. Это готовность условий, не вероятность прибыли. "
         } else ""
-        val text = "$preparation${snapshot.signalReason}. Цена €${formatPrice(snapshot.lastPrice)}"
+        val text = "$preparation${snapshot.signalReason}. Дыхание: ${snapshot.breathingState}; " +
+            "поток ${if (snapshot.directionScore >= 0) "+" else ""}${snapshot.directionScore}/100; " +
+            "поздний вход ${snapshot.lateEntryRisk}/100. Цена €${formatPrice(snapshot.lastPrice)}"
         val notification = NotificationCompat.Builder(context, signalChannelId)
             .setSmallIcon(R.drawable.ic_launcher)
             .setContentTitle(title)
