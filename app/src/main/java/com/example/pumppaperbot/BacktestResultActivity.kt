@@ -56,7 +56,7 @@ class BacktestResultActivity : AppCompatActivity() {
         root.addView(navRow)
 
         root.addView(label("РЕЗУЛЬТАТ ПРОВЕРКИ", 23, "#F0F6FC", true))
-        val profile = if (aggressive) "Чувствительный" else "Строгий"
+        val profile = if (aggressive) "Активный" else "Осторожный"
         root.addView(label("PUMP/EUR | $profile | старт ${PumpBotEngine.formatDate(startTime)}", 13, "#8B949E", false))
 
         status = label("Загружаю свечи 30 минут...", 14, "#8B949E", false)
@@ -77,7 +77,7 @@ class BacktestResultActivity : AppCompatActivity() {
         thread {
             val pool = Executors.newFixedThreadPool(8)
             try {
-                val warmupStart = startTime - TimeUnit.DAYS.toMillis(14)
+                val warmupStart = startTime - TimeUnit.DAYS.toMillis(45)
                 val end = System.currentTimeMillis()
                 val pump = pool.submit<List<PumpCandle>> { fetchCandles(PumpBotEngine.pumpSymbol, warmupStart, end) }
                 val eur = pool.submit<List<PumpCandle>> { fetchCandles(PumpBotEngine.eurSymbol, warmupStart, end) }
@@ -209,6 +209,7 @@ class BacktestResultActivity : AppCompatActivity() {
             addView(label(String.format(Locale.US, "Вложили: %.2f EUR", PumpBotEngine.startBalance), 15, "#C9D1D9", false))
             addView(label(String.format(Locale.US, "Сейчас: %.2f EUR | результат %+.2f EUR (%+.2f%%)", result.equity, result.profit, result.profitPercent), 19, if (result.profit >= 0) "#32C789" else "#FF4D6D", true))
             addView(label(String.format(Locale.US, "Сделок: %d | прибыльных %.1f%% | полных стопов: %d", result.roundTrips, result.winRatePercent, result.stopCount), 14, "#F0F6FC", false))
+            addView(label("Защита от вершины остановила входов: ${result.blockedOverheatCount}", 14, "#F0B72F", true))
             addView(label(String.format(Locale.US, "Закрытая просадка: %.2f%% | комиссии: %.2f EUR | 0,15%% за операцию", result.maxDrawdownPercent, result.totalFees), 14, "#F0F6FC", false))
             addView(label("Результат исторический и не гарантирует будущую прибыль.", 13, "#F0B72F", true))
             addView(label("Данные до: ${PumpBotEngine.formatDate(result.lastCandleTime)}", 13, "#8B949E", false))

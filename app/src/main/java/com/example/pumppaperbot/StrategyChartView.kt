@@ -315,7 +315,7 @@ class StrategyChartView @JvmOverloads constructor(
 
         drawIndicator(canvas, data.fast, start, visibleCount, ::x, ::y, fastPaint)
         drawIndicator(canvas, data.slow, start, visibleCount, ::x, ::y, slowPaint)
-        drawTrades(canvas, data.trades, candles, ::x, ::y)
+        drawTrades(canvas, data.trades, candles, data.aggressive, ::x, ::y)
         drawDates(canvas, candles, ::x, bottom + 25f)
         if (historyOffsetBars == 0) drawScenario(canvas, data, start, visibleCount, step, candleRight, ::x, ::y)
         if (data.showReadinessGauge) drawReadinessGauge(canvas, data, gaugeLeft, top, width - 8f, bottom)
@@ -445,6 +445,7 @@ class StrategyChartView @JvmOverloads constructor(
         canvas: Canvas,
         trades: List<TradeEvent>,
         candles: List<PumpCandle>,
+        aggressive: Boolean,
         x: (Int) -> Float,
         y: (Double) -> Float
     ) {
@@ -479,21 +480,13 @@ class StrategyChartView @JvmOverloads constructor(
             canvas.drawText(label, centerX, baseY, connectionTextPaint)
         }
 
-        var activeMode = StrategyV2.MODE_TREND
+        val profilePaint = if (aggressive) sellPaint else buyPaint
         trades.sortedBy { it.time }.forEach { trade ->
-            if (trade.action == "BUY") {
-                activeMode = when {
-                    trade.reason.contains("Чувствитель", ignoreCase = true) -> StrategyV2.MODE_EXHAUSTION
-                    trade.reason.contains("шок", ignoreCase = true) || trade.reason.contains("импульс", ignoreCase = true) -> StrategyV2.MODE_SHOCK
-                    else -> StrategyV2.MODE_TREND
-                }
-            }
             val index = visibleIndex(trade.time) ?: return@forEach
             val cx = x(index)
             val cy = y(trade.price)
-            val modePaint = if (activeMode == StrategyV2.MODE_EXHAUSTION || activeMode == StrategyV2.MODE_SHOCK) sellPaint else buyPaint
             if (trade.action == "BUY") {
-                canvas.drawCircle(cx, cy + 34f, 9f, modePaint)
+                canvas.drawCircle(cx, cy + 34f, 9f, profilePaint)
                 canvas.drawLine(cx, cy + 34f, cx, cy + 9f, arrowPaint)
                 val arrow = Path().apply {
                     moveTo(cx, cy)
@@ -504,7 +497,7 @@ class StrategyChartView @JvmOverloads constructor(
                 canvas.drawPath(arrow, arrowPaint)
                 canvas.drawText("ВХОД", cx, cy + 58f, markerTextPaint)
             } else {
-                canvas.drawCircle(cx, cy - 34f, 9f, modePaint)
+                canvas.drawCircle(cx, cy - 34f, 9f, profilePaint)
                 canvas.drawLine(cx, cy - 34f, cx, cy - 9f, arrowPaint)
                 val arrow = Path().apply {
                     moveTo(cx, cy)
@@ -515,7 +508,6 @@ class StrategyChartView @JvmOverloads constructor(
                 canvas.drawPath(arrow, arrowPaint)
                 val partialLabel = if (trade.reason.startsWith("40%")) "ВЫХОД 40%" else "ВЫХОД 50%"
                 canvas.drawText(if (trade.action == "SELL_HALF") partialLabel else "ВЫХОД", cx, cy - 48f, markerTextPaint)
-                if (trade.action != "SELL_HALF") activeMode = StrategyV2.MODE_TREND
             }
         }
     }
