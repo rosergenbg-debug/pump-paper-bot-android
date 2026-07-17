@@ -20,13 +20,6 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-data class ChartCandleSelection(
-    val candle: PumpCandle,
-    val latestCandle: PumpCandle,
-    val changeToLatestPercent: Double,
-    val timeToLatestMillis: Long
-)
-
 class StrategyChartView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null
@@ -165,16 +158,20 @@ class StrategyChartView @JvmOverloads constructor(
     private var dragStartOffset = 0
     private var draggingHorizontally = false
     private var historyListener: ((Int, Long, Long) -> Unit)? = null
-    private var candleSelectionListener: ((ChartCandleSelection) -> Unit)? = null
     private var visibleBarLimit = 120
     private var selectedCandleTime: Long? = null
+    private var selectionTouchX = 0f
+    private var selectionTouchY = 0f
     private var lastVisibleCandles: List<PumpCandle> = emptyList()
     private var lastPlotLeft = 0f
+    private var lastPlotRight = 0f
+    private var lastPlotTop = 0f
+    private var lastPlotBottom = 0f
     private var lastPlotStep = 1f
 
     init {
         isClickable = true
-        contentDescription = "График PUMP/EUR. Тяните влево или вправо для истории. Коснитесь свечи, чтобы увидеть цену, время и разницу с текущей ценой."
+        contentDescription = "График PUMP/EUR. Тяните влево или вправо для истории. Удерживайте палец на свече, чтобы временно увидеть цену, время и разницу с текущей ценой."
     }
 
     fun setData(title: String, data: ChartBundle) {
@@ -202,10 +199,6 @@ class StrategyChartView @JvmOverloads constructor(
     fun setOnHistoryWindowChanged(listener: ((Int, Long, Long) -> Unit)?) {
         historyListener = listener
         notifyHistoryChanged()
-    }
-
-    fun setOnCandleSelected(listener: ((ChartCandleSelection) -> Unit)?) {
-        candleSelectionListener = listener
     }
 
     fun setVisibleBarLimit(limit: Int) {
@@ -255,14 +248,16 @@ class StrategyChartView @JvmOverloads constructor(
                 downY = event.y
                 dragStartOffset = historyOffsetBars
                 draggingHorizontally = false
+                selectCandleAt(event.x, event.y)
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
                 val dx = event.x - downX
                 val dy = event.y - downY
-                if (!draggingHorizontally && abs(dx) > 12f && abs(dx) > abs(dy)) {
+                if (!draggingHorizontally && abs(dx) > dp(5f) && abs(dx) > abs(dy)) {
                     draggingHorizontally = true
                     parent?.requestDisallowInterceptTouchEvent(true)
+                    clearCandleSelection()
                 }
                 if (draggingHorizontally) {
                     val movedBars = (dx / max(lastPlotStep, 1f)).toInt()
@@ -270,20 +265,21 @@ class StrategyChartView @JvmOverloads constructor(
                         .coerceIn(0, max(0, data.candles.size - visibleBars(data)))
                     invalidate()
                     notifyHistoryChanged()
+                } else {
+                    selectCandleAt(event.x, event.y)
                 }
                 return true
             }
             MotionEvent.ACTION_UP -> {
                 parent?.requestDisallowInterceptTouchEvent(false)
-                if (!draggingHorizontally) {
-                    selectCandleAt(event.x)
-                    performClick()
-                }
+                clearCandleSelection()
+                if (!draggingHorizontally) performClick()
                 draggingHorizontally = false
                 return true
             }
             MotionEvent.ACTION_CANCEL -> {
                 parent?.requestDisallowInterceptTouchEvent(false)
+                clearCandleSelection()
                 draggingHorizontally = false
                 return true
             }
@@ -291,22 +287,24 @@ class StrategyChartView @JvmOverloads constructor(
         return super.onTouchEvent(event)
     }
 
-    private fun selectCandleAt(touchX: Float) {
-        val data = bundle ?: return
+    private fun selectCandleAt(touchX: Float, touchY: Float) {
         if (lastVisibleCandles.isEmpty()) return
+        if (touchX !in lastPlotLeft..lastPlotRight || touchY !in lastPlotTop..lastPlotBottom) {
+            clearCandleSelection()
+            return
+        }
         val localIndex = floor((touchX - lastPlotLeft) / max(lastPlotStep, 1f)).toInt()
             .coerceIn(0, lastVisibleCandles.lastIndex)
         val candle = lastVisibleCandles[localIndex]
-        val latest = data.candles.lastOrNull() ?: return
         selectedCandleTime = candle.closeTime
-        val change = if (candle.close > 0.0) (latest.close / candle.close - 1.0) * 100.0 else 0.0
-        val selection = ChartCandleSelection(
-            candle = candle,
-            latestCandle = latest,
-            changeToLatestPercent = change,
-            timeToLatestMillis = (latest.closeTime - candle.closeTime).coerceAtLeast(0L)
-        )
-        candleSelectionListener?.invoke(selection)
+        selectionTouchX = touchX
+        selectionTouchY = touchY
+        invalidate()
+    }
+
+    private fun clearCandleSelection() {
+        if (selectedCandleTime == null) return
+        selectedCandleTime = null
         invalidate()
     }
 
@@ -327,10 +325,10 @@ class StrategyChartView @JvmOverloads constructor(
         }
 
         val left = dp(7f)
-        val top = dp(49f)
+        val top = dp(44f)
         val gaugeLeft = width - dp(42f)
         val right = if (data.showReadinessGauge) gaugeLeft - dp(4f) else width - dp(6f)
-        val bottom = height - dp(21f)
+        val bottom = height - dp(18f)
         val chartHeight = bottom - top
         val chartWidth = right - left
         val visibleCount = visibleBars(data)
@@ -342,6 +340,9 @@ class StrategyChartView @JvmOverloads constructor(
         val candleRight = left + visibleCount * step
         lastVisibleCandles = candles
         lastPlotLeft = left
+        lastPlotRight = right
+        lastPlotTop = top
+        lastPlotBottom = bottom
         lastPlotStep = step
         val lineValues = (data.fast.subList(start.coerceAtMost(data.fast.size), endExclusive.coerceAtMost(data.fast.size)) +
             data.slow.subList(start.coerceAtMost(data.slow.size), endExclusive.coerceAtMost(data.slow.size))).filterNotNull()
@@ -367,10 +368,10 @@ class StrategyChartView @JvmOverloads constructor(
             return top + fraction.toFloat() * chartHeight
         }
 
-        canvas.drawText(title, dp(8f), dp(17f), textPaint)
+        canvas.drawText(title, dp(8f), dp(15f), textPaint)
         val scrollText = if (historyOffsetBars > 0) "назад: $historyOffsetBars свечей • тяните ↔" else "живой край • тяните график назад ↔"
-        canvas.drawText(scrollText, dp(8f), dp(31f), mutedPaint)
-        canvas.drawText(data.subtitle, dp(8f), dp(43f), mutedPaint)
+        canvas.drawText(scrollText, dp(8f), dp(27f), mutedPaint)
+        canvas.drawText(data.subtitle, dp(8f), dp(38f), mutedPaint)
 
         for (i in 0..4) {
             val gy = top + chartHeight / 4f * i
@@ -395,7 +396,7 @@ class StrategyChartView @JvmOverloads constructor(
         if (data.showReadinessGauge) drawReadinessGauge(canvas, data, gaugeLeft, top, width - dp(2f), bottom)
         drawPriceScale(canvas, data, paddedMin, paddedMax, left, right, top, bottom, ::y)
         drawSelectedCandle(canvas, data, candles, left, right, top, bottom, ::x, ::y)
-        drawDates(canvas, candles, ::x, bottom + dp(14f))
+        drawDates(canvas, candles, ::x, bottom + dp(12f))
         postInvalidateDelayed(850L)
     }
 
@@ -446,8 +447,15 @@ class StrategyChartView @JvmOverloads constructor(
             latestPrice < scaleMin -> "↓ "
             else -> ""
         }
-        val baseline = currentY.coerceIn(top + dp(27f), bottom - dp(19f))
-        drawPriceBadge(canvas, "СЕЙЧАС $direction${formatPrice(latestPrice)}", right - dp(2f), baseline)
+        val currentText = "СЕЙЧАС $direction${formatPrice(latestPrice)}"
+        when {
+            latestPrice > scaleMax -> drawPriceBadgeFromLeft(canvas, currentText, left + dp(2f), top + dp(13f))
+            latestPrice < scaleMin -> drawPriceBadgeFromLeft(canvas, currentText, left + dp(2f), bottom - dp(4f))
+            else -> {
+                val baseline = currentY.coerceIn(top + dp(27f), bottom - dp(19f))
+                drawPriceBadge(canvas, currentText, right - dp(2f), baseline)
+            }
+        }
     }
 
     private fun drawPriceBadge(canvas: Canvas, text: String, right: Float, baseline: Float) {
@@ -462,6 +470,11 @@ class StrategyChartView @JvmOverloads constructor(
         )
         canvas.drawRoundRect(bodyRect, dp(3f), dp(3f), priceBadgePaint)
         canvas.drawText(text, right - horizontalPadding, baseline, priceTextPaint)
+    }
+
+    private fun drawPriceBadgeFromLeft(canvas: Canvas, text: String, left: Float, baseline: Float) {
+        val right = left + priceTextPaint.measureText(text) + dp(8f)
+        drawPriceBadge(canvas, text, right, baseline)
     }
 
     private fun drawSelectedCandle(
@@ -490,16 +503,20 @@ class StrategyChartView @JvmOverloads constructor(
         val elapsed = (latest.closeTime - candle.closeTime).coerceAtLeast(0L)
         val tooltipWidth = min(dp(205f), right - left - dp(6f))
         val tooltipHeight = dp(54f)
-        val tooltipLeft = if (selectedX + tooltipWidth + dp(7f) <= right) {
-            selectedX + dp(7f)
-        } else {
-            (selectedX - tooltipWidth - dp(7f)).coerceAtLeast(left)
-        }
-        val tooltipTop = if (selectedY + tooltipHeight + dp(7f) <= bottom) {
-            selectedY + dp(7f)
-        } else {
-            (selectedY - tooltipHeight - dp(7f)).coerceAtLeast(top)
-        }
+        val fingerClearance = dp(24f)
+        val tooltipPosition = chartTooltipPosition(
+            selectionTouchX,
+            selectionTouchY,
+            left,
+            right,
+            top,
+            bottom,
+            tooltipWidth,
+            tooltipHeight,
+            fingerClearance
+        )
+        val tooltipLeft = tooltipPosition.left
+        val tooltipTop = tooltipPosition.top
         bodyRect.set(tooltipLeft, tooltipTop, tooltipLeft + tooltipWidth, tooltipTop + tooltipHeight)
         canvas.drawRoundRect(bodyRect, dp(5f), dp(5f), selectionBadgePaint)
 

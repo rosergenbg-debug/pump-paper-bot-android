@@ -61,15 +61,15 @@ class ChartDetailActivity : AppCompatActivity() {
     private fun render() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(10), dp(8), dp(10), dp(8))
+            setPadding(dp(10), dp(4), dp(10), dp(4))
             setBackgroundColor(Color.parseColor("#0D1117"))
         }
 
         val nav = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        nav.addView(button("← НАЗАД", "#30363D").apply { setOnClickListener { finish() } }, LinearLayout.LayoutParams(0, dp(48), 1f))
+        nav.addView(button("← НАЗАД", "#30363D").apply { setOnClickListener { finish() } }, LinearLayout.LayoutParams(0, dp(44), 1f))
         nav.addView(button("КРУПНО: ПОТОК ±100", "#1F6FEB").apply {
             setOnClickListener { SignalGaugeDialog.show(this@ChartDetailActivity, PumpBotEngine.snapshot(this@ChartDetailActivity)) }
-        }, LinearLayout.LayoutParams(0, dp(48), 1.35f).apply { leftMargin = dp(8) })
+        }, LinearLayout.LayoutParams(0, dp(44), 1.35f).apply { leftMargin = dp(8) })
         root.addView(nav)
 
         status = label("Загружаю историю PUMP/EUR за 6 месяцев…", 14, "#F0F6FC", true)
@@ -78,33 +78,34 @@ class ChartDetailActivity : AppCompatActivity() {
         val profiles = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         cautiousButton = button("ОСТОРОЖНЫЙ", "#30363D").apply { setOnClickListener { selectProfile(false) } }
         aggressiveButton = button("АКТИВНЫЙ", "#30363D").apply { setOnClickListener { selectProfile(true) } }
-        profiles.addView(cautiousButton, LinearLayout.LayoutParams(0, dp(48), 1f))
-        profiles.addView(aggressiveButton, LinearLayout.LayoutParams(0, dp(48), 1f).apply { leftMargin = dp(8) })
+        profiles.addView(cautiousButton, LinearLayout.LayoutParams(0, dp(44), 1f))
+        profiles.addView(aggressiveButton, LinearLayout.LayoutParams(0, dp(44), 1f).apply { leftMargin = dp(8) })
         root.addView(profiles)
         profileStatus = label("", 13, "#C9D1D9", true)
         root.addView(profileStatus)
         renderProfileButtons()
 
         val controls = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        controls.addView(button("← ТОЧКА", "#1F6FEB").apply { setOnClickListener { moveSignal(-1) } }, LinearLayout.LayoutParams(0, dp(46), 1f))
+        controls.addView(button("← ТОЧКА", "#1F6FEB").apply { setOnClickListener { moveSignal(-1) } }, LinearLayout.LayoutParams(0, dp(44), 1f))
         zoomButton = button("УВЕЛИЧИТЬ ×2", "#30363D").apply { setOnClickListener { cycleZoom() } }
-        controls.addView(zoomButton, LinearLayout.LayoutParams(0, dp(46), 1.15f).apply { leftMargin = dp(6) })
-        controls.addView(button("ТОЧКА →", "#1F6FEB").apply { setOnClickListener { moveSignal(1) } }, LinearLayout.LayoutParams(0, dp(46), 1f).apply { leftMargin = dp(6) })
-        root.addView(controls, LinearLayout.LayoutParams(-1, dp(46)).apply { topMargin = dp(4) })
-        root.addView(button("ПОКАЗАТЬ ПОСЛЕДНИЕ СВЕЧИ", "#30363D").apply {
+        controls.addView(zoomButton, LinearLayout.LayoutParams(0, dp(44), 1.15f).apply { leftMargin = dp(6) })
+        controls.addView(button("ТОЧКА →", "#1F6FEB").apply { setOnClickListener { moveSignal(1) } }, LinearLayout.LayoutParams(0, dp(44), 1f).apply { leftMargin = dp(6) })
+        root.addView(controls, LinearLayout.LayoutParams(-1, dp(44)).apply { topMargin = dp(2) })
+        root.addView(button("ПОСЛЕДНИЕ СВЕЧИ", "#30363D").apply {
             setOnClickListener {
                 activePointIndex = -1
                 chart.setHistoryOffsetBars(0)
-                pointStatus.text = "Показаны последние свечи. Если стрелок нет, в этом периоде сигналов не было."
+                pointStatus.text = "Последние свечи • удерживайте палец на свече для подробностей"
             }
-        }, LinearLayout.LayoutParams(-1, dp(42)).apply { topMargin = dp(4) })
+        }, LinearLayout.LayoutParams(-1, dp(38)).apply { topMargin = dp(2) })
 
-        pointStatus = label("После загрузки откроется последняя историческая сделка.", 14, "#58A6FF", true)
+        pointStatus = label("После загрузки откроется последняя историческая сделка.", 13, "#58A6FF", true).apply {
+            maxLines = 2
+        }
         root.addView(pointStatus)
-        root.addView(label("Синие стрелки — вход и выход. Фиолетовый угол соединяет время и цену одной сделки. Коснитесь любой свечи — увидите разницу с текущей ценой и временем.", 13, "#C9D1D9", false))
 
         chart = StrategyChartView(this).apply { setVisibleBarLimit(120) }
-        root.addView(chart, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(3) })
+        root.addView(chart, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(1) })
 
         range = label("Период на экране: —", 13, "#C9D1D9", true)
         root.addView(range)
@@ -117,36 +118,23 @@ class ChartDetailActivity : AppCompatActivity() {
                     if (fromUser && !adjustingSeek) {
                         activePointIndex = -1
                         chart.setHistoryOffsetBars(chart.maxHistoryOffset() - progress)
-                        pointStatus.text = "Период выбран вручную. Синие стрелки видны только там, где была сделка."
+                        pointStatus.text = "Период выбран вручную • стрелки видны только возле сделок"
                     }
                 }
                 override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
                 override fun onStopTrackingTouch(seekBar: SeekBar?) = Unit
             })
         }
-        root.addView(seek, LinearLayout.LayoutParams(-1, dp(38)))
-        root.addView(label("Слева — 6 месяцев назад, справа — последние свечи.", 12, "#8B949E", false))
+        root.addView(seek, LinearLayout.LayoutParams(-1, dp(28)))
 
         chart.setOnHistoryWindowChanged { offset, start, end ->
-            val format = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.GERMAN)
+            val format = SimpleDateFormat("dd.MM HH:mm", Locale.GERMAN)
             range.text = "На экране: ${format.format(Date(start))} — ${format.format(Date(end))}"
             if (seek.isEnabled) {
                 adjustingSeek = true
                 seek.progress = (chart.maxHistoryOffset() - offset).coerceIn(0, seek.max)
                 adjustingSeek = false
             }
-        }
-        chart.setOnCandleSelected { selection ->
-            activePointIndex = -1
-            pointStatus.text = String.format(
-                Locale.GERMAN,
-                "Выбрана свеча %s • €%.8f\nТекущая €%.8f • движение до текущей %+.2f%%\nДо последней свечи: %s",
-                PumpBotEngine.formatDate(selection.candle.closeTime),
-                selection.candle.close,
-                selection.latestCandle.close,
-                selection.changeToLatestPercent,
-                formatDuration(selection.timeToLatestMillis)
-            )
         }
         setContentView(root)
     }
@@ -162,9 +150,9 @@ class ChartDetailActivity : AppCompatActivity() {
         cautiousButton.backgroundTintList = ColorStateList.valueOf(Color.parseColor(if (!aggressive) "#238636" else "#30363D"))
         aggressiveButton.backgroundTintList = ColorStateList.valueOf(Color.parseColor(if (aggressive) "#B62324" else "#30363D"))
         profileStatus.text = if (aggressive) {
-            "Активный: допускает более позднее подтверждение после серии падений"
+            "Активный: более позднее подтверждение после падений"
         } else {
-            "Осторожный: вход после серии падений только пока цена остаётся близко ко дну"
+            "Осторожный: вход только пока цена близко ко дну"
         }
     }
 
@@ -207,25 +195,23 @@ class ChartDetailActivity : AppCompatActivity() {
             val tradeNumber = completedTrades.indexOf(connection) + 1
             String.format(
                 Locale.GERMAN,
-                "Сделка %d из %d: %+.2f%% (%+.2f EUR) • деньги работали %s\nВход %s → выход %s\nВыбрана точка: %s • %s • €%.8f",
+                "Сделка %d/%d • %+.2f%% (%+.2f EUR) • %s\nТочка %s • %s • €%.8f",
                 tradeNumber,
                 completedTrades.size,
                 connection.profitPercent,
                 connection.profitEur,
                 formatDuration(connection.durationMillis),
-                PumpBotEngine.formatDate(connection.entry.time),
-                PumpBotEngine.formatDate(connection.exit.time),
                 action,
-                PumpBotEngine.formatDate(trade.time),
+                formatCompactDate(trade.time),
                 trade.price
             )
         } else {
             String.format(
                 Locale.GERMAN,
-                "Точка %d из %d • %s • %s • €%.8f\n%s",
+                "Точка %d/%d • %s • %s\n€%.8f • %s",
                 activePointIndex + 1,
                 signalPoints.size,
-                PumpBotEngine.formatDate(trade.time),
+                formatCompactDate(trade.time),
                 action,
                 trade.price,
                 trade.reason
@@ -288,7 +274,7 @@ class ChartDetailActivity : AppCompatActivity() {
         )
         status.text = String.format(
             Locale.GERMAN,
-            "PUMP/EUR • %d сделок • итог %+.2f%% (%+.2f EUR) • защита остановила %d входов",
+            "PUMP/EUR • %d сделок • %+.2f%% (%+.2f EUR) • защита %d",
             result.roundTrips,
             result.profitPercent,
             result.profit,
@@ -404,6 +390,9 @@ class ChartDetailActivity : AppCompatActivity() {
             else -> "${minutes} мин"
         }
     }
+
+    private fun formatCompactDate(time: Long): String =
+        SimpleDateFormat("dd.MM HH:mm", Locale.GERMAN).format(Date(time))
 
     private fun label(text: String, size: Int, color: String, bold: Boolean) = TextView(this).apply {
         this.text = text
