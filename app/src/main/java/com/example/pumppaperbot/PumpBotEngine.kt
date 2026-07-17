@@ -168,7 +168,7 @@ data class SavedMarketPayloads(
 )
 
 object PumpBotEngine {
-    const val appVersionName = "2.1"
+    const val appVersionName = "2.2"
     const val startBalance = 1000.0
     const val feeRate = 0.0015
     const val slippage = 0.0005

@@ -10,6 +10,7 @@ import android.graphics.RectF
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
+import kotlin.math.floor
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -19,6 +20,13 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+data class ChartCandleSelection(
+    val candle: PumpCandle,
+    val latestCandle: PumpCandle,
+    val changeToLatestPercent: Double,
+    val timeToLatestMillis: Long
+)
+
 class StrategyChartView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null
@@ -26,72 +34,74 @@ class StrategyChartView @JvmOverloads constructor(
     private val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#0D1117") }
     private val gridPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#30363D")
-        strokeWidth = 1f
+        strokeWidth = dp(1f)
     }
     private val candleUpPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#32C789") }
     private val candleDownPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#FF4D6D") }
     private val fastPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#FFD84D")
-        strokeWidth = 4f
+        strokeWidth = dp(1.5f)
         style = Paint.Style.STROKE
     }
     private val slowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#B58CFF")
-        strokeWidth = 4f
+        strokeWidth = dp(1.5f)
         style = Paint.Style.STROKE
     }
     private val scenarioPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#58A6FF")
-        strokeWidth = 3f
+        strokeWidth = dp(1.25f)
         style = Paint.Style.STROKE
-        pathEffect = DashPathEffect(floatArrayOf(9f, 7f), 0f)
+        pathEffect = DashPathEffect(floatArrayOf(dp(4f), dp(3f)), 0f)
     }
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#C9D1D9")
-        textSize = 28f
+        textSize = sp(13f)
+        isFakeBoldText = true
     }
     private val mutedPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#8B949E")
-        textSize = 21f
+        textSize = sp(9.5f)
     }
     private val gaugeTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#C9D1D9")
-        textSize = 19f
+        textSize = sp(9.5f)
         textAlign = Paint.Align.CENTER
     }
     private val datePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#8B949E")
-        textSize = 18f
+        textSize = sp(10f)
+        isFakeBoldText = true
         textAlign = Paint.Align.CENTER
     }
     private val markerTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
-        textSize = 16f
+        textSize = sp(10f)
         textAlign = Paint.Align.CENTER
         isFakeBoldText = true
     }
     private val arrowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#2F81F7")
-        strokeWidth = 6f
+        strokeWidth = dp(2f)
         style = Paint.Style.FILL_AND_STROKE
         strokeCap = Paint.Cap.ROUND
     }
     private val connectionPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#E879F9")
-        strokeWidth = 5f
+        strokeWidth = dp(2f)
         style = Paint.Style.STROKE
         strokeCap = Paint.Cap.ROUND
     }
     private val partialConnectionPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#A855F7")
-        strokeWidth = 3f
+        strokeWidth = dp(1.5f)
         style = Paint.Style.STROKE
         strokeCap = Paint.Cap.ROUND
-        pathEffect = DashPathEffect(floatArrayOf(12f, 8f), 0f)
+        pathEffect = DashPathEffect(floatArrayOf(dp(5f), dp(3f)), 0f)
     }
     private val connectionTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
-        textSize = 17f
+        textSize = sp(10f)
         textAlign = Paint.Align.CENTER
         isFakeBoldText = true
     }
@@ -115,6 +125,36 @@ class StrategyChartView @JvmOverloads constructor(
         color = Color.parseColor("#6E7681")
         style = Paint.Style.FILL
     }
+    private val priceTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        textSize = sp(10.5f)
+        textAlign = Paint.Align.RIGHT
+        isFakeBoldText = true
+    }
+    private val priceBadgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#D91F6FEB")
+        style = Paint.Style.FILL
+    }
+    private val currentPriceLinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#8B58A6FF")
+        strokeWidth = dp(1f)
+        style = Paint.Style.STROKE
+        pathEffect = DashPathEffect(floatArrayOf(dp(4f), dp(3f)), 0f)
+    }
+    private val selectionPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#58A6FF")
+        strokeWidth = dp(1.5f)
+        style = Paint.Style.STROKE
+    }
+    private val selectionBadgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#F0222730")
+        style = Paint.Style.FILL
+    }
+    private val selectionTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        textSize = sp(10.5f)
+        isFakeBoldText = true
+    }
     private val bodyRect = RectF()
 
     private var bundle: ChartBundle? = null
@@ -125,16 +165,24 @@ class StrategyChartView @JvmOverloads constructor(
     private var dragStartOffset = 0
     private var draggingHorizontally = false
     private var historyListener: ((Int, Long, Long) -> Unit)? = null
+    private var candleSelectionListener: ((ChartCandleSelection) -> Unit)? = null
     private var visibleBarLimit = 120
+    private var selectedCandleTime: Long? = null
+    private var lastVisibleCandles: List<PumpCandle> = emptyList()
+    private var lastPlotLeft = 0f
+    private var lastPlotStep = 1f
 
     init {
         isClickable = true
-        contentDescription = "График PUMP/EUR. Проведите пальцем влево или вправо, чтобы посмотреть историю."
+        contentDescription = "График PUMP/EUR. Тяните влево или вправо для истории. Коснитесь свечи, чтобы увидеть цену, время и разницу с текущей ценой."
     }
 
     fun setData(title: String, data: ChartBundle) {
         this.title = title
         this.bundle = data
+        if (selectedCandleTime != null && data.candles.none { it.closeTime == selectedCandleTime }) {
+            selectedCandleTime = null
+        }
         historyOffsetBars = historyOffsetBars.coerceIn(0, max(0, data.candles.size - visibleBars(data)))
         invalidate()
         post { notifyHistoryChanged() }
@@ -154,6 +202,10 @@ class StrategyChartView @JvmOverloads constructor(
     fun setOnHistoryWindowChanged(listener: ((Int, Long, Long) -> Unit)?) {
         historyListener = listener
         notifyHistoryChanged()
+    }
+
+    fun setOnCandleSelected(listener: ((ChartCandleSelection) -> Unit)?) {
+        candleSelectionListener = listener
     }
 
     fun setVisibleBarLimit(limit: Int) {
@@ -213,9 +265,7 @@ class StrategyChartView @JvmOverloads constructor(
                     parent?.requestDisallowInterceptTouchEvent(true)
                 }
                 if (draggingHorizontally) {
-                    val usableWidth = max(1f, width - 130f)
-                    val step = usableWidth / visibleBars(data)
-                    val movedBars = (dx / max(step, 1f)).toInt()
+                    val movedBars = (dx / max(lastPlotStep, 1f)).toInt()
                     historyOffsetBars = (dragStartOffset + movedBars)
                         .coerceIn(0, max(0, data.candles.size - visibleBars(data)))
                     invalidate()
@@ -225,7 +275,10 @@ class StrategyChartView @JvmOverloads constructor(
             }
             MotionEvent.ACTION_UP -> {
                 parent?.requestDisallowInterceptTouchEvent(false)
-                if (!draggingHorizontally) performClick()
+                if (!draggingHorizontally) {
+                    selectCandleAt(event.x)
+                    performClick()
+                }
                 draggingHorizontally = false
                 return true
             }
@@ -236,6 +289,25 @@ class StrategyChartView @JvmOverloads constructor(
             }
         }
         return super.onTouchEvent(event)
+    }
+
+    private fun selectCandleAt(touchX: Float) {
+        val data = bundle ?: return
+        if (lastVisibleCandles.isEmpty()) return
+        val localIndex = floor((touchX - lastPlotLeft) / max(lastPlotStep, 1f)).toInt()
+            .coerceIn(0, lastVisibleCandles.lastIndex)
+        val candle = lastVisibleCandles[localIndex]
+        val latest = data.candles.lastOrNull() ?: return
+        selectedCandleTime = candle.closeTime
+        val change = if (candle.close > 0.0) (latest.close / candle.close - 1.0) * 100.0 else 0.0
+        val selection = ChartCandleSelection(
+            candle = candle,
+            latestCandle = latest,
+            changeToLatestPercent = change,
+            timeToLatestMillis = (latest.closeTime - candle.closeTime).coerceAtLeast(0L)
+        )
+        candleSelectionListener?.invoke(selection)
+        invalidate()
     }
 
     override fun performClick(): Boolean {
@@ -249,16 +321,16 @@ class StrategyChartView @JvmOverloads constructor(
 
         val data = bundle
         if (data == null || data.candles.size < 4) {
-            canvas.drawText(title.ifBlank { "Ждем данные графика" }, 24f, 48f, textPaint)
-            canvas.drawText("Нажмите ПРОВЕРИТЬ или ЗАПУСТИТЬ", 24f, 84f, mutedPaint)
+            canvas.drawText(title.ifBlank { "Ждем данные графика" }, dp(8f), dp(20f), textPaint)
+            canvas.drawText("Нажмите ПРОВЕРИТЬ или ЗАПУСТИТЬ", dp(8f), dp(36f), mutedPaint)
             return
         }
 
-        val left = 24f
-        val top = 82f
-        val gaugeLeft = width - 98f
-        val right = if (data.showReadinessGauge) gaugeLeft - 12f else width - 20f
-        val bottom = height - 62f
+        val left = dp(7f)
+        val top = dp(49f)
+        val gaugeLeft = width - dp(42f)
+        val right = if (data.showReadinessGauge) gaugeLeft - dp(4f) else width - dp(6f)
+        val bottom = height - dp(21f)
         val chartHeight = bottom - top
         val chartWidth = right - left
         val visibleCount = visibleBars(data)
@@ -268,6 +340,9 @@ class StrategyChartView @JvmOverloads constructor(
         val futureBars = if (historyOffsetBars == 0) 10 else 0
         val step = chartWidth / (visibleCount + futureBars)
         val candleRight = left + visibleCount * step
+        lastVisibleCandles = candles
+        lastPlotLeft = left
+        lastPlotStep = step
         val lineValues = (data.fast.subList(start.coerceAtMost(data.fast.size), endExclusive.coerceAtMost(data.fast.size)) +
             data.slow.subList(start.coerceAtMost(data.slow.size), endExclusive.coerceAtMost(data.slow.size))).filterNotNull()
         val minPrice = min(candles.minOf { it.low }, lineValues.minOrNull() ?: candles.minOf { it.low })
@@ -292,10 +367,10 @@ class StrategyChartView @JvmOverloads constructor(
             return top + fraction.toFloat() * chartHeight
         }
 
-        canvas.drawText(title, 24f, 31f, textPaint)
+        canvas.drawText(title, dp(8f), dp(17f), textPaint)
         val scrollText = if (historyOffsetBars > 0) "назад: $historyOffsetBars свечей • тяните ↔" else "живой край • тяните график назад ↔"
-        canvas.drawText(scrollText, 24f, 58f, mutedPaint)
-        canvas.drawText(data.subtitle, 24f, 78f, mutedPaint)
+        canvas.drawText(scrollText, dp(8f), dp(31f), mutedPaint)
+        canvas.drawText(data.subtitle, dp(8f), dp(43f), mutedPaint)
 
         for (i in 0..4) {
             val gy = top + chartHeight / 4f * i
@@ -308,17 +383,19 @@ class StrategyChartView @JvmOverloads constructor(
             canvas.drawLine(cx, y(candle.high), cx, y(candle.low), paint)
             val bodyTop = y(max(candle.open, candle.close))
             val bodyBottom = y(min(candle.open, candle.close))
-            val halfWidth = max(1.5f, step * 0.32f)
-            bodyRect.set(cx - halfWidth, bodyTop, cx + halfWidth, max(bodyBottom, bodyTop + 2f))
-            canvas.drawRoundRect(bodyRect, 2f, 2f, paint)
+            val halfWidth = max(dp(0.7f), step * 0.32f)
+            bodyRect.set(cx - halfWidth, bodyTop, cx + halfWidth, max(bodyBottom, bodyTop + dp(0.8f)))
+            canvas.drawRoundRect(bodyRect, dp(0.7f), dp(0.7f), paint)
         }
 
         drawIndicator(canvas, data.fast, start, visibleCount, ::x, ::y, fastPaint)
         drawIndicator(canvas, data.slow, start, visibleCount, ::x, ::y, slowPaint)
         drawTrades(canvas, data.trades, candles, data.aggressive, ::x, ::y)
-        drawDates(canvas, candles, ::x, bottom + 25f)
         if (historyOffsetBars == 0) drawScenario(canvas, data, start, visibleCount, step, candleRight, ::x, ::y)
-        if (data.showReadinessGauge) drawReadinessGauge(canvas, data, gaugeLeft, top, width - 8f, bottom)
+        if (data.showReadinessGauge) drawReadinessGauge(canvas, data, gaugeLeft, top, width - dp(2f), bottom)
+        drawPriceScale(canvas, data, paddedMin, paddedMax, left, right, top, bottom, ::y)
+        drawSelectedCandle(canvas, data, candles, left, right, top, bottom, ::x, ::y)
+        drawDates(canvas, candles, ::x, bottom + dp(14f))
         postInvalidateDelayed(850L)
     }
 
@@ -346,6 +423,103 @@ class StrategyChartView @JvmOverloads constructor(
         }
     }
 
+    private fun drawPriceScale(
+        canvas: Canvas,
+        data: ChartBundle,
+        scaleMin: Double,
+        scaleMax: Double,
+        left: Float,
+        right: Float,
+        top: Float,
+        bottom: Float,
+        y: (Double) -> Float
+    ) {
+        drawPriceBadge(canvas, "ВЕРХ ${formatPrice(scaleMax)}", right - dp(2f), top + dp(13f))
+        drawPriceBadge(canvas, "НИЗ ${formatPrice(scaleMin)}", right - dp(2f), bottom - dp(4f))
+
+        val latestPrice = data.candles.lastOrNull()?.close ?: return
+        val actualY = y(latestPrice)
+        val currentY = actualY.coerceIn(top, bottom)
+        canvas.drawLine(left, currentY, right, currentY, currentPriceLinePaint)
+        val direction = when {
+            latestPrice > scaleMax -> "↑ "
+            latestPrice < scaleMin -> "↓ "
+            else -> ""
+        }
+        val baseline = currentY.coerceIn(top + dp(27f), bottom - dp(19f))
+        drawPriceBadge(canvas, "СЕЙЧАС $direction${formatPrice(latestPrice)}", right - dp(2f), baseline)
+    }
+
+    private fun drawPriceBadge(canvas: Canvas, text: String, right: Float, baseline: Float) {
+        val horizontalPadding = dp(4f)
+        val verticalPadding = dp(3f)
+        val width = priceTextPaint.measureText(text)
+        bodyRect.set(
+            right - width - horizontalPadding * 2f,
+            baseline - priceTextPaint.textSize - verticalPadding,
+            right,
+            baseline + verticalPadding
+        )
+        canvas.drawRoundRect(bodyRect, dp(3f), dp(3f), priceBadgePaint)
+        canvas.drawText(text, right - horizontalPadding, baseline, priceTextPaint)
+    }
+
+    private fun drawSelectedCandle(
+        canvas: Canvas,
+        data: ChartBundle,
+        candles: List<PumpCandle>,
+        left: Float,
+        right: Float,
+        top: Float,
+        bottom: Float,
+        x: (Int) -> Float,
+        y: (Double) -> Float
+    ) {
+        val selectedTime = selectedCandleTime ?: return
+        val selectedIndex = candles.indexOfFirst { it.closeTime == selectedTime }
+        if (selectedIndex < 0) return
+        val candle = candles[selectedIndex]
+        val latest = data.candles.lastOrNull() ?: return
+        val selectedX = x(selectedIndex)
+        val selectedY = y(candle.close).coerceIn(top, bottom)
+        canvas.drawLine(selectedX, top, selectedX, bottom, selectionPaint)
+        canvas.drawLine(left, selectedY, right, selectedY, selectionPaint)
+        canvas.drawCircle(selectedX, selectedY, dp(4f), arrowPaint)
+
+        val change = if (candle.close > 0.0) (latest.close / candle.close - 1.0) * 100.0 else 0.0
+        val elapsed = (latest.closeTime - candle.closeTime).coerceAtLeast(0L)
+        val tooltipWidth = min(dp(205f), right - left - dp(6f))
+        val tooltipHeight = dp(54f)
+        val tooltipLeft = if (selectedX + tooltipWidth + dp(7f) <= right) {
+            selectedX + dp(7f)
+        } else {
+            (selectedX - tooltipWidth - dp(7f)).coerceAtLeast(left)
+        }
+        val tooltipTop = if (selectedY + tooltipHeight + dp(7f) <= bottom) {
+            selectedY + dp(7f)
+        } else {
+            (selectedY - tooltipHeight - dp(7f)).coerceAtLeast(top)
+        }
+        bodyRect.set(tooltipLeft, tooltipTop, tooltipLeft + tooltipWidth, tooltipTop + tooltipHeight)
+        canvas.drawRoundRect(bodyRect, dp(5f), dp(5f), selectionBadgePaint)
+
+        val textX = tooltipLeft + dp(6f)
+        val date = SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.GERMAN).format(Date(candle.closeTime))
+        canvas.drawText(date, textX, tooltipTop + dp(14f), selectionTextPaint)
+        canvas.drawText(
+            String.format(Locale.GERMAN, "%s → сейчас %+.2f%%", formatPrice(candle.close), change),
+            textX,
+            tooltipTop + dp(30f),
+            selectionTextPaint
+        )
+        canvas.drawText(
+            "До последней свечи: ${formatLongDuration(elapsed)}",
+            textX,
+            tooltipTop + dp(46f),
+            selectionTextPaint
+        )
+    }
+
     private fun drawScenario(
         canvas: Canvas,
         data: ChartBundle,
@@ -369,9 +543,9 @@ class StrategyChartView @JvmOverloads constructor(
             path.lineTo(candleRight + (i - 0.5f) * step, y(projected))
         }
         canvas.drawPath(path, scenarioPaint)
-        canvas.drawText("сценарий", candleRight + 4f, y(lastClose) - 8f, mutedPaint)
+        canvas.drawText("сценарий", candleRight + dp(2f), y(lastClose) - dp(3f), mutedPaint)
 
-        val pulse = (9f + 4f * ((sin(System.currentTimeMillis() / 350.0) + 1.0) / 2.0)).toFloat()
+        val pulse = dp((3f + 1.4f * ((sin(System.currentTimeMillis() / 350.0) + 1.0) / 2.0)).toFloat())
         val markerPaint = if (data.directionScore < 0) sellPaint else buyPaint
         canvas.drawCircle(x(visibleCount - 1), y(lastClose), pulse, markerPaint)
     }
@@ -384,29 +558,29 @@ class StrategyChartView @JvmOverloads constructor(
         right: Float,
         bottom: Float
     ) {
-        canvas.drawRoundRect(left, top, right, bottom, 12f, 12f, neutralPaint)
+        canvas.drawRoundRect(left, top, right, bottom, dp(4f), dp(4f), neutralPaint)
         val middle = (top + bottom) / 2f
-        canvas.drawLine(left + 6f, middle, right - 6f, middle, gridPaint)
-        canvas.drawText("+100", (left + right) / 2f, top + 20f, gaugeTextPaint)
-        canvas.drawText("0", (left + right) / 2f, middle + 7f, gaugeTextPaint)
-        canvas.drawText("−100", (left + right) / 2f, bottom - 7f, gaugeTextPaint)
+        canvas.drawLine(left + dp(2f), middle, right - dp(2f), middle, gridPaint)
+        canvas.drawText("+100", (left + right) / 2f, top + dp(11f), gaugeTextPaint)
+        canvas.drawText("0", (left + right) / 2f, middle + dp(4f), gaugeTextPaint)
+        canvas.drawText("−100", (left + right) / 2f, bottom - dp(3f), gaugeTextPaint)
 
-        val usable = (bottom - top) / 2f - 26f
+        val usable = (bottom - top) / 2f - dp(16f)
         val score = data.directionScore.coerceIn(-100, 100)
         val amount = abs(score) / 100f * usable
         if (score > 0) {
-            bodyRect.set(left + 24f, middle - amount, right - 24f, middle)
-            canvas.drawRoundRect(bodyRect, 5f, 5f, buyPaint)
+            bodyRect.set(left + dp(8f), middle - amount, right - dp(8f), middle)
+            canvas.drawRoundRect(bodyRect, dp(2f), dp(2f), buyPaint)
         } else if (score < 0) {
-            bodyRect.set(left + 24f, middle, right - 24f, middle + amount)
-            canvas.drawRoundRect(bodyRect, 5f, 5f, sellPaint)
+            bodyRect.set(left + dp(8f), middle, right - dp(8f), middle + amount)
+            canvas.drawRoundRect(bodyRect, dp(2f), dp(2f), sellPaint)
         }
-        canvas.drawText("Э${data.energyScore}", (left + right) / 2f, top + 43f, gaugeTextPaint)
-        canvas.drawText("Р${data.lateEntryRisk}", (left + right) / 2f, bottom - 28f, gaugeTextPaint)
+        canvas.drawText("Э${data.energyScore}", (left + right) / 2f, top + dp(24f), gaugeTextPaint)
+        canvas.drawText("Р${data.lateEntryRisk}", (left + right) / 2f, bottom - dp(15f), gaugeTextPaint)
         val markerY = if (score >= 0) middle - usable * score / 100f else middle + usable * abs(score) / 100f
         val markerPaint = if (score < 0) sellPaint else buyPaint
-        val pulse = (7f + 2f * ((sin(System.currentTimeMillis() / 350.0) + 1.0) / 2.0)).toFloat()
-        canvas.drawCircle(right - 10f, markerY, pulse, markerPaint)
+        val pulse = dp((2.5f + 0.8f * ((sin(System.currentTimeMillis() / 350.0) + 1.0) / 2.0)).toFloat())
+        canvas.drawCircle(right - dp(3f), markerY, pulse, markerPaint)
     }
 
     private fun drawIndicator(
@@ -453,21 +627,21 @@ class StrategyChartView @JvmOverloads constructor(
             val entryY = y(connection.entry.price)
             val exitX = x(exitIndex)
             val exitY = y(connection.exit.price)
-            canvas.drawLine(entryX, entryY, exitX, exitY, connectionPaint)
+            drawElbowConnection(canvas, entryX, entryY, exitX, exitY, connectionPaint)
 
             connection.partialExits.forEach { partial ->
                 val partialIndex = visibleIndex(partial.time) ?: return@forEach
-                canvas.drawLine(entryX, entryY, x(partialIndex), y(partial.price), partialConnectionPaint)
+                drawElbowConnection(canvas, entryX, entryY, x(partialIndex), y(partial.price), partialConnectionPaint)
             }
 
             val duration = formatDuration(connection.durationMillis)
             val label = String.format(Locale.GERMAN, "%+.2f%% • %s", connection.profitPercent, duration)
-            val halfWidth = connectionTextPaint.measureText(label) / 2f + 10f
-            val centerX = ((entryX + exitX) / 2f).coerceIn(halfWidth + 8f, width - halfWidth - 8f)
-            val baseY = ((entryY + exitY) / 2f + if (connectionIndex % 2 == 0) -26f else 32f)
-                .coerceIn(108f, height - 78f)
-            bodyRect.set(centerX - halfWidth, baseY - 20f, centerX + halfWidth, baseY + 7f)
-            canvas.drawRoundRect(bodyRect, 8f, 8f, if (connection.profitEur >= 0.0) profitBadgePaint else lossBadgePaint)
+            val halfWidth = connectionTextPaint.measureText(label) / 2f + dp(4f)
+            val centerX = ((entryX + exitX) / 2f).coerceIn(halfWidth + dp(3f), width - halfWidth - dp(3f))
+            val baseY = (entryY + if (connectionIndex % 2 == 0) -dp(9f) else dp(14f))
+                .coerceIn(dp(58f), height - dp(27f))
+            bodyRect.set(centerX - halfWidth, baseY - dp(9f), centerX + halfWidth, baseY + dp(3f))
+            canvas.drawRoundRect(bodyRect, dp(3f), dp(3f), if (connection.profitEur >= 0.0) profitBadgePaint else lossBadgePaint)
             canvas.drawText(label, centerX, baseY, connectionTextPaint)
         }
 
@@ -477,30 +651,47 @@ class StrategyChartView @JvmOverloads constructor(
             val cx = x(index)
             val cy = y(trade.price)
             if (trade.action == "BUY") {
-                canvas.drawCircle(cx, cy + 34f, 9f, profilePaint)
-                canvas.drawLine(cx, cy + 34f, cx, cy + 9f, arrowPaint)
+                canvas.drawCircle(cx, cy + dp(13f), dp(3.5f), profilePaint)
+                canvas.drawLine(cx, cy + dp(13f), cx, cy + dp(4f), arrowPaint)
                 val arrow = Path().apply {
                     moveTo(cx, cy)
-                    lineTo(cx - 12f, cy + 15f)
-                    lineTo(cx + 12f, cy + 15f)
+                    lineTo(cx - dp(5f), cy + dp(6f))
+                    lineTo(cx + dp(5f), cy + dp(6f))
                     close()
                 }
                 canvas.drawPath(arrow, arrowPaint)
-                canvas.drawText("ВХОД", cx, cy + 58f, markerTextPaint)
+                canvas.drawText("ВХОД", cx, cy + dp(23f), markerTextPaint)
             } else {
-                canvas.drawCircle(cx, cy - 34f, 9f, profilePaint)
-                canvas.drawLine(cx, cy - 34f, cx, cy - 9f, arrowPaint)
+                canvas.drawCircle(cx, cy - dp(13f), dp(3.5f), profilePaint)
+                canvas.drawLine(cx, cy - dp(13f), cx, cy - dp(4f), arrowPaint)
                 val arrow = Path().apply {
                     moveTo(cx, cy)
-                    lineTo(cx - 12f, cy - 15f)
-                    lineTo(cx + 12f, cy - 15f)
+                    lineTo(cx - dp(5f), cy - dp(6f))
+                    lineTo(cx + dp(5f), cy - dp(6f))
                     close()
                 }
                 canvas.drawPath(arrow, arrowPaint)
                 val partialLabel = if (trade.reason.startsWith("40%")) "ВЫХОД 40%" else "ВЫХОД 50%"
-                canvas.drawText(if (trade.action == "SELL_HALF") partialLabel else "ВЫХОД", cx, cy - 48f, markerTextPaint)
+                canvas.drawText(if (trade.action == "SELL_HALF") partialLabel else "ВЫХОД", cx, cy - dp(18f), markerTextPaint)
             }
         }
+    }
+
+    private fun drawElbowConnection(
+        canvas: Canvas,
+        startX: Float,
+        startY: Float,
+        endX: Float,
+        endY: Float,
+        paint: Paint
+    ) {
+        val path = Path().apply {
+            moveTo(startX, startY)
+            lineTo(endX, startY)
+            lineTo(endX, endY)
+        }
+        canvas.drawPath(path, paint)
+        canvas.drawCircle(endX, startY, dp(2f), arrowPaint)
     }
 
     private fun formatDuration(durationMillis: Long): String {
@@ -514,4 +705,22 @@ class StrategyChartView @JvmOverloads constructor(
             else -> "${minutes}м"
         }
     }
+
+    private fun formatLongDuration(durationMillis: Long): String {
+        val totalMinutes = durationMillis / 60_000L
+        val days = totalMinutes / (24L * 60L)
+        val hours = totalMinutes / 60L % 24L
+        val minutes = totalMinutes % 60L
+        return when {
+            days > 0L -> "${days} д ${hours} ч"
+            hours > 0L -> "${hours} ч ${minutes} мин"
+            else -> "${minutes} мин"
+        }
+    }
+
+    private fun formatPrice(price: Double): String = String.format(Locale.GERMAN, "€%.8f", price)
+
+    private fun dp(value: Float): Float = value * resources.displayMetrics.density
+
+    private fun sp(value: Float): Float = value * resources.displayMetrics.scaledDensity
 }
