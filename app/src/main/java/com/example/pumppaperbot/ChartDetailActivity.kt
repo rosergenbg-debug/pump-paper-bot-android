@@ -87,7 +87,7 @@ class ChartDetailActivity : AppCompatActivity() {
 
         val controls = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         controls.addView(button("← ТОЧКА", "#1F6FEB").apply { setOnClickListener { moveSignal(-1) } }, LinearLayout.LayoutParams(0, dp(46), 1f))
-        zoomButton = button("МАСШТАБ ×2", "#30363D").apply { setOnClickListener { cycleZoom() } }
+        zoomButton = button("УВЕЛИЧИТЬ ×2", "#30363D").apply { setOnClickListener { cycleZoom() } }
         controls.addView(zoomButton, LinearLayout.LayoutParams(0, dp(46), 1.15f).apply { leftMargin = dp(6) })
         controls.addView(button("ТОЧКА →", "#1F6FEB").apply { setOnClickListener { moveSignal(1) } }, LinearLayout.LayoutParams(0, dp(46), 1f).apply { leftMargin = dp(6) })
         root.addView(controls, LinearLayout.LayoutParams(-1, dp(46)).apply { topMargin = dp(4) })
@@ -99,9 +99,9 @@ class ChartDetailActivity : AppCompatActivity() {
             }
         }, LinearLayout.LayoutParams(-1, dp(42)).apply { topMargin = dp(4) })
 
-        pointStatus = label("После загрузки откроется последняя историческая сделка.", 13, "#58A6FF", true)
+        pointStatus = label("После загрузки откроется последняя историческая сделка.", 14, "#58A6FF", true)
         root.addView(pointStatus)
-        root.addView(label("Синие стрелки — вход и выход. Фиолетовая линия соединяет одну сделку; пунктир ведёт к частичной продаже.", 12, "#C9D1D9", false))
+        root.addView(label("Синие стрелки — вход и выход. Фиолетовый угол соединяет время и цену одной сделки. Коснитесь любой свечи — увидите разницу с текущей ценой и временем.", 13, "#C9D1D9", false))
 
         chart = StrategyChartView(this).apply { setVisibleBarLimit(120) }
         root.addView(chart, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(3) })
@@ -136,6 +136,18 @@ class ChartDetailActivity : AppCompatActivity() {
                 adjustingSeek = false
             }
         }
+        chart.setOnCandleSelected { selection ->
+            activePointIndex = -1
+            pointStatus.text = String.format(
+                Locale.GERMAN,
+                "Выбрана свеча %s • €%.8f\nТекущая €%.8f • движение до текущей %+.2f%%\nДо последней свечи: %s",
+                PumpBotEngine.formatDate(selection.candle.closeTime),
+                selection.candle.close,
+                selection.latestCandle.close,
+                selection.changeToLatestPercent,
+                formatDuration(selection.timeToLatestMillis)
+            )
+        }
         setContentView(root)
     }
 
@@ -157,11 +169,7 @@ class ChartDetailActivity : AppCompatActivity() {
     }
 
     private fun cycleZoom() {
-        val next = when (chart.currentVisibleBarLimit()) {
-            in 0..30 -> 120
-            in 31..60 -> 30
-            else -> 60
-        }
+        val next = nextChartVisibleBarLimit(chart.currentVisibleBarLimit())
         chart.setVisibleBarLimit(next)
         if (activePointIndex in signalPoints.indices) chart.centerOnTime(signalPoints[activePointIndex].time)
         updateZoomButton(next)
@@ -375,18 +383,14 @@ class ChartDetailActivity : AppCompatActivity() {
         this.text = text
         setTextColor(Color.WHITE)
         setBackgroundColor(Color.parseColor(color))
-        textSize = 11f
+        textSize = 13f
+        maxLines = 2
         isAllCaps = false
         setPadding(dp(3), 0, dp(3), 0)
     }
 
     private fun updateZoomButton(limit: Int) {
-        zoomButton.text = when (limit) {
-            in 0..30 -> "ВИД: 15 ЧАСОВ"
-            in 31..60 -> "ВИД: 30 ЧАСОВ"
-            in 61..120 -> "ВИД: 2,5 ДНЯ"
-            else -> "ВИД: 5 ДНЕЙ"
-        }
+        zoomButton.text = chartZoomActionText(limit)
     }
 
     private fun formatDuration(durationMillis: Long): String {
@@ -403,7 +407,7 @@ class ChartDetailActivity : AppCompatActivity() {
 
     private fun label(text: String, size: Int, color: String, bold: Boolean) = TextView(this).apply {
         this.text = text
-        textSize = size.toFloat()
+        textSize = size.coerceAtLeast(13).toFloat()
         setTextColor(Color.parseColor(color))
         setPadding(0, dp(2), 0, dp(2))
         if (bold) setTypeface(typeface, android.graphics.Typeface.BOLD)
