@@ -125,7 +125,7 @@ class StrategyChartView @JvmOverloads constructor(
         isFakeBoldText = true
     }
     private val priceBadgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#D91F6FEB")
+        color = Color.parseColor("#B31F6FEB")
         style = Paint.Style.FILL
     }
     private val currentPriceLinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -435,8 +435,9 @@ class StrategyChartView @JvmOverloads constructor(
         bottom: Float,
         y: (Double) -> Float
     ) {
-        drawPriceBadge(canvas, "ВЕРХ ${formatPrice(scaleMax)}", right - dp(2f), top + dp(13f))
-        drawPriceBadge(canvas, "НИЗ ${formatPrice(scaleMin)}", right - dp(2f), bottom - dp(4f))
+        val labelLeft = left + dp(2f)
+        drawPriceBadgeFromLeft(canvas, "ВЕРХ ${formatPrice(scaleMax)}", labelLeft, top + dp(13f))
+        drawPriceBadgeFromLeft(canvas, "НИЗ ${formatPrice(scaleMin)}", labelLeft, bottom - dp(4f))
 
         val latestPrice = data.candles.lastOrNull()?.close ?: return
         val actualY = y(latestPrice)
@@ -448,14 +449,12 @@ class StrategyChartView @JvmOverloads constructor(
             else -> ""
         }
         val currentText = "СЕЙЧАС $direction${formatPrice(latestPrice)}"
-        when {
-            latestPrice > scaleMax -> drawPriceBadgeFromLeft(canvas, currentText, left + dp(2f), top + dp(13f))
-            latestPrice < scaleMin -> drawPriceBadgeFromLeft(canvas, currentText, left + dp(2f), bottom - dp(4f))
-            else -> {
-                val baseline = currentY.coerceIn(top + dp(27f), bottom - dp(19f))
-                drawPriceBadge(canvas, currentText, right - dp(2f), baseline)
-            }
+        val currentBaseline = when {
+            latestPrice > scaleMax -> top + dp(30f)
+            latestPrice < scaleMin -> bottom - dp(21f)
+            else -> currentY.coerceIn(top + dp(30f), bottom - dp(21f))
         }
+        drawPriceBadgeFromLeft(canvas, currentText, labelLeft, currentBaseline)
     }
 
     private fun drawPriceBadge(canvas: Canvas, text: String, right: Float, baseline: Float) {
