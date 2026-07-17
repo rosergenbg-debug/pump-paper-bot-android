@@ -156,8 +156,19 @@ data class LiveSnapshot(
 
 data class CoinOption(val name: String, val symbol: String)
 
+data class SavedMarketPayloads(
+    val pumpJson: String,
+    val eurJson: String,
+    val btcJson: String,
+    val ethJson: String,
+    val solJson: String,
+    val futuresJson: String,
+    val premiumJson: String,
+    val fundingJson: String
+)
+
 object PumpBotEngine {
-    const val appVersionName = "2.0"
+    const val appVersionName = "2.1"
     const val startBalance = 1000.0
     const val feeRate = 0.0015
     const val slippage = 0.0005
@@ -345,6 +356,21 @@ object PumpBotEngine {
     fun isAggressive(context: Context): Boolean {
         ensureInitialized(context)
         return prefs(context).getBoolean(keyAggressive, false)
+    }
+
+    fun savedMarketPayloads(context: Context): SavedMarketPayloads {
+        ensureInitialized(context)
+        val p = prefs(context)
+        return SavedMarketPayloads(
+            pumpJson = p.getString(keyMarketJson, "").orEmpty(),
+            eurJson = p.getString(keyEurJson, "").orEmpty(),
+            btcJson = p.getString(keyBtcJson, "").orEmpty(),
+            ethJson = p.getString(keyEthJson, "").orEmpty(),
+            solJson = p.getString(keySolJson, "").orEmpty(),
+            futuresJson = p.getString(keyFuturesJson, "").orEmpty(),
+            premiumJson = p.getString(keyPremiumJson, "").orEmpty(),
+            fundingJson = p.getString(keyFundingJson, "").orEmpty()
+        )
     }
 
     fun confirmBought(context: Context) {

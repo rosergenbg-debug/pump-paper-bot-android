@@ -32,25 +32,25 @@ jobs:
         run: gradle testDebugUnitTest assembleDebug
 
       - name: Prepare named APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk PumpSignal-MarketBreathing-v2.0.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk PumpSignal-IncrementalCache-v2.1.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: PumpSignal-MarketBreathing-v2.0-APK
-          path: PumpSignal-MarketBreathing-v2.0.apk
+          name: PumpSignal-IncrementalCache-v2.1-APK
+          path: PumpSignal-IncrementalCache-v2.1.apk
           retention-days: 30
 
-      - name: Publish v2.0 release
+      - name: Publish v2.1 release
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v2.0
-          name: PUMP Сигнал v2.0 — Дыхание рынка
+          tag_name: v2.1
+          name: PUMP Сигнал v2.1 — Экономия трафика
           prerelease: true
           body: |
-            Добавлен причинный анализ состояния PUMP: активность/сжатие, направление потока, согласованность данных и отдельный риск позднего входа. Высокий риск по самому PUMP блокирует покупку, даже если прежняя готовность стратегии приблизилась к 99 и BTC/SOL не перегреты.
-            Добавлены публичный снимок стакана Binance, открытый интерес PUMP futures и локальный исследовательский журнал. Эти данные пока используются осторожно: они уточняют состояние, но не являются самостоятельным приказом купить.
-            Профили «Осторожный» и «Активный», вертикальный исторический график, точки и связи сделок сохранены. Звонок на 99 работает только при допустимом риске позднего входа и достаточной согласованности доступных данных.
+            История рынка теперь загружается один раз и сохраняется в приложении. Во время последующих проверок программа добавляет только новые закрытые свечи; если новая 30-минутная свеча ещё не закрылась, большие запросы истории вообще не выполняются.
+            Стакан и открытый интерес продолжают обновляться примерно каждые 2 минуты, потому что это маленькие ответы. Торговые формулы, профили, пороги входа/выхода, звонок на 99 и защита от позднего входа не изменены.
+            При обновлении с v2.0 уже сохранённая история используется сразу и повторно не скачивается.
             Комиссия 0,15% на вход и 0,15% на выход. Исторические результаты не гарантируют будущую прибыль.
-          files: PumpSignal-MarketBreathing-v2.0.apk
+          files: PumpSignal-IncrementalCache-v2.1.apk
