@@ -32,25 +32,25 @@ jobs:
         run: gradle testDebugUnitTest assembleDebug
 
       - name: Prepare named APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk PumpSignal-ReadableChart-v2.2.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk PumpSignal-HoldChart-v2.3.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: PumpSignal-ReadableChart-v2.2-APK
-          path: PumpSignal-ReadableChart-v2.2.apk
+          name: PumpSignal-HoldChart-v2.3-APK
+          path: PumpSignal-HoldChart-v2.3.apk
           retention-days: 30
 
-      - name: Publish v2.2 release
+      - name: Publish v2.3 release
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v2.2
-          name: PUMP Сигнал v2.2 — Читаемый график
+          tag_name: v2.3
+          name: PUMP Сигнал v2.3 — График без перекрытия
           prerelease: true
           body: |
-            Шрифты и отметки на графике увеличены. Завершённая сделка соединяется фиолетовым углом по времени и цене, а не диагональю. На графике постоянно видны верхняя, нижняя и текущая цены шкалы.
-            Коснитесь любой свечи: приложение покажет её цену, изменение до последней свечи в процентах и прошедшее время. Кнопка масштаба теперь всегда ясно сообщает следующее действие: увеличить ×2, ещё ×2 или вернуть обзор.
-            Торговые формулы, исторические результаты, профили, пороги входа/выхода, звонок на 99, защита от позднего входа и экономный режим загрузки v2.1 не изменены.
+            Карточка свечи теперь видна только пока палец удерживается на графике и исчезает сразу после отпускания. Она выводится на противоположной стороне от пальца, чтобы не перекрывать выбранную свечу.
+            Большой график получил больше высоты: сокращены повторяющиеся описания, карточка сделки занимает не больше двух строк, нижняя подсказка удалена, а ползунок истории стал компактнее. Текущая цена вне исторического диапазона больше не накладывается на верхнюю или нижнюю цену шкалы.
+            Торговые формулы, исторические результаты, профили, пороги входа/выхода, звонок на 99, защита от позднего входа и экономный режим загрузки не изменены.
             Комиссия 0,15% на вход и 0,15% на выход. Исторические результаты не гарантируют будущую прибыль.
-          files: PumpSignal-ReadableChart-v2.2.apk
+          files: PumpSignal-HoldChart-v2.3.apk
