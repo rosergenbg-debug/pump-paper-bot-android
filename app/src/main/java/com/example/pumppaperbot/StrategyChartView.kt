@@ -226,15 +226,9 @@ class StrategyChartView @JvmOverloads constructor(
             .let { if (it < 0) data.candles.lastIndex else it }
         val endIndex = data.candles.indexOfFirst { it.closeTime >= endTime }
             .let { if (it < 0) data.candles.lastIndex else it }
-        val required = (endIndex - startIndex + 17).coerceAtLeast(24)
-        visibleBarLimit = when {
-            required <= 30 -> 30
-            required <= 60 -> 60
-            required <= 120 -> 120
-            else -> 240
-        }.coerceAtMost(data.candles.size)
-        val desiredEnd = (endIndex + 9).coerceIn(visibleBarLimit, data.candles.size)
-        historyOffsetBars = (data.candles.size - desiredEnd).coerceIn(0, maxHistoryOffset())
+        val focus = tradeFocusWindow(startIndex, endIndex, data.candles.size)
+        visibleBarLimit = focus.visibleBars
+        historyOffsetBars = (data.candles.size - focus.endExclusive).coerceIn(0, maxHistoryOffset())
         invalidate()
         notifyHistoryChanged()
         return visibleBarLimit
