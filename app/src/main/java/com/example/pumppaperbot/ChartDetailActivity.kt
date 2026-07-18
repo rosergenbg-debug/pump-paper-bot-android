@@ -1,7 +1,9 @@
 package com.example.pumppaperbot
 
+import android.app.AlertDialog
 import android.content.res.ColorStateList
 import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.widget.Button
 import android.widget.LinearLayout
@@ -32,6 +34,7 @@ class ChartDetailActivity : AppCompatActivity() {
     private lateinit var cautiousButton: Button
     private lateinit var aggressiveButton: Button
     private lateinit var zoomButton: Button
+    private lateinit var criteriaButton: Button
     private var adjustingSeek = false
     private var aggressive = false
     private var startTime = 0L
@@ -44,7 +47,7 @@ class ChartDetailActivity : AppCompatActivity() {
     private var funding: List<FundingPoint> = emptyList()
     private var signalPoints: List<TradeEvent> = emptyList()
     private var completedTrades: List<TradeConnection> = emptyList()
-    private var activePointIndex = -1
+    private var activeTradeIndex = -1
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -86,21 +89,30 @@ class ChartDetailActivity : AppCompatActivity() {
         renderProfileButtons()
 
         val controls = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        controls.addView(button("← ТОЧКА", "#1F6FEB").apply { setOnClickListener { moveSignal(-1) } }, LinearLayout.LayoutParams(0, dp(44), 1f))
+        controls.addView(button("← СДЕЛКА", "#1F6FEB").apply { setOnClickListener { moveTrade(-1) } }, LinearLayout.LayoutParams(0, dp(44), 1f))
         zoomButton = button("УВЕЛИЧИТЬ ×2", "#30363D").apply { setOnClickListener { cycleZoom() } }
         controls.addView(zoomButton, LinearLayout.LayoutParams(0, dp(44), 1.15f).apply { leftMargin = dp(6) })
-        controls.addView(button("ТОЧКА →", "#1F6FEB").apply { setOnClickListener { moveSignal(1) } }, LinearLayout.LayoutParams(0, dp(44), 1f).apply { leftMargin = dp(6) })
+        controls.addView(button("СДЕЛКА →", "#1F6FEB").apply { setOnClickListener { moveTrade(1) } }, LinearLayout.LayoutParams(0, dp(44), 1f).apply { leftMargin = dp(6) })
         root.addView(controls, LinearLayout.LayoutParams(-1, dp(44)).apply { topMargin = dp(2) })
-        root.addView(button("ПОСЛЕДНИЕ СВЕЧИ", "#30363D").apply {
+
+        val actionRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        criteriaButton = button("ПОЧЕМУ ВХОД / ВЫХОД", "#8250DF").apply {
+            setOnClickListener { showActiveTradeCriteria() }
+        }
+        actionRow.addView(criteriaButton, LinearLayout.LayoutParams(0, dp(38), 1.25f))
+        actionRow.addView(button("ПОСЛЕДНИЕ СВЕЧИ", "#30363D").apply {
             setOnClickListener {
-                activePointIndex = -1
+                activeTradeIndex = -1
                 chart.setHistoryOffsetBars(0)
                 pointStatus.text = "Последние свечи • удерживайте палец на свече для подробностей"
             }
-        }, LinearLayout.LayoutParams(-1, dp(38)).apply { topMargin = dp(2) })
+        }, LinearLayout.LayoutParams(0, dp(38), 1f).apply { leftMargin = dp(6) })
+        root.addView(actionRow, LinearLayout.LayoutParams(-1, dp(38)).apply { topMargin = dp(2) })
 
         pointStatus = label("После загрузки откроется последняя историческая сделка.", 13, "#58A6FF", true).apply {
-            maxLines = 2
+            maxLines = 3
+            setPadding(dp(8), dp(5), dp(8), dp(5))
+            background = roundedBackground("#161B22", 8)
         }
         root.addView(pointStatus)
 
@@ -116,9 +128,9 @@ class ChartDetailActivity : AppCompatActivity() {
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                     if (fromUser && !adjustingSeek) {
-                        activePointIndex = -1
+                        activeTradeIndex = -1
                         chart.setHistoryOffsetBars(chart.maxHistoryOffset() - progress)
-                        pointStatus.text = "Период выбран вручную • стрелки видны только возле сделок"
+                        pointStatus.text = "Период выбран вручную\nСиние стрелки показывают входы и выходы сделок"
                     }
                 }
                 override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
@@ -159,64 +171,70 @@ class ChartDetailActivity : AppCompatActivity() {
     private fun cycleZoom() {
         val next = nextChartVisibleBarLimit(chart.currentVisibleBarLimit())
         chart.setVisibleBarLimit(next)
-        if (activePointIndex in signalPoints.indices) chart.centerOnTime(signalPoints[activePointIndex].time)
+        completedTrades.getOrNull(activeTradeIndex)?.let { connection ->
+            chart.centerOnTime(connection.entry.time + (connection.exit.time - connection.entry.time) / 2L)
+        }
         updateZoomButton(next)
     }
 
-    private fun moveSignal(delta: Int) {
-        if (signalPoints.isEmpty()) {
-            pointStatus.text = "Для выбранного профиля исторических точек нет."
+    private fun moveTrade(delta: Int) {
+        if (completedTrades.isEmpty()) {
+            pointStatus.text = "Для выбранного профиля завершённых сделок нет."
             return
         }
-        activePointIndex = if (activePointIndex !in signalPoints.indices) {
-            if (delta < 0) signalPoints.lastIndex else 0
+        activeTradeIndex = if (activeTradeIndex !in completedTrades.indices) {
+            if (delta < 0) completedTrades.lastIndex else 0
         } else {
-            (activePointIndex + delta).coerceIn(0, signalPoints.lastIndex)
+            (activeTradeIndex + delta).coerceIn(0, completedTrades.lastIndex)
         }
-        focusActiveSignal()
+        focusActiveTrade()
     }
 
-    private fun focusActiveSignal() {
-        val trade = signalPoints.getOrNull(activePointIndex) ?: return
-        val connection = completedTrades.firstOrNull {
-            it.entry == trade || it.exit == trade || trade in it.partialExits
+    private fun focusActiveTrade() {
+        val connection = completedTrades.getOrNull(activeTradeIndex) ?: return
+        updateZoomButton(chart.focusOnTimeRange(connection.entry.time, connection.exit.time))
+        pointStatus.text = String.format(
+            Locale.GERMAN,
+            "СДЕЛКА %d/%d   %+.2f%%  •  %+.2f EUR  •  %s\nВХОД  %s  €%.8f\nВЫХОД %s  €%.8f",
+            activeTradeIndex + 1,
+            completedTrades.size,
+            connection.profitPercent,
+            connection.profitEur,
+            formatDuration(connection.durationMillis),
+            formatCompactDate(connection.entry.time),
+            connection.entry.price,
+            formatCompactDate(connection.exit.time),
+            connection.exit.price
+        )
+    }
+
+    private fun showActiveTradeCriteria() {
+        val connection = completedTrades.getOrNull(activeTradeIndex)
+        if (connection == null) {
+            pointStatus.text = "Сначала выберите сделку кнопками ← СДЕЛКА / СДЕЛКА →"
+            return
         }
-        if (connection != null) {
-            updateZoomButton(chart.focusOnTimeRange(connection.entry.time, connection.exit.time))
+        val partial = if (connection.partialExits.isEmpty()) {
+            "Частичной продажи не было."
         } else {
-            chart.centerOnTime(trade.time)
+            connection.partialExits.joinToString("\n") { "• ${formatCompactDate(it.time)} — ${it.reason} по €${String.format(Locale.GERMAN, "%.8f", it.price)}" }
         }
-        val action = when (trade.action) {
-            "BUY" -> "ВХОД"
-            "SELL_HALF" -> if (trade.reason.startsWith("40%")) "ВЫХОД 40%" else "ВЫХОД 50%"
-            else -> "ВЫХОД"
+        val message = buildString {
+            append("ПОЧЕМУ ВОШЛИ\n")
+            append("✓ Сигнал сформирован на закрытой 30-минутной свече.\n")
+            append("✓ ${connection.entry.reason}\n")
+            append("✓ Покупка исполнена на открытии следующей свечи.\n\n")
+            append("ПОЧЕМУ ВЫШЛИ\n")
+            append("✓ ${connection.exit.reason}\n")
+            append("✓ Продажа исполнена после подтверждения, с учётом проскальзывания 0,05%.\n\n")
+            append("ЧАСТИЧНАЯ ФИКСАЦИЯ\n$partial\n\n")
+            append(String.format(Locale.GERMAN, "ИТОГ  %+.2f%%  •  %+.2f EUR\nДеньги работали: %s", connection.profitPercent, connection.profitEur, formatDuration(connection.durationMillis)))
         }
-        pointStatus.text = if (connection != null) {
-            val tradeNumber = completedTrades.indexOf(connection) + 1
-            String.format(
-                Locale.GERMAN,
-                "Сделка %d/%d • %+.2f%% (%+.2f EUR) • %s\nТочка %s • %s • €%.8f",
-                tradeNumber,
-                completedTrades.size,
-                connection.profitPercent,
-                connection.profitEur,
-                formatDuration(connection.durationMillis),
-                action,
-                formatCompactDate(trade.time),
-                trade.price
-            )
-        } else {
-            String.format(
-                Locale.GERMAN,
-                "Точка %d/%d • %s • %s\n€%.8f • %s",
-                activePointIndex + 1,
-                signalPoints.size,
-                formatCompactDate(trade.time),
-                action,
-                trade.price,
-                trade.reason
-            )
-        }
+        AlertDialog.Builder(this)
+            .setTitle("Критерии сделки ${activeTradeIndex + 1}")
+            .setMessage(message)
+            .setPositiveButton("ПОНЯТНО", null)
+            .show()
     }
 
     private fun loadSixMonths() {
@@ -284,12 +302,12 @@ class ChartDetailActivity : AppCompatActivity() {
         seek.max = chart.maxHistoryOffset().coerceAtLeast(1)
         seek.progress = seek.max
         seek.isEnabled = chart.maxHistoryOffset() > 0
-        if (focusLastSignal && signalPoints.isNotEmpty()) {
-            activePointIndex = signalPoints.lastIndex
-            focusActiveSignal()
-        } else if (signalPoints.isEmpty()) {
-            activePointIndex = -1
-            pointStatus.text = "За выбранный период сделок не найдено."
+        if (focusLastSignal && completedTrades.isNotEmpty()) {
+            activeTradeIndex = completedTrades.lastIndex
+            focusActiveTrade()
+        } else if (completedTrades.isEmpty()) {
+            activeTradeIndex = -1
+            pointStatus.text = "За выбранный период завершённых сделок не найдено."
         }
     }
 
@@ -400,6 +418,11 @@ class ChartDetailActivity : AppCompatActivity() {
         setTextColor(Color.parseColor(color))
         setPadding(0, dp(2), 0, dp(2))
         if (bold) setTypeface(typeface, android.graphics.Typeface.BOLD)
+    }
+
+    private fun roundedBackground(color: String, radiusDp: Int) = GradientDrawable().apply {
+        setColor(Color.parseColor(color))
+        cornerRadius = dp(radiusDp).toFloat()
     }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
