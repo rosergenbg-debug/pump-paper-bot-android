@@ -52,4 +52,18 @@ class ChartDisplayLogicTest {
         assertTrue(fromTopLeft.left + 300f <= 900f)
         assertTrue(fromTopLeft.top + 150f <= 800f)
     }
+
+    @Test
+    fun `trade focus keeps entry and exit together with balanced padding`() {
+        val shortTrade = tradeFocusWindow(startIndex = 100, endIndex = 112, totalBars = 1_000)
+        assertEquals(24, shortTrade.visibleBars)
+        assertTrue(shortTrade.endExclusive >= 118)
+
+        val longTrade = tradeFocusWindow(startIndex = 300, endIndex = 396, totalBars = 1_000)
+        assertTrue(longTrade.visibleBars >= 97)
+        assertTrue(longTrade.visibleBars <= 140)
+        val windowStart = longTrade.endExclusive - longTrade.visibleBars
+        assertTrue(windowStart <= 300)
+        assertTrue(longTrade.endExclusive > 396)
+    }
 }

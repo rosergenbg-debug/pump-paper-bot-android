@@ -1,8 +1,25 @@
 package com.example.pumppaperbot
 
 import kotlin.math.max
+import kotlin.math.roundToInt
 
 internal data class ChartTooltipPosition(val left: Float, val top: Float)
+
+internal data class TradeFocusWindow(val visibleBars: Int, val endExclusive: Int)
+
+internal fun tradeFocusWindow(startIndex: Int, endIndex: Int, totalBars: Int): TradeFocusWindow {
+    if (totalBars <= 0) return TradeFocusWindow(0, 0)
+    val safeStart = startIndex.coerceIn(0, totalBars - 1)
+    val safeEnd = endIndex.coerceIn(safeStart, totalBars - 1)
+    val span = safeEnd - safeStart + 1
+    val sidePadding = max(5, (span * 0.14).roundToInt())
+    val visible = (span + sidePadding * 2).coerceIn(minOf(24, totalBars), minOf(240, totalBars))
+    val preferredStart = safeStart - sidePadding
+    val maxStart = max(0, totalBars - visible)
+    val windowStart = preferredStart.coerceIn(0, maxStart)
+    val endExclusive = (windowStart + visible).coerceAtMost(totalBars)
+    return TradeFocusWindow(visible, endExclusive)
+}
 
 internal fun nextChartVisibleBarLimit(current: Int): Int = when (current) {
     in 0..30 -> 120
