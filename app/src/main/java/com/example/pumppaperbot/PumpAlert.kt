@@ -17,9 +17,11 @@ object PumpAlert {
     private const val monitorChannelId = "pump_rsi_risk_monitor"
     private const val signalChannelId = "pump_rsi_risk_signals"
     private const val rapidDropChannelId = "pump_rapid_drop_v26"
+    private const val eventRadarChannelId = "pump_event_radar_v3"
     private const val monitorNotificationId = 3501
     private const val signalNotificationId = 3502
     private const val rapidDropNotificationId = 3503
+    private const val eventRadarNotificationId = 3504
     private val rapidDropVibration = longArrayOf(0, 1000, 180, 1000, 180, 1600)
 
     fun ensureChannels(context: Context) {
@@ -55,9 +57,20 @@ object PumpAlert {
             vibrationPattern = rapidDropVibration
             setSound(sound, attrs)
         }
+        val eventRadar = NotificationChannel(
+            eventRadarChannelId,
+            "PUMP V3 важные внешние события",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "Предупреждение о важном официальном событии; это не самостоятельная команда купить или продать"
+            enableVibration(true)
+            vibrationPattern = longArrayOf(0, 500, 180, 500)
+            setSound(sound, attrs)
+        }
         manager.createNotificationChannel(monitor)
         manager.createNotificationChannel(signal)
         manager.createNotificationChannel(rapidDrop)
+        manager.createNotificationChannel(eventRadar)
     }
 
     fun monitorNotification(context: Context, text: String) =
@@ -151,6 +164,34 @@ object PumpAlert {
         context.getSystemService(NotificationManager::class.java)
             .notify(rapidDropNotificationId, notification)
         vibrate(context, rapidDropVibration)
+    }
+
+    fun showEventRadar(context: Context, state: EventRadarState, snapshot: LiveSnapshot) {
+        ensureChannels(context)
+        val event = state.alertCandidate ?: return
+        val direction = when {
+            event.directionScore >= 20 -> "ВОЗМОЖНОЕ ДАВЛЕНИЕ ВВЕРХ"
+            event.directionScore <= -20 -> "ВОЗМОЖНОЕ ДАВЛЕНИЕ ВНИЗ"
+            else -> "НАПРАВЛЕНИЕ НЕЯСНО"
+        }
+        val title = "V3 ${event.source}: $direction"
+        val text = "Важность ${event.importance}/100. ${event.title}. " +
+            "${state.confirmation(snapshot.directionScore, snapshot.breathingConfidence, event)}. " +
+            "Это предупреждение для проверки, не приказ купить или продать."
+        val notification = NotificationCompat.Builder(context, eventRadarChannelId)
+            .setSmallIcon(R.drawable.ic_launcher)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setContentIntent(openAppIntent(context))
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setColor(0xFF7C3AED.toInt())
+            .build()
+        context.getSystemService(NotificationManager::class.java)
+            .notify(eventRadarNotificationId, notification)
+        vibrate(context, longArrayOf(0, 500, 180, 500))
     }
 
     fun monitorId(): Int = monitorNotificationId

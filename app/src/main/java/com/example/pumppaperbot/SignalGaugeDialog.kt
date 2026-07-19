@@ -8,11 +8,13 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.view.View
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import kotlin.math.abs
 
 object SignalGaugeDialog {
     fun show(context: Context, snapshot: LiveSnapshot) {
+        val radar = EventRadarStore.state(context)
         val root = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(context, 18), dp(context, 10), dp(context, 18), dp(context, 8))
@@ -42,6 +44,13 @@ object SignalGaugeDialog {
                 append("\nСогласованность данных: ${snapshot.breathingConfidence}/100")
                 append(" • поздний вход: ${snapshot.lateEntryRisk}/100")
                 append("\n${snapshot.breathingState}")
+                append("\n\nИНТЕРНЕТ: ${radar.sourceCount}/4 источников • ${radar.parsedEntries} сообщений")
+                append("\nGEMINI: ${if (radar.aiEnabled) radar.gemini.status else "ВЫКЛЮЧЁН"}")
+                if (radar.gemini.lastSuccess > 0L) {
+                    append(" • HTTP ${radar.gemini.httpCode} • ${radar.gemini.totalTokensToday} токенов сегодня")
+                    append("\nВлияние события: ${signed(radar.gemini.directionScore)}/100 • уверенность ${radar.gemini.confidence}/100")
+                }
+                if (radar.gemini.lastAutoNote.isNotBlank()) append("\n${radar.gemini.lastAutoNote}")
                 append("\n\nЭта шкала показывает наблюдаемый поток, а не вероятность прибыли и не приказ купить.")
             }
             textSize = 15f
@@ -50,12 +59,14 @@ object SignalGaugeDialog {
             setPadding(0, dp(context, 4), 0, dp(context, 8))
         })
         AlertDialog.Builder(context)
-            .setView(root)
+            .setView(ScrollView(context).apply { addView(root) })
             .setPositiveButton("ЗАКРЫТЬ", null)
             .show()
     }
 
     private fun dp(context: Context, value: Int): Int = (value * context.resources.displayMetrics.density).toInt()
+
+    private fun signed(value: Int): String = if (value >= 0) "+$value" else "−${abs(value)}"
 }
 
 private class LargeSignalGaugeView(context: Context) : View(context) {

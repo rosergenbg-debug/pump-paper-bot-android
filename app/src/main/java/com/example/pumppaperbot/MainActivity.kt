@@ -37,6 +37,7 @@ class MainActivity : AppCompatActivity() {
     private var tvMode: TextView? = null
     private var tvReadiness: TextView? = null
     private var tvRapidDrop: TextView? = null
+    private var tvEventRadar: TextView? = null
     private var tvBreathingState: TextView? = null
     private var tvEnergy: TextView? = null
     private var tvDirection: TextView? = null
@@ -58,6 +59,7 @@ class MainActivity : AppCompatActivity() {
     private var btnToggleMode: Button? = null
     private var btnBacktest: Button? = null
     private var btnAlertSettings: Button? = null
+    private var btnEventRadar: Button? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -69,6 +71,7 @@ class MainActivity : AppCompatActivity() {
         tvMode = findViewById(R.id.tvMode)
         tvReadiness = findViewById(R.id.tvReadiness)
         tvRapidDrop = findViewById(R.id.tvRapidDrop)
+        tvEventRadar = findViewById(R.id.tvEventRadar)
         tvBreathingState = findViewById(R.id.tvBreathingState)
         tvEnergy = findViewById(R.id.tvEnergy)
         tvDirection = findViewById(R.id.tvDirection)
@@ -90,6 +93,7 @@ class MainActivity : AppCompatActivity() {
         btnToggleMode = findViewById(R.id.btnToggleMode)
         btnBacktest = findViewById(R.id.btnBacktest)
         btnAlertSettings = findViewById(R.id.btnAlertSettings)
+        btnEventRadar = findViewById(R.id.btnEventRadar)
 
         PumpBotEngine.ensureInitialized(this)
         requestNotificationPermission()
@@ -120,6 +124,7 @@ class MainActivity : AppCompatActivity() {
         btnToggleMode?.setOnClickListener { showSignalInfo() }
         btnBacktest?.setOnClickListener { startActivity(Intent(this, BacktestActivity::class.java)) }
         btnAlertSettings?.setOnClickListener { startActivity(Intent(this, AlertSettingsActivity::class.java)) }
+        btnEventRadar?.setOnClickListener { startActivity(Intent(this, EventRadarActivity::class.java)) }
         chart?.setOnClickListener { startActivity(Intent(this, ChartDetailActivity::class.java)) }
 
         updateUi()
@@ -214,6 +219,7 @@ class MainActivity : AppCompatActivity() {
                     "АКТИВНОСТЬ показывает силу текущего расширения, но не направление. ПОТОК показывает согласованное направление цены и taker-покупок. СОГЛАСОВАНО — качество и согласие доступных данных, а не вероятность прибыли. ПОЗДНИЙ ВХОД показывает риск покупки после уже прошедшего импульса.\n\n" +
                     "Новая защита PUMP работает самостоятельно: высокий риск позднего входа блокирует покупку даже тогда, когда BTC и SOL не растут. Старый общерыночный фильтр остаётся дополнительной страховкой.\n\n" +
                     "Недельный ритм показывается только как предупреждение: выходные обычно тише, понедельник 06–12 склонен к откату, четверг исторически слабее. Календарь сам не создаёт и не отменяет сделку.\n\n" +
+                    "V3 Радар читает небольшие обновления из официальных лент ФРС, ЕЦБ, SEC и BLS. Сначала он работает в режиме наблюдения: показывает возможное влияние и сравнивает его с движением рынка, но сам не создаёт покупку или продажу.\n\n" +
                     "При падении PUMP/EUR на 25% и больше от максимума последних 24 часов включается отдельная аварийная тревога. Она не является командой купить: до подтверждённого отскока обычный сигнал покупки блокируется.\n\n" +
                     "95–98 — только отображение приближения без звонка. 99 — звук и вибрация только при допустимом риске позднего входа и достаточной согласованности данных. " +
                     "100 — условия стратегии полностью выполнены. " +
@@ -256,6 +262,7 @@ class MainActivity : AppCompatActivity() {
         )
 
         renderRapidDrop(snapshot)
+        renderEventRadar(snapshot)
         renderReadiness(snapshot)
         renderBreathing(snapshot)
 
@@ -314,6 +321,40 @@ class MainActivity : AppCompatActivity() {
         }
         btnToggleMode?.text = "ПОЧЕМУ ТАКОЙ СИГНАЛ?"
         chart?.setData("PUMP/EUR • ДЫХАНИЕ РЫНКА", snapshot.chart)
+    }
+
+    private fun renderEventRadar(snapshot: LiveSnapshot) {
+        val state = EventRadarStore.state(this)
+        val latest = state.latest
+        val confirmation = state.confirmation(snapshot.directionScore, snapshot.breathingConfidence)
+        val internetLine = "ИНТЕРНЕТ ${state.sourceCount}/4 • ${state.parsedEntries} сообщений • новых ${state.newEvents}"
+        val geminiLine = when {
+            !state.aiEnabled -> "GEMINI ВЫКЛЮЧЁН"
+            state.gemini.status == "РАБОТАЕТ" -> "GEMINI РАБОТАЕТ • ${state.gemini.totalTokensToday} токенов сегодня"
+            state.gemini.status == "ОШИБКА" -> "GEMINI: ОШИБКА HTTP ${state.gemini.httpCode}"
+            else -> "GEMINI: ${state.gemini.status}"
+        }
+        val mainText = when {
+            !state.enabled -> "V3 РАДАР ВЫКЛЮЧЕН\nТорговый алгоритм работает как раньше"
+            state.lastSuccess <= 0L -> "V3.1 РАДАР СОБЫТИЙ\nЖдём первую проверку официальных источников"
+            latest == null -> "V3.1 РАДАР • новых значимых событий пока нет"
+            else -> {
+                val direction = if (latest.directionScore >= 0) "+${latest.directionScore}" else "−${kotlin.math.abs(latest.directionScore)}"
+                "V3.1 ${latest.source} • важность ${latest.importance}/100 • влияние $direction/100\n" +
+                    "${latest.title.take(95)}\n$confirmation"
+            }
+        }
+        tvEventRadar?.text = "$mainText\n$internetLine\n$geminiLine"
+        tvEventRadar?.setTextColor(
+            Color.parseColor(
+                when {
+                    (latest?.directionScore ?: 0) <= -35 -> "#FF7B72"
+                    (latest?.directionScore ?: 0) >= 35 -> "#7EE787"
+                    else -> "#79C0FF"
+                }
+            )
+        )
+        tvEventRadar?.setBackgroundColor(Color.parseColor("#172033"))
     }
 
     private fun renderRapidDrop(snapshot: LiveSnapshot) {

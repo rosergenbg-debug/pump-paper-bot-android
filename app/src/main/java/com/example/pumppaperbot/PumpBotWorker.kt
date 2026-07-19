@@ -9,19 +9,26 @@ class PumpBotWorker(
     params: WorkerParameters
 ) : Worker(context, params) {
     private val market = MarketSyncClient()
+    private val eventRadar = EventRadarClient()
 
     override fun doWork(): Result {
         return try {
             market.sync(applicationContext)
+            val eventState = eventRadar.sync(applicationContext)
             val snapshot = PumpBotEngine.snapshot(applicationContext)
             val rapidDropAlerted = if (PumpBotEngine.shouldAlertRapidDrop(applicationContext, snapshot)) {
                 PumpAlert.showRapidDrop(applicationContext, snapshot)
                 PumpBotEngine.markRapidDropAlerted(applicationContext, snapshot)
                 true
             } else false
-            if (!rapidDropAlerted && PumpBotEngine.shouldAlert(applicationContext, snapshot)) {
+            val signalAlerted = if (!rapidDropAlerted && PumpBotEngine.shouldAlert(applicationContext, snapshot)) {
                 PumpAlert.showSignal(applicationContext, snapshot)
                 PumpBotEngine.markAlerted(applicationContext, snapshot)
+                true
+            } else false
+            if (!rapidDropAlerted && !signalAlerted && EventRadarStore.shouldAlert(applicationContext, eventState)) {
+                PumpAlert.showEventRadar(applicationContext, eventState, snapshot)
+                EventRadarStore.markAlerted(applicationContext, eventState)
             }
             Result.success()
         } catch (e: Exception) {
