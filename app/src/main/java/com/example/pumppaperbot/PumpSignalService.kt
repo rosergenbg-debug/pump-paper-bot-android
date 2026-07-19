@@ -13,6 +13,7 @@ class PumpSignalService : Service() {
     private val handler = Handler(Looper.getMainLooper())
     private val executor: ExecutorService = Executors.newSingleThreadExecutor()
     private val market = MarketSyncClient()
+    private val eventRadar = EventRadarClient()
 
     private val loop = object : Runnable {
         override fun run() {
@@ -49,15 +50,21 @@ class PumpSignalService : Service() {
         executor.execute {
             try {
                 market.sync(this)
+                val eventState = eventRadar.sync(this)
                 val snapshot = PumpBotEngine.snapshot(this)
                 val rapidDropAlerted = if (PumpBotEngine.shouldAlertRapidDrop(this, snapshot)) {
                     PumpAlert.showRapidDrop(this, snapshot)
                     PumpBotEngine.markRapidDropAlerted(this, snapshot)
                     true
                 } else false
-                if (!rapidDropAlerted && PumpBotEngine.shouldAlert(this, snapshot)) {
+                val signalAlerted = if (!rapidDropAlerted && PumpBotEngine.shouldAlert(this, snapshot)) {
                     PumpAlert.showSignal(this, snapshot)
                     PumpBotEngine.markAlerted(this, snapshot)
+                    true
+                } else false
+                if (!rapidDropAlerted && !signalAlerted && EventRadarStore.shouldAlert(this, eventState)) {
+                    PumpAlert.showEventRadar(this, eventState, snapshot)
+                    EventRadarStore.markAlerted(this, eventState)
                 }
             } catch (_: Exception) {
                 // Следующая проверка попробует еще раз.

@@ -14,7 +14,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="PUMP Сигнал"
+            android:text="PUMP Сигнал V3"
             android:textColor="#F0F6FC"
             android:textSize="28sp"
             android:textStyle="bold" />
@@ -68,6 +68,30 @@
             android:textSize="17sp"
             android:textStyle="bold"
             android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/tvEventRadar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:background="#172033"
+            android:minHeight="84dp"
+            android:padding="10dp"
+            android:text="V3 РАДАР СОБЫТИЙ • БЕСПЛАТНО"
+            android:textColor="#79C0FF"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/btnEventRadar"
+            android:layout_width="match_parent"
+            android:layout_height="50dp"
+            android:layout_marginTop="5dp"
+            android:backgroundTint="#7C3AED"
+            android:text="V3 РАДАР • ИСТОЧНИКИ И НЕОБЯЗАТЕЛЬНЫЙ ИИ"
+            android:textColor="#FFFFFF"
+            android:textSize="13sp"
+            android:textStyle="bold" />
 
         <TextView
             android:id="@+id/tvBreathingState"
