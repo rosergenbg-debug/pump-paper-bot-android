@@ -38,9 +38,9 @@ class EventRadarActivity : AppCompatActivity() {
             setBackgroundColor(Color.parseColor("#0D1117"))
         }
         content.addView(button("← НАЗАД", "#30363D").apply { setOnClickListener { finish() } }, params(dp(50)))
-        content.addView(label("V3.1 • ИНТЕРНЕТ + GEMINI", 25, "#F0F6FC", true))
+        content.addView(label("V3.2 • ИНТЕРНЕТ + GEMINI", 25, "#F0F6FC", true))
         content.addView(label(
-            "Читает небольшие обновления ФРС, ЕЦБ, SEC и BLS, затем Gemini сопоставляет важное событие с текущим дыханием PUMP, Bitcoin и Solana. Этот слой объясняет фон, но не создаёт сделку самостоятельно.",
+            "Читает ФРС, ЕЦБ, SEC, BLS и свежие ленты PUMP, Bitcoin и Solana. Gemini сопоставляет их с текущим рынком. Поправка Gemini видна отдельно, ограничена ±12 и пока не открывает сделку сама.",
             15, "#C9D1D9", false
         ))
 
@@ -58,7 +58,7 @@ class EventRadarActivity : AppCompatActivity() {
         }
         content.addView(status, params(-2, dp(8)))
 
-        val checkButton = button("ПРОВЕРИТЬ ОФИЦИАЛЬНЫЕ ЛЕНТЫ СЕЙЧАС", "#1F6FEB").apply {
+        val checkButton = button("ПРОВЕРИТЬ 7 ИСТОЧНИКОВ СЕЙЧАС", "#1F6FEB").apply {
             setOnClickListener { syncNow() }
         }
         content.addView(checkButton, params(dp(58), dp(8)))
@@ -152,7 +152,7 @@ class EventRadarActivity : AppCompatActivity() {
 
     private fun syncNow() {
         progress.visibility = View.VISIBLE
-        status.text = "Проверяю четыре официальные ленты…"
+        status.text = "Проверяю ${EventRadarClient.totalSources} лент: макро, PUMP, Bitcoin и Solana…"
         executor.execute {
             val state = runCatching { EventRadarClient().sync(this, force = true) }
                 .getOrElse {
@@ -197,10 +197,10 @@ class EventRadarActivity : AppCompatActivity() {
         status.text = when {
             !state.enabled -> "Радар выключен. Торговая часть продолжает работать как раньше."
             state.lastSuccess <= 0L -> "Радар готов. Нажмите проверку или запустите основной монитор."
-            latest == null -> "Интернет: ${state.sourceCount}/4 источников • разобрано ${state.parsedEntries} сообщений."
+            latest == null -> "Интернет: ${state.sourceCount}/${EventRadarClient.totalSources} источников • разобрано ${state.parsedEntries} сообщений."
             else -> {
                 val direction = signed(latest.directionScore)
-                "Интернет: ${state.sourceCount}/4 • ${formatBytes(state.fetchBytes)} • разобрано ${state.parsedEntries} • новых ${state.newEvents}\n" +
+                "Интернет: ${state.sourceCount}/${EventRadarClient.totalSources} • ${formatBytes(state.fetchBytes)} • разобрано ${state.parsedEntries} • новых ${state.newEvents}\n" +
                     "${latest.source}: важность ${latest.importance}/100 • влияние $direction/100\n" +
                     "${if (latest.aiAnalyzed) "оценено Gemini + правилами" else "оценено прозрачными правилами"}"
             }
@@ -210,6 +210,7 @@ class EventRadarActivity : AppCompatActivity() {
         status.append("\nGEMINI: ${gemini.status}")
         if (gemini.lastSuccess > 0L) {
             status.append(" • HTTP ${gemini.httpCode} • ${gemini.totalTokensToday} токенов сегодня")
+            status.append("\nПоправка Gemini: ${signed(state.informationAdjustment())} пунктов из ±12 (режим наблюдения)")
         }
         if (gemini.error.isNotBlank()) status.append("\nОшибка Gemini: ${gemini.error}")
         if (gemini.lastAutoNote.isNotBlank()) status.append("\n${gemini.lastAutoNote}")
@@ -257,8 +258,21 @@ class EventRadarActivity : AppCompatActivity() {
             append("\nОтправлено: ${gemini.inputTitle.ifBlank { "—" }}")
             append("\nПолучено: ${gemini.outputSummary.ifBlank { "—" }}")
             append("\nОценка: ${signed(gemini.directionScore)}/100 • важность ${gemini.importance}/100 • уверенность ${gemini.confidence}/100")
+            append("\nПоправка к шкале: ${signed(state.informationAdjustment())} из ±12 • горизон ${gemini.horizonHours} ч")
             append("\nСегодня: ${gemini.requestsToday} запросов • ${gemini.promptTokensToday} входных + ${gemini.outputTokensToday} выходных = ${gemini.totalTokensToday} токенов")
             append("\nВнешние ссылки Gemini: ${gemini.webReferences}\n$web")
+            if (gemini.detailedAnalysis.isNotBlank()) {
+                append("\n\nПОДРОБНЫЙ АНАЛИЗ\n${gemini.detailedAnalysis}")
+            }
+            if (gemini.evidence.isNotEmpty()) {
+                append("\n\nФАКТЫ И НАБЛЮДЕНИЯ\n")
+                append(gemini.evidence.joinToString("\n") { "• $it" })
+            }
+            if (gemini.risks.isNotEmpty()) {
+                append("\n\nЧТО МОЖЕТ ОПРОВЕРГНУТЬ ВЫВОД\n")
+                append(gemini.risks.joinToString("\n") { "• $it" })
+            }
+            append("\n\nКак считается поправка: направление × важность × уверенность × свежесть. Через 24 часа влияние становится нулевым. До исторической проверки она не меняет торговые сигналы.")
         }
     }
 

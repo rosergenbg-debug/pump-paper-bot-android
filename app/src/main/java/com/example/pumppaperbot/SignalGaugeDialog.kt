@@ -15,6 +15,9 @@ import kotlin.math.abs
 object SignalGaugeDialog {
     fun show(context: Context, snapshot: LiveSnapshot) {
         val radar = EventRadarStore.state(context)
+        val internalScore = snapshot.directionScore
+        val information = radar.informationAdjustment()
+        val totalScore = radar.combinedDirection(internalScore)
         val root = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(context, 18), dp(context, 10), dp(context, 18), dp(context, 8))
@@ -27,8 +30,10 @@ object SignalGaugeDialog {
             setTypeface(typeface, android.graphics.Typeface.BOLD)
             gravity = android.view.Gravity.CENTER
         })
-        root.addView(LargeSignalGaugeView(context).apply { setSnapshot(snapshot) }, LinearLayout.LayoutParams(-1, dp(context, 390)))
-        val score = snapshot.directionScore
+        root.addView(LargeSignalGaugeView(context).apply {
+            setScores(internalScore, information, totalScore)
+        }, LinearLayout.LayoutParams(-1, dp(context, 430)))
+        val score = totalScore
         val direction = when {
             score >= 25 -> "Поток направлен вверх: +$score/100"
             score > 0 -> "Слабый перевес вверх: +$score/100"
@@ -39,19 +44,22 @@ object SignalGaugeDialog {
         root.addView(TextView(context).apply {
             text = buildString {
                 append(direction)
+                append("\nВнутренний алгоритм: ${signed(internalScore)}/100")
+                append(" • Gemini: ${signed(information)}")
+                append(" • итог: ${signed(totalScore)}/100")
                 append("\nАктивность: ${snapshot.energyScore}/100")
                 append(" • сжатие: ${snapshot.compressionScore}/100")
                 append("\nСогласованность данных: ${snapshot.breathingConfidence}/100")
                 append(" • поздний вход: ${snapshot.lateEntryRisk}/100")
                 append("\n${snapshot.breathingState}")
-                append("\n\nИНТЕРНЕТ: ${radar.sourceCount}/4 источников • ${radar.parsedEntries} сообщений")
+                append("\n\nИНТЕРНЕТ: ${radar.sourceCount}/${EventRadarClient.totalSources} источников • ${radar.parsedEntries} сообщений")
                 append("\nGEMINI: ${if (radar.aiEnabled) radar.gemini.status else "ВЫКЛЮЧЁН"}")
                 if (radar.gemini.lastSuccess > 0L) {
                     append(" • HTTP ${radar.gemini.httpCode} • ${radar.gemini.totalTokensToday} токенов сегодня")
                     append("\nВлияние события: ${signed(radar.gemini.directionScore)}/100 • уверенность ${radar.gemini.confidence}/100")
                 }
                 if (radar.gemini.lastAutoNote.isNotBlank()) append("\n${radar.gemini.lastAutoNote}")
-                append("\n\nЭта шкала показывает наблюдаемый поток, а не вероятность прибыли и не приказ купить.")
+                append("\n\nСиний маркер — внутренний алгоритм. Фиолетовый — итог с новостной поправкой. Это не вероятность прибыли и не приказ купить.")
             }
             textSize = 15f
             setTextColor(Color.parseColor("#C9D1D9"))
@@ -74,6 +82,11 @@ private class LargeSignalGaugeView(context: Context) : View(context) {
     private val red = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#B62324") }
     private val track = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#30363D") }
     private val blue = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#2F81F7") }
+    private val purple = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#A371F7") }
+    private val connector = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#A371F7")
+        strokeWidth = 6f
+    }
     private val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
         textSize = 34f
@@ -85,14 +98,18 @@ private class LargeSignalGaugeView(context: Context) : View(context) {
         textSize = 24f
         textAlign = Paint.Align.CENTER
     }
-    private var score = 0
+    private var internalScore = 0
+    private var informationAdjustment = 0
+    private var totalScore = 0
 
     init {
         contentDescription = "Крупная шкала направления рыночного потока от плюс ста вверх до минус ста вниз"
     }
 
-    fun setSnapshot(snapshot: LiveSnapshot) {
-        score = snapshot.directionScore.coerceIn(-100, 100)
+    fun setScores(internal: Int, information: Int, total: Int) {
+        internalScore = internal.coerceIn(-100, 100)
+        informationAdjustment = information.coerceIn(-12, 12)
+        totalScore = total.coerceIn(-100, 100)
         invalidate()
     }
 
@@ -109,16 +126,30 @@ private class LargeSignalGaugeView(context: Context) : View(context) {
         canvas.drawRoundRect(RectF(centerX - 36f, middle, centerX + 36f, bottom), 24f, 24f, red)
         canvas.drawRect(centerX - 36f, middle - 24f, centerX + 36f, middle + 24f, track)
 
-        val markerY = if (score >= 0) middle - half * score / 100f else middle + half * abs(score) / 100f
-        canvas.drawCircle(centerX, markerY, 24f, blue)
-        canvas.drawLine(centerX - 76f, markerY, centerX + 76f, markerY, blue.apply { strokeWidth = 8f })
+        fun markerY(value: Int): Float = if (value >= 0) {
+            middle - half * value / 100f
+        } else {
+            middle + half * abs(value) / 100f
+        }
+        val internalY = markerY(internalScore)
+        val totalY = markerY(totalScore)
+        blue.strokeWidth = 8f
+        purple.strokeWidth = 8f
+        canvas.drawLine(centerX - 82f, internalY, centerX - 8f, internalY, blue)
+        canvas.drawCircle(centerX - 18f, internalY, 21f, blue)
+        canvas.drawLine(centerX + 8f, totalY, centerX + 82f, totalY, purple)
+        canvas.drawCircle(centerX + 18f, totalY, 21f, purple)
+        if (internalY != totalY) canvas.drawLine(centerX + 58f, internalY, centerX + 58f, totalY, connector)
 
         canvas.drawText("+100", centerX, 35f, text)
         canvas.drawText("ПОТОК ВВЕРХ", centerX + 135f, top + 12f, small)
         canvas.drawText("0", centerX + 72f, middle + 8f, small)
         canvas.drawText("−100", centerX, height - 20f, text)
         canvas.drawText("ПОТОК ВНИЗ", centerX + 135f, bottom, small)
-        val current = if (score >= 0) "+$score" else "−${abs(score)}"
-        canvas.drawText(current, centerX - 105f, markerY + 10f, text)
+        val internalLabel = if (internalScore >= 0) "+$internalScore" else "−${abs(internalScore)}"
+        val totalLabel = if (totalScore >= 0) "+$totalScore" else "−${abs(totalScore)}"
+        canvas.drawText("алг $internalLabel", centerX - 128f, internalY + 8f, small)
+        canvas.drawText("итог $totalLabel", centerX + 145f, totalY + 8f, small)
+        canvas.drawText("Gemini ${if (informationAdjustment >= 0) "+$informationAdjustment" else "−${abs(informationAdjustment)}"}", centerX, height - 12f, small)
     }
 }

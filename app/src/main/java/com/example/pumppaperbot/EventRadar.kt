@@ -6,6 +6,7 @@ import org.json.JSONObject
 import java.security.MessageDigest
 import java.util.Locale
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 data class RawMarketEvent(
     val source: String,
@@ -109,6 +110,10 @@ data class GeminiDiagnostics(
     val model: String = "",
     val inputTitle: String = "",
     val outputSummary: String = "",
+    val detailedAnalysis: String = "",
+    val evidence: List<String> = emptyList(),
+    val risks: List<String> = emptyList(),
+    val horizonHours: Int = 0,
     val directionScore: Int = 0,
     val importance: Int = 0,
     val confidence: Int = 0,
@@ -129,6 +134,10 @@ data class GeminiDiagnostics(
         .put("model", model)
         .put("inputTitle", inputTitle)
         .put("outputSummary", outputSummary)
+        .put("detailedAnalysis", detailedAnalysis)
+        .put("evidence", JSONArray(evidence))
+        .put("risks", JSONArray(risks))
+        .put("horizonHours", horizonHours)
         .put("directionScore", directionScore)
         .put("importance", importance)
         .put("confidence", confidence)
@@ -150,6 +159,10 @@ data class GeminiDiagnostics(
             model = json.optString("model"),
             inputTitle = json.optString("inputTitle"),
             outputSummary = json.optString("outputSummary"),
+            detailedAnalysis = json.optString("detailedAnalysis"),
+            evidence = json.optJSONArray("evidence")?.toStringList().orEmpty(),
+            risks = json.optJSONArray("risks")?.toStringList().orEmpty(),
+            horizonHours = json.optInt("horizonHours"),
             directionScore = json.optInt("directionScore"),
             importance = json.optInt("importance"),
             confidence = json.optInt("confidence"),
@@ -164,6 +177,9 @@ data class GeminiDiagnostics(
             error = json.optString("error"),
             lastAutoNote = json.optString("lastAutoNote")
         )
+
+        private fun JSONArray.toStringList(): List<String> =
+            (0 until length()).mapNotNull { optString(it).takeIf(String::isNotBlank) }
     }
 }
 
@@ -184,6 +200,30 @@ data class EventRadarState(
     val sourceChecks: List<EventSourceCheck>,
     val gemini: GeminiDiagnostics
 ) {
+    /**
+     * Provisional shadow adjustment. It is deliberately capped and is not used by StrategyV2.
+     * Direction, importance and confidence must agree; old information rapidly decays.
+     */
+    fun informationAdjustment(now: Long = System.currentTimeMillis()): Int {
+        if (!aiEnabled || gemini.status != "РАБОТАЕТ" || gemini.lastSuccess <= 0L) return 0
+        val related = recent.firstOrNull { it.aiAnalyzed && it.title == gemini.inputTitle } ?: return 0
+        val eventTime = related.publishedAt
+        val ageHours = ((now - eventTime).coerceAtLeast(0L) / 3_600_000.0)
+        val decay = when {
+            ageHours <= 2.0 -> 1.0
+            ageHours <= 6.0 -> 0.75
+            ageHours <= 12.0 -> 0.50
+            ageHours <= 24.0 -> 0.25
+            else -> 0.0
+        }
+        val raw = 12.0 * (gemini.directionScore / 100.0) *
+            (gemini.importance / 100.0) * (gemini.confidence / 100.0) * decay
+        return raw.roundToInt().coerceIn(-12, 12)
+    }
+
+    fun combinedDirection(internalDirection: Int, now: Long = System.currentTimeMillis()): Int =
+        (internalDirection + informationAdjustment(now)).coerceIn(-100, 100)
+
     fun confirmation(
         marketDirection: Int,
         marketConfidence: Int,
@@ -456,6 +496,10 @@ object EventRadarStore {
         outputTokens: Int,
         totalTokens: Int,
         webTitles: List<String>,
+        detailedAnalysis: String,
+        evidence: List<String>,
+        risks: List<String>,
+        horizonHours: Int,
         saveEvent: Boolean = true
     ) {
         val current = geminiDiagnostics(context)
@@ -465,6 +509,10 @@ object EventRadarStore {
             httpCode = httpCode,
             model = model.take(80),
             outputSummary = event.explanation.take(500),
+            detailedAnalysis = detailedAnalysis.take(24_000),
+            evidence = evidence.map { it.take(500) }.take(30),
+            risks = risks.map { it.take(500) }.take(20),
+            horizonHours = horizonHours.coerceIn(0, 168),
             directionScore = event.directionScore,
             importance = event.importance,
             confidence = event.confidence,

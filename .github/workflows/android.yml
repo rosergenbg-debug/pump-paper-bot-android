@@ -32,25 +32,25 @@ jobs:
         run: gradle testDebugUnitTest assembleDebug
 
       - name: Prepare named APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk PumpSignal-V3-Gemini-Diagnostics-v3.1.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk PumpSignal-V3-Info-Score-v3.2.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: PumpSignal-V3-Gemini-Diagnostics-v3.1-APK
-          path: PumpSignal-V3-Gemini-Diagnostics-v3.1.apk
+          name: PumpSignal-V3-Info-Score-v3.2-APK
+          path: PumpSignal-V3-Info-Score-v3.2.apk
           retention-days: 30
 
-      - name: Publish v3.1 release
+      - name: Publish v3.2 release
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v3.1
-          name: PUMP Сигнал v3.1 — проверяемая интеграция Gemini
+          tag_name: v3.2
+          name: PUMP Сигнал v3.2 — информационная поправка Gemini
           prerelease: true
           body: |
-            Gemini подключён в личной сборке и включён при первом запуске v3.1. Добавлена независимая живая проверка API: приложение показывает HTTP-код, модель, фактически отправленный заголовок, полученное резюме, запросы и токены.
-            Для официальных лент ФРС, ЕЦБ, SEC и BLS показываются HTTP 200/304, реальный объём загрузки и количество разобранных сообщений. Неизменившиеся ленты не перекачиваются; действует предел 768 КБ на ответ и 8 МБ в сутки.
-            Статус интернета и Gemini виден на главном экране и в крупной шкале потока ±100. Подробная кнопка раскрывает фактические данные, а ошибки больше не скрываются.
-            Сохранены алгоритм v2.6, аварийная тревога 25%+, недельный контекст, комиссия 0,15% на вход и 0,15% на выход. Исторические результаты не гарантируют будущую прибыль.
-          files: PumpSignal-V3-Gemini-Diagnostics-v3.1.apk
+            Исправлена Android-ошибка XML, из-за которой все RSS-ленты показывали Unknown 0.0. К ФРС, ЕЦБ, SEC и BLS добавлены свежие ленты PUMP, Bitcoin и Solana.
+            Исправлен пустой HTTP 200 от Gemini 3: минимальный thinking больше не съедает весь лимит ответа. Ручная проверка возвращает развёрнутый анализ, факты, риски, горизонт и ссылки Google Search.
+            На главном экране и в крупной шкале видны три числа: внутренний алгоритм, поправка Gemini и общий фон. Поправка ограничена ±12, уменьшается с возрастом новости и пока не меняет торговые сигналы и backtest.
+            Сохранены алгоритм v2.6, аварийная тревога 25%+, лимит 8 МБ в сутки и комиссия 0,15% на каждую сторону. Исторические результаты не гарантируют будущую прибыль.
+          files: PumpSignal-V3-Info-Score-v3.2.apk

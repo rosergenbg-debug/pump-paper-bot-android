@@ -89,7 +89,7 @@ class EventRadarTest {
         val response = """
             {
               "candidates": [{
-                "content": {"parts": [{"text": "{\"direction\":-32,\"importance\":77,\"confidence\":68,\"category\":\"СТАВКИ\",\"summary_ru\":\"Давление на рискованные активы.\"}"}]},
+                "content": {"parts": [{"text": "{\"direction\":-32,\"importance\":77,\"confidence\":68,\"category\":\"СТАВКИ\",\"summary_ru\":\"Давление на рискованные активы.\",\"detailed_analysis_ru\":\"Подробный разбор.\",\"evidence\":[\"Ставка выше\"],\"risks\":[\"Рынок уже учёл\"],\"horizon_hours\":12}"}]},
                 "groundingMetadata": {"groundingChunks": [{"web": {"title": "Federal Reserve", "uri": "https://federalreserve.gov"}}]}
               }],
               "usageMetadata": {"promptTokenCount": 120, "candidatesTokenCount": 30, "totalTokenCount": 150},
@@ -104,6 +104,65 @@ class EventRadarTest {
         assertTrue(parsed.event.aiAnalyzed)
         assertEquals(150, parsed.totalTokens)
         assertEquals(listOf("Federal Reserve"), parsed.webTitles)
+        assertEquals("Подробный разбор.", parsed.detailedAnalysis)
+        assertEquals(listOf("Ставка выше"), parsed.evidence)
+        assertEquals(listOf("Рынок уже учёл"), parsed.risks)
+        assertEquals(12, parsed.horizonHours)
+    }
+
+    @Test
+    fun informationAdjustmentRequiresRealRecentAiEventAndIsCapped() {
+        val event = EventRadarClassifier.classify(
+            RawMarketEvent("PUMP НОВОСТИ", "", "PUMP event", "", "", 1_000L),
+            now = 2_000L
+        ).copy(aiAnalyzed = true)
+        val state = EventRadarState(
+            enabled = true,
+            lastAttempt = 0L,
+            lastSuccess = 2_000L,
+            sourceCount = 7,
+            latest = event,
+            alertCandidate = null,
+            recent = listOf(event),
+            error = "",
+            aiEnabled = true,
+            aiConfigured = true,
+            fetchBytes = 0,
+            parsedEntries = 1,
+            newEvents = 1,
+            sourceChecks = emptyList(),
+            gemini = GeminiDiagnostics(
+                lastSuccess = 2_000L,
+                status = "РАБОТАЕТ",
+                inputTitle = event.title,
+                directionScore = 100,
+                importance = 100,
+                confidence = 100
+            )
+        )
+
+        assertEquals(12, state.informationAdjustment(now = 2_000L))
+        assertEquals(100, state.combinedDirection(95, now = 2_000L))
+        assertEquals(0, state.copy(recent = emptyList()).informationAdjustment(now = 2_000L))
+        assertEquals(0, state.informationAdjustment(now = 25L * 60L * 60L * 1000L))
+    }
+
+    @Test
+    fun emptyGeminiCandidateExplainsTokenExhaustion() {
+        val event = EventRadarClassifier.classify(
+            RawMarketEvent("ТЕСТ", "", "API test", "", "", 1_000L),
+            now = 2_000L
+        )
+        val error = runCatching {
+            GeminiResponseParser.parse(
+                """{"candidates":[{"finishReason":"MAX_TOKENS"}],"usageMetadata":{"thoughtsTokenCount":305}}""",
+                event
+            )
+        }.exceptionOrNull()
+
+        assertTrue(error is GeminiApiException)
+        assertTrue(error?.message.orEmpty().contains("MAX_TOKENS"))
+        assertTrue(error?.message.orEmpty().contains("305"))
     }
 
     private fun state(event: MarketEvent) = EventRadarState(

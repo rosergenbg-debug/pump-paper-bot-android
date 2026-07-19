@@ -38,7 +38,10 @@ class EventRadarClient {
         EventFeedSource("ФРС", "https://www.federalreserve.gov/feeds/press_monetary.xml"),
         EventFeedSource("ЕЦБ", "https://www.ecb.europa.eu/rss/press.html"),
         EventFeedSource("SEC", "https://www.sec.gov/news/pressreleases.rss"),
-        EventFeedSource("BLS", "https://www.bls.gov/feed/bls_latest.rss")
+        EventFeedSource("BLS", "https://www.bls.gov/feed/bls_latest.rss"),
+        EventFeedSource("PUMP НОВОСТИ", "https://news.google.com/rss/search?q=%22PUMP%20token%22%20OR%20%22pump.fun%22%20when%3A7d&hl=en-US&gl=US&ceid=US%3Aen"),
+        EventFeedSource("SOL НОВОСТИ", "https://news.google.com/rss/search?q=Solana%20crypto%20when%3A3d&hl=en-US&gl=US&ceid=US%3Aen"),
+        EventFeedSource("BTC НОВОСТИ", "https://news.google.com/rss/search?q=Bitcoin%20crypto%20when%3A3d&hl=en-US&gl=US&ceid=US%3Aen")
     )
 
     fun sync(context: Context, force: Boolean = false): EventRadarState {
@@ -92,8 +95,8 @@ class EventRadarClient {
             RawMarketEvent(
                 source = "ТЕСТ",
                 sourceUrl = "",
-                title = "Проверка подключения Gemini к PUMP Сигнал",
-                summary = "Проверь доступ к модели и верни диагностический JSON без торгового совета.",
+                title = "Текущий новостной фон Bitcoin, Solana и PUMP",
+                summary = "Проверь свежие публичные факты, отдели их от предположений и сопоставь с рыночным снимком. Не давай торговый совет.",
                 link = "",
                 publishedAt = System.currentTimeMillis()
             )
@@ -104,8 +107,9 @@ class EventRadarClient {
                 apiKey = key,
                 event = event,
                 market = PumpBotEngine.snapshot(context),
-                recent = state.recent.take(6),
-                useGoogleSearch = false
+                recent = state.recent.take(20),
+                useGoogleSearch = true,
+                detailed = true
             )
         }.onSuccess { result ->
             EventRadarStore.saveGeminiSuccess(
@@ -117,6 +121,10 @@ class EventRadarClient {
                 outputTokens = result.outputTokens,
                 totalTokens = result.totalTokens,
                 webTitles = result.webTitles,
+                detailedAnalysis = result.detailedAnalysis,
+                evidence = result.evidence,
+                risks = result.risks,
+                horizonHours = result.horizonHours,
                 saveEvent = storedEvent != null
             )
             EventRadarStore.setUseAi(context, true)
@@ -211,7 +219,8 @@ class EventRadarClient {
                 event = candidate,
                 market = PumpBotEngine.snapshot(context),
                 recent = events.take(6),
-                useGoogleSearch = false
+                useGoogleSearch = false,
+                detailed = false
             )
         }.onFailure { error ->
             EventRadarStore.saveGeminiFailure(
@@ -229,12 +238,17 @@ class EventRadarClient {
             result.outputTokens,
             result.totalTokens,
             result.webTitles,
+            result.detailedAnalysis,
+            result.evidence,
+            result.risks,
+            result.horizonHours,
             saveEvent = false
         )
         return events.map { if (it.id == candidate.id) result.event else it }
     }
 
-    private companion object {
+    companion object {
+        const val totalSources = 7
         const val maxFeedBytes = 768 * 1024
         const val minimumUsefulResponseBytes = 16 * 1024L
     }
@@ -247,8 +261,8 @@ internal object EventFeedParser {
             runCatching { setFeature("http://apache.org/xml/features/disallow-doctype-decl", true) }
             runCatching { setFeature("http://xml.org/sax/features/external-general-entities", false) }
             runCatching { setFeature("http://xml.org/sax/features/external-parameter-entities", false) }
-            isXIncludeAware = false
-            isExpandEntityReferences = false
+            runCatching { isXIncludeAware = false }
+            runCatching { isExpandEntityReferences = false }
         }
         val document = factory.newDocumentBuilder().parse(ByteArrayInputStream(bytes))
         val entries = descendants(document.documentElement)
@@ -353,7 +367,11 @@ internal data class GeminiAnalysisResult(
     val promptTokens: Int,
     val outputTokens: Int,
     val totalTokens: Int,
-    val webTitles: List<String>
+    val webTitles: List<String>,
+    val detailedAnalysis: String,
+    val evidence: List<String>,
+    val risks: List<String>,
+    val horizonHours: Int
 )
 
 internal object GeminiResponseParser {
@@ -367,7 +385,15 @@ internal object GeminiResponseParser {
                 append(parts.optJSONObject(index)?.optString("text").orEmpty())
             }
         }.trim()
-        if (text.isBlank()) throw GeminiApiException(httpCode, "Gemini вернул пустой ответ")
+        if (text.isBlank()) {
+            val finish = candidate.optString("finishReason", "без причины")
+            val usage = root.optJSONObject("usageMetadata")
+            val thoughts = usage?.optInt("thoughtsTokenCount") ?: 0
+            throw GeminiApiException(
+                httpCode,
+                "Gemini завершил ответ: $finish; внутренний анализ $thoughts токенов, текста нет"
+            )
+        }
         val firstBrace = text.indexOf('{')
         val lastBrace = text.lastIndexOf('}')
         if (firstBrace < 0 || lastBrace <= firstBrace) {
@@ -391,6 +417,10 @@ internal object GeminiResponseParser {
             explanation = json.optString("summary_ru", event.explanation).take(500),
             aiAnalyzed = true
         )
+        fun stringList(name: String): List<String> {
+            val array = json.optJSONArray(name) ?: return emptyList()
+            return (0 until array.length()).mapNotNull { array.optString(it).trim().takeIf(String::isNotBlank) }
+        }
         return GeminiAnalysisResult(
             event = enriched,
             httpCode = httpCode,
@@ -398,7 +428,11 @@ internal object GeminiResponseParser {
             promptTokens = usage?.optInt("promptTokenCount") ?: 0,
             outputTokens = usage?.optInt("candidatesTokenCount") ?: 0,
             totalTokens = usage?.optInt("totalTokenCount") ?: 0,
-            webTitles = webTitles
+            webTitles = webTitles,
+            detailedAnalysis = json.optString("detailed_analysis_ru").take(24_000),
+            evidence = stringList("evidence").take(30),
+            risks = stringList("risks").take(20),
+            horizonHours = json.optInt("horizon_hours").coerceIn(0, 168)
         )
     }
 }
@@ -409,9 +443,10 @@ internal class GeminiEventInterpreter(private val client: OkHttpClient) {
         event: MarketEvent,
         market: LiveSnapshot,
         recent: List<MarketEvent>,
-        useGoogleSearch: Boolean
+        useGoogleSearch: Boolean,
+        detailed: Boolean
     ): GeminiAnalysisResult {
-        val recentContext = recent.take(6).joinToString("\n") {
+        val recentContext = recent.take(if (detailed) 20 else 8).joinToString("\n") {
             "- ${it.source}: ${it.title.take(220)}"
         }.ifBlank { "- других заголовков пока нет" }
         val prompt = """
@@ -420,8 +455,13 @@ internal class GeminiEventInterpreter(private val client: OkHttpClient) {
             для проверки свежего контекста и не заменяй факт предположением. Не давай торговый совет.
             Верни только JSON без markdown:
             {"direction": число от -100 до 100, "importance": 0..100, "confidence": 0..100,
-             "category": "краткая категория", "summary_ru": "одно короткое предложение"}
+             "category": "краткая категория", "summary_ru": "одно короткое предложение",
+             "detailed_analysis_ru": "структурированный подробный анализ",
+             "evidence": ["конкретный факт или наблюдение"],
+             "risks": ["что может опровергнуть вывод"], "horizon_hours": 0..168}
             -100 означает сильное давление вниз, +100 — вверх, 0 — направление неясно.
+            Не называй direction вероятностью прибыли. Если данных мало, снижай confidence.
+            ${if (detailed) "Дай 12–20 содержательных нумерованных разделов: факты и первоисточники, механизм влияния, BTC, SOL, PUMP, срочность, противоречия, альтернативные объяснения, горизонт и условия отмены. Чётко разделяй факт, вывод и неизвестность. Не повторяй заголовки списком." else "Дай 3–5 коротких аналитических пунктов."}
             Источник: ${event.source}
             Заголовок: ${event.title}
             Текст: ${event.summary.take(1200)}
@@ -438,8 +478,8 @@ internal class GeminiEventInterpreter(private val client: OkHttpClient) {
             ))
             .put("generationConfig", JSONObject()
                 .put("responseMimeType", "application/json")
-                .put("temperature", 0.1)
-                .put("maxOutputTokens", 320)
+                .put("maxOutputTokens", if (detailed) 6144 else 1536)
+                .put("thinkingConfig", JSONObject().put("thinkingLevel", "MINIMAL"))
             )
         if (useGoogleSearch) {
             requestJson.put("tools", JSONArray().put(JSONObject().put("google_search", JSONObject())))
