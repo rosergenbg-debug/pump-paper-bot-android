@@ -327,7 +327,9 @@ class MainActivity : AppCompatActivity() {
         val state = EventRadarStore.state(this)
         val latest = state.latest
         val confirmation = state.confirmation(snapshot.directionScore, snapshot.breathingConfidence)
-        val internetLine = "ИНТЕРНЕТ ${state.sourceCount}/4 • ${state.parsedEntries} сообщений • новых ${state.newEvents}"
+        val infoAdjustment = state.informationAdjustment()
+        val combined = state.combinedDirection(snapshot.directionScore)
+        val internetLine = "ИНТЕРНЕТ ${state.sourceCount}/${EventRadarClient.totalSources} • ${state.parsedEntries} сообщений • новых ${state.newEvents}"
         val geminiLine = when {
             !state.aiEnabled -> "GEMINI ВЫКЛЮЧЁН"
             state.gemini.status == "РАБОТАЕТ" -> "GEMINI РАБОТАЕТ • ${state.gemini.totalTokensToday} токенов сегодня"
@@ -336,15 +338,16 @@ class MainActivity : AppCompatActivity() {
         }
         val mainText = when {
             !state.enabled -> "V3 РАДАР ВЫКЛЮЧЕН\nТорговый алгоритм работает как раньше"
-            state.lastSuccess <= 0L -> "V3.1 РАДАР СОБЫТИЙ\nЖдём первую проверку официальных источников"
-            latest == null -> "V3.1 РАДАР • новых значимых событий пока нет"
+            state.lastSuccess <= 0L -> "V3.2 РАДАР СОБЫТИЙ\nЖдём первую проверку 7 источников"
+            latest == null -> "V3.2 РАДАР • новых значимых событий пока нет"
             else -> {
                 val direction = if (latest.directionScore >= 0) "+${latest.directionScore}" else "−${kotlin.math.abs(latest.directionScore)}"
-                "V3.1 ${latest.source} • важность ${latest.importance}/100 • влияние $direction/100\n" +
+                "V3.2 ${latest.source} • важность ${latest.importance}/100 • влияние $direction/100\n" +
                     "${latest.title.take(95)}\n$confirmation"
             }
         }
-        tvEventRadar?.text = "$mainText\n$internetLine\n$geminiLine"
+        tvEventRadar?.text = "$mainText\n$internetLine\n$geminiLine\n" +
+            "ШКАЛА: алгоритм ${signed(snapshot.directionScore)} • Gemini ${signed(infoAdjustment)} • итог ${signed(combined)}"
         tvEventRadar?.setTextColor(
             Color.parseColor(
                 when {
@@ -384,21 +387,25 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun renderBreathing(snapshot: LiveSnapshot) {
+        val radar = EventRadarStore.state(this)
+        val information = radar.informationAdjustment()
+        val combined = radar.combinedDirection(snapshot.directionScore)
         tvBreathingState?.text = "ДЫХАНИЕ: ${snapshot.breathingState}\n${snapshot.marketRelation}"
         tvBreathingState?.setTextColor(
             Color.parseColor(
                 when {
                     snapshot.lateEntryBlocked -> "#FF7B72"
-                    snapshot.directionScore >= 25 -> "#7EE787"
-                    snapshot.directionScore <= -25 -> "#FF7B72"
+                    combined >= 25 -> "#7EE787"
+                    combined <= -25 -> "#FF7B72"
                     else -> "#79C0FF"
                 }
             )
         )
         tvEnergy?.text = "АКТИВНОСТЬ\n${snapshot.energyScore}/100\nсжатие ${snapshot.compressionScore}"
-        val direction = if (snapshot.directionScore >= 0) "+${snapshot.directionScore}" else "−${kotlin.math.abs(snapshot.directionScore)}"
-        tvDirection?.text = "ПОТОК\n$direction/100\n${if (snapshot.directionScore >= 0) "вверх" else "вниз"}"
-        tvDirection?.setTextColor(Color.parseColor(if (snapshot.directionScore >= 20) "#7EE787" else if (snapshot.directionScore <= -20) "#FF7B72" else "#C9D1D9"))
+        tvDirection?.text = "ОБЩИЙ ФОН ${signed(combined)}/100\n" +
+            "алг ${signed(snapshot.directionScore)} • ИИ ${signed(information)}\n" +
+            if (information == 0) "новость не влияет" else "поправка наблюдения"
+        tvDirection?.setTextColor(Color.parseColor(if (combined >= 20) "#7EE787" else if (combined <= -20) "#FF7B72" else "#C9D1D9"))
         tvConfidence?.text = "СОГЛАСОВАНО\n${snapshot.breathingConfidence}/100\nне шанс прибыли"
         tvLateRisk?.text = "ПОЗДНИЙ ВХОД\n${snapshot.lateEntryRisk}/100\n${if (snapshot.lateEntryBlocked) "ЗАПРЕЩЁН" else "допустимо"}"
         tvLateRisk?.setTextColor(Color.parseColor(if (snapshot.lateEntryBlocked) "#FF7B72" else if (snapshot.lateEntryRisk >= 45) "#F0B72F" else "#7EE787"))
@@ -413,6 +420,8 @@ class MainActivity : AppCompatActivity() {
             ?: "OI: нет данных"
         tvMicrostructure?.text = "$book • $spread • $oi\nСнимок стакана — дополнительное наблюдение, не самостоятельный приказ купить."
     }
+
+    private fun signed(value: Int): String = if (value >= 0) "+$value" else "−${kotlin.math.abs(value)}"
 
     private fun renderReadiness(snapshot: LiveSnapshot) {
         val score = snapshot.readinessScore

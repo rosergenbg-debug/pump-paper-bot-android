@@ -116,7 +116,7 @@
             <TextView
                 android:id="@+id/tvEnergy"
                 android:layout_width="0dp"
-                android:layout_height="68dp"
+                android:layout_height="82dp"
                 android:layout_weight="1"
                 android:background="#161B22"
                 android:gravity="center"
@@ -129,7 +129,7 @@
             <TextView
                 android:id="@+id/tvDirection"
                 android:layout_width="0dp"
-                android:layout_height="68dp"
+                android:layout_height="82dp"
                 android:layout_marginStart="5dp"
                 android:layout_weight="1"
                 android:background="#161B22"
@@ -143,7 +143,7 @@
             <TextView
                 android:id="@+id/tvConfidence"
                 android:layout_width="0dp"
-                android:layout_height="68dp"
+                android:layout_height="82dp"
                 android:layout_marginStart="5dp"
                 android:layout_weight="1"
                 android:background="#161B22"
@@ -157,7 +157,7 @@
             <TextView
                 android:id="@+id/tvLateRisk"
                 android:layout_width="0dp"
-                android:layout_height="68dp"
+                android:layout_height="82dp"
                 android:layout_marginStart="5dp"
                 android:layout_weight="1"
                 android:background="#161B22"
