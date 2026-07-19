@@ -10,6 +10,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.view.View
 import android.widget.Button
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
@@ -35,6 +36,7 @@ class MainActivity : AppCompatActivity() {
     private var tvSellSignal: TextView? = null
     private var tvMode: TextView? = null
     private var tvReadiness: TextView? = null
+    private var tvRapidDrop: TextView? = null
     private var tvBreathingState: TextView? = null
     private var tvEnergy: TextView? = null
     private var tvDirection: TextView? = null
@@ -66,6 +68,7 @@ class MainActivity : AppCompatActivity() {
         tvSellSignal = findViewById(R.id.tvSellSignal)
         tvMode = findViewById(R.id.tvMode)
         tvReadiness = findViewById(R.id.tvReadiness)
+        tvRapidDrop = findViewById(R.id.tvRapidDrop)
         tvBreathingState = findViewById(R.id.tvBreathingState)
         tvEnergy = findViewById(R.id.tvEnergy)
         tvDirection = findViewById(R.id.tvDirection)
@@ -210,6 +213,8 @@ class MainActivity : AppCompatActivity() {
                     "Дыхание: ${snapshot.breathingState}.\n${snapshot.breathingExplanation}\n\n" +
                     "АКТИВНОСТЬ показывает силу текущего расширения, но не направление. ПОТОК показывает согласованное направление цены и taker-покупок. СОГЛАСОВАНО — качество и согласие доступных данных, а не вероятность прибыли. ПОЗДНИЙ ВХОД показывает риск покупки после уже прошедшего импульса.\n\n" +
                     "Новая защита PUMP работает самостоятельно: высокий риск позднего входа блокирует покупку даже тогда, когда BTC и SOL не растут. Старый общерыночный фильтр остаётся дополнительной страховкой.\n\n" +
+                    "Недельный ритм показывается только как предупреждение: выходные обычно тише, понедельник 06–12 склонен к откату, четверг исторически слабее. Календарь сам не создаёт и не отменяет сделку.\n\n" +
+                    "При падении PUMP/EUR на 25% и больше от максимума последних 24 часов включается отдельная аварийная тревога. Она не является командой купить: до подтверждённого отскока обычный сигнал покупки блокируется.\n\n" +
                     "95–98 — только отображение приближения без звонка. 99 — звук и вибрация только при допустимом риске позднего входа и достаточной согласованности данных. " +
                     "100 — условия стратегии полностью выполнены. " +
                     "Это готовность правил, а не вероятность прибыли."
@@ -234,7 +239,9 @@ class MainActivity : AppCompatActivity() {
         } else {
             "Монитор остановлен • последнее обновление ${PumpBotEngine.formatTime(snapshot.lastSync)}"
         }
-        tvMode?.text = if (snapshot.lateEntryBlocked && snapshot.waitMode == "BUY") {
+        tvMode?.text = if (snapshot.rapidDrop.active) {
+            String.format(Locale.GERMANY, "АВАРИЙНОЕ ПАДЕНИЕ −%.1f%% — ПРОВЕРЬТЕ РЫНОК", snapshot.rapidDrop.dropPercent)
+        } else if (snapshot.lateEntryBlocked && snapshot.waitMode == "BUY") {
             "ВХОД ЗАБЛОКИРОВАН — ЦЕНА УЖЕ ВЫСОКО"
         } else if (snapshot.marketGateActive && snapshot.waitMode == "BUY") {
             "РЫНОК ПЕРЕГРЕТ — НЕ ДОГОНЯЕМ ЦЕНУ"
@@ -245,9 +252,10 @@ class MainActivity : AppCompatActivity() {
         }
         tvMode?.setTextColor(Color.parseColor("#F0F6FC"))
         tvMode?.setBackgroundColor(
-            Color.parseColor(if (snapshot.marketGateActive || snapshot.lateEntryBlocked) "#9E2A2B" else "#30363D")
+            Color.parseColor(if (snapshot.rapidDrop.active || snapshot.marketGateActive || snapshot.lateEntryBlocked) "#9E2A2B" else "#30363D")
         )
 
+        renderRapidDrop(snapshot)
         renderReadiness(snapshot)
         renderBreathing(snapshot)
 
@@ -264,7 +272,11 @@ class MainActivity : AppCompatActivity() {
             snapshot.lastEma200,
             snapshot.fundingRate * 100.0
         )
-        tvReason?.text = snapshot.signalReason
+        tvReason?.text = if (snapshot.weekRhythm.caution) {
+            "${snapshot.signalReason}\n${snapshot.weekRhythm.title}. ${snapshot.weekRhythm.explanation}"
+        } else {
+            snapshot.signalReason
+        }
         tvReason?.setTextColor(
             when {
                 snapshot.marketGateActive -> Color.parseColor("#F0B72F")
@@ -304,6 +316,32 @@ class MainActivity : AppCompatActivity() {
         chart?.setData("PUMP/EUR • ДЫХАНИЕ РЫНКА", snapshot.chart)
     }
 
+    private fun renderRapidDrop(snapshot: LiveSnapshot) {
+        val drop = snapshot.rapidDrop
+        if (!drop.active) {
+            tvRapidDrop?.visibility = View.GONE
+            return
+        }
+        tvRapidDrop?.visibility = View.VISIBLE
+        val action = when {
+            snapshot.waitMode == "SELL" -> "ПОЗИЦИЯ ОТКРЫТА — СРОЧНО ПРОВЕРЬТЕ СТОП И ЦЕНУ ВЫХОДА"
+            drop.recoveryConfirmed -> String.format(
+                Locale.GERMANY,
+                "ОТСКОК +%.1f%% ЕСТЬ, НО ЖДЁМ ОБЫЧНЫЙ СИГНАЛ 99/100",
+                drop.reboundPercent
+            )
+            else -> "ПАДЕНИЕ НЕ ОСТАНОВИЛОСЬ — НЕ ПОКУПАТЬ АВТОМАТИЧЕСКИ"
+        }
+        tvRapidDrop?.text = String.format(
+            Locale.GERMANY,
+            "РЕЗКОЕ ПАДЕНИЕ −%.1f%%\nмаксимум €%.8f → сейчас €%.8f\n%s",
+            drop.dropPercent,
+            drop.peakPrice,
+            drop.currentPrice,
+            action
+        )
+    }
+
     private fun renderBreathing(snapshot: LiveSnapshot) {
         tvBreathingState?.text = "ДЫХАНИЕ: ${snapshot.breathingState}\n${snapshot.marketRelation}"
         tvBreathingState?.setTextColor(
@@ -337,6 +375,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun renderReadiness(snapshot: LiveSnapshot) {
         val score = snapshot.readinessScore
+        if (snapshot.rapidDrop.active && snapshot.waitMode == "BUY" && !snapshot.rapidDrop.recoveryConfirmed) {
+            tvReadiness?.text = "АВАРИЙНЫЙ РЕЖИМ\nПОКУПКА ЕЩЁ НЕ ПОДТВЕРЖДЕНА\nждём остановку падения"
+            tvReadiness?.setTextColor(Color.parseColor("#FFFFFF"))
+            tvReadiness?.setBackgroundColor(Color.parseColor("#4A1418"))
+            return
+        }
         if (snapshot.lateEntryBlocked && snapshot.waitMode == "BUY") {
             tvReadiness?.text = "ПОКУПКА ЗАПРЕЩЕНА\nРИСК ПОЗДНЕГО ВХОДА ${snapshot.lateEntryRisk}/100\nждём новый вход снизу"
             tvReadiness?.setTextColor(Color.parseColor("#FF7B72"))

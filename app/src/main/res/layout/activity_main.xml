@@ -55,6 +55,21 @@
             android:textStyle="bold" />
 
         <TextView
+            android:id="@+id/tvRapidDrop"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:background="#8E1519"
+            android:gravity="center"
+            android:minHeight="92dp"
+            android:padding="10dp"
+            android:text="АВАРИЙНОЕ ПАДЕНИЕ PUMP/EUR"
+            android:textColor="#FFFFFF"
+            android:textSize="17sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
+
+        <TextView
             android:id="@+id/tvBreathingState"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

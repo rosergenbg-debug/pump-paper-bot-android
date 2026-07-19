@@ -14,7 +14,12 @@ class PumpBotWorker(
         return try {
             market.sync(applicationContext)
             val snapshot = PumpBotEngine.snapshot(applicationContext)
-            if (PumpBotEngine.shouldAlert(applicationContext, snapshot)) {
+            val rapidDropAlerted = if (PumpBotEngine.shouldAlertRapidDrop(applicationContext, snapshot)) {
+                PumpAlert.showRapidDrop(applicationContext, snapshot)
+                PumpBotEngine.markRapidDropAlerted(applicationContext, snapshot)
+                true
+            } else false
+            if (!rapidDropAlerted && PumpBotEngine.shouldAlert(applicationContext, snapshot)) {
                 PumpAlert.showSignal(applicationContext, snapshot)
                 PumpBotEngine.markAlerted(applicationContext, snapshot)
             }

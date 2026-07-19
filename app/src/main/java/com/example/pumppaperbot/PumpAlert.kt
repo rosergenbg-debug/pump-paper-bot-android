@@ -16,8 +16,11 @@ import androidx.core.app.NotificationCompat
 object PumpAlert {
     private const val monitorChannelId = "pump_rsi_risk_monitor"
     private const val signalChannelId = "pump_rsi_risk_signals"
+    private const val rapidDropChannelId = "pump_rapid_drop_v26"
     private const val monitorNotificationId = 3501
     private const val signalNotificationId = 3502
+    private const val rapidDropNotificationId = 3503
+    private val rapidDropVibration = longArrayOf(0, 1000, 180, 1000, 180, 1600)
 
     fun ensureChannels(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
@@ -42,8 +45,19 @@ object PumpAlert {
             vibrationPattern = longArrayOf(0, 700, 250, 700, 250, 1100)
             setSound(sound, attrs)
         }
+        val rapidDrop = NotificationChannel(
+            rapidDropChannelId,
+            "PUMP аварийное падение 25%+",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "Отдельная тревога при падении PUMP/EUR на 25% и больше от максимума последних 24 часов"
+            enableVibration(true)
+            vibrationPattern = rapidDropVibration
+            setSound(sound, attrs)
+        }
         manager.createNotificationChannel(monitor)
         manager.createNotificationChannel(signal)
+        manager.createNotificationChannel(rapidDrop)
     }
 
     fun monitorNotification(context: Context, text: String) =
@@ -95,6 +109,50 @@ object PumpAlert {
         vibrate(context)
     }
 
+    fun showRapidDrop(context: Context, snapshot: LiveSnapshot) {
+        ensureChannels(context)
+        val drop = snapshot.rapidDrop
+        if (!drop.active) return
+        val title = String.format(
+            java.util.Locale.GERMANY,
+            "PUMP/EUR: РЕЗКОЕ ПАДЕНИЕ −%.1f%%",
+            drop.dropPercent
+        )
+        val action = when {
+            snapshot.waitMode == "SELL" -> "ОТКРЫТА ПОЗИЦИЯ: срочно проверьте цену, стоп и возможность выхода."
+            drop.recoveryConfirmed -> String.format(
+                java.util.Locale.GERMANY,
+                "Есть отскок +%.1f%% от минимума, но покупка разрешена только после обычного подтверждения 99/100.",
+                drop.reboundPercent
+            )
+            else -> "Падение ещё не остановлено. Не покупать автоматически; ждём разворот, покупателей и закрытую свечу."
+        }
+        val text = String.format(
+            java.util.Locale.GERMANY,
+            "%s Максимум €%.8f, сейчас €%.8f, движение заняло около %d мин.",
+            action,
+            drop.peakPrice,
+            drop.currentPrice,
+            drop.windowMinutes
+        )
+        val notification = NotificationCompat.Builder(context, rapidDropChannelId)
+            .setSmallIcon(R.drawable.ic_launcher)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setContentIntent(openAppIntent(context))
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setColor(0xFFDA3633.toInt())
+            .setVibrate(rapidDropVibration)
+            .setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM))
+            .build()
+        context.getSystemService(NotificationManager::class.java)
+            .notify(rapidDropNotificationId, notification)
+        vibrate(context, rapidDropVibration)
+    }
+
     fun monitorId(): Int = monitorNotificationId
 
     private fun openAppIntent(context: Context): PendingIntent {
@@ -108,7 +166,10 @@ object PumpAlert {
         )
     }
 
-    private fun vibrate(context: Context) {
+    private fun vibrate(
+        context: Context,
+        pattern: LongArray = longArrayOf(0, 700, 250, 700, 250, 1100)
+    ) {
         val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             context.getSystemService(VibratorManager::class.java).defaultVibrator
         } else {
@@ -116,10 +177,10 @@ object PumpAlert {
             context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            vibrator.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 700, 250, 700, 250, 1100), -1))
+            vibrator.vibrate(VibrationEffect.createWaveform(pattern, -1))
         } else {
             @Suppress("DEPRECATION")
-            vibrator.vibrate(longArrayOf(0, 700, 250, 700, 250, 1100), -1)
+            vibrator.vibrate(pattern, -1)
         }
     }
 
