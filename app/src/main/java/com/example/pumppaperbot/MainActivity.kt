@@ -327,16 +327,24 @@ class MainActivity : AppCompatActivity() {
         val state = EventRadarStore.state(this)
         val latest = state.latest
         val confirmation = state.confirmation(snapshot.directionScore, snapshot.breathingConfidence)
-        tvEventRadar?.text = when {
+        val internetLine = "ИНТЕРНЕТ ${state.sourceCount}/4 • ${state.parsedEntries} сообщений • новых ${state.newEvents}"
+        val geminiLine = when {
+            !state.aiEnabled -> "GEMINI ВЫКЛЮЧЁН"
+            state.gemini.status == "РАБОТАЕТ" -> "GEMINI РАБОТАЕТ • ${state.gemini.totalTokensToday} токенов сегодня"
+            state.gemini.status == "ОШИБКА" -> "GEMINI: ОШИБКА HTTP ${state.gemini.httpCode}"
+            else -> "GEMINI: ${state.gemini.status}"
+        }
+        val mainText = when {
             !state.enabled -> "V3 РАДАР ВЫКЛЮЧЕН\nТорговый алгоритм работает как раньше"
-            state.lastSuccess <= 0L -> "V3 РАДАР СОБЫТИЙ • БЕСПЛАТНО\nЖдём первую проверку официальных источников"
-            latest == null -> "V3 РАДАР • проверено ${state.sourceCount}/4\nНовых значимых событий пока нет"
+            state.lastSuccess <= 0L -> "V3.1 РАДАР СОБЫТИЙ\nЖдём первую проверку официальных источников"
+            latest == null -> "V3.1 РАДАР • новых значимых событий пока нет"
             else -> {
                 val direction = if (latest.directionScore >= 0) "+${latest.directionScore}" else "−${kotlin.math.abs(latest.directionScore)}"
-                "V3 ${latest.source} • важность ${latest.importance}/100 • влияние $direction/100\n" +
+                "V3.1 ${latest.source} • важность ${latest.importance}/100 • влияние $direction/100\n" +
                     "${latest.title.take(95)}\n$confirmation"
             }
         }
+        tvEventRadar?.text = "$mainText\n$internetLine\n$geminiLine"
         tvEventRadar?.setTextColor(
             Color.parseColor(
                 when {

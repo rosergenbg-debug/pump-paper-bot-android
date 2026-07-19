@@ -80,6 +80,32 @@ class EventRadarTest {
         assertTrue(result.single().summary.contains("Monetary policy statement & outlook"))
     }
 
+    @Test
+    fun geminiResponseParserReadsAnalysisUsageAndGrounding() {
+        val original = EventRadarClassifier.classify(
+            RawMarketEvent("ФРС", "https://example.test", "Rate decision", "Policy text", "", 1000L),
+            now = 2000L
+        )
+        val response = """
+            {
+              "candidates": [{
+                "content": {"parts": [{"text": "{\"direction\":-32,\"importance\":77,\"confidence\":68,\"category\":\"СТАВКИ\",\"summary_ru\":\"Давление на рискованные активы.\"}"}]},
+                "groundingMetadata": {"groundingChunks": [{"web": {"title": "Federal Reserve", "uri": "https://federalreserve.gov"}}]}
+              }],
+              "usageMetadata": {"promptTokenCount": 120, "candidatesTokenCount": 30, "totalTokenCount": 150},
+              "modelVersion": "gemini-3-flash-preview"
+            }
+        """.trimIndent()
+
+        val parsed = GeminiResponseParser.parse(response, original)
+
+        assertEquals(-32, parsed.event.directionScore)
+        assertEquals(77, parsed.event.importance)
+        assertTrue(parsed.event.aiAnalyzed)
+        assertEquals(150, parsed.totalTokens)
+        assertEquals(listOf("Federal Reserve"), parsed.webTitles)
+    }
+
     private fun state(event: MarketEvent) = EventRadarState(
         enabled = true,
         lastAttempt = 0L,
@@ -90,6 +116,11 @@ class EventRadarTest {
         recent = listOf(event),
         error = "",
         aiEnabled = false,
-        aiConfigured = false
+        aiConfigured = false,
+        fetchBytes = 0,
+        parsedEntries = 0,
+        newEvents = 0,
+        sourceChecks = emptyList(),
+        gemini = GeminiDiagnostics()
     )
 }

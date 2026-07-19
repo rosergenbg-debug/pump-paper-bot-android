@@ -32,25 +32,25 @@ jobs:
         run: gradle testDebugUnitTest assembleDebug
 
       - name: Prepare named APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk PumpSignal-V3-FreeRadar-v3.0.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk PumpSignal-V3-Gemini-Diagnostics-v3.1.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: PumpSignal-V3-FreeRadar-v3.0-APK
-          path: PumpSignal-V3-FreeRadar-v3.0.apk
+          name: PumpSignal-V3-Gemini-Diagnostics-v3.1-APK
+          path: PumpSignal-V3-Gemini-Diagnostics-v3.1.apk
           retention-days: 30
 
-      - name: Publish v3.0 release
+      - name: Publish v3.1 release
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v3.0
-          name: PUMP Сигнал v3.0 — бесплатный радар официальных событий
+          tag_name: v3.1
+          name: PUMP Сигнал v3.1 — проверяемая интеграция Gemini
           prerelease: true
           body: |
-            Добавлен бесплатный V3 Радар: небольшие обновления из официальных лент ФРС, ЕЦБ, SEC и BLS проверяются не чаще одного раза в 10 минут. HTTP-кэш не перекачивает неизменившиеся ленты; дополнительно действует предел 768 КБ на ответ и 8 МБ в сутки для радара.
-            Радар показывает важность, возможное направление и подтверждение текущим дыханием рынка. Он работает в безопасном режиме наблюдения и самостоятельно не создаёт покупку или продажу.
-            Необязательный бесплатный ключ Gemini можно ввести прямо в приложении. Без ключа работает прозрачная оценка по правилам. Ключ не сохраняется в GitHub.
+            Gemini подключён в личной сборке и включён при первом запуске v3.1. Добавлена независимая живая проверка API: приложение показывает HTTP-код, модель, фактически отправленный заголовок, полученное резюме, запросы и токены.
+            Для официальных лент ФРС, ЕЦБ, SEC и BLS показываются HTTP 200/304, реальный объём загрузки и количество разобранных сообщений. Неизменившиеся ленты не перекачиваются; действует предел 768 КБ на ответ и 8 МБ в сутки.
+            Статус интернета и Gemini виден на главном экране и в крупной шкале потока ±100. Подробная кнопка раскрывает фактические данные, а ошибки больше не скрываются.
             Сохранены алгоритм v2.6, аварийная тревога 25%+, недельный контекст, комиссия 0,15% на вход и 0,15% на выход. Исторические результаты не гарантируют будущую прибыль.
-          files: PumpSignal-V3-FreeRadar-v3.0.apk
+          files: PumpSignal-V3-Gemini-Diagnostics-v3.1.apk

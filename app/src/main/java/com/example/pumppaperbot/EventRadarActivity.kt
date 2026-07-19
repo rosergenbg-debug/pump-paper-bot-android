@@ -27,6 +27,7 @@ class EventRadarActivity : AppCompatActivity() {
     private lateinit var keyInput: EditText
     private lateinit var status: TextView
     private lateinit var events: TextView
+    private lateinit var details: TextView
     private lateinit var progress: ProgressBar
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -37,9 +38,9 @@ class EventRadarActivity : AppCompatActivity() {
             setBackgroundColor(Color.parseColor("#0D1117"))
         }
         content.addView(button("← НАЗАД", "#30363D").apply { setOnClickListener { finish() } }, params(dp(50)))
-        content.addView(label("V3 • РАДАР СОБЫТИЙ", 25, "#F0F6FC", true))
+        content.addView(label("V3.1 • ИНТЕРНЕТ + GEMINI", 25, "#F0F6FC", true))
         content.addView(label(
-            "Бесплатно читает небольшие обновления из официальных лент ФРС, ЕЦБ, SEC и BLS. Новости не имеют права самостоятельно создавать покупку или продажу: сначала проверяем их на реальном рынке.",
+            "Читает небольшие обновления ФРС, ЕЦБ, SEC и BLS, затем Gemini сопоставляет важное событие с текущим дыханием PUMP, Bitcoin и Solana. Этот слой объясняет фон, но не создаёт сделку самостоятельно.",
             15, "#C9D1D9", false
         ))
 
@@ -64,34 +65,36 @@ class EventRadarActivity : AppCompatActivity() {
         progress = ProgressBar(this).apply { visibility = View.GONE }
         content.addView(progress, LinearLayout.LayoutParams(-1, dp(38)))
 
-        content.addView(label("НЕОБЯЗАТЕЛЬНЫЙ ИИ", 20, "#F0F6FC", true))
+        content.addView(label("GEMINI УЖЕ ПОДКЛЮЧЁН", 20, "#F0F6FC", true))
         content.addView(label(
-            "Без ключа уже работает прозрачная проверка по правилам. Gemini нужен только для краткой смысловой оценки новых важных заголовков. Публичные тексты отправляются в Gemini, ваши сделки и баланс не отправляются.",
+            "В этой личной сборке ключ уже встроен. Поле ниже нужно только если вы захотите временно проверить другой ключ.",
             14, "#C9D1D9", false
         ))
         keyInput = EditText(this).apply {
-            hint = "Вставьте Gemini API key"
+            hint = "Встроенный ключ активен • здесь можно указать другой"
             setHintTextColor(Color.parseColor("#8B949E"))
             setTextColor(Color.WHITE)
             setBackgroundColor(Color.parseColor("#161B22"))
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
             setPadding(dp(10), 0, dp(10), 0)
-            setText(EventRadarStore.apiKey(this@EventRadarActivity))
+            setText("")
         }
         content.addView(keyInput, params(dp(58), dp(6)))
 
         val keyButtons = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        keyButtons.addView(button("СОХРАНИТЬ КЛЮЧ", "#238636").apply {
+        keyButtons.addView(button("СОХРАНИТЬ ДРУГОЙ", "#238636").apply {
             setOnClickListener {
                 EventRadarStore.saveApiKey(this@EventRadarActivity, keyInput.text.toString())
+                EventRadarStore.setUseAi(this@EventRadarActivity, true)
+                keyInput.setText("")
                 updateUi()
             }
         }, LinearLayout.LayoutParams(0, dp(56), 1f))
-        keyButtons.addView(button("УДАЛИТЬ", "#8E1519").apply {
+        keyButtons.addView(button("ВЕРНУТЬ ВСТРОЕННЫЙ", "#30363D").apply {
             setOnClickListener {
                 keyInput.setText("")
                 EventRadarStore.saveApiKey(this@EventRadarActivity, "")
-                EventRadarStore.setUseAi(this@EventRadarActivity, false)
+                EventRadarStore.setUseAi(this@EventRadarActivity, true)
                 updateUi()
             }
         }, LinearLayout.LayoutParams(0, dp(56), 1f).apply { leftMargin = dp(8) })
@@ -108,10 +111,23 @@ class EventRadarActivity : AppCompatActivity() {
             }
         }
         content.addView(aiButton, params(dp(58), dp(8)))
-        content.addView(label(
-            "Ключ хранится только в данных приложения на этом телефоне и не попадает в GitHub. Если телефон будет передан другому человеку, сначала удалите данные приложения или ключ.",
-            13, "#F0B72F", false
-        ))
+
+        content.addView(button("ПРОВЕРИТЬ GEMINI — ПОЛУЧИТЬ ЖИВОЙ ОТВЕТ", "#7C3AED").apply {
+            setOnClickListener { testGeminiNow() }
+        }, params(dp(58), dp(8)))
+
+        details = label("", 14, "#C9D1D9", false).apply {
+            setBackgroundColor(Color.parseColor("#0B1320"))
+            setPadding(dp(10), dp(10), dp(10), dp(10))
+            visibility = View.GONE
+        }
+        content.addView(button("ПОКАЗАТЬ, ЧТО РЕАЛЬНО ПОЛУЧЕНО", "#1F6FEB").apply {
+            setOnClickListener {
+                details.visibility = if (details.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+                updateDetails(EventRadarStore.state(this@EventRadarActivity))
+            }
+        }, params(dp(58), dp(8)))
+        content.addView(details, params(-2, dp(4)))
 
         content.addView(label("ПОСЛЕДНИЕ СОБЫТИЯ", 20, "#F0F6FC", true))
         events = label("Пока событий нет", 14, "#C9D1D9", false).apply {
@@ -150,13 +166,27 @@ class EventRadarActivity : AppCompatActivity() {
         }
     }
 
+    private fun testGeminiNow() {
+        progress.visibility = View.VISIBLE
+        status.text = "Отправляю реальный запрос в Gemini и жду JSON-ответ…"
+        executor.execute {
+            val state = EventRadarClient().testGemini(this)
+            main.post {
+                progress.visibility = View.GONE
+                updateUi(state)
+                details.visibility = View.VISIBLE
+                updateDetails(state)
+            }
+        }
+    }
+
     private fun updateUi(state: EventRadarState = EventRadarStore.state(this)) {
         enabledButton.text = if (state.enabled) "РАДАР ВКЛЮЧЁН" else "РАДАР ВЫКЛЮЧЕН"
         enabledButton.backgroundTintList = ColorStateList.valueOf(
             Color.parseColor(if (state.enabled) "#238636" else "#30363D")
         )
         aiButton.text = when {
-            !state.aiConfigured -> "ИИ НЕ ПОДКЛЮЧЁН — ЭТО НЕ ОБЯЗАТЕЛЬНО"
+            !state.aiConfigured -> "GEMINI: КЛЮЧ НЕ НАЙДЕН"
             state.aiEnabled -> "GEMINI ВКЛЮЧЁН"
             else -> "GEMINI СОХРАНЁН, НО ВЫКЛЮЧЕН"
         }
@@ -167,15 +197,22 @@ class EventRadarActivity : AppCompatActivity() {
         status.text = when {
             !state.enabled -> "Радар выключен. Торговая часть продолжает работать как раньше."
             state.lastSuccess <= 0L -> "Радар готов. Нажмите проверку или запустите основной монитор."
-            latest == null -> "Проверено ${state.sourceCount}/4 источников • новых подходящих сообщений нет."
+            latest == null -> "Интернет: ${state.sourceCount}/4 источников • разобрано ${state.parsedEntries} сообщений."
             else -> {
                 val direction = signed(latest.directionScore)
-                "Проверено ${state.sourceCount}/4 • ${PumpBotEngine.formatTime(state.lastSuccess)}\n" +
+                "Интернет: ${state.sourceCount}/4 • ${formatBytes(state.fetchBytes)} • разобрано ${state.parsedEntries} • новых ${state.newEvents}\n" +
                     "${latest.source}: важность ${latest.importance}/100 • влияние $direction/100\n" +
                     "${if (latest.aiAnalyzed) "оценено Gemini + правилами" else "оценено прозрачными правилами"}"
             }
         }
         if (state.error.isNotBlank()) status.append("\nНе все источники ответили: ${state.error}")
+        val gemini = state.gemini
+        status.append("\nGEMINI: ${gemini.status}")
+        if (gemini.lastSuccess > 0L) {
+            status.append(" • HTTP ${gemini.httpCode} • ${gemini.totalTokensToday} токенов сегодня")
+        }
+        if (gemini.error.isNotBlank()) status.append("\nОшибка Gemini: ${gemini.error}")
+        if (gemini.lastAutoNote.isNotBlank()) status.append("\n${gemini.lastAutoNote}")
         status.append("\nТрафик V3 сегодня: ${EventRadarStore.trafficText(this)}")
 
         events.text = if (state.recent.isEmpty()) {
@@ -191,6 +228,44 @@ class EventRadarActivity : AppCompatActivity() {
                     "${event.title}\nВажность ${event.importance}/100 • влияние ${signed(event.directionScore)}/100 • уверенность ${event.confidence}/100"
             }.joinToString("\n\n") + "\n\nКоснитесь списка, чтобы открыть источник самого свежего события."
         }
+        if (details.visibility == View.VISIBLE) updateDetails(state)
+    }
+
+    private fun updateDetails(state: EventRadarState) {
+        val sourceLines = if (state.sourceChecks.isEmpty()) {
+            "Источники ещё не проверялись"
+        } else state.sourceChecks.joinToString("\n") { check ->
+            val result = when {
+                check.error.isNotBlank() -> "ошибка: ${check.error}"
+                check.cacheHit -> "HTTP 304 • без повторной загрузки"
+                else -> "HTTP ${check.httpCode} • ${formatBytes(check.downloadedBytes)} • сообщений ${check.parsedEntries}"
+            }
+            "${check.source}: $result"
+        }
+        val gemini = state.gemini
+        val web = if (gemini.webReferenceTitles.isEmpty()) "дополнительных ссылок Google Search не вернул" else {
+            gemini.webReferenceTitles.joinToString("\n") { "• $it" }
+        }
+        val latestTitles = state.recent.take(5).joinToString("\n") {
+            "• ${it.source}: ${it.title.take(180)}"
+        }.ifBlank { "• сообщений пока нет" }
+        details.text = buildString {
+            append("ФАКТИЧЕСКАЯ ПРОВЕРКА ИНТЕРНЕТА\n$sourceLines")
+            append("\n\nПОСЛЕДНИЕ ЗАГРУЖЕННЫЕ ЗАГОЛОВКИ\n$latestTitles")
+            append("\n\nФАКТИЧЕСКИЙ ОТВЕТ GEMINI\n")
+            append("Статус: ${gemini.status} • HTTP ${gemini.httpCode} • модель ${gemini.model.ifBlank { "—" }}")
+            append("\nОтправлено: ${gemini.inputTitle.ifBlank { "—" }}")
+            append("\nПолучено: ${gemini.outputSummary.ifBlank { "—" }}")
+            append("\nОценка: ${signed(gemini.directionScore)}/100 • важность ${gemini.importance}/100 • уверенность ${gemini.confidence}/100")
+            append("\nСегодня: ${gemini.requestsToday} запросов • ${gemini.promptTokensToday} входных + ${gemini.outputTokensToday} выходных = ${gemini.totalTokensToday} токенов")
+            append("\nВнешние ссылки Gemini: ${gemini.webReferences}\n$web")
+        }
+    }
+
+    private fun formatBytes(bytes: Int): String = when {
+        bytes >= 1024 * 1024 -> String.format(Locale.GERMANY, "%.2f МБ", bytes / 1024.0 / 1024.0)
+        bytes >= 1024 -> String.format(Locale.GERMANY, "%.1f КБ", bytes / 1024.0)
+        else -> "$bytes Б"
     }
 
     private fun signed(value: Int): String = if (value >= 0) "+$value" else "−${kotlin.math.abs(value)}"

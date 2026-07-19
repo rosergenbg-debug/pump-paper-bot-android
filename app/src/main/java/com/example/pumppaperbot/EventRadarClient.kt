@@ -20,6 +20,13 @@ import javax.xml.parsers.DocumentBuilderFactory
 
 data class EventFeedSource(val name: String, val url: String)
 
+private data class FeedFetchResult(
+    val events: List<RawMarketEvent>,
+    val check: EventSourceCheck
+)
+
+private class FeedHttpException(val httpCode: Int, message: String) : IllegalStateException(message)
+
 class EventRadarClient {
     private val client = OkHttpClient.Builder()
         .connectTimeout(12, TimeUnit.SECONDS)
@@ -40,29 +47,91 @@ class EventRadarClient {
         EventRadarStore.markAttempt(context)
         val collected = ArrayList<MarketEvent>()
         val errors = ArrayList<String>()
-        var successes = 0
+        val checks = ArrayList<EventSourceCheck>()
         sources.forEach { source ->
             runCatching {
-                fetchSource(context, source).map { EventRadarClassifier.classify(it) }
-            }.onSuccess {
-                successes += 1
-                collected += it
+                fetchSource(context, source)
+            }.onSuccess { result ->
+                checks += result.check
+                collected += result.events.map { EventRadarClassifier.classify(it) }
             }.onFailure {
-                errors += "${source.name}: ${it.message ?: "ошибка"}"
+                val message = it.message ?: "ошибка"
+                val code = (it as? FeedHttpException)?.httpCode ?: 0
+                errors += "${source.name}: $message"
+                checks += EventSourceCheck(
+                    source = source.name,
+                    httpCode = code,
+                    cacheHit = false,
+                    downloadedBytes = 0,
+                    parsedEntries = 0,
+                    checkedAt = System.currentTimeMillis(),
+                    error = message
+                )
             }
         }
 
-        if (successes == 0) {
-            EventRadarStore.saveFailure(context, errors.joinToString("; "))
+        if (checks.none { it.successful }) {
+            EventRadarStore.saveFetchFailure(context, checks, errors.joinToString("; "))
             return EventRadarStore.state(context)
         }
 
         val enriched = maybeUseAi(context, collected)
-        EventRadarStore.saveSync(context, enriched, successes, errors.joinToString("; "))
+        EventRadarStore.saveSync(context, enriched, checks, errors.joinToString("; "))
         return EventRadarStore.state(context)
     }
 
-    private fun fetchSource(context: Context, source: EventFeedSource): List<RawMarketEvent> {
+    fun testGemini(context: Context): EventRadarState {
+        val key = EventRadarStore.apiKey(context)
+        if (key.isBlank()) {
+            EventRadarStore.saveGeminiFailure(context, 0, "Ключ Gemini не найден")
+            return EventRadarStore.state(context)
+        }
+        val state = EventRadarStore.state(context)
+        val storedEvent = state.latest
+        val event = storedEvent ?: EventRadarClassifier.classify(
+            RawMarketEvent(
+                source = "ТЕСТ",
+                sourceUrl = "",
+                title = "Проверка подключения Gemini к PUMP Сигнал",
+                summary = "Проверь доступ к модели и верни диагностический JSON без торгового совета.",
+                link = "",
+                publishedAt = System.currentTimeMillis()
+            )
+        )
+        EventRadarStore.markGeminiAttempt(context, event.title, "Ручная проверка API и смыслового анализа")
+        runCatching {
+            GeminiEventInterpreter(client).analyze(
+                apiKey = key,
+                event = event,
+                market = PumpBotEngine.snapshot(context),
+                recent = state.recent.take(6),
+                useGoogleSearch = false
+            )
+        }.onSuccess { result ->
+            EventRadarStore.saveGeminiSuccess(
+                context = context,
+                event = result.event,
+                httpCode = result.httpCode,
+                model = result.model,
+                promptTokens = result.promptTokens,
+                outputTokens = result.outputTokens,
+                totalTokens = result.totalTokens,
+                webTitles = result.webTitles,
+                saveEvent = storedEvent != null
+            )
+            EventRadarStore.setUseAi(context, true)
+        }.onFailure { error ->
+            EventRadarStore.saveGeminiFailure(
+                context,
+                (error as? GeminiApiException)?.httpCode ?: 0,
+                error.message ?: "Gemini не ответил"
+            )
+        }
+        return EventRadarStore.state(context)
+    }
+
+    private fun fetchSource(context: Context, source: EventFeedSource): FeedFetchResult {
+        val checkedAt = System.currentTimeMillis()
         val builder = Request.Builder()
             .url(source.url)
             .header("Accept", "application/rss+xml, application/atom+xml, application/xml, text/xml")
@@ -75,8 +144,11 @@ class EventRadarClient {
         }
         val request = builder.build()
         client.newCall(request).execute().use { response ->
-            if (response.code == 304) return emptyList()
-            if (!response.isSuccessful) error("HTTP ${response.code}")
+            if (response.code == 304) return FeedFetchResult(
+                emptyList(),
+                EventSourceCheck(source.name, 304, true, 0, 0, checkedAt)
+            )
+            if (!response.isSuccessful) throw FeedHttpException(response.code, "HTTP ${response.code}")
             val remaining = EventRadarStore.remainingTrafficBytes(context)
             if (remaining < minimumUsefulResponseBytes) error("дневной лимит трафика V3 исчерпан")
             val allowed = minOf(maxFeedBytes.toLong(), remaining).toInt()
@@ -99,28 +171,67 @@ class EventRadarClient {
                 output.toByteArray()
             } ?: ByteArray(0)
             EventRadarStore.recordTrafficBytes(context, bytes.size.toLong())
-            if (bytes.isEmpty()) return emptyList()
-            val parsed = EventFeedParser.parse(bytes, source, System.currentTimeMillis())
+            val parsed = if (bytes.isEmpty()) emptyList() else {
+                EventFeedParser.parse(bytes, source, System.currentTimeMillis())
+            }
             EventRadarStore.saveHttpValidators(
                 context,
                 source.name,
                 response.header("ETag"),
                 response.header("Last-Modified")
             )
-            return parsed
+            return FeedFetchResult(
+                parsed,
+                EventSourceCheck(source.name, response.code, false, bytes.size, parsed.size, checkedAt)
+            )
         }
     }
 
     private fun maybeUseAi(context: Context, events: List<MarketEvent>): List<MarketEvent> {
         val key = EventRadarStore.apiKey(context)
-        if (!EventRadarStore.useAi(context) || key.isBlank()) return events
+        if (!EventRadarStore.useAi(context) || key.isBlank()) {
+            EventRadarStore.markGeminiSkipped(context, "Gemini выключен; официальные ленты проверены правилами")
+            return events
+        }
         val candidate = events
             .filter { it.importance >= 45 }
             .maxByOrNull { it.publishedAt }
-            ?: return events
-        val enriched = runCatching { GeminiEventInterpreter(client).analyze(key, candidate) }.getOrNull()
-            ?: return events
-        return events.map { if (it.id == candidate.id) enriched else it }
+        if (candidate == null) {
+            EventRadarStore.markGeminiSkipped(
+                context,
+                if (events.isEmpty()) "Ленты не изменились (HTTP 304): нового текста для Gemini нет"
+                else "Новые сообщения есть, но их важность ниже 45/100"
+            )
+            return events
+        }
+        EventRadarStore.markGeminiAttempt(context, candidate.title, "Автоматический анализ нового важного сообщения")
+        val result = runCatching {
+            GeminiEventInterpreter(client).analyze(
+                apiKey = key,
+                event = candidate,
+                market = PumpBotEngine.snapshot(context),
+                recent = events.take(6),
+                useGoogleSearch = false
+            )
+        }.onFailure { error ->
+            EventRadarStore.saveGeminiFailure(
+                context,
+                (error as? GeminiApiException)?.httpCode ?: 0,
+                error.message ?: "Gemini не ответил"
+            )
+        }.getOrNull() ?: return events
+        EventRadarStore.saveGeminiSuccess(
+            context,
+            result.event,
+            result.httpCode,
+            result.model,
+            result.promptTokens,
+            result.outputTokens,
+            result.totalTokens,
+            result.webTitles,
+            saveEvent = false
+        )
+        return events.map { if (it.id == candidate.id) result.event else it }
     }
 
     private companion object {
@@ -233,23 +344,107 @@ internal object EventFeedParser {
     }
 }
 
+internal class GeminiApiException(val httpCode: Int, message: String) : IllegalStateException(message)
+
+internal data class GeminiAnalysisResult(
+    val event: MarketEvent,
+    val httpCode: Int,
+    val model: String,
+    val promptTokens: Int,
+    val outputTokens: Int,
+    val totalTokens: Int,
+    val webTitles: List<String>
+)
+
+internal object GeminiResponseParser {
+    fun parse(responseText: String, event: MarketEvent, httpCode: Int = 200): GeminiAnalysisResult {
+        val root = JSONObject(responseText)
+        val candidate = root.optJSONArray("candidates")?.optJSONObject(0)
+            ?: throw GeminiApiException(httpCode, "Gemini не вернул вариант ответа")
+        val parts = candidate.optJSONObject("content")?.optJSONArray("parts")
+        val text = buildString {
+            if (parts != null) for (index in 0 until parts.length()) {
+                append(parts.optJSONObject(index)?.optString("text").orEmpty())
+            }
+        }.trim()
+        if (text.isBlank()) throw GeminiApiException(httpCode, "Gemini вернул пустой ответ")
+        val firstBrace = text.indexOf('{')
+        val lastBrace = text.lastIndexOf('}')
+        if (firstBrace < 0 || lastBrace <= firstBrace) {
+            throw GeminiApiException(httpCode, "Ответ Gemini не содержит JSON")
+        }
+        val json = JSONObject(text.substring(firstBrace, lastBrace + 1))
+        val usage = root.optJSONObject("usageMetadata")
+        val chunks = candidate.optJSONObject("groundingMetadata")?.optJSONArray("groundingChunks")
+        val webTitles = buildList {
+            if (chunks != null) for (index in 0 until chunks.length()) {
+                val web = chunks.optJSONObject(index)?.optJSONObject("web") ?: continue
+                val label = web.optString("title").ifBlank { web.optString("uri") }.trim()
+                if (label.isNotBlank()) add(label.take(160))
+            }
+        }.distinct().take(8)
+        val enriched = event.copy(
+            directionScore = json.optInt("direction", event.directionScore).coerceIn(-100, 100),
+            importance = json.optInt("importance", event.importance).coerceIn(0, 100),
+            confidence = json.optInt("confidence", event.confidence).coerceIn(0, 100),
+            category = json.optString("category", event.category).take(60),
+            explanation = json.optString("summary_ru", event.explanation).take(500),
+            aiAnalyzed = true
+        )
+        return GeminiAnalysisResult(
+            event = enriched,
+            httpCode = httpCode,
+            model = root.optString("modelVersion", "gemini-3-flash-preview"),
+            promptTokens = usage?.optInt("promptTokenCount") ?: 0,
+            outputTokens = usage?.optInt("candidatesTokenCount") ?: 0,
+            totalTokens = usage?.optInt("totalTokenCount") ?: 0,
+            webTitles = webTitles
+        )
+    }
+}
+
 internal class GeminiEventInterpreter(private val client: OkHttpClient) {
-    fun analyze(apiKey: String, event: MarketEvent): MarketEvent {
+    fun analyze(
+        apiKey: String,
+        event: MarketEvent,
+        market: LiveSnapshot,
+        recent: List<MarketEvent>,
+        useGoogleSearch: Boolean
+    ): GeminiAnalysisResult {
+        val recentContext = recent.take(6).joinToString("\n") {
+            "- ${it.source}: ${it.title.take(220)}"
+        }.ifBlank { "- других заголовков пока нет" }
         val prompt = """
-            Ты оцениваешь только возможное краткосрочное влияние публичного события на крипторынок.
-            Не давай торговый совет и не выдумывай факты. Верни только JSON без markdown:
+            Ты проверяешь возможное краткосрочное влияние публичного события на Bitcoin, Solana и волатильный PUMP.
+            Сопоставь событие с текущими рыночными измерениями. Если доступен Google Search, используй его только
+            для проверки свежего контекста и не заменяй факт предположением. Не давай торговый совет.
+            Верни только JSON без markdown:
             {"direction": число от -100 до 100, "importance": 0..100, "confidence": 0..100,
              "category": "краткая категория", "summary_ru": "одно короткое предложение"}
             -100 означает сильное давление вниз, +100 — вверх, 0 — направление неясно.
             Источник: ${event.source}
             Заголовок: ${event.title}
             Текст: ${event.summary.take(1200)}
+            Рыночный снимок PUMP/EUR: цена ${market.lastPrice}; RSI ${market.lastRsi};
+            поток ${market.directionScore}/100; активность ${market.energyScore}/100;
+            сжатие ${market.compressionScore}/100; согласованность ${market.breathingConfidence}/100;
+            риск позднего входа ${market.lateEntryRisk}/100; состояние ${market.breathingState}.
+            Другие свежие официальные заголовки:
+            $recentContext
         """.trimIndent()
-        val body = JSONObject()
+        val requestJson = JSONObject()
             .put("contents", JSONArray().put(
                 JSONObject().put("parts", JSONArray().put(JSONObject().put("text", prompt)))
             ))
-            .put("generationConfig", JSONObject().put("responseMimeType", "application/json"))
+            .put("generationConfig", JSONObject()
+                .put("responseMimeType", "application/json")
+                .put("temperature", 0.1)
+                .put("maxOutputTokens", 320)
+            )
+        if (useGoogleSearch) {
+            requestJson.put("tools", JSONArray().put(JSONObject().put("google_search", JSONObject())))
+        }
+        val body = requestJson
             .toString()
             .toRequestBody("application/json; charset=utf-8".toMediaType())
         val request = Request.Builder()
@@ -257,20 +452,15 @@ internal class GeminiEventInterpreter(private val client: OkHttpClient) {
             .header("x-goog-api-key", apiKey)
             .post(body)
             .build()
-        val text = client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) error("Gemini HTTP ${response.code}")
-            val root = JSONObject(response.body?.string().orEmpty())
-            root.getJSONArray("candidates").getJSONObject(0)
-                .getJSONObject("content").getJSONArray("parts").getJSONObject(0).getString("text")
+        return client.newCall(request).execute().use { response ->
+            val responseBody = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                val message = runCatching {
+                    JSONObject(responseBody).optJSONObject("error")?.optString("message")
+                }.getOrNull().orEmpty().ifBlank { "Gemini HTTP ${response.code}" }
+                throw GeminiApiException(response.code, message.take(500))
+            }
+            GeminiResponseParser.parse(responseBody, event, response.code)
         }
-        val json = JSONObject(text.substringAfter('{', "").substringBeforeLast('}', "").let { "{$it}" })
-        return event.copy(
-            directionScore = json.optInt("direction", event.directionScore).coerceIn(-100, 100),
-            importance = json.optInt("importance", event.importance).coerceIn(0, 100),
-            confidence = json.optInt("confidence", event.confidence).coerceIn(0, 100),
-            category = json.optString("category", event.category).take(60),
-            explanation = json.optString("summary_ru", event.explanation).take(300),
-            aiAnalyzed = true
-        )
     }
 }
