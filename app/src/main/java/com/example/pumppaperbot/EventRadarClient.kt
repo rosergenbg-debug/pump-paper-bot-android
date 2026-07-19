@@ -82,7 +82,7 @@ class EventRadarClient {
                 response.header("ETag"),
                 response.header("Last-Modified")
             )
-            val bytes = response.body?.bytes().orEmpty()
+            val bytes = response.body?.bytes() ?: ByteArray(0)
             if (bytes.isEmpty()) return emptyList()
             if (bytes.size > maxFeedBytes) error("лента больше допустимого размера")
             return EventFeedParser.parse(bytes, source, System.currentTimeMillis())
