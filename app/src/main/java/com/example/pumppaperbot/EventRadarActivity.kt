@@ -176,6 +176,7 @@ class EventRadarActivity : AppCompatActivity() {
             }
         }
         if (state.error.isNotBlank()) status.append("\nНе все источники ответили: ${state.error}")
+        status.append("\nТрафик V3 сегодня: ${EventRadarStore.trafficText(this)}")
 
         events.text = if (state.recent.isEmpty()) {
             "Пока событий нет. После первой проверки старая лента будет показана, но не вызовет ложный звонок."

@@ -10,6 +10,7 @@ import org.json.JSONObject
 import org.w3c.dom.Element
 import org.w3c.dom.Node
 import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.net.URI
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -76,16 +77,37 @@ class EventRadarClient {
         client.newCall(request).execute().use { response ->
             if (response.code == 304) return emptyList()
             if (!response.isSuccessful) error("HTTP ${response.code}")
+            val remaining = EventRadarStore.remainingTrafficBytes(context)
+            if (remaining < minimumUsefulResponseBytes) error("дневной лимит трафика V3 исчерпан")
+            val allowed = minOf(maxFeedBytes.toLong(), remaining).toInt()
+            val declared = response.body?.contentLength() ?: -1L
+            if (declared > allowed) error("лента превышает лимит ${allowed / 1024} КБ")
+            val bytes = response.body?.byteStream()?.use { input ->
+                val output = ByteArrayOutputStream(minOf(allowed, 64 * 1024))
+                val buffer = ByteArray(8 * 1024)
+                var total = 0
+                while (true) {
+                    val read = input.read(buffer)
+                    if (read < 0) break
+                    total += read
+                    if (total > allowed) {
+                        EventRadarStore.recordTrafficBytes(context, total.toLong())
+                        error("лента превышает лимит ${allowed / 1024} КБ")
+                    }
+                    output.write(buffer, 0, read)
+                }
+                output.toByteArray()
+            } ?: ByteArray(0)
+            EventRadarStore.recordTrafficBytes(context, bytes.size.toLong())
+            if (bytes.isEmpty()) return emptyList()
+            val parsed = EventFeedParser.parse(bytes, source, System.currentTimeMillis())
             EventRadarStore.saveHttpValidators(
                 context,
                 source.name,
                 response.header("ETag"),
                 response.header("Last-Modified")
             )
-            val bytes = response.body?.bytes() ?: ByteArray(0)
-            if (bytes.isEmpty()) return emptyList()
-            if (bytes.size > maxFeedBytes) error("лента больше допустимого размера")
-            return EventFeedParser.parse(bytes, source, System.currentTimeMillis())
+            return parsed
         }
     }
 
@@ -102,7 +124,8 @@ class EventRadarClient {
     }
 
     private companion object {
-        const val maxFeedBytes = 2 * 1024 * 1024
+        const val maxFeedBytes = 768 * 1024
+        const val minimumUsefulResponseBytes = 16 * 1024L
     }
 }
 

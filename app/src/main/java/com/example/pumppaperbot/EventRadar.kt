@@ -213,6 +213,9 @@ object EventRadarStore {
     private const val keyInitialized = "initialized"
     private const val keyLastAlert = "last_alert"
     private const val keyPendingAlert = "pending_alert"
+    private const val keyTrafficDay = "traffic_day"
+    private const val keyTrafficBytes = "traffic_bytes"
+    const val dailyTrafficLimitBytes = 8L * 1024L * 1024L
 
     private fun prefs(context: Context) = context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
 
@@ -229,6 +232,24 @@ object EventRadarStore {
         if (!etag.isNullOrBlank()) editor.putString("etag_$source", etag)
         if (!lastModified.isNullOrBlank()) editor.putString("modified_$source", lastModified)
         editor.apply()
+    }
+
+    fun remainingTrafficBytes(context: Context, now: Long = System.currentTimeMillis()): Long {
+        resetTrafficDayIfNeeded(context, now)
+        return (dailyTrafficLimitBytes - prefs(context).getLong(keyTrafficBytes, 0L)).coerceAtLeast(0L)
+    }
+
+    fun recordTrafficBytes(context: Context, bytes: Long, now: Long = System.currentTimeMillis()) {
+        if (bytes <= 0L) return
+        resetTrafficDayIfNeeded(context, now)
+        val p = prefs(context)
+        val total = (p.getLong(keyTrafficBytes, 0L) + bytes).coerceAtMost(dailyTrafficLimitBytes)
+        p.edit().putLong(keyTrafficBytes, total).apply()
+    }
+
+    fun trafficText(context: Context): String {
+        val used = dailyTrafficLimitBytes - remainingTrafficBytes(context)
+        return String.format(Locale.GERMANY, "%.2f из 8 МБ", used / 1024.0 / 1024.0)
     }
 
     fun shouldSync(context: Context, now: Long = System.currentTimeMillis()): Boolean {
@@ -313,4 +334,12 @@ object EventRadarStore {
             array.optJSONObject(index)?.let { MarketEvent.fromJson(it) }
         }
     }.getOrDefault(emptyList())
+
+    private fun resetTrafficDayIfNeeded(context: Context, now: Long) {
+        val day = now / (24L * 60L * 60L * 1000L)
+        val p = prefs(context)
+        if (p.getLong(keyTrafficDay, -1L) != day) {
+            p.edit().putLong(keyTrafficDay, day).putLong(keyTrafficBytes, 0L).apply()
+        }
+    }
 }
