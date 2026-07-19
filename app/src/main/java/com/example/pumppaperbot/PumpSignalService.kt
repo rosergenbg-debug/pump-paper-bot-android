@@ -50,7 +50,12 @@ class PumpSignalService : Service() {
             try {
                 market.sync(this)
                 val snapshot = PumpBotEngine.snapshot(this)
-                if (PumpBotEngine.shouldAlert(this, snapshot)) {
+                val rapidDropAlerted = if (PumpBotEngine.shouldAlertRapidDrop(this, snapshot)) {
+                    PumpAlert.showRapidDrop(this, snapshot)
+                    PumpBotEngine.markRapidDropAlerted(this, snapshot)
+                    true
+                } else false
+                if (!rapidDropAlerted && PumpBotEngine.shouldAlert(this, snapshot)) {
                     PumpAlert.showSignal(this, snapshot)
                     PumpBotEngine.markAlerted(this, snapshot)
                 }

@@ -18,7 +18,7 @@ class MarketSyncClient {
     fun sync(context: Context) {
         val now = System.currentTimeMillis()
         val saved = PumpBotEngine.savedMarketPayloads(context)
-        val pool = Executors.newFixedThreadPool(10)
+        val pool = Executors.newFixedThreadPool(12)
         try {
             val pump = pool.submit<String> {
                 updateKlines(saved.pumpJson, recentSpotBars, now) { start, end ->
@@ -58,10 +58,13 @@ class MarketSyncClient {
             val funding = pool.submit<String> { updateFunding(saved.fundingJson, now) }
             val depth = pool.submit<String> { runCatching { fetch(PumpBotEngine.depthUrl()) }.getOrDefault("") }
             val openInterest = pool.submit<String> { runCatching { fetch(PumpBotEngine.openInterestUrl()) }.getOrDefault("") }
+            val pumpTicker = pool.submit<String> { runCatching { fetch(PumpBotEngine.tickerUrl(PumpBotEngine.pumpSymbol)) }.getOrDefault("") }
+            val eurTicker = pool.submit<String> { runCatching { fetch(PumpBotEngine.tickerUrl(PumpBotEngine.eurSymbol)) }.getOrDefault("") }
             PumpBotEngine.syncMarket(
                 context,
                 pump.get(), eur.get(), btc.get(), eth.get(), sol.get(),
-                futures.get(), premium.get(), funding.get(), depth.get(), openInterest.get()
+                futures.get(), premium.get(), funding.get(), depth.get(), openInterest.get(),
+                pumpTicker.get(), eurTicker.get()
             )
         } finally {
             pool.shutdownNow()

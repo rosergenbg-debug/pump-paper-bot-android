@@ -151,7 +151,9 @@ data class LiveSnapshot(
     val bookImbalance: Double? = null,
     val spreadPercent: Double? = null,
     val openInterest: Double? = null,
-    val openInterestChangePercent: Double? = null
+    val openInterestChangePercent: Double? = null,
+    val rapidDrop: RapidDropState = RapidDropState.none(),
+    val weekRhythm: WeekRhythmContext = WeekRhythm.at(0L)
 )
 
 data class CoinOption(val name: String, val symbol: String)
@@ -168,7 +170,7 @@ data class SavedMarketPayloads(
 )
 
 object PumpBotEngine {
-    const val appVersionName = "2.5"
+    const val appVersionName = "2.6"
     const val startBalance = 1000.0
     const val feeRate = 0.0015
     const val slippage = 0.0005
@@ -187,7 +189,7 @@ object PumpBotEngine {
     const val uniqueWorkName = "pump_rsi_risk_periodic_monitor"
 
     private const val prefsName = "PumpSignalV17"
-    private const val algorithmVersion = 20
+    private const val algorithmVersion = 21
     private const val keyVersion = "algorithm_version"
     private const val keyRunning = "running"
     private const val keyWaitMode = "wait_mode"
@@ -216,6 +218,18 @@ object PumpBotEngine {
     private const val keySpreadPercent = "spread_percent"
     private const val keyOpenInterest = "open_interest"
     private const val keyOpenInterestChange = "open_interest_change"
+    private const val keyRapidDropActive = "rapid_drop_active"
+    private const val keyRapidDropPercent = "rapid_drop_percent"
+    private const val keyRapidDropBand = "rapid_drop_band"
+    private const val keyRapidDropPeakPrice = "rapid_drop_peak_price"
+    private const val keyRapidDropCurrentPrice = "rapid_drop_current_price"
+    private const val keyRapidDropPeakTime = "rapid_drop_peak_time"
+    private const val keyRapidDropWindowMinutes = "rapid_drop_window_minutes"
+    private const val keyRapidDropRebound = "rapid_drop_rebound"
+    private const val keyRapidDropRecovery = "rapid_drop_recovery"
+    private const val keyLastRapidDropAlertKey = "last_rapid_drop_alert_key"
+    private const val keyLastRapidDropAlertBand = "last_rapid_drop_alert_band"
+    private const val keyLastRapidDropAlertTime = "last_rapid_drop_alert_time"
     private const val keyStrategyMode = "strategy_mode"
     private const val keyPendingMode = "pending_mode"
     private const val keyEntryTime = "entry_time"
@@ -247,7 +261,7 @@ object PumpBotEngine {
         val p = prefs(context)
         when (p.getInt(keyVersion, 0)) {
             algorithmVersion -> Unit
-            17, 18, 19 -> p.edit()
+            17, 18, 19, 20 -> p.edit()
                 .putInt(keyVersion, algorithmVersion)
                 .putBoolean(keyLateEntryBlocked, false)
                 .putString(keyBreathingState, "ЖДЁМ НОВЫЙ РАСЧЁТ")
@@ -256,6 +270,18 @@ object PumpBotEngine {
                 .putInt(keyDirectionScore, 0)
                 .putInt(keyBreathingConfidence, 0)
                 .putInt(keyLateEntryRisk, 0)
+                .putBoolean(keyRapidDropActive, false)
+                .putDouble(keyRapidDropPercent, 0.0)
+                .putInt(keyRapidDropBand, 0)
+                .putDouble(keyRapidDropPeakPrice, 0.0)
+                .putDouble(keyRapidDropCurrentPrice, 0.0)
+                .putLong(keyRapidDropPeakTime, 0L)
+                .putInt(keyRapidDropWindowMinutes, 0)
+                .putDouble(keyRapidDropRebound, 0.0)
+                .putBoolean(keyRapidDropRecovery, false)
+                .putString(keyLastRapidDropAlertKey, "")
+                .putInt(keyLastRapidDropAlertBand, 0)
+                .putLong(keyLastRapidDropAlertTime, 0L)
                 .apply()
             else -> reset(context)
         }
@@ -292,6 +318,18 @@ object PumpBotEngine {
             .putDouble(keySpreadPercent, Double.NaN)
             .putDouble(keyOpenInterest, Double.NaN)
             .putDouble(keyOpenInterestChange, Double.NaN)
+            .putBoolean(keyRapidDropActive, false)
+            .putDouble(keyRapidDropPercent, 0.0)
+            .putInt(keyRapidDropBand, 0)
+            .putDouble(keyRapidDropPeakPrice, 0.0)
+            .putDouble(keyRapidDropCurrentPrice, 0.0)
+            .putLong(keyRapidDropPeakTime, 0L)
+            .putInt(keyRapidDropWindowMinutes, 0)
+            .putDouble(keyRapidDropRebound, 0.0)
+            .putBoolean(keyRapidDropRecovery, false)
+            .putString(keyLastRapidDropAlertKey, "")
+            .putInt(keyLastRapidDropAlertBand, 0)
+            .putLong(keyLastRapidDropAlertTime, 0L)
             .putString(keyStrategyMode, StrategyV2.MODE_NONE)
             .putString(keyPendingMode, StrategyV2.MODE_NONE)
             .putLong(keyEntryTime, 0L)
@@ -421,6 +459,11 @@ object PumpBotEngine {
         return "https://data-api.binance.vision/api/v3/klines?symbol=$encoded&interval=$interval&limit=$limit"
     }
 
+    fun tickerUrl(symbol: String): String {
+        val encoded = URLEncoder.encode(symbol, "UTF-8")
+        return "https://data-api.binance.vision/api/v3/ticker/price?symbol=$encoded"
+    }
+
     fun historicalKlineUrl(symbol: String, interval: String, start: Long, end: Long): String {
         val encoded = URLEncoder.encode(symbol, "UTF-8")
         return "https://data-api.binance.vision/api/v3/klines?symbol=$encoded&interval=$interval&startTime=$start&endTime=$end&limit=1000"
@@ -473,7 +516,9 @@ object PumpBotEngine {
         premiumJson: String,
         fundingJson: String,
         depthJson: String,
-        openInterestJson: String
+        openInterestJson: String,
+        pumpTickerJson: String = "",
+        eurTickerJson: String = ""
     ) {
         ensureInitialized(context)
         val candles = StrategyV2.synthesizeEur(parseCandles(pumpJson), parseCandles(eurJson))
@@ -485,7 +530,13 @@ object PumpBotEngine {
         val funding = parseFunding(fundingJson)
         val orderBook = parseOrderBook(depthJson)
         val openInterest = parseOpenInterest(openInterestJson)
+        val livePump = parseTickerPrice(pumpTickerJson)
+        val liveEur = parseTickerPrice(eurTickerJson)
+        val livePumpEur = if (livePump != null && liveEur != null && liveEur > 0.0) livePump / liveEur else null
+        val rapidDrop = RapidDropDetector.detect(candles, livePumpEur)
         val p = prefs(context)
+        val crashBlocksBuy = p.getString(keyWaitMode, "BUY") == "BUY" &&
+            rapidDrop.active && !rapidDrop.recoveryConfirmed
         val previousOpenInterest = p.getDouble(keyOpenInterest, Double.NaN).takeIf { it.isFinite() && it > 0.0 }
         val openInterestChange = if (openInterest != null && previousOpenInterest != null) {
             (openInterest / previousOpenInterest - 1.0) * 100.0
@@ -543,14 +594,31 @@ object PumpBotEngine {
             .putDouble(keySpreadPercent, evaluation.breathing.spreadPercent ?: Double.NaN)
             .putDouble(keyOpenInterest, evaluation.breathing.openInterest ?: Double.NaN)
             .putDouble(keyOpenInterestChange, evaluation.breathing.openInterestChangePercent ?: Double.NaN)
+            .putBoolean(keyRapidDropActive, rapidDrop.active)
+            .putDouble(keyRapidDropPercent, rapidDrop.dropPercent)
+            .putInt(keyRapidDropBand, rapidDrop.severityBand)
+            .putDouble(keyRapidDropPeakPrice, rapidDrop.peakPrice)
+            .putDouble(keyRapidDropCurrentPrice, rapidDrop.currentPrice)
+            .putLong(keyRapidDropPeakTime, rapidDrop.peakTime)
+            .putInt(keyRapidDropWindowMinutes, rapidDrop.windowMinutes)
+            .putDouble(keyRapidDropRebound, rapidDrop.reboundPercent)
+            .putBoolean(keyRapidDropRecovery, rapidDrop.recoveryConfirmed)
             .putString(keyPendingMode, evaluation.strategyMode)
-            .putBoolean(keyBuySignal, evaluation.buySignal)
+            .putBoolean(keyBuySignal, evaluation.buySignal && !crashBlocksBuy)
             .putBoolean(keySellSignal, evaluation.sellSignal)
-            .putString(keySignalAction, evaluation.signalAction)
-            .putString(keySignalReason, evaluation.signalReason)
+            .putString(keySignalAction, if (crashBlocksBuy && evaluation.signalAction == "BUY") "WAIT" else evaluation.signalAction)
+            .putString(
+                keySignalReason,
+                if (crashBlocksBuy) {
+                    "АВАРИЙНОЕ ПАДЕНИЕ: обычная покупка временно заблокирована до подтверждённого отскока."
+                } else evaluation.signalReason
+            )
             .putDouble(keyHighestClose, evaluation.highestClose)
         if (evaluation.marketGateActive || kotlin.math.abs(evaluation.readinessScore) < 90) {
             editor.putString(keyLastAlertKey, "")
+        }
+        if (!rapidDrop.active || rapidDrop.dropPercent < RapidDropDetector.RESET_THRESHOLD_PERCENT) {
+            editor.putString(keyLastRapidDropAlertKey, "")
         }
         editor.apply()
         MarketObservationLog.append(context, snapshot(context))
@@ -627,7 +695,19 @@ object PumpBotEngine {
             bookImbalance = p.nullableDouble(keyBookImbalance),
             spreadPercent = p.nullableDouble(keySpreadPercent),
             openInterest = p.nullableDouble(keyOpenInterest),
-            openInterestChangePercent = p.nullableDouble(keyOpenInterestChange)
+            openInterestChangePercent = p.nullableDouble(keyOpenInterestChange),
+            rapidDrop = RapidDropState(
+                active = p.getBoolean(keyRapidDropActive, false),
+                dropPercent = p.getDouble(keyRapidDropPercent, 0.0),
+                severityBand = p.getInt(keyRapidDropBand, 0),
+                peakPrice = p.getDouble(keyRapidDropPeakPrice, 0.0),
+                currentPrice = p.getDouble(keyRapidDropCurrentPrice, 0.0),
+                peakTime = p.getLong(keyRapidDropPeakTime, 0L),
+                windowMinutes = p.getInt(keyRapidDropWindowMinutes, 0),
+                reboundPercent = p.getDouble(keyRapidDropRebound, 0.0),
+                recoveryConfirmed = p.getBoolean(keyRapidDropRecovery, false)
+            ),
+            weekRhythm = WeekRhythm.at(p.getLong(keyLastCandle, 0L))
         )
     }
 
@@ -644,6 +724,9 @@ object PumpBotEngine {
         if (snapshot.waitMode == "BUY" &&
             (snapshot.lateEntryBlocked || snapshot.breathingConfidence < 50)
         ) return false
+        if (snapshot.waitMode == "BUY" && snapshot.rapidDrop.active && !snapshot.rapidDrop.recoveryConfirmed) {
+            return false
+        }
         if (expected && !AlertSchedule.isAllowedNow(context)) {
             AlertSchedule.rememberBlocked(context, snapshot)
             return false
@@ -667,6 +750,34 @@ object PumpBotEngine {
         val key = alertKey(context, snapshot)
         prefs(context).edit().putString(keyLastAlertKey, key).apply()
         if (AlertSchedule.pendingTime(context) > 0L) AlertSchedule.markDelivered(context)
+    }
+
+    fun rapidDropAlertKey(snapshot: LiveSnapshot): String {
+        if (!snapshot.rapidDrop.active) return ""
+        return "${snapshot.rapidDrop.peakTime}:${snapshot.rapidDrop.severityBand}"
+    }
+
+    fun shouldAlertRapidDrop(context: Context, snapshot: LiveSnapshot): Boolean {
+        if (!snapshot.running || !snapshot.rapidDrop.active) return false
+        if (!AlertSchedule.isAllowedNow(context)) return false
+        val key = rapidDropAlertKey(snapshot)
+        val p = prefs(context)
+        if (key.isBlank() || key == p.getString(keyLastRapidDropAlertKey, "")) return false
+        val elapsed = (System.currentTimeMillis() - p.getLong(keyLastRapidDropAlertTime, 0L))
+            .coerceAtLeast(0L)
+        return RapidDropDetector.shouldNotify(
+            snapshot.rapidDrop.severityBand,
+            p.getInt(keyLastRapidDropAlertBand, 0),
+            elapsed
+        )
+    }
+
+    fun markRapidDropAlerted(context: Context, snapshot: LiveSnapshot) {
+        prefs(context).edit()
+            .putString(keyLastRapidDropAlertKey, rapidDropAlertKey(snapshot))
+            .putInt(keyLastRapidDropAlertBand, snapshot.rapidDrop.severityBand)
+            .putLong(keyLastRapidDropAlertTime, System.currentTimeMillis())
+            .apply()
     }
 
     fun parseCandles(json: String): List<PumpCandle> {
@@ -733,6 +844,13 @@ object PumpBotEngine {
         return runCatching {
             JSONObject(json).optString("openInterest", "").toDoubleOrNull()
         }.getOrNull()?.takeIf { it.isFinite() && it >= 0.0 }
+    }
+
+    fun parseTickerPrice(json: String): Double? {
+        if (json.isBlank()) return null
+        return runCatching {
+            JSONObject(json).optString("price", "").toDoubleOrNull()
+        }.getOrNull()?.takeIf { it.isFinite() && it > 0.0 }
     }
 
     fun parseFunding(json: String): List<FundingPoint> {
