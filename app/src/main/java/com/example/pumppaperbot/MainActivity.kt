@@ -338,11 +338,11 @@ class MainActivity : AppCompatActivity() {
         }
         val mainText = when {
             !state.enabled -> "V3 РАДАР ВЫКЛЮЧЕН\nТорговый алгоритм работает как раньше"
-            state.lastSuccess <= 0L -> "V3.2 РАДАР СОБЫТИЙ\nЖдём первую проверку 7 источников"
-            latest == null -> "V3.2 РАДАР • новых значимых событий пока нет"
+            state.lastSuccess <= 0L -> "V3.3 РАДАР СОБЫТИЙ\nЖдём первую проверку 7 источников"
+            latest == null -> "V3.3 РАДАР • новых значимых событий пока нет"
             else -> {
                 val direction = if (latest.directionScore >= 0) "+${latest.directionScore}" else "−${kotlin.math.abs(latest.directionScore)}"
-                "V3.2 ${latest.source} • важность ${latest.importance}/100 • влияние $direction/100\n" +
+                "V3.3 ${latest.source} • важность ${latest.importance}/100 • влияние $direction/100\n" +
                     "${latest.title.take(95)}\n$confirmation"
             }
         }
@@ -418,7 +418,16 @@ class MainActivity : AppCompatActivity() {
         val oi = snapshot.openInterestChangePercent?.let { "OI ${String.format(Locale.GERMAN, "%+.2f%%", it)} с прошлой проверки" }
             ?: snapshot.openInterest?.let { "OI собирается для сравнения" }
             ?: "OI: нет данных"
-        tvMicrostructure?.text = "$book • $spread • $oi\nСнимок стакана — дополнительное наблюдение, не самостоятельный приказ купить."
+        val impulse = ImpulseRadarStore.state(this)
+        val impulseValues = if (impulse.candleTime > 0L) {
+            val volume = impulse.volumeRatio?.let { String.format(Locale.GERMAN, "объём ×%.1f", it) } ?: "объём —"
+            val flow = impulse.spotTakerRatio?.let { String.format(Locale.GERMAN, "spot %.0f%%", it * 100.0) } ?: "spot —"
+            val oi10 = impulse.openInterestChange10m?.let { String.format(Locale.GERMAN, "OI10 %+.2f%%", it * 100.0) } ?: "OI10 —"
+            "5m SHADOW ${impulse.readiness}/100 • $volume • $flow • $oi10"
+        } else {
+            "5m SHADOW: ждём первую синхронизацию"
+        }
+        tvMicrostructure?.text = "$book • $spread • $oi\n$impulseValues\n${impulse.status}"
     }
 
     private fun signed(value: Int): String = if (value >= 0) "+$value" else "−${kotlin.math.abs(value)}"

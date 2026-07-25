@@ -165,6 +165,13 @@ class EventRadarTest {
         assertTrue(error?.message.orEmpty().contains("305"))
     }
 
+    @Test
+    fun googleSearch429RetriesWithoutSearchOnlyOnce() {
+        assertTrue(GeminiRetryPolicy.shouldRetryWithoutSearch(429, true))
+        assertFalse(GeminiRetryPolicy.shouldRetryWithoutSearch(429, false))
+        assertFalse(GeminiRetryPolicy.shouldRetryWithoutSearch(500, true))
+    }
+
     private fun state(event: MarketEvent) = EventRadarState(
         enabled = true,
         lastAttempt = 0L,

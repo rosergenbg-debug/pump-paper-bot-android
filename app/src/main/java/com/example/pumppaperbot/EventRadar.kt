@@ -366,6 +366,7 @@ object EventRadarStore {
     private const val keyGeminiDiagnostics = "gemini_diagnostics"
     private const val keyGeminiUsageDay = "gemini_usage_day"
     private const val keyV31AiInitialized = "v31_ai_initialized"
+    private const val keyLastGeminiEventId = "last_gemini_event_id"
     const val dailyTrafficLimitBytes = 8L * 1024L * 1024L
 
     private fun prefs(context: Context) = context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
@@ -487,6 +488,17 @@ object EventRadarStore {
         ))
     }
 
+    fun newForAutomaticAnalysis(
+        context: Context,
+        events: List<MarketEvent>
+    ): List<MarketEvent> {
+        val p = prefs(context)
+        val existingIds = readEvents(p.getString(keyEvents, "[]").orEmpty())
+            .mapTo(HashSet()) { it.id }
+        val lastAnalyzedId = p.getString(keyLastGeminiEventId, "").orEmpty()
+        return events.filter { it.id !in existingIds && it.id != lastAnalyzedId }
+    }
+
     fun saveGeminiSuccess(
         context: Context,
         event: MarketEvent,
@@ -500,7 +512,8 @@ object EventRadarStore {
         evidence: List<String>,
         risks: List<String>,
         horizonHours: Int,
-        saveEvent: Boolean = true
+        saveEvent: Boolean = true,
+        note: String? = null
     ) {
         val current = geminiDiagnostics(context)
         saveGemini(context, current.copy(
@@ -521,8 +534,10 @@ object EventRadarStore {
             totalTokensToday = current.totalTokensToday + totalTokens,
             webReferences = webTitles.size,
             webReferenceTitles = webTitles.take(8),
-            error = ""
+            error = "",
+            lastAutoNote = note?.take(240) ?: current.lastAutoNote
         ))
+        prefs(context).edit().putString(keyLastGeminiEventId, event.id).apply()
         if (saveEvent) replaceEvent(context, event)
     }
 

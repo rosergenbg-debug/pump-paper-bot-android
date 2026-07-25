@@ -32,25 +32,25 @@ jobs:
         run: gradle testDebugUnitTest assembleDebug
 
       - name: Prepare named APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk PumpSignal-V3-Info-Score-v3.2.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk PumpSignal-V3-Shadow-Radar-v3.3.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: PumpSignal-V3-Info-Score-v3.2-APK
-          path: PumpSignal-V3-Info-Score-v3.2.apk
+          name: PumpSignal-V3-Shadow-Radar-v3.3-APK
+          path: PumpSignal-V3-Shadow-Radar-v3.3.apk
           retention-days: 30
 
-      - name: Publish v3.2 release
+      - name: Publish v3.3 release
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v3.2
-          name: PUMP Сигнал v3.2 — информационная поправка Gemini
+          tag_name: v3.3
+          name: PUMP Сигнал v3.3 — проверенный 5m Shadow Radar
           prerelease: true
           body: |
-            Исправлена Android-ошибка XML, из-за которой все RSS-ленты показывали Unknown 0.0. К ФРС, ЕЦБ, SEC и BLS добавлены свежие ленты PUMP, Bitcoin и Solana.
-            Исправлен пустой HTTP 200 от Gemini 3: минимальный thinking больше не съедает весь лимит ответа. Ручная проверка возвращает развёрнутый анализ, факты, риски, горизонт и ссылки Google Search.
-            На главном экране и в крупной шкале видны три числа: внутренний алгоритм, поправка Gemini и общий фон. Поправка ограничена ±12, уменьшается с возрастом новости и пока не меняет торговые сигналы и backtest.
-            Сохранены алгоритм v2.6, аварийная тревога 25%+, лимит 8 МБ в сутки и комиссия 0,15% на каждую сторону. Исторические результаты не гарантируют будущую прибыль.
-          files: PumpSignal-V3-Info-Score-v3.2.apk
+            Добавлен отдельный 5-минутный Shadow Radar: объём, устойчивый spot/futures taker-поток, сжатие, относительная сила PUMP против BTC/SOL и изменение OI за 10 минут.
+            Проверка на 90 534 пятиминутных свечах показала, что прямой быстрый вход по предложениям Gemini убыточен. Поэтому Shadow Radar ничего не меняет в BUY/SELL и сохраняет наблюдения в отдельный CSV для будущего walk-forward.
+            Старые RSS-заголовки больше не отправляются в Gemini повторно. При HTTP 429 от Google Search подробная проверка один раз повторяется без поиска и честно показывает fallback.
+            Сохранены торговая логика V3.2, информационная поправка ±12 в режиме наблюдения, аварийная тревога 25%+ и комиссия 0,15% на каждую сторону. Исторические результаты не гарантируют будущую прибыль.
+          files: PumpSignal-V3-Shadow-Radar-v3.3.apk
