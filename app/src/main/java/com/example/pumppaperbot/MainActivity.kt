@@ -19,6 +19,7 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import androidx.work.workDataOf
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
@@ -37,8 +38,6 @@ class MainActivity : AppCompatActivity() {
     private var tvMode: TextView? = null
     private var tvReadiness: TextView? = null
     private var tvRapidDrop: TextView? = null
-    private var tvEventRadar: TextView? = null
-    private var tvGeminiPaper: TextView? = null
     private var tvBreathingState: TextView? = null
     private var tvEnergy: TextView? = null
     private var tvDirection: TextView? = null
@@ -60,7 +59,6 @@ class MainActivity : AppCompatActivity() {
     private var btnToggleMode: Button? = null
     private var btnBacktest: Button? = null
     private var btnAlertSettings: Button? = null
-    private var btnEventRadar: Button? = null
     private var btnGeminiExperiment: Button? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -73,8 +71,6 @@ class MainActivity : AppCompatActivity() {
         tvMode = findViewById(R.id.tvMode)
         tvReadiness = findViewById(R.id.tvReadiness)
         tvRapidDrop = findViewById(R.id.tvRapidDrop)
-        tvEventRadar = findViewById(R.id.tvEventRadar)
-        tvGeminiPaper = findViewById(R.id.tvGeminiPaper)
         tvBreathingState = findViewById(R.id.tvBreathingState)
         tvEnergy = findViewById(R.id.tvEnergy)
         tvDirection = findViewById(R.id.tvDirection)
@@ -96,7 +92,6 @@ class MainActivity : AppCompatActivity() {
         btnToggleMode = findViewById(R.id.btnToggleMode)
         btnBacktest = findViewById(R.id.btnBacktest)
         btnAlertSettings = findViewById(R.id.btnAlertSettings)
-        btnEventRadar = findViewById(R.id.btnEventRadar)
         btnGeminiExperiment = findViewById(R.id.btnGeminiExperiment)
 
         PumpBotEngine.ensureInitialized(this)
@@ -128,11 +123,7 @@ class MainActivity : AppCompatActivity() {
         btnToggleMode?.setOnClickListener { showSignalInfo() }
         btnBacktest?.setOnClickListener { startActivity(Intent(this, BacktestActivity::class.java)) }
         btnAlertSettings?.setOnClickListener { startActivity(Intent(this, AlertSettingsActivity::class.java)) }
-        btnEventRadar?.setOnClickListener { startActivity(Intent(this, EventRadarActivity::class.java)) }
         btnGeminiExperiment?.setOnClickListener {
-            startActivity(Intent(this, GeminiExperimentActivity::class.java))
-        }
-        tvGeminiPaper?.setOnClickListener {
             startActivity(Intent(this, GeminiExperimentActivity::class.java))
         }
         chart?.setOnClickListener { startActivity(Intent(this, ChartDetailActivity::class.java)) }
@@ -156,7 +147,12 @@ class MainActivity : AppCompatActivity() {
         PumpBotEngine.setRunning(this, true)
         PumpAlert.ensureChannels(this)
         ContextCompat.startForegroundService(this, Intent(this, PumpSignalService::class.java))
-        val request = PeriodicWorkRequestBuilder<PumpBotWorker>(15, TimeUnit.MINUTES).build()
+        val request = PeriodicWorkRequestBuilder<PumpBotWorker>(15, TimeUnit.MINUTES)
+            .setInputData(workDataOf(
+                PumpBotWorker.INPUT_CYCLE_SOURCE to "ANDROID РЕЗЕРВ 15 МИН",
+                PumpBotWorker.INPUT_CYCLE_INTERVAL to TimeUnit.MINUTES.toMillis(15)
+            ))
+            .build()
         WorkManager.getInstance(this).enqueueUniquePeriodicWork(
             PumpBotEngine.uniqueWorkName,
             ExistingPeriodicWorkPolicy.UPDATE,
@@ -181,7 +177,18 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun checkNow() {
-        WorkManager.getInstance(this).enqueue(OneTimeWorkRequestBuilder<PumpBotWorker>().build())
+        val interval = if (PumpBotEngine.snapshot(this).running) {
+            TimeUnit.MINUTES.toMillis(2)
+        } else {
+            TimeUnit.MINUTES.toMillis(15)
+        }
+        val request = OneTimeWorkRequestBuilder<PumpBotWorker>()
+            .setInputData(workDataOf(
+                PumpBotWorker.INPUT_CYCLE_SOURCE to "РУЧНАЯ ПРОВЕРКА",
+                PumpBotWorker.INPUT_CYCLE_INTERVAL to interval
+            ))
+            .build()
+        WorkManager.getInstance(this).enqueue(request)
         handler.postDelayed({ updateUi() }, 2000)
         handler.postDelayed({ updateUi() }, 6000)
     }
@@ -272,8 +279,6 @@ class MainActivity : AppCompatActivity() {
         )
 
         renderRapidDrop(snapshot)
-        renderEventRadar(snapshot)
-        renderGeminiPaper(snapshot)
         renderReadiness(snapshot)
         renderBreathing(snapshot)
 
@@ -351,102 +356,6 @@ class MainActivity : AppCompatActivity() {
                 )
             )
         )
-    }
-
-    private fun renderEventRadar(snapshot: LiveSnapshot) {
-        val state = EventRadarStore.state(this)
-        val latest = state.latest
-        val confirmation = state.confirmation(snapshot.directionScore, snapshot.breathingConfidence)
-        val infoAdjustment = state.informationAdjustment()
-        val combined = state.combinedDirection(snapshot.directionScore)
-        val internetLine = "ИНТЕРНЕТ ${state.sourceCount}/${EventRadarClient.totalSources} • ${state.parsedEntries} сообщений • новых ${state.newEvents}"
-        val geminiLine = when {
-            !state.aiEnabled -> "GEMINI ВЫКЛЮЧЁН"
-            state.gemini.status == "РАБОТАЕТ" -> "GEMINI РАБОТАЕТ • ${state.gemini.totalTokensToday} токенов сегодня"
-            state.gemini.status == "ОШИБКА" -> "GEMINI: ОШИБКА HTTP ${state.gemini.httpCode}"
-            else -> "GEMINI: ${state.gemini.status}"
-        }
-        val mainText = when {
-            !state.enabled -> "V3 РАДАР ВЫКЛЮЧЕН\nТорговый алгоритм работает как раньше"
-            state.lastSuccess <= 0L -> "V3.4 РАДАР СОБЫТИЙ\nЖдём первую проверку 7 источников"
-            latest == null -> "V3.4 РАДАР • новых значимых событий пока нет"
-            else -> {
-                val direction = if (latest.directionScore >= 0) "+${latest.directionScore}" else "−${kotlin.math.abs(latest.directionScore)}"
-                "V3.4 ${latest.source} • важность ${latest.importance}/100 • влияние $direction/100\n" +
-                    "${latest.title.take(95)}\n$confirmation"
-            }
-        }
-        tvEventRadar?.text = "$mainText\n$internetLine\n$geminiLine\n" +
-            "ШКАЛА: алгоритм ${signed(snapshot.directionScore)} • Gemini ${signed(infoAdjustment)} • итог ${signed(combined)}"
-        tvEventRadar?.setTextColor(
-            Color.parseColor(
-                when {
-                    (latest?.directionScore ?: 0) <= -35 -> "#FF7B72"
-                    (latest?.directionScore ?: 0) >= 35 -> "#7EE787"
-                    else -> "#79C0FF"
-                }
-            )
-        )
-        tvEventRadar?.setBackgroundColor(Color.parseColor("#172033"))
-    }
-
-    private fun renderGeminiPaper(snapshot: LiveSnapshot) {
-        val state = GeminiPaperStore.state(this)
-        val now = System.currentTimeMillis()
-        val visibleStatus = GeminiHourlyRetryPolicy.visibleStatus(state, now)
-        val portfolio = state.portfolio
-        val value = portfolio.value(snapshot.lastPrice)
-        val last = portfolio.decisions.lastOrNull()
-        val position = if (portfolio.inPosition) {
-            String.format(Locale.GERMANY, "PUMP %.2f • вход €%.8f", portfolio.pumpAmount, portfolio.entryPrice)
-        } else {
-            String.format(Locale.GERMANY, "наличные €%.2f • ждёт вход", portfolio.cashEur)
-        }
-        val forecastLine = last?.let {
-            val action = when (it.requestedAction) {
-                "BUY" -> "КУПИТЬ"
-                "SELL" -> "ПРОДАТЬ"
-                else -> "ДЕРЖАТЬ"
-            }
-            "ШКАЛА GEMINI ${signed(it.directionScore)}/100 • $action • уверенность ${it.confidence}/100 • прогноз ${PumpBotEngine.formatTime(it.decidedAt)}"
-        } ?: "ШКАЛА GEMINI — НЕТ ОТВЕТА • ждём полностью закрытый час"
-        val model = state.activeModel.ifBlank { state.model }.ifBlank { "ещё не выбрана" }
-        val attempt = state.attemptsThisHour.coerceAtMost(
-            GeminiHourlyRetryPolicy.MAX_AUTOMATIC_ATTEMPTS_PER_HOUR
-        )
-        val requestLine = if (state.lastAttempt > 0L) {
-            "Последний запрос ${PumpBotEngine.formatTime(state.lastAttempt)} • попытка $attempt/3"
-        } else {
-            "Запросов Gemini ещё не было"
-        }
-        val nextAt = GeminiHourlyRetryPolicy.nextVisibleActionAt(state, now)
-        val nextLine = when {
-            !state.enabled -> "Следующий запрос: выключен"
-            visibleStatus == "НЕТ КЛЮЧА GEMINI" -> "Следующий запрос: сначала сохраните ключ Gemini"
-            nextAt <= 0L -> "Сейчас: сетевой запрос выполняется • предел 85 секунд"
-            state.lastFailure >= state.lastSuccess &&
-                state.attemptsThisHour in 1 until GeminiHourlyRetryPolicy.MAX_AUTOMATIC_ATTEMPTS_PER_HOUR ->
-                "Следующая попытка не раньше ${PumpBotEngine.formatTime(nextAt)}"
-            else -> "Следующий новый прогноз после ${PumpBotEngine.formatTime(nextAt)}"
-        }
-        val reason = last?.reason?.take(180)
-            ?: state.error.takeIf(String::isNotBlank)?.take(180)
-            ?: "Gemini ещё не сформировал самостоятельный прогноз."
-        tvGeminiPaper?.text = String.format(
-            Locale.GERMANY,
-            "V3.5 GEMINI • ОТДЕЛЬНАЯ ШКАЛА\n%s\nСтатус: %s • модель %s\n%s\n%s\nРынок 2 мин • RSS-новости 10 мин • Gemini API 1 раз за закрытый час\nСчёт €%.2f • результат %+.2f%% • операций %d • %s\n%s",
-            forecastLine,
-            visibleStatus,
-            model,
-            requestLine,
-            nextLine,
-            value, portfolio.profitPercent(snapshot.lastPrice), portfolio.trades.size,
-            position,
-            reason
-        )
-        tvGeminiPaper?.setTextColor(Color.parseColor(
-            if (portfolio.profit(snapshot.lastPrice) >= 0.0) "#D2A8FF" else "#FF7B72"
-        ))
     }
 
     private fun renderRapidDrop(snapshot: LiveSnapshot) {
