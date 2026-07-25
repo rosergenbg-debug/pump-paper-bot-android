@@ -3,6 +3,12 @@ plugins {
     id 'org.jetbrains.kotlin.android'
 }
 
+def releaseStoreFile = System.getenv("PUMP_SIGNING_STORE_FILE")
+def releaseStorePassword = System.getenv("PUMP_SIGNING_STORE_PASSWORD")
+def releaseKeyAlias = System.getenv("PUMP_SIGNING_KEY_ALIAS")
+def releaseKeyPassword = System.getenv("PUMP_SIGNING_KEY_PASSWORD")
+def hasReleaseSigning = releaseStoreFile && releaseStorePassword && releaseKeyAlias && releaseKeyPassword
+
 android {
     namespace 'com.example.pumppaperbot'
     compileSdk 34
@@ -11,8 +17,28 @@ android {
         applicationId "com.example.pumppaperbot.v8"
         minSdk 24
         targetSdk 34
-        versionCode 33
-        versionName "3.3"
+        versionCode 34
+        versionName "3.4"
+    }
+
+    signingConfigs {
+        if (hasReleaseSigning) {
+            release {
+                storeFile file(releaseStoreFile)
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
+        }
     }
 
     compileOptions {

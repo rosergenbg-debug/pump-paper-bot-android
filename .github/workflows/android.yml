@@ -28,29 +28,60 @@ jobs:
         with:
           gradle-version: '8.5'
 
-      - name: Test and build APK
+      - name: Verify release signing
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          SIGNING_KEYSTORE_BASE64: ${{ secrets.PUMP_SIGNING_KEYSTORE_BASE64 }}
+          SIGNING_STORE_PASSWORD: ${{ secrets.PUMP_SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.PUMP_SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.PUMP_SIGNING_KEY_PASSWORD }}
+        run: |
+          test -n "$SIGNING_KEYSTORE_BASE64"
+          test -n "$SIGNING_STORE_PASSWORD"
+          test -n "$SIGNING_KEY_ALIAS"
+          test -n "$SIGNING_KEY_PASSWORD"
+
+      - name: Restore permanent signing key
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          SIGNING_KEYSTORE_BASE64: ${{ secrets.PUMP_SIGNING_KEYSTORE_BASE64 }}
+        run: printf '%s' "$SIGNING_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/pump-signal-release.jks"
+
+      - name: Test and build update APK
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          PUMP_SIGNING_STORE_FILE: ${{ runner.temp }}/pump-signal-release.jks
+          PUMP_SIGNING_STORE_PASSWORD: ${{ secrets.PUMP_SIGNING_STORE_PASSWORD }}
+          PUMP_SIGNING_KEY_ALIAS: ${{ secrets.PUMP_SIGNING_KEY_ALIAS }}
+          PUMP_SIGNING_KEY_PASSWORD: ${{ secrets.PUMP_SIGNING_KEY_PASSWORD }}
+        run: gradle testDebugUnitTest assembleRelease
+
+      - name: Test pull request
+        if: github.event_name != 'push' || github.ref != 'refs/heads/main'
         run: gradle testDebugUnitTest assembleDebug
 
       - name: Prepare named APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk PumpSignal-V3-Shadow-Radar-v3.3.apk
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: cp app/build/outputs/apk/release/app-release.apk PumpSignal-V3-Gemini-Paper-v3.4.apk
 
       - name: Upload APK
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@v4
         with:
-          name: PumpSignal-V3-Shadow-Radar-v3.3-APK
-          path: PumpSignal-V3-Shadow-Radar-v3.3.apk
+          name: PumpSignal-V3-Gemini-Paper-v3.4-APK
+          path: PumpSignal-V3-Gemini-Paper-v3.4.apk
           retention-days: 30
 
-      - name: Publish v3.3 release
+      - name: Publish v3.4 release
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v3.3
-          name: PUMP Сигнал v3.3 — проверенный 5m Shadow Radar
+          tag_name: v3.4
+          name: PUMP Сигнал v3.4 — Gemini Shadow Portfolio
           prerelease: true
           body: |
-            Добавлен отдельный 5-минутный Shadow Radar: объём, устойчивый spot/futures taker-поток, сжатие, относительная сила PUMP против BTC/SOL и изменение OI за 10 минут.
-            Проверка на 90 534 пятиминутных свечах показала, что прямой быстрый вход по предложениям Gemini убыточен. Поэтому Shadow Radar ничего не меняет в BUY/SELL и сохраняет наблюдения в отдельный CSV для будущего walk-forward.
-            Старые RSS-заголовки больше не отправляются в Gemini повторно. При HTTP 429 от Google Search подробная проверка один раз повторяется без поиска и честно показывает fallback.
-            Сохранены торговая логика V3.2, информационная поправка ±12 в режиме наблюдения, аварийная тревога 25%+ и комиссия 0,15% на каждую сторону. Исторические результаты не гарантируют будущую прибыль.
-          files: PumpSignal-V3-Shadow-Radar-v3.3.apk
+            Добавлен независимый виртуальный портфель Gemini со стартовыми 1 000 €, живым P/L, сохранением позиции и журналом операций.
+            Сделки используют только свежую оценку Gemini и защищены от повторного исполнения, позднего входа, убытка больше 4,5% и неограниченного удержания прибыли.
+            Основная стратегия и её BUY/SELL не изменены: портфель Gemini работает параллельно в Shadow Mode для честного сравнения.
+            Комиссия 0,15% учитывается на входе и выходе. Результаты эксперимента не гарантируют будущую прибыль.
+          files: PumpSignal-V3-Gemini-Paper-v3.4.apk
