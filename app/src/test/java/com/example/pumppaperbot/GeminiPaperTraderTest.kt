@@ -158,4 +158,26 @@ class GeminiPaperTraderTest {
         assertFalse(blocked.allowed)
         assertTrue(blocked.status.contains("3/3"))
     }
+
+    @Test fun `activity event preserves observable request details`() {
+        val original = GeminiActivityEvent(
+            at = 123_456L,
+            stage = "GEMINI API",
+            result = "OK",
+            detail = "Ответ получен",
+            durationMillis = 4_321L,
+            model = "gemini-test",
+            hourId = 77L,
+            attempt = 2
+        )
+        assertEquals(original, GeminiActivityEvent.fromJson(original.toJson()))
+    }
+
+    @Test fun `cycle guard blocks overlapping checks and recovers`() {
+        assertTrue(GeminiCycleGuard.tryEnter())
+        assertFalse(GeminiCycleGuard.tryEnter())
+        GeminiCycleGuard.exit()
+        assertTrue(GeminiCycleGuard.tryEnter())
+        GeminiCycleGuard.exit()
+    }
 }
