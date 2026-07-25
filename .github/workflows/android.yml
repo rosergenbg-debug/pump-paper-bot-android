@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -28,68 +28,12 @@ jobs:
         with:
           gradle-version: '8.5'
 
-      - name: Verify release signing
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        env:
-          SIGNING_KEYSTORE_BASE64: ${{ secrets.PUMP_SIGNING_KEYSTORE_BASE64 }}
-          SIGNING_STORE_PASSWORD: ${{ secrets.PUMP_SIGNING_STORE_PASSWORD }}
-          SIGNING_KEY_ALIAS: ${{ secrets.PUMP_SIGNING_KEY_ALIAS }}
-          SIGNING_KEY_PASSWORD: ${{ secrets.PUMP_SIGNING_KEY_PASSWORD }}
-        run: |
-          test -n "$SIGNING_KEYSTORE_BASE64"
-          test -n "$SIGNING_STORE_PASSWORD"
-          test -n "$SIGNING_KEY_ALIAS"
-          test -n "$SIGNING_KEY_PASSWORD"
-
-      - name: Restore permanent signing key
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        env:
-          SIGNING_KEYSTORE_BASE64: ${{ secrets.PUMP_SIGNING_KEYSTORE_BASE64 }}
-        run: printf '%s' "$SIGNING_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/pump-signal-release.jks"
-
-      - name: Test and build update APK
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        env:
-          PUMP_SIGNING_STORE_FILE: ${{ runner.temp }}/pump-signal-release.jks
-          PUMP_SIGNING_STORE_PASSWORD: ${{ secrets.PUMP_SIGNING_STORE_PASSWORD }}
-          PUMP_SIGNING_KEY_ALIAS: ${{ secrets.PUMP_SIGNING_KEY_ALIAS }}
-          PUMP_SIGNING_KEY_PASSWORD: ${{ secrets.PUMP_SIGNING_KEY_PASSWORD }}
-        run: gradle testDebugUnitTest assembleRelease
-
-      - name: Test pull request
-        if: github.event_name != 'push' || github.ref != 'refs/heads/main'
+      - name: Test and build APK
         run: gradle testDebugUnitTest assembleDebug
 
-      - name: Upload test APK for signing
-        if: github.event_name != 'push' || github.ref != 'refs/heads/main'
+      - name: Upload test APK
         uses: actions/upload-artifact@v4
         with:
-          name: PumpSignal-V3.4-Unsigned-Test-APK
+          name: PumpSignal-V3.4-Test-APK
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 7
-
-      - name: Prepare named APK
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: cp app/build/outputs/apk/release/app-release.apk PumpSignal-V3-Gemini-Paper-v3.4.apk
-
-      - name: Upload APK
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/upload-artifact@v4
-        with:
-          name: PumpSignal-V3-Gemini-Paper-v3.4-APK
-          path: PumpSignal-V3-Gemini-Paper-v3.4.apk
-          retention-days: 30
-
-      - name: Publish v3.4 release
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v3.4
-          name: PUMP Сигнал v3.4 — Gemini Shadow Portfolio
-          prerelease: true
-          body: |
-            Добавлен независимый виртуальный портфель Gemini со стартовыми 1 000 €, живым P/L, сохранением позиции и журналом операций.
-            Сделки используют только свежую оценку Gemini и защищены от повторного исполнения, позднего входа, убытка больше 4,5% и неограниченного удержания прибыли.
-            Основная стратегия и её BUY/SELL не изменены: портфель Gemini работает параллельно в Shadow Mode для честного сравнения.
-            Комиссия 0,15% учитывается на входе и выходе. Результаты эксперимента не гарантируют будущую прибыль.
-          files: PumpSignal-V3-Gemini-Paper-v3.4.apk
