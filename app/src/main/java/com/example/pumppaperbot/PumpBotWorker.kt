@@ -16,6 +16,7 @@ class PumpBotWorker(
             market.sync(applicationContext)
             val eventState = eventRadar.sync(applicationContext)
             val snapshot = PumpBotEngine.snapshot(applicationContext)
+            GeminiExperimentClient().sync(applicationContext)
             val rapidDropAlerted = if (PumpBotEngine.shouldAlertRapidDrop(applicationContext, snapshot)) {
                 PumpAlert.showRapidDrop(applicationContext, snapshot)
                 PumpBotEngine.markRapidDropAlerted(applicationContext, snapshot)

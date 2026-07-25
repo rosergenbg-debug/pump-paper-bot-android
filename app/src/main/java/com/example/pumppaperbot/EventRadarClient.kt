@@ -408,7 +408,12 @@ internal data class GeminiAnalysisResult(
 )
 
 internal object GeminiResponseParser {
-    fun parse(responseText: String, event: MarketEvent, httpCode: Int = 200): GeminiAnalysisResult {
+    fun parse(
+        responseText: String,
+        event: MarketEvent,
+        httpCode: Int = 200,
+        requestedModel: String = "gemini-3.6-flash"
+    ): GeminiAnalysisResult {
         val root = JSONObject(responseText)
         val candidate = root.optJSONArray("candidates")?.optJSONObject(0)
             ?: throw GeminiApiException(httpCode, "Gemini не вернул вариант ответа")
@@ -457,7 +462,7 @@ internal object GeminiResponseParser {
         return GeminiAnalysisResult(
             event = enriched,
             httpCode = httpCode,
-            model = root.optString("modelVersion", "gemini-3-flash-preview"),
+            model = root.optString("modelVersion", requestedModel),
             promptTokens = usage?.optInt("promptTokenCount") ?: 0,
             outputTokens = usage?.optInt("candidatesTokenCount") ?: 0,
             totalTokens = usage?.optInt("totalTokenCount") ?: 0,
@@ -473,6 +478,36 @@ internal object GeminiResponseParser {
 internal class GeminiEventInterpreter(private val client: OkHttpClient) {
     fun analyze(
         apiKey: String,
+        event: MarketEvent,
+        market: LiveSnapshot,
+        recent: List<MarketEvent>,
+        useGoogleSearch: Boolean,
+        detailed: Boolean
+    ): GeminiAnalysisResult {
+        var lastError: GeminiApiException? = null
+        for ((index, model) in MODELS.withIndex()) {
+            try {
+                return analyzeModel(
+                    apiKey = apiKey,
+                    model = model,
+                    event = event,
+                    market = market,
+                    recent = recent,
+                    useGoogleSearch = useGoogleSearch,
+                    detailed = detailed
+                )
+            } catch (error: GeminiApiException) {
+                lastError = error
+                val canFallback = error.httpCode in setOf(404, 429, 500, 503)
+                if (!canFallback || index == MODELS.lastIndex) throw error
+            }
+        }
+        throw lastError ?: GeminiApiException(0, "Gemini не ответил")
+    }
+
+    private fun analyzeModel(
+        apiKey: String,
+        model: String,
         event: MarketEvent,
         market: LiveSnapshot,
         recent: List<MarketEvent>,
@@ -512,7 +547,7 @@ internal class GeminiEventInterpreter(private val client: OkHttpClient) {
             .put("generationConfig", JSONObject()
                 .put("responseMimeType", "application/json")
                 .put("maxOutputTokens", if (detailed) 6144 else 1536)
-                .put("thinkingConfig", JSONObject().put("thinkingLevel", "MINIMAL"))
+                .put("thinkingConfig", JSONObject().put("thinkingLevel", "LOW"))
             )
         if (useGoogleSearch) {
             requestJson.put("tools", JSONArray().put(JSONObject().put("google_search", JSONObject())))
@@ -521,7 +556,7 @@ internal class GeminiEventInterpreter(private val client: OkHttpClient) {
             .toString()
             .toRequestBody("application/json; charset=utf-8".toMediaType())
         val request = Request.Builder()
-            .url("https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent")
+            .url("https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent")
             .header("x-goog-api-key", apiKey)
             .post(body)
             .build()
@@ -533,7 +568,11 @@ internal class GeminiEventInterpreter(private val client: OkHttpClient) {
                 }.getOrNull().orEmpty().ifBlank { "Gemini HTTP ${response.code}" }
                 throw GeminiApiException(response.code, message.take(500))
             }
-            GeminiResponseParser.parse(responseBody, event, response.code)
+            GeminiResponseParser.parse(responseBody, event, response.code, model)
         }
+    }
+
+    private companion object {
+        val MODELS = listOf("gemini-3.6-flash", "gemini-3.5-flash")
     }
 }

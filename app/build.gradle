@@ -17,7 +17,7 @@ android {
         applicationId "com.example.pumppaperbot.v8"
         minSdk 24
         targetSdk 34
-        versionCode 34
+        versionCode 35
         versionName "3.4"
     }
 
@@ -28,10 +28,6 @@ android {
                 storePassword releaseStorePassword
                 keyAlias releaseKeyAlias
                 keyPassword releaseKeyPassword
-                enableV1Signing true
-                enableV2Signing true
-                enableV3Signing true
-                enableV4Signing true
             }
         }
     }
