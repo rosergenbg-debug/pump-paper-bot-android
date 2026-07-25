@@ -94,6 +94,19 @@
             android:textStyle="bold" />
 
         <TextView
+            android:id="@+id/tvGeminiPaper"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:background="#211A36"
+            android:minHeight="112dp"
+            android:padding="10dp"
+            android:text="GEMINI • ВИРТУАЛЬНЫЕ 1 000 €&#10;Ждём первую самостоятельную оценку"
+            android:textColor="#D2A8FF"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <TextView
             android:id="@+id/tvBreathingState"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

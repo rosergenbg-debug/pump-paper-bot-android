@@ -38,6 +38,7 @@ class MainActivity : AppCompatActivity() {
     private var tvReadiness: TextView? = null
     private var tvRapidDrop: TextView? = null
     private var tvEventRadar: TextView? = null
+    private var tvGeminiPaper: TextView? = null
     private var tvBreathingState: TextView? = null
     private var tvEnergy: TextView? = null
     private var tvDirection: TextView? = null
@@ -72,6 +73,7 @@ class MainActivity : AppCompatActivity() {
         tvReadiness = findViewById(R.id.tvReadiness)
         tvRapidDrop = findViewById(R.id.tvRapidDrop)
         tvEventRadar = findViewById(R.id.tvEventRadar)
+        tvGeminiPaper = findViewById(R.id.tvGeminiPaper)
         tvBreathingState = findViewById(R.id.tvBreathingState)
         tvEnergy = findViewById(R.id.tvEnergy)
         tvDirection = findViewById(R.id.tvDirection)
@@ -263,6 +265,7 @@ class MainActivity : AppCompatActivity() {
 
         renderRapidDrop(snapshot)
         renderEventRadar(snapshot)
+        renderGeminiPaper(snapshot)
         renderReadiness(snapshot)
         renderBreathing(snapshot)
 
@@ -358,6 +361,30 @@ class MainActivity : AppCompatActivity() {
             )
         )
         tvEventRadar?.setBackgroundColor(Color.parseColor("#172033"))
+    }
+
+    private fun renderGeminiPaper(snapshot: LiveSnapshot) {
+        val gemini = EventRadarStore.state(this).gemini
+        val portfolio = GeminiPaperStore.evaluate(this, snapshot, gemini)
+        val value = portfolio.value(snapshot.lastPrice)
+        val last = portfolio.trades.lastOrNull()
+        val position = if (portfolio.inPosition) {
+            String.format(Locale.GERMANY, "PUMP %.2f • вход €%.8f", portfolio.pumpAmount, portfolio.entryPrice)
+        } else {
+            String.format(Locale.GERMANY, "наличные €%.2f • ждёт вход", portfolio.cashEur)
+        }
+        val lastLine = last?.let {
+            "${it.action} ${PumpBotEngine.formatTime(it.time)} • ${it.reason}"
+        } ?: "Сделок пока нет"
+        tvGeminiPaper?.text = String.format(
+            Locale.GERMANY,
+            "GEMINI SHADOW • СТАРТ 1 000 €\nСейчас €%.2f • результат %+.2f%% • сделок %d\n%s\nШкала Gemini %+d/100 • уверенность %d/100\n%s",
+            value, portfolio.profitPercent(snapshot.lastPrice), portfolio.trades.size,
+            position, gemini.directionScore, gemini.confidence, lastLine
+        )
+        tvGeminiPaper?.setTextColor(Color.parseColor(
+            if (portfolio.profit(snapshot.lastPrice) >= 0.0) "#D2A8FF" else "#FF7B72"
+        ))
     }
 
     private fun renderRapidDrop(snapshot: LiveSnapshot) {
