@@ -2,7 +2,7 @@ name: Android Build
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "agent/v3-4-gemini-rebuild-v2" ]
   pull_request:
     branches: [ "main" ]
   workflow_dispatch:
@@ -36,4 +36,25 @@ jobs:
         with:
           name: PumpSignal-V3.4-Test-APK
           path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 7
+
+      - name: Build unsigned personal release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/agent/v3-4-gemini-rebuild-v2'
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_dir="$RUNNER_TEMP/pump-signal-v34-unsigned"
+          mkdir -p "$release_dir"
+          gradle assembleRelease
+          build_tools="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+          cp app/build/outputs/apk/release/app-release.apk \
+            "$release_dir/PumpSignal-V3.4-Gemini-Hourly-UNSIGNED.apk"
+          cp "$build_tools/lib/apksigner.jar" "$release_dir/apksigner.jar"
+
+      - name: Upload unsigned personal release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/agent/v3-4-gemini-rebuild-v2'
+        uses: actions/upload-artifact@v4
+        with:
+          name: PumpSignal-V3.4-Unsigned-Release
+          path: ${{ runner.temp }}/pump-signal-v34-unsigned
           retention-days: 7
