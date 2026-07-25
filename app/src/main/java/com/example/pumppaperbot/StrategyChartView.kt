@@ -118,6 +118,10 @@ class StrategyChartView @JvmOverloads constructor(
         color = Color.parseColor("#6E7681")
         style = Paint.Style.FILL
     }
+    private val geminiGaugePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#5B4A70")
+        style = Paint.Style.FILL
+    }
     private val priceTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
         textSize = sp(10.5f)
@@ -320,8 +324,11 @@ class StrategyChartView @JvmOverloads constructor(
 
         val left = dp(7f)
         val top = dp(44f)
-        val gaugeLeft = width - dp(42f)
-        val right = if (data.showReadinessGauge) gaugeLeft - dp(4f) else width - dp(6f)
+        val gaugeWidth = if (data.showGeminiGauge) dp(34f) else dp(42f)
+        val algorithmGaugeLeft = width - gaugeWidth
+        val geminiGaugeLeft = algorithmGaugeLeft - dp(2f) - gaugeWidth
+        val firstGaugeLeft = if (data.showGeminiGauge) geminiGaugeLeft else algorithmGaugeLeft
+        val right = if (data.showReadinessGauge) firstGaugeLeft - dp(4f) else width - dp(6f)
         val bottom = height - dp(18f)
         val chartHeight = bottom - top
         val chartWidth = right - left
@@ -387,7 +394,19 @@ class StrategyChartView @JvmOverloads constructor(
         drawIndicator(canvas, data.slow, start, visibleCount, ::x, ::y, slowPaint)
         drawTrades(canvas, data.trades, candles, data.aggressive, ::x, ::y)
         if (historyOffsetBars == 0) drawScenario(canvas, data, start, visibleCount, step, candleRight, ::x, ::y)
-        if (data.showReadinessGauge) drawReadinessGauge(canvas, data, gaugeLeft, top, width - dp(2f), bottom)
+        if (data.showReadinessGauge) {
+            if (data.showGeminiGauge) {
+                drawGeminiGauge(
+                    canvas,
+                    data,
+                    geminiGaugeLeft,
+                    top,
+                    geminiGaugeLeft + gaugeWidth,
+                    bottom
+                )
+            }
+            drawReadinessGauge(canvas, data, algorithmGaugeLeft, top, width - dp(2f), bottom)
+        }
         drawPriceScale(canvas, data, paddedMin, paddedMax, left, right, top, bottom, ::y)
         drawSelectedCandle(canvas, data, candles, left, right, top, bottom, ::x, ::y)
         drawDates(canvas, candles, ::x, bottom + dp(12f))
@@ -585,12 +604,63 @@ class StrategyChartView @JvmOverloads constructor(
             bodyRect.set(left + dp(8f), middle, right - dp(8f), middle + amount)
             canvas.drawRoundRect(bodyRect, dp(2f), dp(2f), sellPaint)
         }
-        canvas.drawText("Э${data.energyScore}", (left + right) / 2f, top + dp(24f), gaugeTextPaint)
-        canvas.drawText("Р${data.lateEntryRisk}", (left + right) / 2f, bottom - dp(15f), gaugeTextPaint)
+        canvas.drawText("АЛГ", (left + right) / 2f, top + dp(24f), gaugeTextPaint)
+        canvas.drawText("Э${data.energyScore}/Р${data.lateEntryRisk}", (left + right) / 2f, bottom - dp(15f), gaugeTextPaint)
         val markerY = if (score >= 0) middle - usable * score / 100f else middle + usable * abs(score) / 100f
         val markerPaint = if (score < 0) sellPaint else buyPaint
         val pulse = dp((2.5f + 0.8f * ((sin(System.currentTimeMillis() / 350.0) + 1.0) / 2.0)).toFloat())
         canvas.drawCircle(right - dp(3f), markerY, pulse, markerPaint)
+    }
+
+    private fun drawGeminiGauge(
+        canvas: Canvas,
+        data: ChartBundle,
+        left: Float,
+        top: Float,
+        right: Float,
+        bottom: Float
+    ) {
+        canvas.drawRoundRect(left, top, right, bottom, dp(4f), dp(4f), geminiGaugePaint)
+        val middle = (top + bottom) / 2f
+        canvas.drawLine(left + dp(2f), middle, right - dp(2f), middle, gridPaint)
+        canvas.drawText("+100", (left + right) / 2f, top + dp(11f), gaugeTextPaint)
+        canvas.drawText("0", (left + right) / 2f, middle + dp(4f), gaugeTextPaint)
+        canvas.drawText("−100", (left + right) / 2f, bottom - dp(3f), gaugeTextPaint)
+
+        val score = data.geminiDirectionScore?.coerceIn(-100, 100)
+        val usable = (bottom - top) / 2f - dp(16f)
+        if (score != null) {
+            val amount = abs(score) / 100f * usable
+            if (score > 0) {
+                bodyRect.set(left + dp(7f), middle - amount, right - dp(7f), middle)
+                canvas.drawRoundRect(bodyRect, dp(2f), dp(2f), buyPaint)
+            } else if (score < 0) {
+                bodyRect.set(left + dp(7f), middle, right - dp(7f), middle + amount)
+                canvas.drawRoundRect(bodyRect, dp(2f), dp(2f), sellPaint)
+            }
+            val markerY = if (score >= 0) {
+                middle - usable * score / 100f
+            } else {
+                middle + usable * abs(score) / 100f
+            }
+            val markerPaint = if (score < 0) sellPaint else buyPaint
+            val pulse = dp((2.5f + 0.8f * ((sin(System.currentTimeMillis() / 350.0) + 1.0) / 2.0)).toFloat())
+            canvas.drawCircle(left + dp(3f), markerY, pulse, markerPaint)
+        }
+
+        val action = when {
+            data.geminiStatus.startsWith("ОШИБКА") -> "G ERR"
+            data.geminiStatus.startsWith("ПОВТОР") -> "G WAIT"
+            data.geminiStatus.startsWith("ПРЕДЫДУЩИЙ") -> "G WAIT"
+            data.geminiStatus == "GEMINI АНАЛИЗИРУЕТ" -> "G …"
+            data.geminiAction == "BUY" -> "G BUY"
+            data.geminiAction == "SELL" -> "G SELL"
+            data.geminiAction == "HOLD" -> "G HOLD"
+            else -> "G —"
+        }
+        canvas.drawText(action, (left + right) / 2f, top + dp(24f), gaugeTextPaint)
+        val confidence = if (score == null) "нет" else "${data.geminiConfidenceScore.coerceIn(0, 100)}%"
+        canvas.drawText(confidence, (left + right) / 2f, bottom - dp(15f), gaugeTextPaint)
     }
 
     private fun drawIndicator(

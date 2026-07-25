@@ -39,11 +39,12 @@ class GeminiExperimentActivity : AppCompatActivity() {
         root.addView(button("← НАЗАД", "#30363D").apply {
             setOnClickListener { finish() }
         }, LinearLayout.LayoutParams(-1, dp(48)))
-        root.addView(label("V3.4 • ОТДЕЛЬНЫЙ GEMINI‑ЭКСПЕРИМЕНТ", 24, "#F0F6FC", true))
+        root.addView(label("V3.5 • ВИДИМЫЙ GEMINI‑ЭКСПЕРИМЕНТ", 24, "#F0F6FC", true))
         root.addView(label(
             "Раз в новый закрытый час Gemini самостоятельно выбирает КУПИТЬ, ДЕРЖАТЬ или ПРОДАТЬ для виртуальных 1 000 €. " +
                 "Он видит PUMP/BTC/SOL, spot/futures‑поток, funding, premium, стакан/OI и свежие новости. " +
-                "Основную стратегию и реальные деньги этот модуль не меняет.",
+                "Основную стратегию и реальные деньги этот модуль не меняет. При временной ошибке разрешены максимум " +
+                "три автоматические попытки на один час с паузой пять минут; один запрос не может висеть дольше 85 секунд.",
             14, "#C9D1D9", false, 8
         ))
 
@@ -141,6 +142,8 @@ class GeminiExperimentActivity : AppCompatActivity() {
 
     private fun render() {
         val state = GeminiPaperStore.state(this)
+        val now = System.currentTimeMillis()
+        val visibleStatus = GeminiHourlyRetryPolicy.visibleStatus(state, now)
         val snapshot = PumpBotEngine.snapshot(this)
         val p = state.portfolio
         val value = p.value(snapshot.lastPrice)
@@ -152,16 +155,37 @@ class GeminiExperimentActivity : AppCompatActivity() {
             else -> "ключ не настроен"
         }
         status.text = buildString {
-            append("СТАТУС: ${state.status}")
+            append("СТАТУС: $visibleStatus")
             append("\nКлюч: $keySource")
-            if (state.lastSuccess > 0L) append("\nПоследний ответ: ${PumpBotEngine.formatTime(state.lastSuccess)} • ${state.model}")
-            append("\nСегодня: ${state.requestsToday} запросов • ${state.totalTokensToday} токенов")
+            val activeModel = state.activeModel.ifBlank { state.model }
+            if (activeModel.isNotBlank()) append("\nМодель: $activeModel")
+            if (state.lastAttempt > 0L) {
+                append(
+                    "\nПоследнее обращение: ${PumpBotEngine.formatTime(state.lastAttempt)}" +
+                        " • попытка ${state.attemptsThisHour.coerceAtMost(3)}/3"
+                )
+            }
+            if (state.lastSuccess > 0L) append("\nПоследний успешный ответ: ${PumpBotEngine.formatTime(state.lastSuccess)}")
+            val nextAt = GeminiHourlyRetryPolicy.nextVisibleActionAt(state, now)
+            when {
+                !state.enabled -> append("\nСледующий запрос: выключен")
+                visibleStatus == "НЕТ КЛЮЧА GEMINI" ->
+                    append("\nСледующий запрос: сначала сохраните ключ Gemini")
+                nextAt <= 0L -> append("\nСейчас выполняется сетевой запрос • предел 85 секунд")
+                state.lastFailure >= state.lastSuccess &&
+                    state.attemptsThisHour in 1 until GeminiHourlyRetryPolicy.MAX_AUTOMATIC_ATTEMPTS_PER_HOUR ->
+                    append("\nПовтор разрешён после ${PumpBotEngine.formatTime(nextAt)}")
+                else -> append("\nНовый прогноз после ${PumpBotEngine.formatTime(nextAt)}")
+            }
+            append("\nЦикл: рынок ~2 мин • RSS-новости ~10 мин • Gemini API после закрытия часа")
+            append("\nСегодня: ${state.requestsToday} фактических API-запросов • ${state.totalTokensToday} токенов")
             if (state.error.isNotBlank()) append("\nОшибка: ${state.error}")
         }
         status.setTextColor(Color.parseColor(
-            when (state.status) {
-                "РАБОТАЕТ" -> "#7EE787"
-                "ОШИБКА", "НЕТ КЛЮЧА GEMINI" -> "#FF7B72"
+            when {
+                visibleStatus.startsWith("ОШИБКА") ||
+                    visibleStatus.startsWith("НЕТ КЛЮЧА") -> "#FF7B72"
+                visibleStatus == "РАБОТАЕТ" -> "#7EE787"
                 else -> "#79C0FF"
             }
         ))

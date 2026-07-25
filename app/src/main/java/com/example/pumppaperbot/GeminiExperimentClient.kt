@@ -9,6 +9,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Locale
 import java.util.concurrent.TimeUnit
+import kotlin.math.ceil
 
 data class GeminiMarketFrame(
     val hourId: Long,
@@ -174,9 +175,70 @@ internal object GeminiHourlyResponseParser {
     }
 }
 
+internal object GeminiHourlyRetryPolicy {
+    const val MAX_AUTOMATIC_ATTEMPTS_PER_HOUR = 3
+    const val RETRY_DELAY_MILLIS = 5L * 60L * 1000L
+    const val REQUEST_STALE_MILLIS = 2L * 60L * 1000L
+    const val HOUR_MILLIS = 60L * 60L * 1000L
+
+    data class Decision(
+        val allowed: Boolean,
+        val status: String,
+        val nextAttemptAt: Long = 0L
+    )
+
+    fun automaticDecision(
+        frameHourId: Long,
+        lastAttemptHour: Long,
+        attemptsThisHour: Int,
+        lastAttempt: Long,
+        now: Long
+    ): Decision {
+        if (lastAttemptHour != frameHourId || attemptsThisHour <= 0) {
+            return Decision(true, "НОВЫЙ ЧАС ГОТОВ К АНАЛИЗУ")
+        }
+        if (attemptsThisHour >= MAX_AUTOMATIC_ATTEMPTS_PER_HOUR) {
+            return Decision(false, "ОШИБКА 3/3 • ЖДЁМ СЛЕДУЮЩИЙ ЧАС", nextHourAt(now))
+        }
+        val next = lastAttempt + RETRY_DELAY_MILLIS
+        if (now >= next) return Decision(true, "ПОВТОР РАЗРЕШЁН")
+        val minutes = ceil((next - now) / 60_000.0).toInt().coerceAtLeast(1)
+        return Decision(false, "ПОВТОР ЧЕРЕЗ $minutes МИН • ${attemptsThisHour}/3", next)
+    }
+
+    fun visibleStatus(state: GeminiExperimentState, now: Long): String {
+        if (state.status == "GEMINI АНАЛИЗИРУЕТ" &&
+            state.lastAttempt > 0L &&
+            now - state.lastAttempt > REQUEST_STALE_MILLIS
+        ) {
+            return "ПРЕДЫДУЩИЙ ЗАПРОС ПРЕРВАН • БУДЕТ ПОВТОР"
+        }
+        return state.status
+    }
+
+    fun nextVisibleActionAt(state: GeminiExperimentState, now: Long): Long {
+        if (!state.enabled) return 0L
+        if (state.status == "GEMINI АНАЛИЗИРУЕТ" &&
+            now - state.lastAttempt <= REQUEST_STALE_MILLIS
+        ) {
+            return 0L
+        }
+        if (state.lastFailure >= state.lastSuccess &&
+            state.attemptsThisHour in 1 until MAX_AUTOMATIC_ATTEMPTS_PER_HOUR
+        ) {
+            return maxOf(now, state.lastAttempt + RETRY_DELAY_MILLIS)
+        }
+        if (state.lastAttemptHour < now / HOUR_MILLIS) return now
+        return nextHourAt(now)
+    }
+
+    fun nextHourAt(now: Long): Long = (now / HOUR_MILLIS + 1L) * HOUR_MILLIS
+}
+
 /**
  * One independent Gemini request for each fully closed UTC market hour.
- * Automatic runs do not retry the same hour after a failure, which protects quota.
+ * A transient failure is retried at most three times for the same closed hour,
+ * with a five-minute cooldown. Every network call has a hard total timeout.
  */
 class GeminiExperimentClient {
     private val client = OkHttpClient.Builder()
@@ -191,6 +253,7 @@ class GeminiExperimentClient {
         }
 
     private fun syncLocked(context: Context, force: Boolean): GeminiExperimentState {
+        val now = System.currentTimeMillis()
         val existing = GeminiPaperStore.state(context)
         if (!existing.enabled && !force) return existing
         val frame = GeminiMarketFrame.from(context)
@@ -212,14 +275,25 @@ class GeminiExperimentClient {
             return GeminiPaperStore.state(context)
         }
         if (current.portfolio.lastDecisionId >= frame.hourId) {
-            GeminiPaperStore.markWaiting(context, "ТЕКУЩИЙ ЧАС УЖЕ ОБРАБОТАН")
-            return GeminiPaperStore.state(context)
+            return current
         }
-        if (!force && current.lastAttemptHour >= frame.hourId) return GeminiPaperStore.state(context)
+        if (!force) {
+            val retry = GeminiHourlyRetryPolicy.automaticDecision(
+                frameHourId = frame.hourId,
+                lastAttemptHour = current.lastAttemptHour,
+                attemptsThisHour = current.attemptsThisHour,
+                lastAttempt = current.lastAttempt,
+                now = now
+            )
+            if (!retry.allowed) {
+                GeminiPaperStore.markWaiting(context, retry.status)
+                return GeminiPaperStore.state(context)
+            }
+        }
 
-        GeminiPaperStore.markAttempt(context, frame.hourId)
+        GeminiPaperStore.markAttempt(context, frame.hourId, now)
         return runCatching {
-            analyzeWithFallback(key, frame, current.portfolio)
+            analyzeWithFallback(context, key, frame, current.portfolio)
         }.fold(
             onSuccess = { result ->
                 val updated = GeminiPaperTrader.applyDecision(
@@ -249,6 +323,7 @@ class GeminiExperimentClient {
     }
 
     private fun analyzeWithFallback(
+        context: Context,
         apiKey: String,
         frame: GeminiMarketFrame,
         portfolio: GeminiPaperPortfolio
@@ -256,6 +331,7 @@ class GeminiExperimentClient {
         var lastError: GeminiApiException? = null
         for ((index, model) in MODELS.withIndex()) {
             try {
+                GeminiPaperStore.markApiRequest(context, model)
                 return analyze(apiKey, model, frame, portfolio)
             } catch (error: GeminiApiException) {
                 lastError = error
