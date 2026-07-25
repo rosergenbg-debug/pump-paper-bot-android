@@ -130,9 +130,9 @@ object ImpulseRadarAnalyzer {
         val breakout = candle.close > priorHigh
 
         val checks = listOf(
-            volumeRatio >= VOLUME_RATIO_MIN to 15,
-            spotTakerRatio >= SPOT_TAKER_RATIO_MIN to 15,
-            futuresTakerRatio >= FUTURES_TAKER_RATIO_MIN to 15,
+            (volumeRatio >= VOLUME_RATIO_MIN) to 15,
+            (spotTakerRatio >= SPOT_TAKER_RATIO_MIN) to 15,
+            (futuresTakerRatio >= FUTURES_TAKER_RATIO_MIN) to 15,
             (return15m in RETURN_15M_MIN..RETURN_15M_MAX) to 10,
             (return60m < RETURN_60M_MAX && return5m in 0.0..0.04) to 10,
             breakout to 10,
