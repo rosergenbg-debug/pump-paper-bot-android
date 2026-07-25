@@ -1,0 +1,113 @@
+{
+  "method": {
+    "target_rise": 0.03,
+    "forward_minutes": 60,
+    "fee_rate_per_side": 0.0015,
+    "max_signals_per_day": 1.5,
+    "split": [
+      0.6,
+      0.2,
+      0.2
+    ],
+    "news_replayed": false,
+    "gemini_replayed": false
+  },
+  "study_start": "2026-01-21T23:59:59.999000+00:00",
+  "study_end": "2026-07-22T22:59:59.999000+00:00",
+  "samples": 4368,
+  "train": {
+    "start": "2026-01-21T23:59:59.999000+00:00",
+    "end": "2026-05-11T02:59:59.999000+00:00",
+    "samples": 2620,
+    "rise_events": 75
+  },
+  "candidate_validation": {
+    "logistic_balanced": {
+      "threshold": 0.8716930618047324,
+      "capture_rate": 0.2413793103448276,
+      "precision": 0.14285714285714285,
+      "signals": 49,
+      "budget": 54,
+      "roc_auc": 0.7193225872270964,
+      "average_precision": 0.17010899704630833
+    },
+    "hist_gradient_boosting": {
+      "threshold": 0.2992414042220282,
+      "capture_rate": 0.2413793103448276,
+      "precision": 0.1346153846153846,
+      "signals": 52,
+      "budget": 54,
+      "roc_auc": 0.6912466843501326,
+      "average_precision": 0.10255063791523397
+    },
+    "random_forest": {
+      "threshold": 0.5105799582728505,
+      "capture_rate": 0.1724137931034483,
+      "precision": 0.11363636363636363,
+      "signals": 44,
+      "budget": 54,
+      "roc_auc": 0.7286676188532952,
+      "average_precision": 0.09158954990661773
+    }
+  },
+  "selected_model": "logistic_balanced",
+  "threshold": 0.8716930618047324,
+  "validation_half_capture": {
+    "threshold": 0.5037137581918559,
+    "captured": 15,
+    "events": 29,
+    "capture_rate": 0.5172413793103449,
+    "signals": 223,
+    "signals_per_day": 6.1235697940503435,
+    "false_signals": 208,
+    "precision": 0.06726457399103139
+  },
+  "validation": {
+    "start": "2026-05-11T03:59:59.999000+00:00",
+    "end": "2026-06-16T12:59:59.999000+00:00",
+    "samples": 874,
+    "rise_events": 29,
+    "signals": 49,
+    "signals_per_day": 1.3470790378006874,
+    "captured_events": 7,
+    "capture_rate": 0.2413793103448276,
+    "false_signals": 42,
+    "signal_precision": 0.14285714285714285,
+    "positive_close_rate": 0.5102040816326531,
+    "roc_auc": 0.7193225872270964,
+    "average_precision": 0.17010899704630833,
+    "return_after_fees_pct": -14.052321708507087,
+    "max_drawdown_pct": 14.052321708507087,
+    "stress_returns_pct": {
+      "0.005": -47.41086074189792,
+      "0.010": -67.9016121701526,
+      "0.020": -88.13167125655677
+    }
+  },
+  "holdout": {
+    "start": "2026-06-16T13:59:59.999000+00:00",
+    "end": "2026-07-22T22:59:59.999000+00:00",
+    "samples": 874,
+    "rise_events": 44,
+    "signals": 77,
+    "signals_per_day": 2.1168384879725086,
+    "captured_events": 12,
+    "capture_rate": 0.2727272727272727,
+    "false_signals": 65,
+    "signal_precision": 0.15584415584415584,
+    "positive_close_rate": 0.5064935064935064,
+    "roc_auc": 0.658762322015334,
+    "average_precision": 0.13693522123436613,
+    "return_after_fees_pct": -14.763621961103357,
+    "max_drawdown_pct": 17.170702074617452,
+    "stress_returns_pct": {
+      "0.005": -60.61059489529489,
+      "0.010": -81.86803154098126,
+      "0.020": -96.20299959429663
+    }
+  },
+  "peak_return_summary": {
+    "validation_median": 0.005404735653442461,
+    "holdout_median": 0.006661530676389749
+  }
+}
