@@ -61,6 +61,7 @@ class MainActivity : AppCompatActivity() {
     private var btnBacktest: Button? = null
     private var btnAlertSettings: Button? = null
     private var btnEventRadar: Button? = null
+    private var btnGeminiExperiment: Button? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -96,6 +97,7 @@ class MainActivity : AppCompatActivity() {
         btnBacktest = findViewById(R.id.btnBacktest)
         btnAlertSettings = findViewById(R.id.btnAlertSettings)
         btnEventRadar = findViewById(R.id.btnEventRadar)
+        btnGeminiExperiment = findViewById(R.id.btnGeminiExperiment)
 
         PumpBotEngine.ensureInitialized(this)
         requestNotificationPermission()
@@ -127,6 +129,12 @@ class MainActivity : AppCompatActivity() {
         btnBacktest?.setOnClickListener { startActivity(Intent(this, BacktestActivity::class.java)) }
         btnAlertSettings?.setOnClickListener { startActivity(Intent(this, AlertSettingsActivity::class.java)) }
         btnEventRadar?.setOnClickListener { startActivity(Intent(this, EventRadarActivity::class.java)) }
+        btnGeminiExperiment?.setOnClickListener {
+            startActivity(Intent(this, GeminiExperimentActivity::class.java))
+        }
+        tvGeminiPaper?.setOnClickListener {
+            startActivity(Intent(this, GeminiExperimentActivity::class.java))
+        }
         chart?.setOnClickListener { startActivity(Intent(this, ChartDetailActivity::class.java)) }
 
         updateUi()
@@ -341,11 +349,11 @@ class MainActivity : AppCompatActivity() {
         }
         val mainText = when {
             !state.enabled -> "V3 РАДАР ВЫКЛЮЧЕН\nТорговый алгоритм работает как раньше"
-            state.lastSuccess <= 0L -> "V3.3 РАДАР СОБЫТИЙ\nЖдём первую проверку 7 источников"
-            latest == null -> "V3.3 РАДАР • новых значимых событий пока нет"
+            state.lastSuccess <= 0L -> "V3.4 РАДАР СОБЫТИЙ\nЖдём первую проверку 7 источников"
+            latest == null -> "V3.4 РАДАР • новых значимых событий пока нет"
             else -> {
                 val direction = if (latest.directionScore >= 0) "+${latest.directionScore}" else "−${kotlin.math.abs(latest.directionScore)}"
-                "V3.3 ${latest.source} • важность ${latest.importance}/100 • влияние $direction/100\n" +
+                "V3.4 ${latest.source} • важность ${latest.importance}/100 • влияние $direction/100\n" +
                     "${latest.title.take(95)}\n$confirmation"
             }
         }
@@ -364,23 +372,28 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun renderGeminiPaper(snapshot: LiveSnapshot) {
-        val gemini = EventRadarStore.state(this).gemini
-        val portfolio = GeminiPaperStore.evaluate(this, snapshot, gemini)
+        val state = GeminiPaperStore.state(this)
+        val portfolio = state.portfolio
         val value = portfolio.value(snapshot.lastPrice)
-        val last = portfolio.trades.lastOrNull()
+        val last = portfolio.decisions.lastOrNull()
         val position = if (portfolio.inPosition) {
             String.format(Locale.GERMANY, "PUMP %.2f • вход €%.8f", portfolio.pumpAmount, portfolio.entryPrice)
         } else {
             String.format(Locale.GERMANY, "наличные €%.2f • ждёт вход", portfolio.cashEur)
         }
         val lastLine = last?.let {
-            "${it.action} ${PumpBotEngine.formatTime(it.time)} • ${it.reason}"
-        } ?: "Сделок пока нет"
+            val action = when (it.requestedAction) {
+                "BUY" -> "КУПИТЬ"
+                "SELL" -> "ПРОДАТЬ"
+                else -> "ДЕРЖАТЬ"
+            }
+            "$action ${PumpBotEngine.formatTime(it.decidedAt)} • ${it.reason}"
+        } ?: "Решений пока нет — ждём полностью закрытый час"
         tvGeminiPaper?.text = String.format(
             Locale.GERMANY,
-            "GEMINI SHADOW • СТАРТ 1 000 €\nСейчас €%.2f • результат %+.2f%% • сделок %d\n%s\nШкала Gemini %+d/100 • уверенность %d/100\n%s",
+            "V3.4 GEMINI • ОТДЕЛЬНЫЕ 1 000 €\nСейчас €%.2f • результат %+.2f%% • операций %d\n%s\nСтатус: %s • модель %s\n%s",
             value, portfolio.profitPercent(snapshot.lastPrice), portfolio.trades.size,
-            position, gemini.directionScore, gemini.confidence, lastLine
+            position, state.status, state.model.ifBlank { "ещё не выбрана" }, lastLine
         )
         tvGeminiPaper?.setTextColor(Color.parseColor(
             if (portfolio.profit(snapshot.lastPrice) >= 0.0) "#D2A8FF" else "#FF7B72"

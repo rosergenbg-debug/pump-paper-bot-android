@@ -28,26 +28,12 @@ jobs:
         with:
           gradle-version: '8.5'
 
-      - name: Restore stable signing key
-        run: base64 --decode signing/pump-signal-release.jks.b64 > "$RUNNER_TEMP/pump-signal-release.jks"
+      - name: Test and build APK
+        run: gradle testDebugUnitTest assembleDebug
 
-      - name: Test and build signed APK
-        env:
-          PUMP_SIGNING_STORE_FILE: ${{ runner.temp }}/pump-signal-release.jks
-          PUMP_SIGNING_STORE_PASSWORD: pumpv34localrelease2026
-          PUMP_SIGNING_KEY_ALIAS: pump-update
-          PUMP_SIGNING_KEY_PASSWORD: pumpv34localrelease2026
-        run: gradle testDebugUnitTest assembleRelease
-
-      - name: Verify Android signatures
-        run: "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose --print-certs app/build/outputs/apk/release/app-release.apk
-
-      - name: Prepare named APK
-        run: cp app/build/outputs/apk/release/app-release.apk PumpSignal-V3.4-Gemini-Shadow-FIXED.apk
-
-      - name: Upload signed APK
+      - name: Upload test APK
         uses: actions/upload-artifact@v4
         with:
-          name: PumpSignal-V3.4-Gemini-Shadow-FIXED
-          path: PumpSignal-V3.4-Gemini-Shadow-FIXED.apk
-          retention-days: 30
+          name: PumpSignal-V3.4-Test-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 7

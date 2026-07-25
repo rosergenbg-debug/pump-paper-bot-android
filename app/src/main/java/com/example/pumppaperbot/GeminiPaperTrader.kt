@@ -7,25 +7,119 @@ import kotlin.math.max
 
 data class GeminiPaperTrade(
     val time: Long,
+    val decisionId: Long,
     val action: String,
     val price: Double,
     val amount: Double,
     val fee: Double,
     val score: Int,
     val confidence: Int,
-    val reason: String
+    val reason: String,
+    val pnlEur: Double = 0.0
 ) {
     fun toJson(): JSONObject = JSONObject()
-        .put("time", time).put("action", action).put("price", price)
-        .put("amount", amount).put("fee", fee).put("score", score)
-        .put("confidence", confidence).put("reason", reason)
+        .put("time", time)
+        .put("decisionId", decisionId)
+        .put("action", action)
+        .put("price", price)
+        .put("amount", amount)
+        .put("fee", fee)
+        .put("score", score)
+        .put("confidence", confidence)
+        .put("reason", reason)
+        .put("pnlEur", pnlEur)
 
     companion object {
         fun fromJson(value: JSONObject) = GeminiPaperTrade(
-            value.optLong("time"), value.optString("action"), value.optDouble("price"),
-            value.optDouble("amount"), value.optDouble("fee"), value.optInt("score"),
-            value.optInt("confidence"), value.optString("reason")
+            time = value.optLong("time"),
+            decisionId = value.optLong("decisionId"),
+            action = value.optString("action"),
+            price = value.optDouble("price"),
+            amount = value.optDouble("amount"),
+            fee = value.optDouble("fee"),
+            score = value.optInt("score"),
+            confidence = value.optInt("confidence"),
+            reason = value.optString("reason"),
+            pnlEur = value.optDouble("pnlEur")
         )
+    }
+}
+
+data class GeminiHourlyDecision(
+    val id: Long,
+    val decidedAt: Long,
+    val candleTime: Long,
+    val price: Double,
+    val requestedAction: String,
+    val execution: String,
+    val directionScore: Int,
+    val confidence: Int,
+    val horizonHours: Int,
+    val reason: String,
+    val risks: List<String>,
+    val model: String,
+    val positionAfter: Boolean,
+    val portfolioValueAfter: Double,
+    val evaluatedReturnPercent: Double? = null,
+    val directionCorrect: Boolean? = null,
+    val surgeOpportunity: Boolean? = null,
+    val surgeCaptured: Boolean? = null
+) {
+    fun toJson(): JSONObject = JSONObject()
+        .put("id", id)
+        .put("decidedAt", decidedAt)
+        .put("candleTime", candleTime)
+        .put("price", price)
+        .put("requestedAction", requestedAction)
+        .put("execution", execution)
+        .put("directionScore", directionScore)
+        .put("confidence", confidence)
+        .put("horizonHours", horizonHours)
+        .put("reason", reason)
+        .put("risks", JSONArray(risks))
+        .put("model", model)
+        .put("positionAfter", positionAfter)
+        .put("portfolioValueAfter", portfolioValueAfter)
+        .apply {
+            evaluatedReturnPercent?.let { put("evaluatedReturnPercent", it) }
+            directionCorrect?.let { put("directionCorrect", it) }
+            surgeOpportunity?.let { put("surgeOpportunity", it) }
+            surgeCaptured?.let { put("surgeCaptured", it) }
+        }
+
+    companion object {
+        fun fromJson(value: JSONObject): GeminiHourlyDecision {
+            fun nullableDouble(name: String): Double? =
+                if (value.has(name) && !value.isNull(name)) value.optDouble(name) else null
+            fun nullableBoolean(name: String): Boolean? =
+                if (value.has(name) && !value.isNull(name)) value.optBoolean(name) else null
+            val risksJson = value.optJSONArray("risks") ?: JSONArray()
+            return GeminiHourlyDecision(
+                id = value.optLong("id"),
+                decidedAt = value.optLong("decidedAt"),
+                candleTime = value.optLong("candleTime"),
+                price = value.optDouble("price"),
+                requestedAction = value.optString("requestedAction", "HOLD"),
+                execution = value.optString("execution", "Наблюдение"),
+                directionScore = value.optInt("directionScore"),
+                confidence = value.optInt("confidence"),
+                horizonHours = value.optInt("horizonHours", 1),
+                reason = value.optString("reason"),
+                risks = (0 until risksJson.length()).mapNotNull {
+                    risksJson.optString(it).trim().takeIf(String::isNotBlank)
+                },
+                model = value.optString("model"),
+                positionAfter = value.optBoolean("positionAfter"),
+                portfolioValueAfter = value.optDouble(
+                    "portfolioValueAfter",
+                    GeminiPaperPortfolio.START_BALANCE
+                ),
+                evaluatedReturnPercent = nullableDouble("evaluatedReturnPercent"),
+                directionCorrect = nullableBoolean("directionCorrect"),
+                surgeOpportunity = nullableBoolean("surgeOpportunity"),
+                surgeCaptured = nullableBoolean("surgeCaptured")
+            )
+        }
     }
 }
 
@@ -34,125 +128,354 @@ data class GeminiPaperPortfolio(
     val pumpAmount: Double = 0.0,
     val entryPrice: Double = 0.0,
     val lastDecisionId: Long = 0L,
-    val trades: List<GeminiPaperTrade> = emptyList()
+    val trades: List<GeminiPaperTrade> = emptyList(),
+    val decisions: List<GeminiHourlyDecision> = emptyList(),
+    val totalFeesEur: Double = 0.0,
+    val peakValueEur: Double = START_BALANCE,
+    val maxDrawdownPercent: Double = 0.0
 ) {
     fun value(price: Double): Double = cashEur + pumpAmount * max(0.0, price)
     fun profit(price: Double): Double = value(price) - START_BALANCE
     fun profitPercent(price: Double): Double = profit(price) / START_BALANCE * 100.0
     val inPosition: Boolean get() = pumpAmount > 0.0
+    val closedTrades: Int get() = trades.count { it.action == "SELL" }
+    val winningTrades: Int get() = trades.count { it.action == "SELL" && it.pnlEur > 0.0 }
+    val winRatePercent: Double
+        get() = if (closedTrades > 0) winningTrades.toDouble() / closedTrades * 100.0 else 0.0
+    val evaluatedHours: Int get() = decisions.count { it.directionCorrect != null }
+    val correctDirections: Int get() = decisions.count { it.directionCorrect == true }
+    val directionAccuracyPercent: Double
+        get() = if (evaluatedHours > 0) correctDirections.toDouble() / evaluatedHours * 100.0 else 0.0
+    val surgeOpportunities: Int get() = decisions.count { it.surgeOpportunity == true }
+    val capturedSurges: Int get() = decisions.count { it.surgeCaptured == true }
+    val surgeCapturePercent: Double
+        get() = if (surgeOpportunities > 0) capturedSurges.toDouble() / surgeOpportunities * 100.0 else 0.0
 
     companion object {
         const val START_BALANCE = 1000.0
     }
 }
 
+data class GeminiHourlyRecommendation(
+    val action: String,
+    val directionScore: Int,
+    val confidence: Int,
+    val horizonHours: Int,
+    val reason: String,
+    val risks: List<String>,
+    val model: String
+)
+
 /**
- * Independent live shadow account. It never changes StrategyV2 BUY/SELL decisions.
- * One Gemini answer may cause at most one operation.
+ * Pure paper-account logic. It never reads or changes StrategyV2 state.
+ * A decision id is the UTC hour of a fully closed market hour.
  */
 object GeminiPaperTrader {
     const val FEE_RATE = 0.0015
-    const val BUY_SCORE = 55
-    const val BUY_CONFIDENCE = 60
-    const val SELL_SCORE = -35
-    const val STOP_LOSS_PERCENT = -4.5
-    const val TAKE_PROFIT_PERCENT = 6.0
+    private const val SURGE_THRESHOLD_PERCENT = 3.0
+    private const val MIN_DIRECTION_MOVE_PERCENT = 0.25
 
-    fun evaluate(
+    fun applyDecision(
         current: GeminiPaperPortfolio,
         price: Double,
         decisionId: Long,
-        score: Int,
-        confidence: Int,
-        lateEntryRisk: Int,
+        candleTime: Long,
+        recommendation: GeminiHourlyRecommendation,
         now: Long = System.currentTimeMillis()
     ): GeminiPaperPortfolio {
-        if (price <= 0.0 || decisionId <= 0L) return current
-        val move = if (current.inPosition) (price / current.entryPrice - 1.0) * 100.0 else 0.0
-        val priceExitReason = when {
-            current.inPosition && move <= STOP_LOSS_PERCENT -> "Защитный стоп ${"%.2f".format(move)}%"
-            current.inPosition && move >= TAKE_PROFIT_PERCENT -> "Фиксация прибыли ${"%.2f".format(move)}%"
-            else -> null
+        if (price <= 0.0 || decisionId <= 0L || decisionId <= current.lastDecisionId) return current
+
+        var working = gradePreviousHour(current, decisionId, price)
+        var cash = working.cashEur
+        var amount = working.pumpAmount
+        var entry = working.entryPrice
+        var totalFees = working.totalFeesEur
+        var trades = working.trades
+        val normalizedAction = recommendation.action.uppercase().let {
+            if (it in setOf("BUY", "HOLD", "SELL")) it else "HOLD"
         }
-        if (decisionId == current.lastDecisionId && priceExitReason == null) return current
-        val marked = current.copy(lastDecisionId = decisionId)
-        if (!current.inPosition) {
-            if (score < BUY_SCORE || confidence < BUY_CONFIDENCE || lateEntryRisk > 65) return marked
-            val fee = current.cashEur * FEE_RATE
-            val amount = (current.cashEur - fee) / price
-            return marked.copy(
-                cashEur = 0.0,
-                pumpAmount = amount,
-                entryPrice = price,
-                trades = addTrade(current.trades, GeminiPaperTrade(
-                    now, "BUY", price, amount, fee, score, confidence,
-                    "Gemini ≥ $BUY_SCORE, уверенность ≥ $BUY_CONFIDENCE, поздний вход допустим"
-                ))
-            )
+        val execution = when {
+            normalizedAction == "BUY" && !working.inPosition -> {
+                val fee = cash * FEE_RATE
+                amount = (cash - fee) / price
+                cash = 0.0
+                entry = price
+                totalFees += fee
+                trades = addTrade(
+                    trades,
+                    GeminiPaperTrade(
+                        time = now,
+                        decisionId = decisionId,
+                        action = "BUY",
+                        price = price,
+                        amount = amount,
+                        fee = fee,
+                        score = recommendation.directionScore,
+                        confidence = recommendation.confidence,
+                        reason = recommendation.reason
+                    )
+                )
+                "КУПЛЕНО на все свободные €"
+            }
+            normalizedAction == "SELL" && working.inPosition -> {
+                val soldAmount = amount
+                val gross = soldAmount * price
+                val fee = gross * FEE_RATE
+                val buyFee = trades.lastOrNull { it.action == "BUY" }?.fee ?: 0.0
+                val pnl = gross - fee - (soldAmount * entry + buyFee)
+                cash = gross - fee
+                amount = 0.0
+                entry = 0.0
+                totalFees += fee
+                trades = addTrade(
+                    trades,
+                    GeminiPaperTrade(
+                        time = now,
+                        decisionId = decisionId,
+                        action = "SELL",
+                        price = price,
+                        amount = soldAmount,
+                        fee = fee,
+                        score = recommendation.directionScore,
+                        confidence = recommendation.confidence,
+                        reason = recommendation.reason,
+                        pnlEur = pnl
+                    )
+                )
+                "ПРОДАНО полностью"
+            }
+            normalizedAction == "BUY" -> "УЖЕ В PUMP — позиция сохранена"
+            normalizedAction == "SELL" -> "НЕТ PUMP — остались наличные"
+            working.inPosition -> "ДЕРЖИМ PUMP"
+            else -> "ЖДЁМ В НАЛИЧНЫХ"
         }
 
-        val reason = when {
-            priceExitReason != null -> priceExitReason
-            score <= SELL_SCORE && confidence >= 55 -> "Gemini развернулся вниз"
-            else -> return marked
-        }
-        val gross = current.pumpAmount * price
-        val fee = gross * FEE_RATE
-        return marked.copy(
-            cashEur = gross - fee,
-            pumpAmount = 0.0,
-            entryPrice = 0.0,
-            trades = addTrade(current.trades, GeminiPaperTrade(
-                now, "SELL", price, current.pumpAmount, fee, score, confidence, reason
-            ))
+        val valueAfter = cash + amount * price
+        val peak = max(working.peakValueEur, valueAfter)
+        val drawdown = if (peak > 0.0) (valueAfter / peak - 1.0) * 100.0 else 0.0
+        val maxDrawdown = minOf(working.maxDrawdownPercent, drawdown)
+        val decision = GeminiHourlyDecision(
+            id = decisionId,
+            decidedAt = now,
+            candleTime = candleTime,
+            price = price,
+            requestedAction = normalizedAction,
+            execution = execution,
+            directionScore = recommendation.directionScore.coerceIn(-100, 100),
+            confidence = recommendation.confidence.coerceIn(0, 100),
+            horizonHours = recommendation.horizonHours.coerceIn(1, 6),
+            reason = recommendation.reason.take(1000),
+            risks = recommendation.risks.map { it.take(300) }.take(5),
+            model = recommendation.model.take(80),
+            positionAfter = amount > 0.0,
+            portfolioValueAfter = valueAfter
+        )
+        return working.copy(
+            cashEur = cash,
+            pumpAmount = amount,
+            entryPrice = entry,
+            lastDecisionId = decisionId,
+            trades = trades,
+            decisions = (working.decisions + decision).takeLast(336),
+            totalFeesEur = totalFees,
+            peakValueEur = peak,
+            maxDrawdownPercent = maxDrawdown
         )
     }
 
-    private fun addTrade(old: List<GeminiPaperTrade>, trade: GeminiPaperTrade) =
-        (old + trade).takeLast(100)
+    private fun gradePreviousHour(
+        current: GeminiPaperPortfolio,
+        newDecisionId: Long,
+        currentPrice: Double
+    ): GeminiPaperPortfolio {
+        val previousIndex = current.decisions.indexOfLast {
+            it.id == newDecisionId - 1L && it.evaluatedReturnPercent == null && it.price > 0.0
+        }
+        if (previousIndex < 0) return current
+        val previous = current.decisions[previousIndex]
+        val move = (currentPrice / previous.price - 1.0) * 100.0
+        val predictedDirection = when {
+            previous.directionScore >= 10 -> 1
+            previous.directionScore <= -10 -> -1
+            else -> 0
+        }
+        val actualDirection = when {
+            move >= MIN_DIRECTION_MOVE_PERCENT -> 1
+            move <= -MIN_DIRECTION_MOVE_PERCENT -> -1
+            else -> 0
+        }
+        val opportunity = move >= SURGE_THRESHOLD_PERCENT
+        val graded = previous.copy(
+            evaluatedReturnPercent = move,
+            directionCorrect = predictedDirection == actualDirection,
+            surgeOpportunity = opportunity,
+            surgeCaptured = opportunity && previous.positionAfter
+        )
+        val decisions = current.decisions.toMutableList()
+        decisions[previousIndex] = graded
+        return current.copy(decisions = decisions)
+    }
+
+    private fun addTrade(old: List<GeminiPaperTrade>, trade: GeminiPaperTrade): List<GeminiPaperTrade> =
+        (old + trade).takeLast(200)
 }
+
+data class GeminiExperimentState(
+    val enabled: Boolean,
+    val status: String,
+    val lastAttempt: Long,
+    val lastAttemptHour: Long,
+    val lastSuccess: Long,
+    val model: String,
+    val error: String,
+    val requestsToday: Int,
+    val promptTokensToday: Int,
+    val outputTokensToday: Int,
+    val totalTokensToday: Int,
+    val portfolio: GeminiPaperPortfolio
+)
 
 object GeminiPaperStore {
     private const val PREFS = "gemini_paper_v34"
-    private const val KEY = "portfolio"
+    private const val KEY_PORTFOLIO = "portfolio"
+    private const val KEY_ENABLED = "enabled"
+    private const val KEY_STATUS = "status"
+    private const val KEY_LAST_ATTEMPT = "last_attempt"
+    private const val KEY_LAST_ATTEMPT_HOUR = "last_attempt_hour"
+    private const val KEY_LAST_SUCCESS = "last_success"
+    private const val KEY_MODEL = "model"
+    private const val KEY_ERROR = "error"
+    private const val KEY_USAGE_DAY = "usage_day"
+    private const val KEY_REQUESTS = "requests"
+    private const val KEY_PROMPT_TOKENS = "prompt_tokens"
+    private const val KEY_OUTPUT_TOKENS = "output_tokens"
+    private const val KEY_TOTAL_TOKENS = "total_tokens"
 
-    fun load(context: Context): GeminiPaperPortfolio {
-        val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY, null)
-            ?: return GeminiPaperPortfolio()
+    private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+
+    fun state(context: Context): GeminiExperimentState {
+        resetUsageDayIfNeeded(context)
+        val p = prefs(context)
+        return GeminiExperimentState(
+            enabled = p.getBoolean(KEY_ENABLED, true),
+            status = p.getString(KEY_STATUS, "ЖДЁМ ЗАКРЫТИЯ ЧАСА").orEmpty(),
+            lastAttempt = p.getLong(KEY_LAST_ATTEMPT, 0L),
+            lastAttemptHour = p.getLong(KEY_LAST_ATTEMPT_HOUR, 0L),
+            lastSuccess = p.getLong(KEY_LAST_SUCCESS, 0L),
+            model = p.getString(KEY_MODEL, "").orEmpty(),
+            error = p.getString(KEY_ERROR, "").orEmpty(),
+            requestsToday = p.getInt(KEY_REQUESTS, 0),
+            promptTokensToday = p.getInt(KEY_PROMPT_TOKENS, 0),
+            outputTokensToday = p.getInt(KEY_OUTPUT_TOKENS, 0),
+            totalTokensToday = p.getInt(KEY_TOTAL_TOKENS, 0),
+            portfolio = loadPortfolio(p.getString(KEY_PORTFOLIO, null))
+        )
+    }
+
+    fun setEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit()
+            .putBoolean(KEY_ENABLED, enabled)
+            .putString(KEY_STATUS, if (enabled) "ЖДЁМ ЗАКРЫТИЯ ЧАСА" else "ВЫКЛЮЧЕН")
+            .apply()
+    }
+
+    fun markAttempt(context: Context, hourId: Long, now: Long = System.currentTimeMillis()) {
+        resetUsageDayIfNeeded(context, now)
+        val p = prefs(context)
+        p.edit()
+            .putLong(KEY_LAST_ATTEMPT, now)
+            .putLong(KEY_LAST_ATTEMPT_HOUR, hourId)
+            .putString(KEY_STATUS, "GEMINI АНАЛИЗИРУЕТ")
+            .putString(KEY_ERROR, "")
+            .putInt(KEY_REQUESTS, p.getInt(KEY_REQUESTS, 0) + 1)
+            .apply()
+    }
+
+    fun saveSuccess(
+        context: Context,
+        portfolio: GeminiPaperPortfolio,
+        model: String,
+        promptTokens: Int,
+        outputTokens: Int,
+        totalTokens: Int,
+        now: Long = System.currentTimeMillis()
+    ) {
+        val p = prefs(context)
+        p.edit()
+            .putString(KEY_PORTFOLIO, portfolioToJson(portfolio).toString())
+            .putLong(KEY_LAST_SUCCESS, now)
+            .putString(KEY_STATUS, "РАБОТАЕТ")
+            .putString(KEY_MODEL, model.take(80))
+            .putString(KEY_ERROR, "")
+            .putInt(KEY_PROMPT_TOKENS, p.getInt(KEY_PROMPT_TOKENS, 0) + promptTokens)
+            .putInt(KEY_OUTPUT_TOKENS, p.getInt(KEY_OUTPUT_TOKENS, 0) + outputTokens)
+            .putInt(KEY_TOTAL_TOKENS, p.getInt(KEY_TOTAL_TOKENS, 0) + totalTokens)
+            .apply()
+    }
+
+    fun saveFailure(context: Context, error: String) {
+        prefs(context).edit()
+            .putString(KEY_STATUS, "ОШИБКА")
+            .putString(KEY_ERROR, error.take(500))
+            .apply()
+    }
+
+    fun markWaiting(context: Context, status: String) {
+        prefs(context).edit().putString(KEY_STATUS, status.take(120)).apply()
+    }
+
+    fun reset(context: Context) {
+        prefs(context).edit().clear().putBoolean(KEY_ENABLED, true).apply()
+    }
+
+    private fun loadPortfolio(raw: String?): GeminiPaperPortfolio {
+        if (raw.isNullOrBlank()) return GeminiPaperPortfolio()
         return runCatching {
             val json = JSONObject(raw)
             val tradesJson = json.optJSONArray("trades") ?: JSONArray()
+            val decisionsJson = json.optJSONArray("decisions") ?: JSONArray()
             GeminiPaperPortfolio(
                 cashEur = json.optDouble("cashEur", GeminiPaperPortfolio.START_BALANCE),
                 pumpAmount = json.optDouble("pumpAmount"),
                 entryPrice = json.optDouble("entryPrice"),
                 lastDecisionId = json.optLong("lastDecisionId"),
-                trades = (0 until tradesJson.length()).map {
-                    GeminiPaperTrade.fromJson(tradesJson.getJSONObject(it))
-                }
+                trades = (0 until tradesJson.length()).mapNotNull {
+                    tradesJson.optJSONObject(it)?.let(GeminiPaperTrade::fromJson)
+                },
+                decisions = (0 until decisionsJson.length()).mapNotNull {
+                    decisionsJson.optJSONObject(it)?.let(GeminiHourlyDecision::fromJson)
+                },
+                totalFeesEur = json.optDouble("totalFeesEur"),
+                peakValueEur = json.optDouble(
+                    "peakValueEur",
+                    GeminiPaperPortfolio.START_BALANCE
+                ),
+                maxDrawdownPercent = json.optDouble("maxDrawdownPercent")
             )
         }.getOrDefault(GeminiPaperPortfolio())
     }
 
-    fun evaluate(context: Context, market: LiveSnapshot, gemini: GeminiDiagnostics): GeminiPaperPortfolio {
-        val updated = GeminiPaperTrader.evaluate(
-            load(context), market.lastPrice, gemini.lastSuccess, gemini.directionScore,
-            gemini.confidence, market.lateEntryRisk
-        )
-        save(context, updated)
-        return updated
-    }
+    private fun portfolioToJson(value: GeminiPaperPortfolio): JSONObject = JSONObject()
+        .put("cashEur", value.cashEur)
+        .put("pumpAmount", value.pumpAmount)
+        .put("entryPrice", value.entryPrice)
+        .put("lastDecisionId", value.lastDecisionId)
+        .put("trades", JSONArray(value.trades.map { it.toJson() }))
+        .put("decisions", JSONArray(value.decisions.map { it.toJson() }))
+        .put("totalFeesEur", value.totalFeesEur)
+        .put("peakValueEur", value.peakValueEur)
+        .put("maxDrawdownPercent", value.maxDrawdownPercent)
 
-    fun reset(context: Context) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().apply()
-    }
-
-    private fun save(context: Context, value: GeminiPaperPortfolio) {
-        val json = JSONObject()
-            .put("cashEur", value.cashEur).put("pumpAmount", value.pumpAmount)
-            .put("entryPrice", value.entryPrice).put("lastDecisionId", value.lastDecisionId)
-            .put("trades", JSONArray(value.trades.map { it.toJson() }))
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putString(KEY, json.toString()).apply()
+    private fun resetUsageDayIfNeeded(context: Context, now: Long = System.currentTimeMillis()) {
+        val day = now / (24L * 60L * 60L * 1000L)
+        val p = prefs(context)
+        if (p.getLong(KEY_USAGE_DAY, -1L) == day) return
+        p.edit()
+            .putLong(KEY_USAGE_DAY, day)
+            .putInt(KEY_REQUESTS, 0)
+            .putInt(KEY_PROMPT_TOKENS, 0)
+            .putInt(KEY_OUTPUT_TOKENS, 0)
+            .putInt(KEY_TOTAL_TOKENS, 0)
+            .apply()
     }
 }
