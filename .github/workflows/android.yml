@@ -39,7 +39,9 @@ jobs:
           retention-days: 7
 
       - name: Build unsigned personal release
-        if: github.event_name == 'push' && github.ref == 'refs/heads/agent/v3-4-gemini-rebuild-v2'
+        if: >-
+          github.event_name == 'pull_request' ||
+          (github.event_name == 'push' && github.ref == 'refs/heads/agent/v3-4-gemini-rebuild-v2')
         shell: bash
         run: |
           set -euo pipefail
@@ -52,7 +54,9 @@ jobs:
           cp "$build_tools/lib/apksigner.jar" "$release_dir/apksigner.jar"
 
       - name: Upload unsigned personal release
-        if: github.event_name == 'push' && github.ref == 'refs/heads/agent/v3-4-gemini-rebuild-v2'
+        if: >-
+          github.event_name == 'pull_request' ||
+          (github.event_name == 'push' && github.ref == 'refs/heads/agent/v3-4-gemini-rebuild-v2')
         uses: actions/upload-artifact@v4
         with:
           name: PumpSignal-V3.4-Unsigned-Release
