@@ -113,4 +113,49 @@ class GeminiPaperTraderTest {
         assertEquals("gemini-test", parsed.recommendation.model)
         assertEquals(140, parsed.totalTokens)
     }
+
+    @Test fun `first automatic attempt is allowed for a new closed hour`() {
+        val decision = GeminiHourlyRetryPolicy.automaticDecision(
+            frameHourId = 20L,
+            lastAttemptHour = 19L,
+            attemptsThisHour = 3,
+            lastAttempt = 1_000L,
+            now = 2_000L
+        )
+        assertTrue(decision.allowed)
+    }
+
+    @Test fun `failed hour waits five minutes before retry`() {
+        val now = 1_000_000L
+        val waiting = GeminiHourlyRetryPolicy.automaticDecision(
+            frameHourId = 20L,
+            lastAttemptHour = 20L,
+            attemptsThisHour = 1,
+            lastAttempt = now,
+            now = now + 4L * 60L * 1000L
+        )
+        assertFalse(waiting.allowed)
+        assertEquals(now + 5L * 60L * 1000L, waiting.nextAttemptAt)
+
+        val ready = GeminiHourlyRetryPolicy.automaticDecision(
+            frameHourId = 20L,
+            lastAttemptHour = 20L,
+            attemptsThisHour = 1,
+            lastAttempt = now,
+            now = now + 5L * 60L * 1000L
+        )
+        assertTrue(ready.allowed)
+    }
+
+    @Test fun `automatic retries stop after three attempts in one hour`() {
+        val blocked = GeminiHourlyRetryPolicy.automaticDecision(
+            frameHourId = 20L,
+            lastAttemptHour = 20L,
+            attemptsThisHour = 3,
+            lastAttempt = 1_000L,
+            now = 2_000L
+        )
+        assertFalse(blocked.allowed)
+        assertTrue(blocked.status.contains("3/3"))
+    }
 }

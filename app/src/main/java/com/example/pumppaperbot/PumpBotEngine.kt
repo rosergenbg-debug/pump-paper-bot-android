@@ -112,7 +112,12 @@ data class ChartBundle(
     val energyScore: Int = 0,
     val directionScore: Int = 0,
     val confidenceScore: Int = 0,
-    val lateEntryRisk: Int = 0
+    val lateEntryRisk: Int = 0,
+    val showGeminiGauge: Boolean = false,
+    val geminiDirectionScore: Int? = null,
+    val geminiConfidenceScore: Int = 0,
+    val geminiAction: String = "",
+    val geminiStatus: String = ""
 )
 
 data class LiveSnapshot(

@@ -340,7 +340,10 @@ data class GeminiExperimentState(
     val lastAttempt: Long,
     val lastAttemptHour: Long,
     val lastSuccess: Long,
+    val lastFailure: Long,
+    val attemptsThisHour: Int,
     val model: String,
+    val activeModel: String,
     val error: String,
     val requestsToday: Int,
     val promptTokensToday: Int,
@@ -357,7 +360,10 @@ object GeminiPaperStore {
     private const val KEY_LAST_ATTEMPT = "last_attempt"
     private const val KEY_LAST_ATTEMPT_HOUR = "last_attempt_hour"
     private const val KEY_LAST_SUCCESS = "last_success"
+    private const val KEY_LAST_FAILURE = "last_failure"
+    private const val KEY_ATTEMPTS_THIS_HOUR = "attempts_this_hour"
     private const val KEY_MODEL = "model"
+    private const val KEY_ACTIVE_MODEL = "active_model"
     private const val KEY_ERROR = "error"
     private const val KEY_USAGE_DAY = "usage_day"
     private const val KEY_REQUESTS = "requests"
@@ -376,7 +382,10 @@ object GeminiPaperStore {
             lastAttempt = p.getLong(KEY_LAST_ATTEMPT, 0L),
             lastAttemptHour = p.getLong(KEY_LAST_ATTEMPT_HOUR, 0L),
             lastSuccess = p.getLong(KEY_LAST_SUCCESS, 0L),
+            lastFailure = p.getLong(KEY_LAST_FAILURE, 0L),
+            attemptsThisHour = p.getInt(KEY_ATTEMPTS_THIS_HOUR, 0),
             model = p.getString(KEY_MODEL, "").orEmpty(),
+            activeModel = p.getString(KEY_ACTIVE_MODEL, "").orEmpty(),
             error = p.getString(KEY_ERROR, "").orEmpty(),
             requestsToday = p.getInt(KEY_REQUESTS, 0),
             promptTokensToday = p.getInt(KEY_PROMPT_TOKENS, 0),
@@ -396,11 +405,26 @@ object GeminiPaperStore {
     fun markAttempt(context: Context, hourId: Long, now: Long = System.currentTimeMillis()) {
         resetUsageDayIfNeeded(context, now)
         val p = prefs(context)
+        val attempts = if (p.getLong(KEY_LAST_ATTEMPT_HOUR, Long.MIN_VALUE) == hourId) {
+            p.getInt(KEY_ATTEMPTS_THIS_HOUR, 0) + 1
+        } else {
+            1
+        }
         p.edit()
             .putLong(KEY_LAST_ATTEMPT, now)
             .putLong(KEY_LAST_ATTEMPT_HOUR, hourId)
+            .putInt(KEY_ATTEMPTS_THIS_HOUR, attempts)
             .putString(KEY_STATUS, "GEMINI АНАЛИЗИРУЕТ")
             .putString(KEY_ERROR, "")
+            .apply()
+    }
+
+    fun markApiRequest(context: Context, model: String, now: Long = System.currentTimeMillis()) {
+        resetUsageDayIfNeeded(context, now)
+        val p = prefs(context)
+        p.edit()
+            .putString(KEY_ACTIVE_MODEL, model.take(80))
+            .putString(KEY_STATUS, "GEMINI АНАЛИЗИРУЕТ")
             .putInt(KEY_REQUESTS, p.getInt(KEY_REQUESTS, 0) + 1)
             .apply()
     }
@@ -420,6 +444,7 @@ object GeminiPaperStore {
             .putLong(KEY_LAST_SUCCESS, now)
             .putString(KEY_STATUS, "РАБОТАЕТ")
             .putString(KEY_MODEL, model.take(80))
+            .putString(KEY_ACTIVE_MODEL, model.take(80))
             .putString(KEY_ERROR, "")
             .putInt(KEY_PROMPT_TOKENS, p.getInt(KEY_PROMPT_TOKENS, 0) + promptTokens)
             .putInt(KEY_OUTPUT_TOKENS, p.getInt(KEY_OUTPUT_TOKENS, 0) + outputTokens)
@@ -427,8 +452,9 @@ object GeminiPaperStore {
             .apply()
     }
 
-    fun saveFailure(context: Context, error: String) {
+    fun saveFailure(context: Context, error: String, now: Long = System.currentTimeMillis()) {
         prefs(context).edit()
+            .putLong(KEY_LAST_FAILURE, now)
             .putString(KEY_STATUS, "ОШИБКА")
             .putString(KEY_ERROR, error.take(500))
             .apply()

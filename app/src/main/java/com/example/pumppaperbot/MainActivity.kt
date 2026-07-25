@@ -331,7 +331,26 @@ class MainActivity : AppCompatActivity() {
             else -> "Я ПРОДАЛ — ЖДУ ПОКУПКУ"
         }
         btnToggleMode?.text = "ПОЧЕМУ ТАКОЙ СИГНАЛ?"
-        chart?.setData("PUMP/EUR • ДЫХАНИЕ РЫНКА", snapshot.chart)
+        val geminiState = GeminiPaperStore.state(this)
+        val geminiDecision = geminiState.portfolio.decisions.lastOrNull()
+        val now = System.currentTimeMillis()
+        val currentGeminiDecision = geminiDecision?.takeIf {
+            geminiState.lastSuccess >= geminiState.lastFailure &&
+                now - it.decidedAt <= 90L * 60L * 1000L
+        }
+        chart?.setData(
+            "PUMP/EUR • ДЫХАНИЕ РЫНКА",
+            snapshot.chart.copy(
+                showGeminiGauge = true,
+                geminiDirectionScore = currentGeminiDecision?.directionScore,
+                geminiConfidenceScore = currentGeminiDecision?.confidence ?: 0,
+                geminiAction = currentGeminiDecision?.requestedAction.orEmpty(),
+                geminiStatus = GeminiHourlyRetryPolicy.visibleStatus(
+                    geminiState,
+                    now
+                )
+            )
+        )
     }
 
     private fun renderEventRadar(snapshot: LiveSnapshot) {
@@ -373,6 +392,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun renderGeminiPaper(snapshot: LiveSnapshot) {
         val state = GeminiPaperStore.state(this)
+        val now = System.currentTimeMillis()
+        val visibleStatus = GeminiHourlyRetryPolicy.visibleStatus(state, now)
         val portfolio = state.portfolio
         val value = portfolio.value(snapshot.lastPrice)
         val last = portfolio.decisions.lastOrNull()
@@ -381,19 +402,47 @@ class MainActivity : AppCompatActivity() {
         } else {
             String.format(Locale.GERMANY, "наличные €%.2f • ждёт вход", portfolio.cashEur)
         }
-        val lastLine = last?.let {
+        val forecastLine = last?.let {
             val action = when (it.requestedAction) {
                 "BUY" -> "КУПИТЬ"
                 "SELL" -> "ПРОДАТЬ"
                 else -> "ДЕРЖАТЬ"
             }
-            "$action ${PumpBotEngine.formatTime(it.decidedAt)} • ${it.reason}"
-        } ?: "Решений пока нет — ждём полностью закрытый час"
+            "ШКАЛА GEMINI ${signed(it.directionScore)}/100 • $action • уверенность ${it.confidence}/100 • прогноз ${PumpBotEngine.formatTime(it.decidedAt)}"
+        } ?: "ШКАЛА GEMINI — НЕТ ОТВЕТА • ждём полностью закрытый час"
+        val model = state.activeModel.ifBlank { state.model }.ifBlank { "ещё не выбрана" }
+        val attempt = state.attemptsThisHour.coerceAtMost(
+            GeminiHourlyRetryPolicy.MAX_AUTOMATIC_ATTEMPTS_PER_HOUR
+        )
+        val requestLine = if (state.lastAttempt > 0L) {
+            "Последний запрос ${PumpBotEngine.formatTime(state.lastAttempt)} • попытка $attempt/3"
+        } else {
+            "Запросов Gemini ещё не было"
+        }
+        val nextAt = GeminiHourlyRetryPolicy.nextVisibleActionAt(state, now)
+        val nextLine = when {
+            !state.enabled -> "Следующий запрос: выключен"
+            visibleStatus == "НЕТ КЛЮЧА GEMINI" -> "Следующий запрос: сначала сохраните ключ Gemini"
+            nextAt <= 0L -> "Сейчас: сетевой запрос выполняется • предел 85 секунд"
+            state.lastFailure >= state.lastSuccess &&
+                state.attemptsThisHour in 1 until GeminiHourlyRetryPolicy.MAX_AUTOMATIC_ATTEMPTS_PER_HOUR ->
+                "Следующая попытка не раньше ${PumpBotEngine.formatTime(nextAt)}"
+            else -> "Следующий новый прогноз после ${PumpBotEngine.formatTime(nextAt)}"
+        }
+        val reason = last?.reason?.take(180)
+            ?: state.error.takeIf(String::isNotBlank)?.take(180)
+            ?: "Gemini ещё не сформировал самостоятельный прогноз."
         tvGeminiPaper?.text = String.format(
             Locale.GERMANY,
-            "V3.4 GEMINI • ОТДЕЛЬНЫЕ 1 000 €\nСейчас €%.2f • результат %+.2f%% • операций %d\n%s\nСтатус: %s • модель %s\n%s",
+            "V3.5 GEMINI • ОТДЕЛЬНАЯ ШКАЛА\n%s\nСтатус: %s • модель %s\n%s\n%s\nРынок 2 мин • RSS-новости 10 мин • Gemini API 1 раз за закрытый час\nСчёт €%.2f • результат %+.2f%% • операций %d • %s\n%s",
+            forecastLine,
+            visibleStatus,
+            model,
+            requestLine,
+            nextLine,
             value, portfolio.profitPercent(snapshot.lastPrice), portfolio.trades.size,
-            position, state.status, state.model.ifBlank { "ещё не выбрана" }, lastLine
+            position,
+            reason
         )
         tvGeminiPaper?.setTextColor(Color.parseColor(
             if (portfolio.profit(snapshot.lastPrice) >= 0.0) "#D2A8FF" else "#FF7B72"
