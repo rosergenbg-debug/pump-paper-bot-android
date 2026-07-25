@@ -170,7 +170,7 @@ data class SavedMarketPayloads(
 )
 
 object PumpBotEngine {
-    const val appVersionName = "3.2"
+    const val appVersionName = "3.3"
     const val startBalance = 1000.0
     const val feeRate = 0.0015
     const val slippage = 0.0005
@@ -477,6 +477,11 @@ object PumpBotEngine {
     fun openInterestUrl(symbol: String = pumpSymbol): String {
         val encoded = URLEncoder.encode(symbol, "UTF-8")
         return "https://fapi.binance.com/fapi/v1/openInterest?symbol=$encoded"
+    }
+
+    fun openInterestHistoryUrl(symbol: String = pumpSymbol, limit: Int = 30): String {
+        val encoded = URLEncoder.encode(symbol, "UTF-8")
+        return "https://fapi.binance.com/futures/data/openInterestHist?symbol=$encoded&period=5m&limit=$limit"
     }
 
     fun fundingUrl(symbol: String = pumpSymbol, start: Long? = null, end: Long? = null): String {

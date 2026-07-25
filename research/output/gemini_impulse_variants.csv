@@ -1,0 +1,5 @@
+variant,volume_ratio,spot_taker_ratio,futures_taker_ratio,min_return_15m,compression_ratio,relative_strength_15m,oi_change_10m,holdout_return_pct,holdout_round_trips,holdout_wins,holdout_win_rate,holdout_max_drawdown_pct
+micro,3.5,0.7,0.64,0.01,,,,-17.56781672329527,12,0,0.0,-17.56781672329527
+micro_compression,3.5,0.7,0.64,0.005,0.65,,,-9.999494433284573,7,0,0.0,-9.999494433284573
+micro_compression_relative,3.5,0.7,0.64,0.005,0.65,0.003,,-7.529296299717592,5,0,0.0,-7.529296299717592
+micro_compression_relative_oi,3.5,0.68,0.64,0.005,0.65,0.0,0.0,-3.589564575319093,2,0,0.0,-3.589564575319093

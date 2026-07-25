@@ -66,6 +66,7 @@ class MarketSyncClient {
                 futures.get(), premium.get(), funding.get(), depth.get(), openInterest.get(),
                 pumpTicker.get(), eurTicker.get()
             )
+            ImpulseRadarClient().sync(context)
         } finally {
             pool.shutdownNow()
         }
@@ -78,7 +79,7 @@ class MarketSyncClient {
         url: (Long, Long) -> String
     ): String {
         val lastClosed = IncrementalMarketHistory.lastClosedKlineTime(existingJson, now)
-        if (!IncrementalMarketHistory.needsKlineRefresh(lastClosed, now)) return existingJson
+        if (!IncrementalMarketHistory.needsKlineRefresh(lastClosed, now, candleMillis)) return existingJson
         val start = lastClosed?.plus(1L)
             ?: (now - (limit + initialPaddingBars.toLong()) * candleMillis).coerceAtLeast(0L)
         val fresh = fetchKlineRange(start, now, url)
@@ -150,8 +151,12 @@ internal object IncrementalMarketHistory {
         }.maxOrNull()
     }
 
-    fun needsKlineRefresh(lastClosedTime: Long?, now: Long): Boolean {
-        return lastClosedTime == null || now > lastClosedTime + candleMillis
+    fun needsKlineRefresh(
+        lastClosedTime: Long?,
+        now: Long,
+        intervalMillis: Long = candleMillis
+    ): Boolean {
+        return lastClosedTime == null || now > lastClosedTime + intervalMillis
     }
 
     fun mergeKlines(existingJson: String, freshJson: String, limit: Int, now: Long): String {

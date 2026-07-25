@@ -102,15 +102,36 @@ class EventRadarClient {
             )
         )
         EventRadarStore.markGeminiAttempt(context, event.title, "Ручная проверка API и смыслового анализа")
+        var usedFallback = false
         runCatching {
-            GeminiEventInterpreter(client).analyze(
-                apiKey = key,
-                event = event,
-                market = PumpBotEngine.snapshot(context),
-                recent = state.recent.take(20),
-                useGoogleSearch = true,
-                detailed = true
-            )
+            val interpreter = GeminiEventInterpreter(client)
+            val market = PumpBotEngine.snapshot(context)
+            try {
+                interpreter.analyze(
+                    apiKey = key,
+                    event = event,
+                    market = market,
+                    recent = state.recent.take(20),
+                    useGoogleSearch = true,
+                    detailed = true
+                )
+            } catch (error: GeminiApiException) {
+                if (!GeminiRetryPolicy.shouldRetryWithoutSearch(error.httpCode, true)) throw error
+                usedFallback = true
+                EventRadarStore.markGeminiAttempt(
+                    context,
+                    event.title,
+                    "Google Search вернул HTTP 429; повторяем подробный анализ без поиска"
+                )
+                interpreter.analyze(
+                    apiKey = key,
+                    event = event,
+                    market = market,
+                    recent = state.recent.take(20),
+                    useGoogleSearch = false,
+                    detailed = true
+                )
+            }
         }.onSuccess { result ->
             EventRadarStore.saveGeminiSuccess(
                 context = context,
@@ -125,7 +146,12 @@ class EventRadarClient {
                 evidence = result.evidence,
                 risks = result.risks,
                 horizonHours = result.horizonHours,
-                saveEvent = storedEvent != null
+                saveEvent = storedEvent != null,
+                note = if (usedFallback) {
+                    "Анализ выполнен без Google Search после HTTP 429"
+                } else {
+                    "Подробный анализ выполнен с Google Search"
+                }
             )
             EventRadarStore.setUseAi(context, true)
         }.onFailure { error ->
@@ -201,13 +227,15 @@ class EventRadarClient {
             EventRadarStore.markGeminiSkipped(context, "Gemini выключен; официальные ленты проверены правилами")
             return events
         }
-        val candidate = events
+        val unseen = EventRadarStore.newForAutomaticAnalysis(context, events)
+        val candidate = unseen
             .filter { it.importance >= 45 }
             .maxByOrNull { it.publishedAt }
         if (candidate == null) {
             EventRadarStore.markGeminiSkipped(
                 context,
                 if (events.isEmpty()) "Ленты не изменились (HTTP 304): нового текста для Gemini нет"
+                else if (unseen.isEmpty()) "Все полученные RSS-сообщения уже обработаны; Gemini повторно не вызывается"
                 else "Новые сообщения есть, но их важность ниже 45/100"
             )
             return events
@@ -359,6 +387,11 @@ internal object EventFeedParser {
 }
 
 internal class GeminiApiException(val httpCode: Int, message: String) : IllegalStateException(message)
+
+internal object GeminiRetryPolicy {
+    fun shouldRetryWithoutSearch(httpCode: Int, searchWasEnabled: Boolean): Boolean =
+        searchWasEnabled && httpCode == 429
+}
 
 internal data class GeminiAnalysisResult(
     val event: MarketEvent,

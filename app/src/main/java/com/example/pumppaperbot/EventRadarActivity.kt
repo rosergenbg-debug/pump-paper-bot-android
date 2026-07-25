@@ -38,7 +38,7 @@ class EventRadarActivity : AppCompatActivity() {
             setBackgroundColor(Color.parseColor("#0D1117"))
         }
         content.addView(button("← НАЗАД", "#30363D").apply { setOnClickListener { finish() } }, params(dp(50)))
-        content.addView(label("V3.2 • ИНТЕРНЕТ + GEMINI", 25, "#F0F6FC", true))
+        content.addView(label("V3.3 • ИНТЕРНЕТ + GEMINI", 25, "#F0F6FC", true))
         content.addView(label(
             "Читает ФРС, ЕЦБ, SEC, BLS и свежие ленты PUMP, Bitcoin и Solana. Gemini сопоставляет их с текущим рынком. Поправка Gemini видна отдельно, ограничена ±12 и пока не открывает сделку сама.",
             15, "#C9D1D9", false
