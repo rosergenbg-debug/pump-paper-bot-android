@@ -38,9 +38,9 @@ class EventRadarActivity : AppCompatActivity() {
             setBackgroundColor(Color.parseColor("#0D1117"))
         }
         content.addView(button("← НАЗАД", "#30363D").apply { setOnClickListener { finish() } }, params(dp(50)))
-        content.addView(label("V3.3 • ИНТЕРНЕТ + GEMINI", 25, "#F0F6FC", true))
+        content.addView(label("V3.4 • РАДАР НОВОСТЕЙ + GEMINI", 25, "#F0F6FC", true))
         content.addView(label(
-            "Читает ФРС, ЕЦБ, SEC, BLS и свежие ленты PUMP, Bitcoin и Solana. Gemini сопоставляет их с текущим рынком. Поправка Gemini видна отдельно, ограничена ±12 и пока не открывает сделку сама.",
+            "Читает ФРС, ЕЦБ, SEC, BLS и свежие ленты PUMP, Bitcoin и Solana. Gemini сопоставляет их с текущим рынком. Поправка здесь ограничена ±12 и не меняет основную стратегию. Отдельный часовой Gemini‑эксперимент находится на главном экране.",
             15, "#C9D1D9", false
         ))
 
@@ -65,13 +65,13 @@ class EventRadarActivity : AppCompatActivity() {
         progress = ProgressBar(this).apply { visibility = View.GONE }
         content.addView(progress, LinearLayout.LayoutParams(-1, dp(38)))
 
-        content.addView(label("GEMINI УЖЕ ПОДКЛЮЧЁН", 20, "#F0F6FC", true))
+        content.addView(label("КЛЮЧ GEMINI", 20, "#F0F6FC", true))
         content.addView(label(
-            "В этой личной сборке ключ уже встроен. Поле ниже нужно только если вы захотите временно проверить другой ключ.",
+            "Готовый ключ в APK не вшивается. Вставьте личный API‑ключ один раз: он сохранится в закрытых данных приложения и используется радаром и отдельным часовым экспериментом.",
             14, "#C9D1D9", false
         ))
         keyInput = EditText(this).apply {
-            hint = "Встроенный ключ активен • здесь можно указать другой"
+            hint = "Вставьте личный Gemini API‑ключ"
             setHintTextColor(Color.parseColor("#8B949E"))
             setTextColor(Color.WHITE)
             setBackgroundColor(Color.parseColor("#161B22"))
@@ -82,7 +82,7 @@ class EventRadarActivity : AppCompatActivity() {
         content.addView(keyInput, params(dp(58), dp(6)))
 
         val keyButtons = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        keyButtons.addView(button("СОХРАНИТЬ ДРУГОЙ", "#238636").apply {
+        keyButtons.addView(button("СОХРАНИТЬ КЛЮЧ", "#238636").apply {
             setOnClickListener {
                 EventRadarStore.saveApiKey(this@EventRadarActivity, keyInput.text.toString())
                 EventRadarStore.setUseAi(this@EventRadarActivity, true)
@@ -90,7 +90,7 @@ class EventRadarActivity : AppCompatActivity() {
                 updateUi()
             }
         }, LinearLayout.LayoutParams(0, dp(56), 1f))
-        keyButtons.addView(button("ВЕРНУТЬ ВСТРОЕННЫЙ", "#30363D").apply {
+        keyButtons.addView(button("УДАЛИТЬ КЛЮЧ", "#30363D").apply {
             setOnClickListener {
                 keyInput.setText("")
                 EventRadarStore.saveApiKey(this@EventRadarActivity, "")
