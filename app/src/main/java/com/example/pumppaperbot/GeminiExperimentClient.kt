@@ -247,18 +247,36 @@ class GeminiExperimentClient {
         .callTimeout(85, TimeUnit.SECONDS)
         .build()
 
-    fun sync(context: Context, force: Boolean = false): GeminiExperimentState =
+    fun sync(
+        context: Context,
+        force: Boolean = false,
+        source: String = "АВТОМАТИЧЕСКИЙ ЦИКЛ"
+    ): GeminiExperimentState =
         synchronized(RUN_LOCK) {
-            syncLocked(context, force)
+            syncLocked(context, force, source)
         }
 
-    private fun syncLocked(context: Context, force: Boolean): GeminiExperimentState {
+    private fun syncLocked(
+        context: Context,
+        force: Boolean,
+        source: String
+    ): GeminiExperimentState {
         val now = System.currentTimeMillis()
         val existing = GeminiPaperStore.state(context)
-        if (!existing.enabled && !force) return existing
+        if (!existing.enabled && !force) {
+            GeminiPaperStore.recordActivity(
+                context, "ПРОВЕРКА ЧАСА", "WAIT",
+                "$source: Gemini выключен, API‑запрос не выполнялся", at = now
+            )
+            return existing
+        }
         val frame = GeminiMarketFrame.from(context)
         if (frame == null) {
             GeminiPaperStore.markWaiting(context, "ЖДЁМ ПОЛНЫЕ РЫНОЧНЫЕ ДАННЫЕ")
+            GeminiPaperStore.recordActivity(
+                context, "ПРОВЕРКА ЧАСА", "WAIT",
+                "$source: полного набора закрытых свечей пока нет", at = now
+            )
             return GeminiPaperStore.state(context)
         }
         val gradedPortfolio = GeminiPaperTrader.gradeCompletedHours(
@@ -272,10 +290,23 @@ class GeminiExperimentClient {
         val key = EventRadarStore.apiKey(context)
         if (key.isBlank()) {
             GeminiPaperStore.markWaiting(context, "НЕТ КЛЮЧА GEMINI")
+            GeminiPaperStore.recordActivity(
+                context, "ПРОВЕРКА ЧАСА", "WAIT",
+                "$source: данные готовы, но Gemini API‑ключ не настроен",
+                hourId = frame.hourId,
+                at = now
+            )
             return GeminiPaperStore.state(context)
         }
         if (current.portfolio.lastDecisionId >= frame.hourId) {
-            return current
+            GeminiPaperStore.markWaiting(context, "ЧАС УЖЕ ОБРАБОТАН • ЖДЁМ НОВЫЙ")
+            GeminiPaperStore.recordActivity(
+                context, "ПРОВЕРКА ЧАСА", "WAIT",
+                "$source: закрытый час ${frame.hourId} уже имеет прогноз; новый API‑запрос не нужен",
+                hourId = frame.hourId,
+                at = now
+            )
+            return GeminiPaperStore.state(context)
         }
         if (!force) {
             val retry = GeminiHourlyRetryPolicy.automaticDecision(
@@ -287,13 +318,28 @@ class GeminiExperimentClient {
             )
             if (!retry.allowed) {
                 GeminiPaperStore.markWaiting(context, retry.status)
+                GeminiPaperStore.recordActivity(
+                    context, "ПРОВЕРКА ЧАСА", "WAIT",
+                    "$source: ${retry.status.lowercase()}",
+                    hourId = frame.hourId,
+                    attempt = current.attemptsThisHour,
+                    at = now
+                )
                 return GeminiPaperStore.state(context)
             }
         }
 
         GeminiPaperStore.markAttempt(context, frame.hourId, now)
+        val attempt = GeminiPaperStore.state(context).attemptsThisHour
+        GeminiPaperStore.recordActivity(
+            context, "ПОДГОТОВКА", "START",
+            "$source: собран пакет признаков для закрытого часа ${frame.hourId}",
+            hourId = frame.hourId,
+            attempt = attempt,
+            at = now
+        )
         return runCatching {
-            analyzeWithFallback(context, key, frame, current.portfolio)
+            analyzeWithFallback(context, key, frame, current.portfolio, attempt)
         }.fold(
             onSuccess = { result ->
                 val updated = GeminiPaperTrader.applyDecision(
@@ -311,12 +357,42 @@ class GeminiExperimentClient {
                     outputTokens = result.outputTokens,
                     totalTokens = result.totalTokens
                 )
+                GeminiPaperStore.recordActivity(
+                    context = context,
+                    stage = "РЕШЕНИЕ",
+                    result = "OK",
+                    detail = "${result.recommendation.action}: направление " +
+                        "${result.recommendation.directionScore}/100, уверенность " +
+                        "${result.recommendation.confidence}/100; ${result.recommendation.reason.take(260)}",
+                    model = result.recommendation.model,
+                    hourId = frame.hourId,
+                    attempt = attempt
+                )
                 GeminiPaperStore.state(context)
             },
             onFailure = { error ->
                 val code = (error as? GeminiApiException)?.httpCode ?: 0
                 val prefix = if (code > 0) "HTTP $code: " else ""
                 GeminiPaperStore.saveFailure(context, prefix + (error.message ?: "Gemini не ответил"))
+                val failed = GeminiPaperStore.state(context)
+                val next = GeminiHourlyRetryPolicy.nextVisibleActionAt(
+                    failed,
+                    System.currentTimeMillis()
+                )
+                val retryText = when {
+                    failed.attemptsThisHour >= GeminiHourlyRetryPolicy.MAX_AUTOMATIC_ATTEMPTS_PER_HOUR ->
+                        "попытки исчерпаны до следующего часа"
+                    next > 0L -> "следующая попытка после ${PumpBotEngine.formatTime(next)}"
+                    else -> "цикл восстановится автоматически"
+                }
+                GeminiPaperStore.recordActivity(
+                    context = context,
+                    stage = "ОШИБКА GEMINI",
+                    result = "ERROR",
+                    detail = "${prefix}${error.message ?: "нет ответа"}; $retryText",
+                    hourId = frame.hourId,
+                    attempt = attempt
+                )
                 GeminiPaperStore.state(context)
             }
         )
@@ -326,17 +402,67 @@ class GeminiExperimentClient {
         context: Context,
         apiKey: String,
         frame: GeminiMarketFrame,
-        portfolio: GeminiPaperPortfolio
+        portfolio: GeminiPaperPortfolio,
+        attempt: Int
     ): GeminiHourlyApiResult {
         var lastError: GeminiApiException? = null
         for ((index, model) in MODELS.withIndex()) {
+            val requestStarted = System.currentTimeMillis()
             try {
                 GeminiPaperStore.markApiRequest(context, model)
-                return analyze(apiKey, model, frame, portfolio)
+                GeminiPaperStore.recordActivity(
+                    context = context,
+                    stage = "GEMINI API",
+                    result = "START",
+                    detail = "Запрос отправлен; жёсткий предел ожидания 85 секунд",
+                    model = model,
+                    hourId = frame.hourId,
+                    attempt = attempt,
+                    at = requestStarted
+                )
+                val result = analyze(apiKey, model, frame, portfolio)
+                GeminiPaperStore.recordActivity(
+                    context = context,
+                    stage = "GEMINI API",
+                    result = "OK",
+                    detail = "Ответ получен: ${result.totalTokens} токенов",
+                    durationMillis = System.currentTimeMillis() - requestStarted,
+                    model = result.recommendation.model,
+                    hourId = frame.hourId,
+                    attempt = attempt
+                )
+                return result
             } catch (error: GeminiApiException) {
                 lastError = error
                 val canFallback = error.httpCode in setOf(404, 429, 500, 503)
+                GeminiPaperStore.recordActivity(
+                    context = context,
+                    stage = "GEMINI API",
+                    result = "ERROR",
+                    detail = "HTTP ${error.httpCode}: ${error.message}; " +
+                        if (canFallback && index < MODELS.lastIndex) {
+                            "переключаюсь на резервную модель"
+                        } else {
+                            "ответ не получен"
+                        },
+                    durationMillis = System.currentTimeMillis() - requestStarted,
+                    model = model,
+                    hourId = frame.hourId,
+                    attempt = attempt
+                )
                 if (!canFallback || index == MODELS.lastIndex) throw error
+            } catch (error: Exception) {
+                GeminiPaperStore.recordActivity(
+                    context = context,
+                    stage = "GEMINI API",
+                    result = "ERROR",
+                    detail = "${error.message ?: error.javaClass.simpleName}; запрос прерван, цикл продолжит работу",
+                    durationMillis = System.currentTimeMillis() - requestStarted,
+                    model = model,
+                    hourId = frame.hourId,
+                    attempt = attempt
+                )
+                throw error
             }
         }
         throw lastError ?: GeminiApiException(0, "Gemini не ответил")
