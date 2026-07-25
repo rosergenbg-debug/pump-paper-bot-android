@@ -3,6 +3,7 @@ package com.example.pumppaperbot
 import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.max
 
 data class GeminiPaperTrade(
@@ -337,6 +338,13 @@ object GeminiPaperTrader {
 data class GeminiExperimentState(
     val enabled: Boolean,
     val status: String,
+    val phase: String,
+    val cycleSource: String,
+    val lastCycleStarted: Long,
+    val lastCycleFinished: Long,
+    val lastDataReady: Long,
+    val dataDurationMillis: Long,
+    val nextCheckAt: Long,
     val lastAttempt: Long,
     val lastAttemptHour: Long,
     val lastSuccess: Long,
@@ -349,14 +357,66 @@ data class GeminiExperimentState(
     val promptTokensToday: Int,
     val outputTokensToday: Int,
     val totalTokensToday: Int,
-    val portfolio: GeminiPaperPortfolio
+    val portfolio: GeminiPaperPortfolio,
+    val activity: List<GeminiActivityEvent>
 )
+
+data class GeminiActivityEvent(
+    val at: Long,
+    val stage: String,
+    val result: String,
+    val detail: String,
+    val durationMillis: Long = 0L,
+    val model: String = "",
+    val hourId: Long = 0L,
+    val attempt: Int = 0
+) {
+    fun toJson(): JSONObject = JSONObject()
+        .put("at", at)
+        .put("stage", stage)
+        .put("result", result)
+        .put("detail", detail)
+        .put("durationMillis", durationMillis)
+        .put("model", model)
+        .put("hourId", hourId)
+        .put("attempt", attempt)
+
+    companion object {
+        fun fromJson(value: JSONObject) = GeminiActivityEvent(
+            at = value.optLong("at"),
+            stage = value.optString("stage"),
+            result = value.optString("result", "INFO"),
+            detail = value.optString("detail"),
+            durationMillis = value.optLong("durationMillis"),
+            model = value.optString("model"),
+            hourId = value.optLong("hourId"),
+            attempt = value.optInt("attempt")
+        )
+    }
+}
+
+object GeminiCycleGuard {
+    private val active = AtomicBoolean(false)
+
+    fun tryEnter(): Boolean = active.compareAndSet(false, true)
+    fun exit() {
+        active.set(false)
+    }
+}
 
 object GeminiPaperStore {
     private const val PREFS = "gemini_paper_v34"
     private const val KEY_PORTFOLIO = "portfolio"
     private const val KEY_ENABLED = "enabled"
     private const val KEY_STATUS = "status"
+    private const val KEY_PHASE = "phase"
+    private const val KEY_CYCLE_SOURCE = "cycle_source"
+    private const val KEY_LAST_CYCLE_STARTED = "last_cycle_started"
+    private const val KEY_LAST_CYCLE_FINISHED = "last_cycle_finished"
+    private const val KEY_LAST_DATA_READY = "last_data_ready"
+    private const val KEY_DATA_DURATION = "data_duration"
+    private const val KEY_NEXT_CHECK_AT = "next_check_at"
+    private const val KEY_ACTIVITY = "activity"
     private const val KEY_LAST_ATTEMPT = "last_attempt"
     private const val KEY_LAST_ATTEMPT_HOUR = "last_attempt_hour"
     private const val KEY_LAST_SUCCESS = "last_success"
@@ -370,15 +430,29 @@ object GeminiPaperStore {
     private const val KEY_PROMPT_TOKENS = "prompt_tokens"
     private const val KEY_OUTPUT_TOKENS = "output_tokens"
     private const val KEY_TOTAL_TOKENS = "total_tokens"
+    private const val MAX_ACTIVITY_EVENTS = 1000
+    private val activityLock = Any()
+    @Volatile private var cachedActivityRaw: String? = null
+    @Volatile private var cachedActivity: List<GeminiActivityEvent> = emptyList()
 
     private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-    fun state(context: Context): GeminiExperimentState {
+    fun state(
+        context: Context,
+        includeActivity: Boolean = false
+    ): GeminiExperimentState {
         resetUsageDayIfNeeded(context)
         val p = prefs(context)
         return GeminiExperimentState(
             enabled = p.getBoolean(KEY_ENABLED, true),
             status = p.getString(KEY_STATUS, "ЖДЁМ ЗАКРЫТИЯ ЧАСА").orEmpty(),
+            phase = p.getString(KEY_PHASE, "ОЖИДАНИЕ ПЕРВОГО ЦИКЛА").orEmpty(),
+            cycleSource = p.getString(KEY_CYCLE_SOURCE, "").orEmpty(),
+            lastCycleStarted = p.getLong(KEY_LAST_CYCLE_STARTED, 0L),
+            lastCycleFinished = p.getLong(KEY_LAST_CYCLE_FINISHED, 0L),
+            lastDataReady = p.getLong(KEY_LAST_DATA_READY, 0L),
+            dataDurationMillis = p.getLong(KEY_DATA_DURATION, 0L),
+            nextCheckAt = p.getLong(KEY_NEXT_CHECK_AT, 0L),
             lastAttempt = p.getLong(KEY_LAST_ATTEMPT, 0L),
             lastAttemptHour = p.getLong(KEY_LAST_ATTEMPT_HOUR, 0L),
             lastSuccess = p.getLong(KEY_LAST_SUCCESS, 0L),
@@ -391,7 +465,12 @@ object GeminiPaperStore {
             promptTokensToday = p.getInt(KEY_PROMPT_TOKENS, 0),
             outputTokensToday = p.getInt(KEY_OUTPUT_TOKENS, 0),
             totalTokensToday = p.getInt(KEY_TOTAL_TOKENS, 0),
-            portfolio = loadPortfolio(p.getString(KEY_PORTFOLIO, null))
+            portfolio = loadPortfolio(p.getString(KEY_PORTFOLIO, null)),
+            activity = if (includeActivity) {
+                loadActivityCached(p.getString(KEY_ACTIVITY, null))
+            } else {
+                emptyList()
+            }
         )
     }
 
@@ -399,7 +478,137 @@ object GeminiPaperStore {
         prefs(context).edit()
             .putBoolean(KEY_ENABLED, enabled)
             .putString(KEY_STATUS, if (enabled) "ЖДЁМ ЗАКРЫТИЯ ЧАСА" else "ВЫКЛЮЧЕН")
+            .putString(KEY_PHASE, if (enabled) "ОЖИДАНИЕ ЦИКЛА" else "ВЫКЛЮЧЕН")
             .apply()
+        recordActivity(
+            context,
+            stage = "УПРАВЛЕНИЕ",
+            result = if (enabled) "OK" else "WAIT",
+            detail = if (enabled) "Gemini‑эксперимент включён" else "Gemini‑эксперимент выключен"
+        )
+    }
+
+    fun beginCycle(
+        context: Context,
+        source: String,
+        expectedIntervalMillis: Long,
+        now: Long = System.currentTimeMillis()
+    ) {
+        prefs(context).edit()
+            .putString(KEY_PHASE, "СОБИРАЮ РЫНОК И НОВОСТИ")
+            .putString(KEY_CYCLE_SOURCE, source.take(80))
+            .putLong(KEY_LAST_CYCLE_STARTED, now)
+            .putLong(KEY_NEXT_CHECK_AT, now + expectedIntervalMillis.coerceAtLeast(0L))
+            .apply()
+        recordActivity(
+            context,
+            stage = "ЦИКЛ",
+            result = "START",
+            detail = "$source: начата проверка рынка, новостей и часового прогноза",
+            at = now
+        )
+    }
+
+    fun markDataReady(
+        context: Context,
+        source: String,
+        startedAt: Long,
+        now: Long = System.currentTimeMillis()
+    ) {
+        val duration = (now - startedAt).coerceAtLeast(0L)
+        prefs(context).edit()
+            .putString(KEY_PHASE, "ДАННЫЕ ГОТОВЫ • ПРОВЕРЯЮ ЧАС")
+            .putLong(KEY_LAST_DATA_READY, now)
+            .putLong(KEY_DATA_DURATION, duration)
+            .apply()
+        recordActivity(
+            context,
+            stage = "ДАННЫЕ",
+            result = "OK",
+            detail = "$source: рынок и новости обновлены",
+            durationMillis = duration,
+            at = now
+        )
+    }
+
+    fun finishCycle(
+        context: Context,
+        source: String,
+        startedAt: Long,
+        nextCheckAt: Long,
+        detail: String,
+        now: Long = System.currentTimeMillis()
+    ) {
+        val duration = (now - startedAt).coerceAtLeast(0L)
+        prefs(context).edit()
+            .putString(KEY_PHASE, "ОЖИДАНИЕ СЛЕДУЮЩЕЙ ПРОВЕРКИ")
+            .putLong(KEY_LAST_CYCLE_FINISHED, now)
+            .putLong(KEY_NEXT_CHECK_AT, nextCheckAt)
+            .apply()
+        recordActivity(
+            context,
+            stage = "ЦИКЛ",
+            result = "OK",
+            detail = "$source: $detail",
+            durationMillis = duration,
+            at = now
+        )
+    }
+
+    fun failCycle(
+        context: Context,
+        source: String,
+        startedAt: Long,
+        nextCheckAt: Long,
+        error: String,
+        now: Long = System.currentTimeMillis()
+    ) {
+        val duration = (now - startedAt).coerceAtLeast(0L)
+        prefs(context).edit()
+            .putString(KEY_PHASE, "ОШИБКА ЦИКЛА • БУДЕТ ПОВТОР")
+            .putLong(KEY_LAST_CYCLE_FINISHED, now)
+            .putLong(KEY_NEXT_CHECK_AT, nextCheckAt)
+            .apply()
+        recordActivity(
+            context,
+            stage = "ЦИКЛ",
+            result = "ERROR",
+            detail = "$source: ${error.take(500)}",
+            durationMillis = duration,
+            at = now
+        )
+    }
+
+    fun recordActivity(
+        context: Context,
+        stage: String,
+        result: String,
+        detail: String,
+        durationMillis: Long = 0L,
+        model: String = "",
+        hourId: Long = 0L,
+        attempt: Int = 0,
+        at: Long = System.currentTimeMillis()
+    ) {
+        synchronized(activityLock) {
+            val p = prefs(context)
+            val old = loadActivityCached(p.getString(KEY_ACTIVITY, null))
+            val event = GeminiActivityEvent(
+                at = at,
+                stage = stage.take(40),
+                result = result.take(20),
+                detail = detail.take(700),
+                durationMillis = durationMillis.coerceAtLeast(0L),
+                model = model.take(80),
+                hourId = hourId,
+                attempt = attempt.coerceAtLeast(0)
+            )
+            val updated = (old + event).takeLast(MAX_ACTIVITY_EVENTS)
+            val raw = JSONArray(updated.map { it.toJson() }).toString()
+            cachedActivityRaw = raw
+            cachedActivity = updated
+            p.edit().putString(KEY_ACTIVITY, raw).apply()
+        }
     }
 
     fun markAttempt(context: Context, hourId: Long, now: Long = System.currentTimeMillis()) {
@@ -415,6 +624,7 @@ object GeminiPaperStore {
             .putLong(KEY_LAST_ATTEMPT_HOUR, hourId)
             .putInt(KEY_ATTEMPTS_THIS_HOUR, attempts)
             .putString(KEY_STATUS, "GEMINI АНАЛИЗИРУЕТ")
+            .putString(KEY_PHASE, "ГОТОВЛЮ ЗАПРОС GEMINI")
             .putString(KEY_ERROR, "")
             .apply()
     }
@@ -425,6 +635,7 @@ object GeminiPaperStore {
         p.edit()
             .putString(KEY_ACTIVE_MODEL, model.take(80))
             .putString(KEY_STATUS, "GEMINI АНАЛИЗИРУЕТ")
+            .putString(KEY_PHASE, "ЗАПРОС ОТПРАВЛЕН • ЖДУ ОТВЕТ")
             .putInt(KEY_REQUESTS, p.getInt(KEY_REQUESTS, 0) + 1)
             .apply()
     }
@@ -443,6 +654,7 @@ object GeminiPaperStore {
             .putString(KEY_PORTFOLIO, portfolioToJson(portfolio).toString())
             .putLong(KEY_LAST_SUCCESS, now)
             .putString(KEY_STATUS, "РАБОТАЕТ")
+            .putString(KEY_PHASE, "ОТВЕТ ПОЛУЧЕН")
             .putString(KEY_MODEL, model.take(80))
             .putString(KEY_ACTIVE_MODEL, model.take(80))
             .putString(KEY_ERROR, "")
@@ -456,12 +668,16 @@ object GeminiPaperStore {
         prefs(context).edit()
             .putLong(KEY_LAST_FAILURE, now)
             .putString(KEY_STATUS, "ОШИБКА")
+            .putString(KEY_PHASE, "ОШИБКА GEMINI • ОЖИДАНИЕ ПОВТОРА")
             .putString(KEY_ERROR, error.take(500))
             .apply()
     }
 
     fun markWaiting(context: Context, status: String) {
-        prefs(context).edit().putString(KEY_STATUS, status.take(120)).apply()
+        prefs(context).edit()
+            .putString(KEY_STATUS, status.take(120))
+            .putString(KEY_PHASE, status.take(120))
+            .apply()
     }
 
     fun savePortfolio(context: Context, portfolio: GeminiPaperPortfolio) {
@@ -471,6 +687,8 @@ object GeminiPaperStore {
     }
 
     fun reset(context: Context) {
+        cachedActivityRaw = null
+        cachedActivity = emptyList()
         prefs(context).edit().clear().putBoolean(KEY_ENABLED, true).apply()
     }
 
@@ -499,6 +717,30 @@ object GeminiPaperStore {
                 maxDrawdownPercent = json.optDouble("maxDrawdownPercent")
             )
         }.getOrDefault(GeminiPaperPortfolio())
+    }
+
+    private fun loadActivity(raw: String?): List<GeminiActivityEvent> {
+        if (raw.isNullOrBlank()) return emptyList()
+        return runCatching {
+            val json = JSONArray(raw)
+            (0 until json.length()).mapNotNull {
+                json.optJSONObject(it)?.let(GeminiActivityEvent::fromJson)
+            }.takeLast(MAX_ACTIVITY_EVENTS)
+        }.getOrDefault(emptyList())
+    }
+
+    private fun loadActivityCached(raw: String?): List<GeminiActivityEvent> {
+        if (raw == cachedActivityRaw) return cachedActivity
+        return synchronized(activityLock) {
+            if (raw == cachedActivityRaw) {
+                cachedActivity
+            } else {
+                loadActivity(raw).also {
+                    cachedActivityRaw = raw
+                    cachedActivity = it
+                }
+            }
+        }
     }
 
     private fun portfolioToJson(value: GeminiPaperPortfolio): JSONObject = JSONObject()

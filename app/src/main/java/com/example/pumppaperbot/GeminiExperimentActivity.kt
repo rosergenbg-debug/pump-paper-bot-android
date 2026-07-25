@@ -4,6 +4,8 @@ import android.app.AlertDialog
 import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.Gravity
 import android.view.View
 import android.widget.Button
@@ -11,9 +13,19 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
+import java.util.concurrent.TimeUnit
 
 class GeminiExperimentActivity : AppCompatActivity() {
+    private val handler = Handler(Looper.getMainLooper())
+    private val clock = object : Runnable {
+        override fun run() {
+            render()
+            handler.postDelayed(this, 1000L)
+        }
+    }
     private lateinit var root: LinearLayout
     private lateinit var toggle: Button
     private lateinit var runNow: Button
@@ -21,8 +33,11 @@ class GeminiExperimentActivity : AppCompatActivity() {
     private lateinit var portfolio: TextView
     private lateinit var statistics: TextView
     private lateinit var lastDecision: TextView
+    private lateinit var activityHistory: TextView
     private lateinit var history: TextView
     private lateinit var trades: TextView
+    private var renderedActivityCount = -1
+    private var renderedActivityLastAt = Long.MIN_VALUE
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -39,18 +54,18 @@ class GeminiExperimentActivity : AppCompatActivity() {
         root.addView(button("← НАЗАД", "#30363D").apply {
             setOnClickListener { finish() }
         }, LinearLayout.LayoutParams(-1, dp(48)))
-        root.addView(label("V3.5 • ВИДИМЫЙ GEMINI‑ЭКСПЕРИМЕНТ", 24, "#F0F6FC", true))
+        root.addView(label("V3.6 • АКТИВНОСТЬ GEMINI", 24, "#F0F6FC", true))
         root.addView(label(
-            "Раз в новый закрытый час Gemini самостоятельно выбирает КУПИТЬ, ДЕРЖАТЬ или ПРОДАТЬ для виртуальных 1 000 €. " +
-                "Он видит PUMP/BTC/SOL, spot/futures‑поток, funding, premium, стакан/OI и свежие новости. " +
-                "Основную стратегию и реальные деньги этот модуль не меняет. При временной ошибке разрешены максимум " +
-                "три автоматические попытки на один час с паузой пять минут; один запрос не может висеть дольше 85 секунд.",
+            "Здесь виден весь цикл: запуск проверки, сбор рынка и новостей, решение о необходимости API‑запроса, " +
+                "отправка в Gemini, модель, длительность ответа, результат, ошибка и следующая попытка. " +
+                "Прогноз создаётся один раз после нового закрытого часа; обычные двухминутные циклы только проверяют, " +
+                "появился ли такой час. Основную стратегию и реальные деньги этот модуль не меняет.",
             14, "#C9D1D9", false, 8
         ))
 
         val buttons = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         toggle = button("ВКЛЮЧИТЬ", "#7C3AED")
-        runNow = button("ПРОВЕРИТЬ ЧАС", "#1F6FEB")
+        runNow = button("ПРОВЕРИТЬ СЕЙЧАС", "#1F6FEB")
         buttons.addView(toggle, LinearLayout.LayoutParams(0, dp(56), 1f))
         buttons.addView(runNow, LinearLayout.LayoutParams(0, dp(56), 1f).apply {
             leftMargin = dp(8)
@@ -67,9 +82,12 @@ class GeminiExperimentActivity : AppCompatActivity() {
         portfolio = card("#211A36")
         statistics = card("#161B22")
         lastDecision = card("#172033")
+        activityHistory = card("#101820")
         history = card("#161B22")
         trades = card("#161B22")
         root.addView(status, cardParams())
+        root.addView(label("ЖИВАЯ ЛЕНТА РАБОТЫ", 17, "#7EE787", true, 16))
+        root.addView(activityHistory, cardParams(6))
         root.addView(portfolio, cardParams())
         root.addView(statistics, cardParams())
         root.addView(lastDecision, cardParams())
@@ -113,35 +131,90 @@ class GeminiExperimentActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        render()
+        handler.removeCallbacks(clock)
+        handler.post(clock)
+    }
+
+    override fun onPause() {
+        handler.removeCallbacks(clock)
+        super.onPause()
     }
 
     private fun runCheck() {
         runNow.isEnabled = false
         runNow.text = "ПРОВЕРЯЮ…"
         status.text = "Обновляю рынок и новости, затем проверяю новый закрытый час…"
-        Thread {
-            val result = runCatching {
-                MarketSyncClient().sync(this)
-                EventRadarClient().sync(this, force = true)
-                GeminiExperimentClient().sync(this, force = true)
-            }
-            runOnUiThread {
-                if (result.isFailure) {
-                    GeminiPaperStore.saveFailure(
-                        this,
-                        result.exceptionOrNull()?.message ?: "Ошибка обновления"
-                    )
+        Thread cycle@{
+            val source = "РУЧНАЯ ПРОВЕРКА ИЗ ОКНА GEMINI"
+            if (!GeminiCycleGuard.tryEnter()) {
+                GeminiPaperStore.recordActivity(
+                    this,
+                    "ЦИКЛ",
+                    "WAIT",
+                    "$source: предыдущая проверка ещё выполняется"
+                )
+                runOnUiThread {
+                    runNow.isEnabled = true
+                    runNow.text = "ПРОВЕРИТЬ СЕЙЧАС"
+                    render()
                 }
-                runNow.isEnabled = true
-                runNow.text = "ПРОВЕРИТЬ ЧАС"
-                render()
+                return@cycle
+            }
+            val startedAt = System.currentTimeMillis()
+            val interval = if (PumpBotEngine.snapshot(this).running) {
+                TimeUnit.MINUTES.toMillis(2)
+            } else {
+                TimeUnit.MINUTES.toMillis(15)
+            }
+            GeminiPaperStore.beginCycle(this, source, interval, startedAt)
+            try {
+                val result = runCatching {
+                    MarketSyncClient().sync(this)
+                    EventRadarClient().sync(this, force = true)
+                    GeminiPaperStore.markDataReady(this, source, startedAt)
+                    GeminiExperimentClient().sync(this, force = true, source = source)
+                }
+                val finishedAt = System.currentTimeMillis()
+                result.fold(
+                    onSuccess = {
+                        GeminiPaperStore.finishCycle(
+                            this,
+                            source,
+                            startedAt,
+                            finishedAt + interval,
+                            "ручная проверка завершена; Gemini: ${it.status}",
+                            finishedAt
+                        )
+                    },
+                    onFailure = {
+                        GeminiPaperStore.saveFailure(
+                            this,
+                            it.message ?: "Ошибка обновления",
+                            finishedAt
+                        )
+                        GeminiPaperStore.failCycle(
+                            this,
+                            source,
+                            startedAt,
+                            finishedAt + interval,
+                            it.message ?: it.javaClass.simpleName,
+                            finishedAt
+                        )
+                    }
+                )
+                runOnUiThread {
+                    runNow.isEnabled = true
+                    runNow.text = "ПРОВЕРИТЬ СЕЙЧАС"
+                    render()
+                }
+            } finally {
+                GeminiCycleGuard.exit()
             }
         }.start()
     }
 
     private fun render() {
-        val state = GeminiPaperStore.state(this)
+        val state = GeminiPaperStore.state(this, includeActivity = true)
         val now = System.currentTimeMillis()
         val visibleStatus = GeminiHourlyRetryPolicy.visibleStatus(state, now)
         val snapshot = PumpBotEngine.snapshot(this)
@@ -156,6 +229,7 @@ class GeminiExperimentActivity : AppCompatActivity() {
         }
         status.text = buildString {
             append("СТАТУС: $visibleStatus")
+            append("\nТекущая стадия: ${state.phase}")
             append("\nКлюч: $keySource")
             val activeModel = state.activeModel.ifBlank { state.model }
             if (activeModel.isNotBlank()) append("\nМодель: $activeModel")
@@ -163,6 +237,16 @@ class GeminiExperimentActivity : AppCompatActivity() {
                 append(
                     "\nПоследнее обращение: ${PumpBotEngine.formatTime(state.lastAttempt)}" +
                         " • попытка ${state.attemptsThisHour.coerceAtMost(3)}/3"
+                )
+            }
+            if (state.lastCycleStarted > 0L) {
+                append("\nПоследний цикл: ${activityTime(state.lastCycleStarted)}")
+                if (state.cycleSource.isNotBlank()) append(" • ${state.cycleSource}")
+            }
+            if (state.lastDataReady > 0L) {
+                append(
+                    "\nДанные собраны: ${activityTime(state.lastDataReady)}" +
+                        " • ${formatDuration(state.dataDurationMillis)}"
                 )
             }
             if (state.lastSuccess > 0L) append("\nПоследний успешный ответ: ${PumpBotEngine.formatTime(state.lastSuccess)}")
@@ -177,6 +261,13 @@ class GeminiExperimentActivity : AppCompatActivity() {
                     append("\nПовтор разрешён после ${PumpBotEngine.formatTime(nextAt)}")
                 else -> append("\nНовый прогноз после ${PumpBotEngine.formatTime(nextAt)}")
             }
+            if (state.nextCheckAt > 0L && state.enabled) {
+                append(
+                    "\nСледующая проверка цикла: ${activityTime(state.nextCheckAt)}" +
+                        " • через ${countdown(state.nextCheckAt, now)}"
+                )
+            }
+            append("\nКонтроль жизни: ${cycleHealth(state, snapshot.running, now)}")
             append("\nЦикл: рынок ~2 мин • RSS-новости ~10 мин • Gemini API после закрытия часа")
             append("\nСегодня: ${state.requestsToday} фактических API-запросов • ${state.totalTokensToday} токенов")
             if (state.error.isNotBlank()) append("\nОшибка: ${state.error}")
@@ -189,6 +280,33 @@ class GeminiExperimentActivity : AppCompatActivity() {
                 else -> "#79C0FF"
             }
         ))
+
+        val activityLastAt = state.activity.lastOrNull()?.at ?: 0L
+        if (renderedActivityCount != state.activity.size || renderedActivityLastAt != activityLastAt) {
+            val shownActivity = state.activity.takeLast(300).asReversed()
+            activityHistory.text = if (shownActivity.isEmpty()) {
+                "Журнал пока пуст. Нажмите «ПРОВЕРИТЬ СЕЙЧАС» или запустите монитор."
+            } else {
+                buildString {
+                    append("Показано ${shownActivity.size} последних событий")
+                    if (state.activity.size > shownActivity.size) {
+                        append(" из ${state.activity.size} сохранённых")
+                    }
+                    append("\n\n")
+                    append(shownActivity.joinToString("\n\n") { event ->
+                        buildString {
+                            append("${activityIcon(event.result)} ${activityTime(event.at)} • ${event.stage}")
+                            if (event.model.isNotBlank()) append(" • ${event.model}")
+                            if (event.attempt > 0) append(" • попытка ${event.attempt}/3")
+                            if (event.durationMillis > 0L) append(" • ${formatDuration(event.durationMillis)}")
+                            append("\n${event.detail}")
+                        }
+                    })
+                }
+            }
+            renderedActivityCount = state.activity.size
+            renderedActivityLastAt = activityLastAt
+        }
 
         val position = if (p.inPosition) {
             String.format(
@@ -274,6 +392,50 @@ class GeminiExperimentActivity : AppCompatActivity() {
     }
 
     private fun signed(value: Int): String = if (value >= 0) "+$value" else value.toString()
+
+    private fun cycleHealth(
+        state: GeminiExperimentState,
+        monitorRunning: Boolean,
+        now: Long
+    ): String = when {
+        !state.enabled -> "Gemini выключен"
+        state.lastCycleStarted <= 0L -> "цикл ещё ни разу не запускался"
+        state.lastCycleStarted > state.lastCycleFinished &&
+            now - state.lastCycleStarted > TimeUnit.MINUTES.toMillis(3) ->
+            "ВНИМАНИЕ: текущий цикл длится больше 3 минут"
+        monitorRunning && state.nextCheckAt > 0L &&
+            now - state.nextCheckAt > TimeUnit.MINUTES.toMillis(3) ->
+            "ВНИМАНИЕ: ожидаемая проверка опаздывает больше чем на 3 минуты"
+        state.lastCycleStarted > state.lastCycleFinished ->
+            "цикл выполняется, ${formatDuration(now - state.lastCycleStarted)}"
+        else -> "цикл отвечает и завершил последнюю проверку"
+    }
+
+    private fun activityIcon(result: String): String = when (result) {
+        "OK" -> "✓"
+        "ERROR" -> "!"
+        "START" -> "▶"
+        else -> "•"
+    }
+
+    private fun activityTime(value: Long): String =
+        SimpleDateFormat("dd.MM HH:mm:ss", Locale.GERMANY).format(Date(value))
+
+    private fun formatDuration(value: Long): String {
+        val seconds = value.coerceAtLeast(0L) / 1000.0
+        return if (seconds < 60.0) {
+            String.format(Locale.GERMANY, "%.1f с", seconds)
+        } else {
+            String.format(Locale.GERMANY, "%.1f мин", seconds / 60.0)
+        }
+    }
+
+    private fun countdown(target: Long, now: Long): String {
+        val remaining = (target - now).coerceAtLeast(0L)
+        val minutes = remaining / 60_000L
+        val seconds = (remaining % 60_000L) / 1000L
+        return String.format(Locale.GERMANY, "%02d:%02d", minutes, seconds)
+    }
 
     private fun card(color: String): TextView = label("", 14, "#C9D1D9", false).apply {
         setBackgroundColor(Color.parseColor(color))

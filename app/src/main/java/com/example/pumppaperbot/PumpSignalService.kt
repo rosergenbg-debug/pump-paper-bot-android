@@ -14,11 +14,12 @@ class PumpSignalService : Service() {
     private val executor: ExecutorService = Executors.newSingleThreadExecutor()
     private val market = MarketSyncClient()
     private val eventRadar = EventRadarClient()
+    private val cycleIntervalMillis = TimeUnit.MINUTES.toMillis(2)
 
     private val loop = object : Runnable {
         override fun run() {
             checkNow()
-            handler.postDelayed(this, TimeUnit.MINUTES.toMillis(2))
+            handler.postDelayed(this, cycleIntervalMillis)
         }
     }
 
@@ -48,11 +49,24 @@ class PumpSignalService : Service() {
 
     private fun checkNow() {
         executor.execute {
+            val source = "МОНИТОР 2 МИН"
+            if (!GeminiCycleGuard.tryEnter()) {
+                GeminiPaperStore.recordActivity(
+                    this,
+                    "ЦИКЛ",
+                    "WAIT",
+                    "$source: пропущен, потому что предыдущая проверка ещё выполняется"
+                )
+                return@execute
+            }
+            val startedAt = System.currentTimeMillis()
+            GeminiPaperStore.beginCycle(this, source, cycleIntervalMillis, startedAt)
             try {
                 market.sync(this)
                 val eventState = eventRadar.sync(this)
+                GeminiPaperStore.markDataReady(this, source, startedAt)
                 val snapshot = PumpBotEngine.snapshot(this)
-                GeminiExperimentClient().sync(this)
+                val gemini = GeminiExperimentClient().sync(this, source = source)
                 val rapidDropAlerted = if (PumpBotEngine.shouldAlertRapidDrop(this, snapshot)) {
                     PumpAlert.showRapidDrop(this, snapshot)
                     PumpBotEngine.markRapidDropAlerted(this, snapshot)
@@ -67,8 +81,27 @@ class PumpSignalService : Service() {
                     PumpAlert.showEventRadar(this, eventState, snapshot)
                     EventRadarStore.markAlerted(this, eventState)
                 }
-            } catch (_: Exception) {
-                // Следующая проверка попробует еще раз.
+                val finishedAt = System.currentTimeMillis()
+                GeminiPaperStore.finishCycle(
+                    this,
+                    source,
+                    startedAt,
+                    finishedAt + cycleIntervalMillis,
+                    "проверка завершена; Gemini: ${gemini.status}",
+                    finishedAt
+                )
+            } catch (error: Exception) {
+                val failedAt = System.currentTimeMillis()
+                GeminiPaperStore.failCycle(
+                    this,
+                    source,
+                    startedAt,
+                    failedAt + cycleIntervalMillis,
+                    error.message ?: error.javaClass.simpleName,
+                    failedAt
+                )
+            } finally {
+                GeminiCycleGuard.exit()
             }
         }
     }
