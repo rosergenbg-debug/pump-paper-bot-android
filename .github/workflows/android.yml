@@ -60,6 +60,14 @@ jobs:
         if: github.event_name != 'push' || github.ref != 'refs/heads/main'
         run: gradle testDebugUnitTest assembleDebug
 
+      - name: Upload test APK for signing
+        if: github.event_name != 'push' || github.ref != 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: PumpSignal-V3.4-Unsigned-Test-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 7
+
       - name: Prepare named APK
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: cp app/build/outputs/apk/release/app-release.apk PumpSignal-V3-Gemini-Paper-v3.4.apk
