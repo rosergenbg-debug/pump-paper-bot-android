@@ -55,10 +55,10 @@ class GeminiPaperTraderTest {
         )
         assertFalse(sold.inPosition)
         assertEquals(2, sold.trades.size)
-        assertTrue(sold.cashEur > 1009.0)
+        assertEquals(1009.6702475, sold.cashEur, 0.0000001)
         assertEquals(1, sold.closedTrades)
         assertEquals(1, sold.winningTrades)
-        assertTrue(sold.totalFeesEur > 3.0)
+        assertEquals(0.3147525, sold.totalFeesEur, 0.0000001)
     }
 
     @Test fun `next hour grades direction and captured surge`() {
