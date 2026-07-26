@@ -166,8 +166,10 @@ class EventRadarTest {
     }
 
     @Test
-    fun googleSearch429RetriesWithoutSearchOnlyOnce() {
-        assertTrue(GeminiRetryPolicy.shouldRetryWithoutSearch(429, true))
+    fun googleSearchAvailabilityErrorRetriesWithoutSearchBut429DoesNot() {
+        assertTrue(GeminiRetryPolicy.shouldRetryWithoutSearch(400, true))
+        assertTrue(GeminiRetryPolicy.shouldRetryWithoutSearch(403, true))
+        assertFalse(GeminiRetryPolicy.shouldRetryWithoutSearch(429, true))
         assertFalse(GeminiRetryPolicy.shouldRetryWithoutSearch(429, false))
         assertFalse(GeminiRetryPolicy.shouldRetryWithoutSearch(500, true))
     }

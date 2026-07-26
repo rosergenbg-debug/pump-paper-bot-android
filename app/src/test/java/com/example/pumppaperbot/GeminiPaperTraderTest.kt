@@ -9,12 +9,13 @@ class GeminiPaperTraderTest {
     private fun recommendation(
         action: String,
         direction: Int = 70,
-        confidence: Int = 75
+        confidence: Int = 75,
+        horizonHours: Int = 1
     ) = GeminiHourlyRecommendation(
         action = action,
         directionScore = direction,
         confidence = confidence,
-        horizonHours = 1,
+        horizonHours = horizonHours,
         reason = "Тестовое решение",
         risks = listOf("Рынок может развернуться"),
         model = "gemini-test"
@@ -31,7 +32,8 @@ class GeminiPaperTraderTest {
         )
         assertTrue(bought.inPosition)
         assertEquals(1, bought.trades.size)
-        assertEquals(998.5 / 0.002, bought.pumpAmount, 0.0001)
+        assertEquals(900.0, bought.cashEur, 0.0001)
+        assertEquals(99.85 / 0.002, bought.pumpAmount, 0.0001)
 
         val duplicate = GeminiPaperTrader.applyDecision(
             bought,
@@ -53,19 +55,19 @@ class GeminiPaperTraderTest {
         )
         assertFalse(sold.inPosition)
         assertEquals(2, sold.trades.size)
-        assertTrue(sold.cashEur > 1095.0)
+        assertEquals(1009.6702475, sold.cashEur, 0.0000001)
         assertEquals(1, sold.closedTrades)
         assertEquals(1, sold.winningTrades)
-        assertTrue(sold.totalFeesEur > 3.0)
+        assertEquals(0.3147525, sold.totalFeesEur, 0.0000001)
     }
 
     @Test fun `next hour grades direction and captured surge`() {
         val bought = GeminiPaperTrader.applyDecision(
             GeminiPaperPortfolio(), 0.002, 50L, 100L, recommendation("BUY", 80, 80), 101L
         )
-        val gradedPortfolio = GeminiPaperTrader.gradeCompletedHours(
+        val gradedPortfolio = GeminiPaperTrader.gradeCompletedHorizons(
             bought,
-            listOf(GeminiHourOutcome(50L, closePrice = 0.00208, highPrice = 0.00210))
+            listOf(GeminiHourOutcome(50L, evaluatedAt = 3_700_000L, closePrice = 0.00208, highPrice = 0.00210))
         )
         val held = GeminiPaperTrader.applyDecision(
             gradedPortfolio, 0.00208, 51L, 200L, recommendation("HOLD", 20, 60), 201L
@@ -83,13 +85,74 @@ class GeminiPaperTraderTest {
         val first = GeminiPaperTrader.applyDecision(
             GeminiPaperPortfolio(), 0.002, 50L, 100L, recommendation("HOLD", 40, 70), 101L
         )
-        val graded = GeminiPaperTrader.gradeCompletedHours(
+        val graded = GeminiPaperTrader.gradeCompletedHorizons(
             first,
-            listOf(GeminiHourOutcome(50L, closePrice = 0.00201, highPrice = 0.00208))
+            listOf(GeminiHourOutcome(50L, evaluatedAt = 3_700_000L, closePrice = 0.00201, highPrice = 0.00208))
         )
         assertEquals(0.5, graded.decisions.first().evaluatedReturnPercent ?: 0.0, 0.0001)
         assertEquals(true, graded.decisions.first().surgeOpportunity)
         assertEquals(false, graded.decisions.first().surgeCaptured)
+    }
+
+    @Test fun `profit starts only from quote captured after Gemini response`() {
+        val decision = GeminiPaperTrader.applyDecision(
+            current = GeminiPaperPortfolio(),
+            price = 0.0022,
+            decisionId = 70L,
+            candleTime = 1L,
+            recommendation = recommendation("HOLD", direction = 60),
+            now = 2_100L,
+            requestSentAt = 1_000L,
+            responseReceivedAt = 2_000L,
+            executionQuoteAt = 2_100L
+        )
+        val graded = GeminiPaperTrader.gradeCompletedHorizons(
+            decision,
+            listOf(
+                GeminiHourOutcome(
+                    decisionId = 70L,
+                    evaluatedAt = 3_602_100L,
+                    closePrice = 0.0022,
+                    highPrice = 0.00225
+                )
+            )
+        ).decisions.single()
+
+        assertEquals(0.0, graded.evaluatedReturnPercent ?: 1.0, 0.0001)
+        assertEquals(2_000L, graded.responseReceivedAt)
+        assertEquals(2_100L, graded.executionQuoteAt)
+    }
+
+    @Test fun `selected horizon determines causal evaluation target`() {
+        val decision = GeminiPaperTrader.applyDecision(
+            GeminiPaperPortfolio(),
+            price = 0.002,
+            decisionId = 80L,
+            candleTime = 1L,
+            recommendation = recommendation("HOLD", horizonHours = 4),
+            now = 2_100L,
+            requestSentAt = 1_000L,
+            responseReceivedAt = 2_000L,
+            executionQuoteAt = 2_100L
+        ).decisions.single()
+
+        assertEquals(2_000L + 4L * 60L * 60L * 1000L, GeminiEvaluationWindow.targetAt(decision))
+    }
+
+    @Test fun `live mark to market captures drawdown between hourly decisions`() {
+        val bought = GeminiPaperTrader.applyDecision(
+            GeminiPaperPortfolio(), 0.002, 90L, 1L, recommendation("BUY"), 2L
+        )
+        val marked = GeminiPaperTrader.markToMarket(bought, 0.0018)
+
+        assertTrue(marked.causalMaxDrawdownPercent > 0.9)
+        assertTrue(marked.causalMaxDrawdownPercent < 1.2)
+    }
+
+    @Test fun `rate limit never falls back to another model`() {
+        assertFalse(GeminiFallbackPolicy.shouldFallback(429))
+        assertTrue(GeminiFallbackPolicy.shouldFallback(404))
+        assertTrue(GeminiFallbackPolicy.shouldFallback(503))
     }
 
     @Test fun `only full hour candle close is accepted`() {

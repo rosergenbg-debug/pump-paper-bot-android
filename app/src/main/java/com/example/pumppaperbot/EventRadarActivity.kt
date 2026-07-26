@@ -244,6 +244,7 @@ class EventRadarActivity : AppCompatActivity() {
             "${check.source}: $result"
         }
         val gemini = state.gemini
+        val budget = GeminiRequestBudget.state(this)
         val web = if (gemini.webReferenceTitles.isEmpty()) "дополнительных ссылок Google Search не вернул" else {
             gemini.webReferenceTitles.joinToString("\n") { "• $it" }
         }
@@ -259,7 +260,8 @@ class EventRadarActivity : AppCompatActivity() {
             append("\nПолучено: ${gemini.outputSummary.ifBlank { "—" }}")
             append("\nОценка: ${signed(gemini.directionScore)}/100 • важность ${gemini.importance}/100 • уверенность ${gemini.confidence}/100")
             append("\nПоправка к шкале: ${signed(state.informationAdjustment())} из ±12 • горизон ${gemini.horizonHours} ч")
-            append("\nСегодня: ${gemini.requestsToday} запросов • ${gemini.promptTokensToday} входных + ${gemini.outputTokensToday} выходных = ${gemini.totalTokensToday} токенов")
+            append("\nНовостной контур: ${gemini.requestsToday} запросов • ${gemini.promptTokensToday} входных + ${gemini.outputTokensToday} выходных = ${gemini.totalTokensToday} токенов")
+            append("\nОбщий бюджет Gemini: ${budget.usedToday}/${GeminiRequestBudget.MAX_REQUESTS_PER_DAY} • осталось ${budget.remainingToday}")
             append("\nВнешние ссылки Gemini: ${gemini.webReferences}\n$web")
             if (gemini.detailedAnalysis.isNotBlank()) {
                 append("\n\nПОДРОБНЫЙ АНАЛИЗ\n${gemini.detailedAnalysis}")

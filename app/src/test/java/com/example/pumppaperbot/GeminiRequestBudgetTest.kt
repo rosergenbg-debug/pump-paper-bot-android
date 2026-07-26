@@ -1,0 +1,22 @@
+package com.example.pumppaperbot
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
+
+class GeminiRequestBudgetTest {
+    @Test fun `quota day follows Pacific midnight`() {
+        val parser = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
+        val beforePacificMidnight = parser.parse("2026-07-25 06:59:59")!!.time
+        val afterPacificMidnight = parser.parse("2026-07-25 07:00:01")!!.time
+
+        assertEquals("2026-07-24", GeminiRequestBudget.pacificDayKey(beforePacificMidnight))
+        assertEquals("2026-07-25", GeminiRequestBudget.pacificDayKey(afterPacificMidnight))
+        assertTrue(GeminiRequestBudget.nextPacificReset(beforePacificMidnight) > beforePacificMidnight)
+    }
+}

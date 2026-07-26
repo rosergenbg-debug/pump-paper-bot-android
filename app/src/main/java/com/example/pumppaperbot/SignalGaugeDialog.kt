@@ -14,142 +14,271 @@ import kotlin.math.abs
 
 object SignalGaugeDialog {
     fun show(context: Context, snapshot: LiveSnapshot) {
+        val now = System.currentTimeMillis()
         val radar = EventRadarStore.state(context)
+        val geminiState = GeminiPaperStore.state(context)
+        val geminiDecision = GeminiGaugePolicy.currentDecision(geminiState, now)
+        val lastGeminiDecision = geminiState.portfolio.decisions.lastOrNull()
         val internalScore = snapshot.directionScore
-        val information = radar.informationAdjustment()
-        val totalScore = radar.combinedDirection(internalScore)
+        val information = radar.informationAdjustment(now)
+        val totalScore = radar.combinedDirection(internalScore, now)
         val root = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(context, 18), dp(context, 10), dp(context, 18), dp(context, 8))
             setBackgroundColor(Color.parseColor("#161B22"))
         }
         root.addView(TextView(context).apply {
-            text = "КРУПНАЯ ШКАЛА ПОТОКА"
+            text = "ДВЕ ЖИВЫЕ ШКАЛЫ"
             textSize = 20f
             setTextColor(Color.WHITE)
             setTypeface(typeface, android.graphics.Typeface.BOLD)
             gravity = android.view.Gravity.CENTER
         })
-        root.addView(LargeSignalGaugeView(context).apply {
-            setScores(internalScore, information, totalScore)
-        }, LinearLayout.LayoutParams(-1, dp(context, 430)))
-        val score = totalScore
-        val direction = when {
-            score >= 25 -> "Поток направлен вверх: +$score/100"
-            score > 0 -> "Слабый перевес вверх: +$score/100"
-            score <= -25 -> "Поток направлен вниз: −${abs(score)}/100"
-            score < 0 -> "Слабый перевес вниз: −${abs(score)}/100"
-            else -> "Поток нейтрален"
-        }
-        root.addView(TextView(context).apply {
-            text = buildString {
-                append(direction)
-                append("\nВнутренний алгоритм: ${signed(internalScore)}/100")
-                append(" • Gemini: ${signed(information)}")
-                append(" • итог: ${signed(totalScore)}/100")
-                append("\nАктивность: ${snapshot.energyScore}/100")
-                append(" • сжатие: ${snapshot.compressionScore}/100")
-                append("\nСогласованность данных: ${snapshot.breathingConfidence}/100")
-                append(" • поздний вход: ${snapshot.lateEntryRisk}/100")
-                append("\n${snapshot.breathingState}")
-                append("\n\nИНТЕРНЕТ: ${radar.sourceCount}/${EventRadarClient.totalSources} источников • ${radar.parsedEntries} сообщений")
-                append("\nGEMINI: ${if (radar.aiEnabled) radar.gemini.status else "ВЫКЛЮЧЁН"}")
-                if (radar.gemini.lastSuccess > 0L) {
-                    append(" • HTTP ${radar.gemini.httpCode} • ${radar.gemini.totalTokensToday} токенов сегодня")
-                    append("\nВлияние события: ${signed(radar.gemini.directionScore)}/100 • уверенность ${radar.gemini.confidence}/100")
-                }
-                if (radar.gemini.lastAutoNote.isNotBlank()) append("\n${radar.gemini.lastAutoNote}")
-                append("\n\nСиний маркер — внутренний алгоритм. Фиолетовый — итог с новостной поправкой. Это не вероятность прибыли и не приказ купить.")
+        root.addView(DualSignalGaugeView(context).apply {
+            setScores(
+                appInternal = internalScore,
+                appAdjustment = information,
+                appTotal = totalScore,
+                geminiScore = geminiDecision?.directionScore,
+                geminiConfidence = geminiDecision?.confidence ?: 0
+            )
+        }, LinearLayout.LayoutParams(-1, dp(context, 390)))
+
+        root.addView(section(context, "#172033", buildString {
+            append("APP • ИТОГ ${signed(totalScore)}/100\n")
+            append(directionText(totalScore))
+            append("\n\nКто считает: приложение по текущему рынку PUMP/BTC/SOL, потоку сделок, активности и риску позднего входа.")
+            append("\nОснова приложения: ${signed(internalScore)}/100")
+            append("\nПоправка Gemini по свежим новостям: ${signed(information)}")
+            append("\nИтог на шкале: ${signed(internalScore)} ${operation(information)} = ${signed(totalScore)}/100")
+            append("\n\nПочему сейчас так: ${snapshot.breathingState}. ${snapshot.breathingExplanation}")
+            append("\nАктивность ${snapshot.energyScore}/100 • сжатие ${snapshot.compressionScore}/100")
+            append("\nСогласованность ${snapshot.breathingConfidence}/100 • поздний вход ${snapshot.lateEntryRisk}/100")
+            if (information == 0) {
+                append("\nНовостная поправка равна нулю: нет свежего подтверждённого события, которое сейчас допускается добавить.")
+            } else {
+                append("\nНовостная поправка ограничена диапазоном ±12 и со временем уменьшается до нуля.")
             }
-            textSize = 15f
-            setTextColor(Color.parseColor("#C9D1D9"))
-            gravity = android.view.Gravity.CENTER
-            setPadding(0, dp(context, 4), 0, dp(context, 8))
-        })
+            if (radar.gemini.outputSummary.isNotBlank()) {
+                append("\nОснование новостного Gemini: ${radar.gemini.outputSummary.take(500)}")
+            }
+        }))
+
+        root.addView(section(context, "#211A36", buildString {
+            append("GEMINI • ВИРТУАЛЬНЫЙ ТРЕЙДЕР\n")
+            if (geminiDecision == null) {
+                append("Текущего числа на шкале нет. ")
+                append(GeminiGaugePolicy.unavailableReason(geminiState, now))
+                append("\nСтатус: ${GeminiHourlyRetryPolicy.visibleStatus(geminiState, now)}")
+                if (lastGeminiDecision != null) {
+                    append("\nПоследнее сохранённое решение: ${actionRu(lastGeminiDecision.requestedAction)}")
+                    append(" • ${signed(lastGeminiDecision.directionScore)}/100")
+                    append(" • уверенность ${lastGeminiDecision.confidence}/100")
+                    append(" • ${PumpBotEngine.formatTime(lastGeminiDecision.decidedAt)}")
+                }
+            } else {
+                append("Решение: ${actionRu(geminiDecision.requestedAction)}")
+                append(" • направление ${signed(geminiDecision.directionScore)}/100")
+                append(" • уверенность ${geminiDecision.confidence}/100")
+                append("\nКогда: ${PumpBotEngine.formatTime(geminiDecision.decidedAt)}")
+                append(" • горизонт ${geminiDecision.horizonHours} ч")
+                if (geminiDecision.model.isNotBlank()) append(" • ${geminiDecision.model}")
+                append("\nЧто сделано: ${geminiDecision.execution}")
+                append("\nПочему: ${geminiDecision.reason}")
+                if (geminiDecision.risks.isNotEmpty()) {
+                    append("\nРиски: ${geminiDecision.risks.joinToString("; ")}")
+                }
+            }
+            append("\n\nКто считает: отдельный Gemini-контур после полностью закрытого часа.")
+            append("\nОн самостоятельно ведёт только виртуальные €1 000 и не меняет реальные BUY/SELL основной стратегии.")
+        }))
+
+        root.addView(section(context, "#101820", buildString {
+            append("КАК ЧИТАТЬ ДВЕ ШКАЛЫ\n")
+            append("APP обновляется по живому рынку и показывает общий фон приложения с небольшой новостной поправкой.")
+            append("\nGEMINI раз в час выдаёт отдельное решение для своего виртуального портфеля.")
+            append("\nПоэтому значения могут расходиться — это два независимых взгляда, а не ошибка.")
+            append("\n\nРадар: ${radar.sourceCount}/${EventRadarClient.totalSources} источников • ${radar.parsedEntries} сообщений")
+            append("\nНовостной Gemini: ${if (radar.aiEnabled) radar.gemini.status else "ВЫКЛЮЧЁН"}")
+            append(" • виртуальный Gemini: ${GeminiHourlyRetryPolicy.visibleStatus(geminiState, now)}")
+            append("\n\nСиний маркер APP — расчёт приложения без новостей. Фиолетовый — итог APP после новостной поправки. Оранжевый — самостоятельное решение Gemini.")
+            append("\nЭто шкалы направления, а не вероятность прибыли и не автоматический приказ купить.")
+        }))
         AlertDialog.Builder(context)
             .setView(ScrollView(context).apply { addView(root) })
             .setPositiveButton("ЗАКРЫТЬ", null)
             .show()
     }
 
+    private fun section(context: Context, color: String, value: String) = TextView(context).apply {
+        text = value
+        textSize = 15f
+        setTextColor(Color.parseColor("#C9D1D9"))
+        setPadding(dp(context, 12), dp(context, 12), dp(context, 12), dp(context, 12))
+        setBackgroundColor(Color.parseColor(color))
+    }.also {
+        it.layoutParams = LinearLayout.LayoutParams(-1, -2).apply {
+            topMargin = dp(context, 8)
+        }
+    }
+
     private fun dp(context: Context, value: Int): Int = (value * context.resources.displayMetrics.density).toInt()
 
     private fun signed(value: Int): String = if (value >= 0) "+$value" else "−${abs(value)}"
+
+    private fun operation(value: Int): String =
+        if (value >= 0) "+ $value" else "− ${abs(value)}"
+
+    private fun directionText(value: Int): String = when {
+        value >= 25 -> "Общий поток приложения направлен вверх."
+        value > 0 -> "У приложения слабый перевес вверх."
+        value <= -25 -> "Общий поток приложения направлен вниз."
+        value < 0 -> "У приложения слабый перевес вниз."
+        else -> "Общий поток приложения нейтрален."
+    }
+
+    private fun actionRu(value: String): String = when (value) {
+        "BUY" -> "КУПИТЬ"
+        "SELL" -> "ПРОДАТЬ"
+        else -> "ДЕРЖАТЬ / ЖДАТЬ"
+    }
 }
 
-private class LargeSignalGaugeView(context: Context) : View(context) {
+private class DualSignalGaugeView(context: Context) : View(context) {
     private val green = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#238636") }
     private val red = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#B62324") }
     private val track = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#30363D") }
     private val blue = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#2F81F7") }
     private val purple = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#A371F7") }
+    private val orange = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#F0883E") }
     private val connector = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#A371F7")
-        strokeWidth = 6f
+        strokeWidth = dp(3f)
     }
     private val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
-        textSize = 34f
+        textSize = sp(17f)
         textAlign = Paint.Align.CENTER
         isFakeBoldText = true
     }
     private val small = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#C9D1D9")
-        textSize = 24f
+        textSize = sp(12f)
         textAlign = Paint.Align.CENTER
     }
-    private var internalScore = 0
-    private var informationAdjustment = 0
-    private var totalScore = 0
+    private var appInternal = 0
+    private var appAdjustment = 0
+    private var appTotal = 0
+    private var geminiScore: Int? = null
+    private var geminiConfidence = 0
 
     init {
-        contentDescription = "Крупная шкала направления рыночного потока от плюс ста вверх до минус ста вниз"
+        contentDescription = "Две шкалы от плюс ста до минус ста: итог приложения и самостоятельное решение Gemini"
     }
 
-    fun setScores(internal: Int, information: Int, total: Int) {
-        internalScore = internal.coerceIn(-100, 100)
-        informationAdjustment = information.coerceIn(-12, 12)
-        totalScore = total.coerceIn(-100, 100)
+    fun setScores(
+        appInternal: Int,
+        appAdjustment: Int,
+        appTotal: Int,
+        geminiScore: Int?,
+        geminiConfidence: Int
+    ) {
+        this.appInternal = appInternal.coerceIn(-100, 100)
+        this.appAdjustment = appAdjustment.coerceIn(-12, 12)
+        this.appTotal = appTotal.coerceIn(-100, 100)
+        this.geminiScore = geminiScore?.coerceIn(-100, 100)
+        this.geminiConfidence = geminiConfidence.coerceIn(0, 100)
         invalidate()
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        val centerX = width / 2f
-        val top = 58f
-        val bottom = height - 58f
+        val appX = width * 0.28f
+        val geminiX = width * 0.72f
+        val top = dp(62f)
+        val bottom = height - dp(48f)
         val middle = (top + bottom) / 2f
         val half = (bottom - top) / 2f
-        val bar = RectF(centerX - 36f, top, centerX + 36f, bottom)
-        canvas.drawRoundRect(bar, 24f, 24f, track)
-        canvas.drawRoundRect(RectF(centerX - 36f, top, centerX + 36f, middle), 24f, 24f, green)
-        canvas.drawRoundRect(RectF(centerX - 36f, middle, centerX + 36f, bottom), 24f, 24f, red)
-        canvas.drawRect(centerX - 36f, middle - 24f, centerX + 36f, middle + 24f, track)
+        val barHalf = dp(18f)
+
+        fun drawTrack(centerX: Float) {
+            val bar = RectF(centerX - barHalf, top, centerX + barHalf, bottom)
+            canvas.drawRoundRect(bar, dp(12f), dp(12f), track)
+            canvas.drawRoundRect(
+                RectF(centerX - barHalf, top, centerX + barHalf, middle),
+                dp(12f),
+                dp(12f),
+                green
+            )
+            canvas.drawRoundRect(
+                RectF(centerX - barHalf, middle, centerX + barHalf, bottom),
+                dp(12f),
+                dp(12f),
+                red
+            )
+            canvas.drawRect(
+                centerX - barHalf,
+                middle - dp(9f),
+                centerX + barHalf,
+                middle + dp(9f),
+                track
+            )
+        }
 
         fun markerY(value: Int): Float = if (value >= 0) {
             middle - half * value / 100f
         } else {
             middle + half * abs(value) / 100f
         }
-        val internalY = markerY(internalScore)
-        val totalY = markerY(totalScore)
-        blue.strokeWidth = 8f
-        purple.strokeWidth = 8f
-        canvas.drawLine(centerX - 82f, internalY, centerX - 8f, internalY, blue)
-        canvas.drawCircle(centerX - 18f, internalY, 21f, blue)
-        canvas.drawLine(centerX + 8f, totalY, centerX + 82f, totalY, purple)
-        canvas.drawCircle(centerX + 18f, totalY, 21f, purple)
-        if (internalY != totalY) canvas.drawLine(centerX + 58f, internalY, centerX + 58f, totalY, connector)
 
-        canvas.drawText("+100", centerX, 35f, text)
-        canvas.drawText("ПОТОК ВВЕРХ", centerX + 135f, top + 12f, small)
-        canvas.drawText("0", centerX + 72f, middle + 8f, small)
-        canvas.drawText("−100", centerX, height - 20f, text)
-        canvas.drawText("ПОТОК ВНИЗ", centerX + 135f, bottom, small)
-        val internalLabel = if (internalScore >= 0) "+$internalScore" else "−${abs(internalScore)}"
-        val totalLabel = if (totalScore >= 0) "+$totalScore" else "−${abs(totalScore)}"
-        canvas.drawText("алг $internalLabel", centerX - 128f, internalY + 8f, small)
-        canvas.drawText("итог $totalLabel", centerX + 145f, totalY + 8f, small)
-        canvas.drawText("Gemini ${if (informationAdjustment >= 0) "+$informationAdjustment" else "−${abs(informationAdjustment)}"}", centerX, height - 12f, small)
+        drawTrack(appX)
+        drawTrack(geminiX)
+        canvas.drawText("APP", appX, dp(20f), text)
+        canvas.drawText("GEMINI", geminiX, dp(20f), text)
+        canvas.drawText("итог ${signed(appTotal)}", appX, dp(41f), small)
+        canvas.drawText(
+            geminiScore?.let { signed(it) } ?: "нет свежего",
+            geminiX,
+            dp(41f),
+            small
+        )
+
+        val internalY = markerY(appInternal)
+        val totalY = markerY(appTotal)
+        blue.strokeWidth = dp(4f)
+        purple.strokeWidth = dp(4f)
+        orange.strokeWidth = dp(4f)
+        canvas.drawLine(appX - dp(43f), internalY, appX - dp(4f), internalY, blue)
+        canvas.drawCircle(appX - dp(10f), internalY, dp(8f), blue)
+        canvas.drawLine(appX + dp(4f), totalY, appX + dp(43f), totalY, purple)
+        canvas.drawCircle(appX + dp(10f), totalY, dp(8f), purple)
+        if (internalY != totalY) {
+            canvas.drawLine(appX + dp(39f), internalY, appX + dp(39f), totalY, connector)
+        }
+
+        geminiScore?.let { score ->
+            val scoreY = markerY(score)
+            canvas.drawLine(geminiX - dp(43f), scoreY, geminiX + dp(43f), scoreY, orange)
+            canvas.drawCircle(geminiX, scoreY, dp(9f), orange)
+        } ?: run {
+            canvas.drawText("—", geminiX, middle + dp(6f), text)
+        }
+
+        listOf(appX, geminiX).forEach { centerX ->
+            canvas.drawText("+100", centerX, top - dp(9f), small)
+            canvas.drawText("0", centerX + dp(31f), middle + dp(4f), small)
+            canvas.drawText("−100", centerX, bottom + dp(20f), small)
+        }
+        canvas.drawText("новости ${signed(appAdjustment)}", appX, height - dp(6f), small)
+        canvas.drawText(
+            if (geminiScore == null) "решение устарело" else "уверенность $geminiConfidence%",
+            geminiX,
+            height - dp(6f),
+            small
+        )
     }
+
+    private fun dp(value: Float): Float = value * resources.displayMetrics.density
+    private fun sp(value: Float): Float = value * resources.displayMetrics.scaledDensity
+    private fun signed(value: Int): String = if (value >= 0) "+$value" else "−${abs(value)}"
 }

@@ -70,7 +70,7 @@ class ChartDetailActivity : AppCompatActivity() {
 
         val nav = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         nav.addView(button("← НАЗАД", "#30363D").apply { setOnClickListener { finish() } }, LinearLayout.LayoutParams(0, dp(44), 1f))
-        nav.addView(button("КРУПНО: ПОТОК ±100", "#1F6FEB").apply {
+        nav.addView(button("КРУПНО: ДВЕ ШКАЛЫ", "#1F6FEB").apply {
             setOnClickListener { SignalGaugeDialog.show(this@ChartDetailActivity, PumpBotEngine.snapshot(this@ChartDetailActivity)) }
         }, LinearLayout.LayoutParams(0, dp(44), 1.35f).apply { leftMargin = dp(8) })
         root.addView(nav)

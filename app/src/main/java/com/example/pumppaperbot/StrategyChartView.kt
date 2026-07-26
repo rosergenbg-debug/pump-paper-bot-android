@@ -604,7 +604,7 @@ class StrategyChartView @JvmOverloads constructor(
             bodyRect.set(left + dp(8f), middle, right - dp(8f), middle + amount)
             canvas.drawRoundRect(bodyRect, dp(2f), dp(2f), sellPaint)
         }
-        canvas.drawText("АЛГ", (left + right) / 2f, top + dp(24f), gaugeTextPaint)
+        canvas.drawText("APP", (left + right) / 2f, top + dp(24f), gaugeTextPaint)
         canvas.drawText("Э${data.energyScore}/Р${data.lateEntryRisk}", (left + right) / 2f, bottom - dp(15f), gaugeTextPaint)
         val markerY = if (score >= 0) middle - usable * score / 100f else middle + usable * abs(score) / 100f
         val markerPaint = if (score < 0) sellPaint else buyPaint

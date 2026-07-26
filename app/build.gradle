@@ -17,8 +17,8 @@ android {
         applicationId "com.example.pumppaperbot.v8"
         minSdk 24
         targetSdk 34
-        versionCode 37
-        versionName "3.6"
+        versionCode 42
+        versionName "3.10"
     }
 
     signingConfigs {
@@ -33,6 +33,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
+        }
         release {
             minifyEnabled false
             if (hasReleaseSigning) {

@@ -15,7 +15,9 @@ import android.widget.Button
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
@@ -96,6 +98,9 @@ class MainActivity : AppCompatActivity() {
 
         PumpBotEngine.ensureInitialized(this)
         requestNotificationPermission()
+        if (PumpBotEngine.snapshot(this).running) {
+            schedulePeriodicMonitor()
+        }
 
         btnRisk30?.setOnClickListener {
             PumpBotEngine.setAggressive(this, false)
@@ -147,7 +152,13 @@ class MainActivity : AppCompatActivity() {
         PumpBotEngine.setRunning(this, true)
         PumpAlert.ensureChannels(this)
         ContextCompat.startForegroundService(this, Intent(this, PumpSignalService::class.java))
+        schedulePeriodicMonitor()
+        updateUi()
+    }
+
+    private fun schedulePeriodicMonitor() {
         val request = PeriodicWorkRequestBuilder<PumpBotWorker>(15, TimeUnit.MINUTES)
+            .setConstraints(networkConstraints())
             .setInputData(workDataOf(
                 PumpBotWorker.INPUT_CYCLE_SOURCE to "ANDROID РЕЗЕРВ 15 МИН",
                 PumpBotWorker.INPUT_CYCLE_INTERVAL to TimeUnit.MINUTES.toMillis(15)
@@ -158,7 +169,6 @@ class MainActivity : AppCompatActivity() {
             ExistingPeriodicWorkPolicy.UPDATE,
             request
         )
-        updateUi()
     }
 
     private fun stopMonitor() {
@@ -183,6 +193,7 @@ class MainActivity : AppCompatActivity() {
             TimeUnit.MINUTES.toMillis(15)
         }
         val request = OneTimeWorkRequestBuilder<PumpBotWorker>()
+            .setConstraints(networkConstraints())
             .setInputData(workDataOf(
                 PumpBotWorker.INPUT_CYCLE_SOURCE to "РУЧНАЯ ПРОВЕРКА",
                 PumpBotWorker.INPUT_CYCLE_INTERVAL to interval
@@ -336,27 +347,27 @@ class MainActivity : AppCompatActivity() {
             else -> "Я ПРОДАЛ — ЖДУ ПОКУПКУ"
         }
         btnToggleMode?.text = "ПОЧЕМУ ТАКОЙ СИГНАЛ?"
-        val geminiState = GeminiPaperStore.state(this)
-        val geminiDecision = geminiState.portfolio.decisions.lastOrNull()
         val now = System.currentTimeMillis()
-        val currentGeminiDecision = geminiDecision?.takeIf {
-            geminiState.lastSuccess >= geminiState.lastFailure &&
-                now - it.decidedAt <= 90L * 60L * 1000L
-        }
+        val radar = EventRadarStore.state(this)
+        val appCombinedDirection = radar.combinedDirection(snapshot.directionScore, now)
+        val geminiState = GeminiPaperStore.state(this)
+        val currentGeminiDecision = GeminiGaugePolicy.currentDecision(geminiState, now)
         chart?.setData(
             "PUMP/EUR • ДЫХАНИЕ РЫНКА",
             snapshot.chart.copy(
+                directionScore = appCombinedDirection,
                 showGeminiGauge = true,
                 geminiDirectionScore = currentGeminiDecision?.directionScore,
                 geminiConfidenceScore = currentGeminiDecision?.confidence ?: 0,
                 geminiAction = currentGeminiDecision?.requestedAction.orEmpty(),
-                geminiStatus = GeminiHourlyRetryPolicy.visibleStatus(
-                    geminiState,
-                    now
-                )
+                geminiStatus = GeminiHourlyRetryPolicy.visibleStatus(geminiState, now)
             )
         )
     }
+
+    private fun networkConstraints(): Constraints = Constraints.Builder()
+        .setRequiredNetworkType(NetworkType.CONNECTED)
+        .build()
 
     private fun renderRapidDrop(snapshot: LiveSnapshot) {
         val drop = snapshot.rapidDrop

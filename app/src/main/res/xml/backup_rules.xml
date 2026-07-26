@@ -3,4 +3,6 @@
     <include domain="sharedpref" path="." />
     <include domain="file" path="." />
     <include domain="database" path="." />
+    <exclude domain="sharedpref" path="secure_gemini_credentials.xml" />
+    <exclude domain="sharedpref" path="PumpEventRadarV3.xml" />
 </full-backup-content>

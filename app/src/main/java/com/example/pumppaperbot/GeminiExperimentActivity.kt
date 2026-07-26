@@ -31,11 +31,16 @@ class GeminiExperimentActivity : AppCompatActivity() {
     private lateinit var runNow: Button
     private lateinit var status: TextView
     private lateinit var portfolio: TextView
+    private lateinit var allocation: TextView
+    private lateinit var cashBar: View
+    private lateinit var investedBar: View
     private lateinit var statistics: TextView
     private lateinit var lastDecision: TextView
     private lateinit var activityHistory: TextView
+    private lateinit var activityToggle: Button
     private lateinit var history: TextView
     private lateinit var trades: TextView
+    private var activityExpanded = false
     private var renderedActivityCount = -1
     private var renderedActivityLastAt = Long.MIN_VALUE
 
@@ -54,12 +59,11 @@ class GeminiExperimentActivity : AppCompatActivity() {
         root.addView(button("← НАЗАД", "#30363D").apply {
             setOnClickListener { finish() }
         }, LinearLayout.LayoutParams(-1, dp(48)))
-        root.addView(label("V3.6 • АКТИВНОСТЬ GEMINI", 24, "#F0F6FC", true))
+        root.addView(label("V3.10 • ВИРТУАЛЬНЫЙ ПОРТФЕЛЬ GEMINI", 24, "#F0F6FC", true))
         root.addView(label(
-            "Здесь виден весь цикл: запуск проверки, сбор рынка и новостей, решение о необходимости API‑запроса, " +
-                "отправка в Gemini, модель, длительность ответа, результат, ошибка и следующая попытка. " +
-                "Прогноз создаётся один раз после нового закрытого часа; обычные двухминутные циклы только проверяют, " +
-                "появился ли такой час. Основную стратегию и реальные деньги этот модуль не меняет.",
+            "Отдельный виртуальный счёт со стартом €1 000. Gemini самостоятельно принимает решения, " +
+                "а приложение показывает деньги, вложение в PUMP, результат и операции. " +
+                "Основную стратегию и реальные деньги этот модуль не меняет.",
             14, "#C9D1D9", false, 8
         ))
 
@@ -78,24 +82,45 @@ class GeminiExperimentActivity : AppCompatActivity() {
             }
         }, LinearLayout.LayoutParams(-1, dp(52)).apply { topMargin = dp(8) })
 
+        val portfolioPanel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.parseColor("#211A36"))
+            setPadding(dp(14), dp(14), dp(14), dp(14))
+        }
+        portfolio = label("", 22, "#F0F6FC", true)
+        allocation = label("", 14, "#C9D1D9", false, 8)
+        val allocationBar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setBackgroundColor(Color.parseColor("#30363D"))
+        }
+        cashBar = View(this).apply { setBackgroundColor(Color.parseColor("#58A6FF")) }
+        investedBar = View(this).apply { setBackgroundColor(Color.parseColor("#A371F7")) }
+        allocationBar.addView(cashBar, LinearLayout.LayoutParams(0, dp(12), 1f))
+        allocationBar.addView(investedBar, LinearLayout.LayoutParams(0, dp(12), 0.001f))
+        portfolioPanel.addView(portfolio)
+        portfolioPanel.addView(allocationBar, LinearLayout.LayoutParams(-1, dp(12)).apply {
+            topMargin = dp(12)
+        })
+        portfolioPanel.addView(allocation)
+
         status = card("#172033")
-        portfolio = card("#211A36")
         statistics = card("#161B22")
         lastDecision = card("#172033")
         activityHistory = card("#101820")
+        activityToggle = button("ПОКАЗАТЬ ЖУРНАЛ", "#30363D")
         history = card("#161B22")
         trades = card("#161B22")
-        root.addView(status, cardParams())
-        root.addView(label("ЖИВАЯ ЛЕНТА РАБОТЫ", 17, "#7EE787", true, 16))
-        root.addView(activityHistory, cardParams(6))
-        root.addView(portfolio, cardParams())
-        root.addView(statistics, cardParams())
-        root.addView(lastDecision, cardParams())
 
-        root.addView(label("ИСТОРИЯ РЕШЕНИЙ", 17, "#79C0FF", true, 16))
-        root.addView(history, cardParams(6))
+        root.addView(label("ВИРТУАЛЬНЫЕ ДЕНЬГИ GEMINI", 17, "#D2A8FF", true, 16))
+        root.addView(portfolioPanel, cardParams(6))
+        root.addView(lastDecision, cardParams())
+        root.addView(statistics, cardParams())
+        root.addView(status, cardParams())
+
         root.addView(label("ВИРТУАЛЬНЫЕ ОПЕРАЦИИ", 17, "#D2A8FF", true, 16))
         root.addView(trades, cardParams(6))
+        root.addView(label("ИСТОРИЯ РЕШЕНИЙ", 17, "#79C0FF", true, 16))
+        root.addView(history, cardParams(6))
 
         root.addView(label("ЧЕСТНЫЙ КОНТРОЛЬ ИДЕИ", 17, "#F0B72F", true, 16))
         root.addView(label(
@@ -105,6 +130,18 @@ class GeminiExperimentActivity : AppCompatActivity() {
                 "Поэтому Gemini работает только как живой отдельный эксперимент и сам накапливает проверяемую статистику.",
             14, "#F0B72F", false, 6
         ))
+
+        root.addView(label("ТЕХНИЧЕСКИЙ ЖУРНАЛ • 24 ЧАСА", 17, "#7EE787", true, 16))
+        root.addView(activityToggle, LinearLayout.LayoutParams(-1, dp(48)).apply {
+            topMargin = dp(6)
+        })
+        activityHistory.visibility = View.GONE
+        root.addView(activityHistory, cardParams(6))
+        activityToggle.setOnClickListener {
+            activityExpanded = !activityExpanded
+            activityHistory.visibility = if (activityExpanded) View.VISIBLE else View.GONE
+            render()
+        }
 
         root.addView(button("СБРОСИТЬ ТОЛЬКО GEMINI‑ЭКСПЕРИМЕНТ", "#8E1519").apply {
             setOnClickListener {
@@ -217,9 +254,11 @@ class GeminiExperimentActivity : AppCompatActivity() {
         val state = GeminiPaperStore.state(this, includeActivity = true)
         val now = System.currentTimeMillis()
         val visibleStatus = GeminiHourlyRetryPolicy.visibleStatus(state, now)
+        val budget = GeminiRequestBudget.state(this, now)
         val snapshot = PumpBotEngine.snapshot(this)
         val p = state.portfolio
-        val value = p.value(snapshot.lastPrice)
+        val displayPrice = if (snapshot.lastPrice > 0.0) snapshot.lastPrice else p.entryPrice
+        val value = p.value(displayPrice)
         toggle.text = if (state.enabled) "ВЫКЛЮЧИТЬ" else "ВКЛЮЧИТЬ"
         toggle.setBackgroundColor(Color.parseColor(if (state.enabled) "#7C3AED" else "#6E7681"))
         val keySource = when {
@@ -250,7 +289,10 @@ class GeminiExperimentActivity : AppCompatActivity() {
                 )
             }
             if (state.lastSuccess > 0L) append("\nПоследний успешный ответ: ${PumpBotEngine.formatTime(state.lastSuccess)}")
-            val nextAt = GeminiHourlyRetryPolicy.nextVisibleActionAt(state, now)
+            val nextAt = maxOf(
+                GeminiHourlyRetryPolicy.nextVisibleActionAt(state, now),
+                budget.nextAllowedAt
+            )
             when {
                 !state.enabled -> append("\nСледующий запрос: выключен")
                 visibleStatus == "НЕТ КЛЮЧА GEMINI" ->
@@ -269,7 +311,11 @@ class GeminiExperimentActivity : AppCompatActivity() {
             }
             append("\nКонтроль жизни: ${cycleHealth(state, snapshot.running, now)}")
             append("\nЦикл: рынок ~2 мин • RSS-новости ~10 мин • Gemini API после закрытия часа")
-            append("\nСегодня: ${state.requestsToday} фактических API-запросов • ${state.totalTokensToday} токенов")
+            append(
+                "\nОбщий бюджет Gemini: ${budget.usedToday}/${GeminiRequestBudget.MAX_REQUESTS_PER_DAY}" +
+                    " • осталось ${budget.remainingToday}"
+            )
+            append("\nЧасовой контур: ${state.requestsToday} запросов • ${state.totalTokensToday} токенов")
             if (state.error.isNotBlank()) append("\nОшибка: ${state.error}")
         }
         status.setTextColor(Color.parseColor(
@@ -281,17 +327,20 @@ class GeminiExperimentActivity : AppCompatActivity() {
             }
         ))
 
-        val activityLastAt = state.activity.lastOrNull()?.at ?: 0L
+        val activity24h = state.activity.filter { it.at >= now - ACTIVITY_WINDOW_MILLIS }
+        val activityLastAt = activity24h.lastOrNull()?.at ?: 0L
+        activityToggle.text = if (activityExpanded) {
+            "СКРЫТЬ ЖУРНАЛ (${activity24h.size})"
+        } else {
+            "ПОКАЗАТЬ ЖУРНАЛ ЗА 24 ЧАСА (${activity24h.size})"
+        }
         if (renderedActivityCount != state.activity.size || renderedActivityLastAt != activityLastAt) {
-            val shownActivity = state.activity.takeLast(300).asReversed()
+            val shownActivity = activity24h.asReversed()
             activityHistory.text = if (shownActivity.isEmpty()) {
-                "Журнал пока пуст. Нажмите «ПРОВЕРИТЬ СЕЙЧАС» или запустите монитор."
+                "За последние 24 часа событий нет."
             } else {
                 buildString {
-                    append("Показано ${shownActivity.size} последних событий")
-                    if (state.activity.size > shownActivity.size) {
-                        append(" из ${state.activity.size} сохранённых")
-                    }
+                    append("События только за последние 24 часа: ${shownActivity.size}")
                     append("\n\n")
                     append(shownActivity.joinToString("\n\n") { event ->
                         buildString {
@@ -304,10 +353,27 @@ class GeminiExperimentActivity : AppCompatActivity() {
                     })
                 }
             }
-            renderedActivityCount = state.activity.size
+            renderedActivityCount = activity24h.size
             renderedActivityLastAt = activityLastAt
         }
 
+        val investedEur = if (p.inPosition && displayPrice > 0.0) {
+            p.pumpAmount * displayPrice
+        } else {
+            0.0
+        }
+        val cashEur = p.cashEur.coerceAtLeast(0.0)
+        val allocationTotal = (cashEur + investedEur).coerceAtLeast(0.01)
+        cashBar.layoutParams = LinearLayout.LayoutParams(
+            0,
+            dp(12),
+            (cashEur / allocationTotal).toFloat().coerceAtLeast(0.001f)
+        )
+        investedBar.layoutParams = LinearLayout.LayoutParams(
+            0,
+            dp(12),
+            (investedEur / allocationTotal).toFloat().coerceAtLeast(0.001f)
+        )
         val position = if (p.inPosition) {
             String.format(
                 Locale.GERMANY,
@@ -320,24 +386,30 @@ class GeminiExperimentActivity : AppCompatActivity() {
         }
         portfolio.text = String.format(
             Locale.GERMANY,
-            "ВИРТУАЛЬНЫЙ СЧЁТ\nСтарт €1 000,00 • сейчас €%.2f\nРезультат %+.2f%% • комиссии €%.2f\n%s",
+            "ОБЩАЯ СТОИМОСТЬ\n€%.2f\n\nСтарт €1 000,00  •  результат %+.2f%%\n%s",
             value,
-            p.profitPercent(snapshot.lastPrice),
-            p.totalFeesEur,
+            p.profitPercent(displayPrice),
             position
         )
+        allocation.text = String.format(
+            Locale.GERMANY,
+            "НАЛИЧНЫЕ  €%.2f   •   В PUMP  €%.2f\nНовый вход €100  •  комиссии €%.2f",
+            cashEur,
+            investedEur,
+            p.totalFeesEur
+        )
         portfolio.setTextColor(Color.parseColor(
-            if (p.profit(snapshot.lastPrice) >= 0.0) "#D2A8FF" else "#FF7B72"
+            if (p.profit(displayPrice) >= 0.0) "#D2A8FF" else "#FF7B72"
         ))
         statistics.text = String.format(
             Locale.GERMANY,
-            "ЖИВАЯ СТАТИСТИКА\nЗакрытых сделок %d • прибыльных %d • win rate %.1f%%\n" +
-                "Макс. просадка %.2f%% • точность направления %.1f%% (%d часов)\n" +
+            "СТАТИСТИКА GEMINI С V3.7\nЗакрытых сделок %d • прибыльных %d • win rate %.1f%%\n" +
+                "Макс. живая просадка %.2f%% • точность направления %.1f%% (%d прогнозов)\n" +
                 "Подъёмы >3%%: поймано %d из %d • %.1f%%",
             p.closedTrades,
             p.winningTrades,
             p.winRatePercent,
-            p.maxDrawdownPercent,
+            p.causalMaxDrawdownPercent,
             p.directionAccuracyPercent,
             p.evaluatedHours,
             p.capturedSurges,
@@ -352,7 +424,10 @@ class GeminiExperimentActivity : AppCompatActivity() {
             buildString {
                 append("ПОСЛЕДНЕЕ РЕШЕНИЕ: ${actionRu(last.requestedAction)}")
                 append("\n${PumpBotEngine.formatTime(last.decidedAt)} • направление ${signed(last.directionScore)}/100 • уверенность ${last.confidence}/100")
-                append("\n${last.execution} • счёт €${String.format(Locale.GERMANY, "%.2f", last.portfolioValueAfter)}")
+                append("\n${last.execution} • горизонт ${last.horizonHours} ч • счёт €${String.format(Locale.GERMANY, "%.2f", last.portfolioValueAfter)}")
+                if (last.evaluationVersion >= GeminiHourlyDecision.CAUSAL_EVALUATION_VERSION) {
+                    append("\nИсполнение после ответа: ${PumpBotEngine.formatTime(last.executionQuoteAt)} • €${String.format(Locale.GERMANY, "%.8f", last.price)}")
+                }
                 append("\n${last.reason}")
                 if (last.risks.isNotEmpty()) append("\nРиски: ${last.risks.joinToString("; ")}")
             }
@@ -361,9 +436,9 @@ class GeminiExperimentActivity : AppCompatActivity() {
         history.text = p.decisions.takeLast(24).asReversed().joinToString("\n\n") { decision ->
             buildString {
                 append("${PumpBotEngine.formatTime(decision.decidedAt)} • ${actionRu(decision.requestedAction)}")
-                append(" • ${signed(decision.directionScore)}/100 • увер. ${decision.confidence}")
+                append(" • ${signed(decision.directionScore)}/100 • увер. ${decision.confidence} • ${decision.horizonHours} ч")
                 decision.evaluatedReturnPercent?.let {
-                    append(" • следующий час ${String.format(Locale.GERMANY, "%+.2f%%", it)}")
+                    append(" • итог горизонта ${String.format(Locale.GERMANY, "%+.2f%%", it)}")
                 }
                 decision.peakReturnPercent?.let {
                     append(" • максимум ${String.format(Locale.GERMANY, "%+.2f%%", it)}")
@@ -471,4 +546,8 @@ class GeminiExperimentActivity : AppCompatActivity() {
     }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
+
+    companion object {
+        private val ACTIVITY_WINDOW_MILLIS = TimeUnit.HOURS.toMillis(24)
+    }
 }
