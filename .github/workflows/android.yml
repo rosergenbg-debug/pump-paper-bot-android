@@ -28,12 +28,37 @@ jobs:
         with:
           gradle-version: '8.5'
 
-      - name: Test and build APK
-        run: gradle testDebugUnitTest assembleDebug
+      - name: Restore stable personal signing key
+        run: |
+          git fetch --no-tags --depth=1 origin 25850ffbcce678b9c8033466b9e9b7a3eae1c075
+          git show FETCH_HEAD:signing/pump-signal-release.jks.b64 \
+            | base64 --decode > "$RUNNER_TEMP/pump-signal-release.jks"
 
-      - name: Upload test APK
+      - name: Test and build signed APK
+        env:
+          PUMP_SIGNING_STORE_FILE: ${{ runner.temp }}/pump-signal-release.jks
+          PUMP_SIGNING_STORE_PASSWORD: pumpv34localrelease2026
+          PUMP_SIGNING_KEY_ALIAS: pump-update
+          PUMP_SIGNING_KEY_PASSWORD: pumpv34localrelease2026
+        run: gradle testDebugUnitTest assembleRelease
+
+      - name: Verify signature, package and version
+        run: |
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose --print-certs \
+            app/build/outputs/apk/release/app-release.apk | tee "$RUNNER_TEMP/signature.txt"
+          grep -F "Verified using v2 scheme (APK Signature Scheme v2): true" "$RUNNER_TEMP/signature.txt"
+          grep -F "Verified using v3 scheme (APK Signature Scheme v3): true" "$RUNNER_TEMP/signature.txt"
+          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging \
+            app/build/outputs/apk/release/app-release.apk | tee "$RUNNER_TEMP/badging.txt"
+          grep -F "package: name='com.example.pumppaperbot.v8' versionCode='38' versionName='3.7'" \
+            "$RUNNER_TEMP/badging.txt"
+
+      - name: Prepare named APK
+        run: cp app/build/outputs/apk/release/app-release.apk PumpSignal-V3.7-Signed.apk
+
+      - name: Upload signed APK
         uses: actions/upload-artifact@v4
         with:
-          name: PumpSignal-V3.7-Test-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 7
+          name: PumpSignal-V3.7-Signed-APK
+          path: PumpSignal-V3.7-Signed.apk
+          retention-days: 30
