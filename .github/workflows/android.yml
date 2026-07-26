@@ -49,15 +49,19 @@ jobs:
           grep -F "Verified using v2 scheme (APK Signature Scheme v2): true" "$RUNNER_TEMP/signature.txt"
           "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging \
             app/build/outputs/apk/release/app-release.apk | tee "$RUNNER_TEMP/badging.txt"
-          grep -F "package: name='com.example.pumppaperbot.v8' versionCode='39' versionName='3.8'" \
+          grep -F "package: name='com.example.pumppaperbot.v8' versionCode='40' versionName='3.9'" \
             "$RUNNER_TEMP/badging.txt"
+          grep -F "launchable-activity: name='com.example.pumppaperbot.MainActivity'" \
+            "$RUNNER_TEMP/badging.txt"
+          unzip -t app/build/outputs/apk/release/app-release.apk
+          test "$(stat -c%s app/build/outputs/apk/release/app-release.apk)" -gt 5000000
 
       - name: Prepare named APK
-        run: cp app/build/outputs/apk/release/app-release.apk PumpSignal-V3.8-Signed.apk
+        run: cp app/build/outputs/apk/release/app-release.apk PumpSignal-V3.9-CI.apk
 
       - name: Upload signed APK
         uses: actions/upload-artifact@v4
         with:
-          name: PumpSignal-V3.8-Signed-APK
-          path: PumpSignal-V3.8-Signed.apk
+          name: PumpSignal-V3.9-CI-APK
+          path: PumpSignal-V3.9-CI.apk
           retention-days: 30
