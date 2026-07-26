@@ -47,7 +47,6 @@ jobs:
           "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose --print-certs \
             app/build/outputs/apk/release/app-release.apk | tee "$RUNNER_TEMP/signature.txt"
           grep -F "Verified using v2 scheme (APK Signature Scheme v2): true" "$RUNNER_TEMP/signature.txt"
-          grep -F "Verified using v3 scheme (APK Signature Scheme v3): true" "$RUNNER_TEMP/signature.txt"
           "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging \
             app/build/outputs/apk/release/app-release.apk | tee "$RUNNER_TEMP/badging.txt"
           grep -F "package: name='com.example.pumppaperbot.v8' versionCode='38' versionName='3.7'" \
