@@ -42,12 +42,12 @@ jobs:
           PUMP_SIGNING_KEY_PASSWORD: pumpv34localrelease2026
         run: gradle testDebugUnitTest assembleDebug
 
-      - name: Verify V3.6 update compatibility
+      - name: Verify intermediate debug APK
         run: |
           "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose --print-certs \
             app/build/outputs/apk/debug/app-debug.apk | tee "$RUNNER_TEMP/signature.txt"
           grep -F "Verified using v2 scheme (APK Signature Scheme v2): true" "$RUNNER_TEMP/signature.txt"
-          grep -F "Signer #1 certificate SHA-256 digest: 1f778c4291c9d11c5f89f4de8773bda35a0125031adc05785daee23f27dc7823" \
+          grep -F "Signer #1 certificate SHA-256 digest: 1133e7d3e2cf17983e23dac1ec5b69f1be03e484c7ed1a32c16d24aaf473324c" \
             "$RUNNER_TEMP/signature.txt"
           "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging \
             app/build/outputs/apk/debug/app-debug.apk | tee "$RUNNER_TEMP/badging.txt"
@@ -60,11 +60,11 @@ jobs:
           test "$(stat -c%s app/build/outputs/apk/debug/app-debug.apk)" -gt 6000000
 
       - name: Prepare named APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk PumpSignal-V3.9.1-Compatible.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk PumpSignal-V3.9.1-Intermediate.apk
 
-      - name: Upload signed APK
+      - name: Upload intermediate APK
         uses: actions/upload-artifact@v4
         with:
-          name: PumpSignal-V3.9.1-Compatible-APK
-          path: PumpSignal-V3.9.1-Compatible.apk
+          name: PumpSignal-V3.9.1-Intermediate-APK
+          path: PumpSignal-V3.9.1-Intermediate.apk
           retention-days: 30
