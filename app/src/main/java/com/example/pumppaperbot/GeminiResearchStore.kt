@@ -19,7 +19,7 @@ object GeminiResearchStore {
     private const val DATABASE = "gemini_research_v37.db"
     private const val VERSION = 1
     private const val MAX_ACTIVITY_ROWS = 25_000
-    private const val ACTIVITY_RETENTION_MILLIS = 7L * 24L * 60L * 60L * 1000L
+    internal const val ACTIVITY_RETENTION_MILLIS = 24L * 60L * 60L * 1000L
     private const val PRICE_RETENTION_MILLIS = 14L * 24L * 60L * 60L * 1000L
     private const val MAX_ACTIVITY_READ = 2_000
     private val lock = Any()
@@ -34,7 +34,7 @@ object GeminiResearchStore {
         insertActivity(db, event)
         activityRevision++
         activityWritesSincePrune++
-        if (activityWritesSincePrune >= 100) {
+        if (activityWritesSincePrune >= 20) {
             pruneActivity(db, event.at)
             activityWritesSincePrune = 0
         }
@@ -59,13 +59,18 @@ object GeminiResearchStore {
     }
 
     fun activity(context: Context): List<GeminiActivityEvent> = synchronized(lock) {
-        if (cachedActivityRevision == activityRevision) return@synchronized cachedActivity
+        val cutoff = System.currentTimeMillis() - ACTIVITY_RETENTION_MILLIS
+        if (cachedActivityRevision == activityRevision) {
+            val current = cachedActivity.filter { it.at >= cutoff }
+            if (current.size != cachedActivity.size) cachedActivity = current
+            return@synchronized current
+        }
         val result = ArrayList<GeminiActivityEvent>()
         db(context).query(
             "activity",
             arrayOf("at", "stage", "result", "detail", "duration_ms", "model", "hour_id", "attempt"),
-            null,
-            null,
+            "at >= ?",
+            arrayOf(cutoff.toString()),
             null,
             null,
             "id DESC",
