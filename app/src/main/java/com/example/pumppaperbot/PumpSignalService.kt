@@ -8,6 +8,7 @@ import android.os.Looper
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 class PumpSignalService : Service() {
     private val handler = Handler(Looper.getMainLooper())
@@ -15,6 +16,7 @@ class PumpSignalService : Service() {
     private val market = MarketSyncClient()
     private val eventRadar = EventRadarClient()
     private val cycleIntervalMillis = TimeUnit.MINUTES.toMillis(2)
+    private val cycleQueuedOrRunning = AtomicBoolean(false)
 
     private val loop = object : Runnable {
         override fun run() {
@@ -48,6 +50,15 @@ class PumpSignalService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     private fun checkNow() {
+        if (!cycleQueuedOrRunning.compareAndSet(false, true)) {
+            GeminiPaperStore.recordActivity(
+                this,
+                "ЦИКЛ",
+                "WAIT",
+                "МОНИТОР 2 МИН: новый запуск не поставлен в очередь, предыдущий ещё выполняется"
+            )
+            return
+        }
         executor.execute {
             val source = "МОНИТОР 2 МИН"
             if (!GeminiCycleGuard.tryEnter()) {
@@ -57,6 +68,7 @@ class PumpSignalService : Service() {
                     "WAIT",
                     "$source: пропущен, потому что предыдущая проверка ещё выполняется"
                 )
+                cycleQueuedOrRunning.set(false)
                 return@execute
             }
             val startedAt = System.currentTimeMillis()
@@ -102,6 +114,7 @@ class PumpSignalService : Service() {
                 )
             } finally {
                 GeminiCycleGuard.exit()
+                cycleQueuedOrRunning.set(false)
             }
         }
     }
