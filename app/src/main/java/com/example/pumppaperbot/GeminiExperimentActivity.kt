@@ -59,7 +59,7 @@ class GeminiExperimentActivity : AppCompatActivity() {
         root.addView(button("← НАЗАД", "#30363D").apply {
             setOnClickListener { finish() }
         }, LinearLayout.LayoutParams(-1, dp(48)))
-        root.addView(label("V3.8 • ВИРТУАЛЬНЫЙ ПОРТФЕЛЬ GEMINI", 24, "#F0F6FC", true))
+        root.addView(label("V3.10 • ВИРТУАЛЬНЫЙ ПОРТФЕЛЬ GEMINI", 24, "#F0F6FC", true))
         root.addView(label(
             "Отдельный виртуальный счёт со стартом €1 000. Gemini самостоятельно принимает решения, " +
                 "а приложение показывает деньги, вложение в PUMP, результат и операции. " +

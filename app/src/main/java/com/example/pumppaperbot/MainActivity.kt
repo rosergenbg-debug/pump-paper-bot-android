@@ -347,14 +347,20 @@ class MainActivity : AppCompatActivity() {
             else -> "Я ПРОДАЛ — ЖДУ ПОКУПКУ"
         }
         btnToggleMode?.text = "ПОЧЕМУ ТАКОЙ СИГНАЛ?"
+        val now = System.currentTimeMillis()
+        val radar = EventRadarStore.state(this)
+        val appCombinedDirection = radar.combinedDirection(snapshot.directionScore, now)
+        val geminiState = GeminiPaperStore.state(this)
+        val currentGeminiDecision = GeminiGaugePolicy.currentDecision(geminiState, now)
         chart?.setData(
             "PUMP/EUR • ДЫХАНИЕ РЫНКА",
             snapshot.chart.copy(
-                showGeminiGauge = false,
-                geminiDirectionScore = null,
-                geminiConfidenceScore = 0,
-                geminiAction = "",
-                geminiStatus = ""
+                directionScore = appCombinedDirection,
+                showGeminiGauge = true,
+                geminiDirectionScore = currentGeminiDecision?.directionScore,
+                geminiConfidenceScore = currentGeminiDecision?.confidence ?: 0,
+                geminiAction = currentGeminiDecision?.requestedAction.orEmpty(),
+                geminiStatus = GeminiHourlyRetryPolicy.visibleStatus(geminiState, now)
             )
         )
     }
