@@ -358,7 +358,7 @@ object GeminiPaperTrader {
                 val matchingBuy = trades.lastOrNull { it.action == "BUY" }
                 val buyFee = matchingBuy?.fee ?: 0.0
                 val pnl = gross - fee - (soldAmount * entry + buyFee)
-                cash = gross - fee
+                cash += gross - fee
                 amount = 0.0
                 entry = 0.0
                 totalFees += fee
