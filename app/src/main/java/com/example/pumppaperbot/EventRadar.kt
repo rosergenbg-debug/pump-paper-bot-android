@@ -382,10 +382,30 @@ object EventRadarStore {
         return p.getBoolean(keyUseAi, EmbeddedGeminiKey.value.isNotBlank())
     }
     fun setUseAi(context: Context, value: Boolean) = prefs(context).edit().putBoolean(keyUseAi, value).apply()
-    fun apiKey(context: Context): String = prefs(context).getString(keyApiKey, "").orEmpty().trim()
-        .ifBlank { EmbeddedGeminiKey.value }
-    fun hasCustomApiKey(context: Context): Boolean = prefs(context).getString(keyApiKey, "").orEmpty().isNotBlank()
-    fun saveApiKey(context: Context, value: String) = prefs(context).edit().putString(keyApiKey, value.trim()).apply()
+    fun apiKey(context: Context): String {
+        GeminiSecureKeyStore.read(context).takeIf { it.isNotBlank() }?.let { return it }
+        val legacy = prefs(context).getString(keyApiKey, "").orEmpty().trim()
+        if (legacy.isNotBlank() && GeminiSecureKeyStore.save(context, legacy)) {
+            prefs(context).edit().remove(keyApiKey).apply()
+            return legacy
+        }
+        return legacy.ifBlank { EmbeddedGeminiKey.value }
+    }
+
+    fun hasCustomApiKey(context: Context): Boolean =
+        GeminiSecureKeyStore.read(context).isNotBlank() ||
+            prefs(context).getString(keyApiKey, "").orEmpty().isNotBlank()
+
+    fun saveApiKey(context: Context, value: String) {
+        val clean = value.trim()
+        if (GeminiSecureKeyStore.save(context, clean)) {
+            prefs(context).edit().remove(keyApiKey).apply()
+        } else {
+            // Keep the app usable if a vendor Keystore is temporarily broken.
+            // This legacy preference is excluded from backup in V3.7.
+            prefs(context).edit().putString(keyApiKey, clean).apply()
+        }
+    }
     fun etag(context: Context, source: String): String = prefs(context).getString("etag_$source", "").orEmpty()
     fun lastModified(context: Context, source: String): String = prefs(context).getString("modified_$source", "").orEmpty()
     fun saveHttpValidators(context: Context, source: String, etag: String?, lastModified: String?) {
