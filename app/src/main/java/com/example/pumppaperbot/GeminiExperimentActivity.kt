@@ -54,12 +54,13 @@ class GeminiExperimentActivity : AppCompatActivity() {
         root.addView(button("← НАЗАД", "#30363D").apply {
             setOnClickListener { finish() }
         }, LinearLayout.LayoutParams(-1, dp(48)))
-        root.addView(label("V3.6 • АКТИВНОСТЬ GEMINI", 24, "#F0F6FC", true))
+        root.addView(label("V3.7 • ЧЕСТНЫЙ GEMINI‑ЭКСПЕРИМЕНТ", 24, "#F0F6FC", true))
         root.addView(label(
             "Здесь виден весь цикл: запуск проверки, сбор рынка и новостей, решение о необходимости API‑запроса, " +
-                "отправка в Gemini, модель, длительность ответа, результат, ошибка и следующая попытка. " +
+                "отправка в Gemini, модель, длительность ответа, свежая цена исполнения, результат и следующая попытка. " +
                 "Прогноз создаётся один раз после нового закрытого часа; обычные двухминутные циклы только проверяют, " +
-                "появился ли такой час. Основную стратегию и реальные деньги этот модуль не меняет.",
+                "появился ли такой час. Цена фиксируется только после полного ответа, новый BUY ограничен €100. " +
+                "Основную стратегию и реальные деньги этот модуль не меняет.",
             14, "#C9D1D9", false, 8
         ))
 
@@ -217,6 +218,7 @@ class GeminiExperimentActivity : AppCompatActivity() {
         val state = GeminiPaperStore.state(this, includeActivity = true)
         val now = System.currentTimeMillis()
         val visibleStatus = GeminiHourlyRetryPolicy.visibleStatus(state, now)
+        val budget = GeminiRequestBudget.state(this, now)
         val snapshot = PumpBotEngine.snapshot(this)
         val p = state.portfolio
         val value = p.value(snapshot.lastPrice)
@@ -250,7 +252,10 @@ class GeminiExperimentActivity : AppCompatActivity() {
                 )
             }
             if (state.lastSuccess > 0L) append("\nПоследний успешный ответ: ${PumpBotEngine.formatTime(state.lastSuccess)}")
-            val nextAt = GeminiHourlyRetryPolicy.nextVisibleActionAt(state, now)
+            val nextAt = maxOf(
+                GeminiHourlyRetryPolicy.nextVisibleActionAt(state, now),
+                budget.nextAllowedAt
+            )
             when {
                 !state.enabled -> append("\nСледующий запрос: выключен")
                 visibleStatus == "НЕТ КЛЮЧА GEMINI" ->
@@ -269,7 +274,11 @@ class GeminiExperimentActivity : AppCompatActivity() {
             }
             append("\nКонтроль жизни: ${cycleHealth(state, snapshot.running, now)}")
             append("\nЦикл: рынок ~2 мин • RSS-новости ~10 мин • Gemini API после закрытия часа")
-            append("\nСегодня: ${state.requestsToday} фактических API-запросов • ${state.totalTokensToday} токенов")
+            append(
+                "\nОбщий бюджет Gemini: ${budget.usedToday}/${GeminiRequestBudget.MAX_REQUESTS_PER_DAY}" +
+                    " • осталось ${budget.remainingToday}"
+            )
+            append("\nЧасовой контур: ${state.requestsToday} запросов • ${state.totalTokensToday} токенов")
             if (state.error.isNotBlank()) append("\nОшибка: ${state.error}")
         }
         status.setTextColor(Color.parseColor(
@@ -320,7 +329,7 @@ class GeminiExperimentActivity : AppCompatActivity() {
         }
         portfolio.text = String.format(
             Locale.GERMANY,
-            "ВИРТУАЛЬНЫЙ СЧЁТ\nСтарт €1 000,00 • сейчас €%.2f\nРезультат %+.2f%% • комиссии €%.2f\n%s",
+            "ВИРТУАЛЬНЫЙ СЧЁТ • НОВЫЙ ВХОД €100\nСтарт €1 000,00 • сейчас €%.2f\nРезультат %+.2f%% • комиссии €%.2f\n%s",
             value,
             p.profitPercent(snapshot.lastPrice),
             p.totalFeesEur,
@@ -331,13 +340,13 @@ class GeminiExperimentActivity : AppCompatActivity() {
         ))
         statistics.text = String.format(
             Locale.GERMANY,
-            "ЖИВАЯ СТАТИСТИКА\nЗакрытых сделок %d • прибыльных %d • win rate %.1f%%\n" +
-                "Макс. просадка %.2f%% • точность направления %.1f%% (%d часов)\n" +
+            "ЧИСТАЯ СТАТИСТИКА V3.7\nЗакрытых сделок %d • прибыльных %d • win rate %.1f%%\n" +
+                "Макс. живая просадка %.2f%% • точность направления %.1f%% (%d прогнозов)\n" +
                 "Подъёмы >3%%: поймано %d из %d • %.1f%%",
             p.closedTrades,
             p.winningTrades,
             p.winRatePercent,
-            p.maxDrawdownPercent,
+            p.causalMaxDrawdownPercent,
             p.directionAccuracyPercent,
             p.evaluatedHours,
             p.capturedSurges,
@@ -352,7 +361,10 @@ class GeminiExperimentActivity : AppCompatActivity() {
             buildString {
                 append("ПОСЛЕДНЕЕ РЕШЕНИЕ: ${actionRu(last.requestedAction)}")
                 append("\n${PumpBotEngine.formatTime(last.decidedAt)} • направление ${signed(last.directionScore)}/100 • уверенность ${last.confidence}/100")
-                append("\n${last.execution} • счёт €${String.format(Locale.GERMANY, "%.2f", last.portfolioValueAfter)}")
+                append("\n${last.execution} • горизонт ${last.horizonHours} ч • счёт €${String.format(Locale.GERMANY, "%.2f", last.portfolioValueAfter)}")
+                if (last.evaluationVersion >= GeminiHourlyDecision.CAUSAL_EVALUATION_VERSION) {
+                    append("\nИсполнение после ответа: ${PumpBotEngine.formatTime(last.executionQuoteAt)} • €${String.format(Locale.GERMANY, "%.8f", last.price)}")
+                }
                 append("\n${last.reason}")
                 if (last.risks.isNotEmpty()) append("\nРиски: ${last.risks.joinToString("; ")}")
             }
@@ -361,9 +373,9 @@ class GeminiExperimentActivity : AppCompatActivity() {
         history.text = p.decisions.takeLast(24).asReversed().joinToString("\n\n") { decision ->
             buildString {
                 append("${PumpBotEngine.formatTime(decision.decidedAt)} • ${actionRu(decision.requestedAction)}")
-                append(" • ${signed(decision.directionScore)}/100 • увер. ${decision.confidence}")
+                append(" • ${signed(decision.directionScore)}/100 • увер. ${decision.confidence} • ${decision.horizonHours} ч")
                 decision.evaluatedReturnPercent?.let {
-                    append(" • следующий час ${String.format(Locale.GERMANY, "%+.2f%%", it)}")
+                    append(" • итог горизонта ${String.format(Locale.GERMANY, "%+.2f%%", it)}")
                 }
                 decision.peakReturnPercent?.let {
                     append(" • максимум ${String.format(Locale.GERMANY, "%+.2f%%", it)}")
