@@ -299,6 +299,8 @@ internal object GeminiEvaluationWindow {
  */
 object GeminiPaperTrader {
     const val FEE_RATE = 0.0015
+    internal const val TRADE_RETENTION_MILLIS = 183L * 24L * 60L * 60L * 1000L
+    private const val MAX_RETAINED_TRADES = 5_000
     private const val SURGE_THRESHOLD_PERCENT = 3.0
     private const val MIN_DIRECTION_MOVE_PERCENT = 0.25
 
@@ -321,7 +323,8 @@ object GeminiPaperTrader {
         var entry = working.entryPrice
         var totalFees = working.totalFeesEur
         var trades = working.trades
-        val normalizedAction = recommendation.action.uppercase().let {
+        val effectiveRecommendation = GeminiExecutionPolicy.apply(recommendation, working.inPosition)
+        val normalizedAction = effectiveRecommendation.action.uppercase().let {
             if (it in setOf("BUY", "HOLD", "SELL")) it else "HOLD"
         }
         val execution = when {
@@ -341,9 +344,9 @@ object GeminiPaperTrader {
                         price = price,
                         amount = amount,
                         fee = fee,
-                        score = recommendation.directionScore,
-                        confidence = recommendation.confidence,
-                        reason = recommendation.reason,
+                        score = effectiveRecommendation.directionScore,
+                        confidence = effectiveRecommendation.confidence,
+                        reason = effectiveRecommendation.reason,
                         methodVersion = GeminiHourlyDecision.CAUSAL_EVALUATION_VERSION
                     )
                 )
@@ -369,9 +372,9 @@ object GeminiPaperTrader {
                         price = price,
                         amount = soldAmount,
                         fee = fee,
-                        score = recommendation.directionScore,
-                        confidence = recommendation.confidence,
-                        reason = recommendation.reason,
+                        score = effectiveRecommendation.directionScore,
+                        confidence = effectiveRecommendation.confidence,
+                        reason = effectiveRecommendation.reason,
                         pnlEur = pnl,
                         methodVersion = if (
                             matchingBuy?.methodVersion == GeminiHourlyDecision.CAUSAL_EVALUATION_VERSION
@@ -413,12 +416,12 @@ object GeminiPaperTrader {
             price = price,
             requestedAction = normalizedAction,
             execution = execution,
-            directionScore = recommendation.directionScore.coerceIn(-100, 100),
-            confidence = recommendation.confidence.coerceIn(0, 100),
-            horizonHours = recommendation.horizonHours.coerceIn(1, 6),
-            reason = recommendation.reason.take(1000),
-            risks = recommendation.risks.map { it.take(300) }.take(5),
-            model = recommendation.model.take(80),
+            directionScore = effectiveRecommendation.directionScore.coerceIn(-100, 100),
+            confidence = effectiveRecommendation.confidence.coerceIn(0, 100),
+            horizonHours = effectiveRecommendation.horizonHours.coerceIn(1, 6),
+            reason = effectiveRecommendation.reason.take(1000),
+            risks = effectiveRecommendation.risks.map { it.take(300) }.take(5),
+            model = effectiveRecommendation.model.take(80),
             positionAfter = amount > 0.0,
             portfolioValueAfter = valueAfter,
             requestSentAt = requestSentAt,
@@ -515,8 +518,37 @@ object GeminiPaperTrader {
         }
     }
 
-    private fun addTrade(old: List<GeminiPaperTrade>, trade: GeminiPaperTrade): List<GeminiPaperTrade> =
-        (old + trade).takeLast(200)
+    private fun addTrade(old: List<GeminiPaperTrade>, trade: GeminiPaperTrade): List<GeminiPaperTrade> {
+        val cutoff = trade.time - TRADE_RETENTION_MILLIS
+        return (old + trade)
+            .filter { it.time >= cutoff }
+            .takeLast(MAX_RETAINED_TRADES)
+    }
+}
+
+/**
+ * A mild deterministic guard against low-conviction Gemini BUYs.
+ * It stays independent from StrategyV2 and never creates a BUY by itself.
+ */
+internal object GeminiExecutionPolicy {
+    const val MIN_BUY_DIRECTION = 30
+    const val MIN_BUY_CONFIDENCE = 65
+
+    fun apply(
+        recommendation: GeminiHourlyRecommendation,
+        alreadyInPosition: Boolean
+    ): GeminiHourlyRecommendation {
+        if (recommendation.action.uppercase() != "BUY" || alreadyInPosition) return recommendation
+        if (recommendation.directionScore >= MIN_BUY_DIRECTION &&
+            recommendation.confidence >= MIN_BUY_CONFIDENCE
+        ) return recommendation
+        return recommendation.copy(
+            action = "HOLD",
+            reason = "Вход пропущен защитой от ложного BUY: нужно направление не ниже " +
+                "$MIN_BUY_DIRECTION/100 и уверенность не ниже $MIN_BUY_CONFIDENCE/100. " +
+                recommendation.reason
+        )
+    }
 }
 
 internal object GeminiBuyAlertPolicy {
