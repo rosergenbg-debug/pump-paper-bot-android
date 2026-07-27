@@ -32,6 +32,7 @@ class MicroImpulseStream(context: Context) : WebSocketListener() {
     private var bidQuantity = 0.0
     private var askQuantity = 0.0
     private var lastSavedAt = 0L
+    private var connectedAt = 0L
     private var ignitionAt = 0L
     private var ignitionPrice = 0.0
 
@@ -62,6 +63,9 @@ class MicroImpulseStream(context: Context) : WebSocketListener() {
     }
 
     override fun onOpen(webSocket: WebSocket, response: Response) {
+        connectedAt = System.currentTimeMillis()
+        ignitionAt = 0L
+        ignitionPrice = 0.0
         MicroImpulseStore.markConnected(appContext)
     }
 
@@ -149,17 +153,23 @@ class MicroImpulseStream(context: Context) : WebSocketListener() {
             (bestBid * bidQuantity - bestAsk * askQuantity) / bookTotal
         } else null
 
-        val ignition = five.size >= 8 && tradeAcceleration >= 2.5 &&
+        val warmedUp = connectedAt > 0L && now - connectedAt >= WARMUP_MILLIS
+        val ignition = warmedUp && five.size >= 8 && tradeAcceleration >= 2.5 &&
             buyRatio5 >= 0.62 && buyRatio15 >= 0.58 && change60 >= 0.15
-        if (ignition) {
+        if (ignition && ignitionAt == 0L) {
             ignitionAt = now
             ignitionPrice = currentPrice
+        }
+        if (ignitionAt > 0L && now - ignitionAt > 90_000L) {
+            ignitionAt = 0L
+            ignitionPrice = 0.0
         }
         val confirming = ignitionAt > 0L && now - ignitionAt <= 90_000L &&
             currentPrice >= ignitionPrice * 0.999 && buyRatio15 >= 0.55
         val pressure = five.size >= 4 && tradeAcceleration >= 1.5 &&
             buyRatio15 >= 0.56 && change60 > -0.10
         val phase = when {
+            !warmedUp -> "WARMING UP"
             confirming && now - ignitionAt >= 10_000L -> "CONFIRMATION"
             ignition -> "IGNITION"
             pressure -> "PRESSURE"
@@ -201,7 +211,8 @@ class MicroImpulseStream(context: Context) : WebSocketListener() {
     private companion object {
         const val STREAM_URL = "wss://stream.binance.com:9443/stream?streams=pumpusdt@aggTrade/pumpusdt@bookTicker"
         const val HISTORY_MILLIS = 300_000L
-        const val SAVE_INTERVAL_MILLIS = 1_000L
+        const val SAVE_INTERVAL_MILLIS = 15_000L
+        const val WARMUP_MILLIS = 60_000L
         const val RECONNECT_MILLIS = 5_000L
     }
 }
