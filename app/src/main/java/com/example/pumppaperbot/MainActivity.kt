@@ -49,8 +49,10 @@ class MainActivity : AppCompatActivity() {
     private var tvPrice: TextView? = null
     private var tvReason: TextView? = null
     private var tvPosition: TextView? = null
+    private var tvManualPnl: TextView? = null
     private var tvAlertStatus: TextView? = null
     private var chart: StrategyChartView? = null
+    private var manualPositionChart: ManualPositionChartView? = null
     private var btnRisk30: Button? = null
     private var btnRisk35: Button? = null
     private var btnStart: Button? = null
@@ -58,6 +60,7 @@ class MainActivity : AppCompatActivity() {
     private var btnStop: Button? = null
     private var btnReset: Button? = null
     private var btnManual: Button? = null
+    private var btnManualHistory: Button? = null
     private var btnToggleMode: Button? = null
     private var btnBacktest: Button? = null
     private var btnAlertSettings: Button? = null
@@ -82,8 +85,10 @@ class MainActivity : AppCompatActivity() {
         tvPrice = findViewById(R.id.tvPrice)
         tvReason = findViewById(R.id.tvReason)
         tvPosition = findViewById(R.id.tvPosition)
+        tvManualPnl = findViewById(R.id.tvManualPnl)
         tvAlertStatus = findViewById(R.id.tvAlertStatus)
         chart = findViewById(R.id.chart)
+        manualPositionChart = findViewById(R.id.manualPositionChart)
         btnRisk30 = findViewById(R.id.btnRisk30)
         btnRisk35 = findViewById(R.id.btnRisk35)
         btnStart = findViewById(R.id.btnStart)
@@ -91,6 +96,7 @@ class MainActivity : AppCompatActivity() {
         btnStop = findViewById(R.id.btnStop)
         btnReset = findViewById(R.id.btnReset)
         btnManual = findViewById(R.id.btnManual)
+        btnManualHistory = findViewById(R.id.btnManualHistory)
         btnToggleMode = findViewById(R.id.btnToggleMode)
         btnBacktest = findViewById(R.id.btnBacktest)
         btnAlertSettings = findViewById(R.id.btnAlertSettings)
@@ -99,6 +105,7 @@ class MainActivity : AppCompatActivity() {
         PumpBotEngine.ensureInitialized(this)
         requestNotificationPermission()
         if (PumpBotEngine.snapshot(this).running) {
+            ContextCompat.startForegroundService(this, Intent(this, PumpSignalService::class.java))
             schedulePeriodicMonitor()
         }
 
@@ -125,6 +132,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
         btnManual?.setOnClickListener { confirmManualAction() }
+        btnManualHistory?.setOnClickListener { showManualHistory() }
         btnToggleMode?.setOnClickListener { showSignalInfo() }
         btnBacktest?.setOnClickListener { startActivity(Intent(this, BacktestActivity::class.java)) }
         btnAlertSettings?.setOnClickListener { startActivity(Intent(this, AlertSettingsActivity::class.java)) }
@@ -209,6 +217,9 @@ class MainActivity : AppCompatActivity() {
         if (snapshot.waitMode == "BUY") {
             confirm("Подтвердить покупку?", "Приложение запомнит цену PUMP/EUR и режим ${snapshot.strategyMode}.") {
                 PumpBotEngine.confirmBought(this)
+                val opened = PumpBotEngine.snapshot(this)
+                ManualPositionStore.recordBuy(this, opened.entryPrice)
+                if (!opened.running) startMonitor()
                 updateUi()
             }
         } else if (snapshot.signalAction == StrategyV2.ACTION_SELL_HALF && !snapshot.partialTaken) {
@@ -220,10 +231,44 @@ class MainActivity : AppCompatActivity() {
             }
         } else {
             confirm("Подтвердить продажу?", "Приложение очистит цену входа и начнет ждать сигнал на покупку.") {
+                ManualPositionStore.recordSell(this, snapshot.lastPrice)
                 PumpBotEngine.confirmSold(this)
                 updateUi()
             }
         }
+    }
+
+    private fun showManualHistory() {
+        val trades = ManualPositionStore.trades(this)
+        val text = if (trades.isEmpty()) {
+            "За последние 6 месяцев ручных покупок и продаж нет."
+        } else {
+            trades.asReversed().joinToString("\n\n") { trade ->
+                if (trade.closed) {
+                    String.format(
+                        Locale.GERMANY,
+                        "%s  BUY €%.8f\n%s  SELL €%.8f\nИтог %+.2f%%",
+                        PumpBotEngine.formatDate(trade.boughtAt),
+                        trade.buyPrice,
+                        PumpBotEngine.formatDate(trade.soldAt),
+                        trade.sellPrice,
+                        trade.profitPercent
+                    )
+                } else {
+                    String.format(
+                        Locale.GERMANY,
+                        "%s  BUY €%.8f\nПОЗИЦИЯ ОТКРЫТА",
+                        PumpBotEngine.formatDate(trade.boughtAt),
+                        trade.buyPrice
+                    )
+                }
+            }
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Мои сделки • последние 6 месяцев")
+            .setMessage(text)
+            .setPositiveButton("Закрыть", null)
+            .show()
     }
 
     private fun showSignalInfo() {
@@ -333,6 +378,7 @@ class MainActivity : AppCompatActivity() {
         } else {
             "Сделка: не открыта"
         }
+        renderManualPosition(snapshot)
         tvAlertStatus?.text = AlertSchedule.statusText(this)
 
         btnStart?.isEnabled = !snapshot.running
@@ -362,6 +408,34 @@ class MainActivity : AppCompatActivity() {
                 geminiAction = currentGeminiDecision?.requestedAction.orEmpty(),
                 geminiStatus = GeminiHourlyRetryPolicy.visibleStatus(geminiState, now)
             )
+        )
+    }
+
+    private fun renderManualPosition(snapshot: LiveSnapshot) {
+        val trade = ManualPositionStore.openTrade(this)
+        val active = snapshot.waitMode == "SELL" && snapshot.entryPrice > 0.0
+        val entry = trade?.buyPrice?.takeIf { it > 0.0 } ?: snapshot.entryPrice
+        val boughtAt = trade?.boughtAt ?: 0L
+        if (active && entry > 0.0 && snapshot.lastPrice > 0.0) {
+            val pnl = (snapshot.lastPrice / entry - 1.0) * 100.0
+            val color = if (pnl >= 0.0) "#7EE787" else "#FF7B72"
+            tvManualPnl?.text = String.format(
+                Locale.GERMANY,
+                "МОЯ ПОЗИЦИЯ  %+.2f%%\n€%.8f → €%.8f",
+                pnl,
+                entry,
+                snapshot.lastPrice
+            )
+            tvManualPnl?.setTextColor(Color.parseColor(color))
+        } else {
+            tvManualPnl?.text = "МОЯ ПОЗИЦИЯ НЕ ОТКРЫТА"
+            tvManualPnl?.setTextColor(Color.parseColor("#79C0FF"))
+        }
+        manualPositionChart?.setPosition(
+            candles = snapshot.chart.candles,
+            boughtAt = boughtAt,
+            buyPrice = entry,
+            currentPrice = snapshot.lastPrice
         )
     }
 
