@@ -175,7 +175,7 @@ data class SavedMarketPayloads(
 )
 
 object PumpBotEngine {
-    const val appVersionName = "3.10"
+    const val appVersionName = "3.15"
     const val startBalance = 1000.0
     const val feeRate = 0.0015
     const val slippage = 0.0005
@@ -731,17 +731,23 @@ object PumpBotEngine {
         if (!snapshot.running) return false
         val expected = (snapshot.waitMode == "BUY" && snapshot.readinessScore >= 99) ||
             (snapshot.waitMode == "SELL" && snapshot.readinessScore <= -99)
+        // A user-confirmed real position has priority over quiet hours.
+        // BUY alerts still follow the configured schedule.
+        val urgentPersonalExit = PersonalExitAlertPolicy.bypassesQuietHours(
+            snapshot.waitMode,
+            snapshot.readinessScore
+        )
         if (snapshot.waitMode == "BUY" &&
             (snapshot.lateEntryBlocked || snapshot.breathingConfidence < 50)
         ) return false
         if (snapshot.waitMode == "BUY" && snapshot.rapidDrop.active && !snapshot.rapidDrop.recoveryConfirmed) {
             return false
         }
-        if (expected && !AlertSchedule.isAllowedNow(context)) {
+        if (expected && !urgentPersonalExit && !AlertSchedule.isAllowedNow(context)) {
             AlertSchedule.rememberBlocked(context, snapshot)
             return false
         }
-        if (AlertSchedule.isAllowedNow(context)) {
+        if (!urgentPersonalExit && AlertSchedule.isAllowedNow(context)) {
             when (AlertSchedule.resolvePending(context, snapshot)) {
                 DelayedSignalState.POSSIBLE -> {
                     val delayedKey = alertKey(context, snapshot)
@@ -769,7 +775,9 @@ object PumpBotEngine {
 
     fun shouldAlertRapidDrop(context: Context, snapshot: LiveSnapshot): Boolean {
         if (!snapshot.running || !snapshot.rapidDrop.active) return false
-        if (!AlertSchedule.isAllowedNow(context)) return false
+        if (!PersonalExitAlertPolicy.bypassesQuietHours(snapshot.waitMode, -100) &&
+            !AlertSchedule.isAllowedNow(context)
+        ) return false
         val key = rapidDropAlertKey(snapshot)
         val p = prefs(context)
         if (key.isBlank() || key == p.getString(keyLastRapidDropAlertKey, "")) return false
@@ -1075,4 +1083,9 @@ object PumpBotEngine {
     private fun SharedPreferences.getDouble(key: String, default: Double): Double {
         return if (contains(key)) java.lang.Double.longBitsToDouble(getLong(key, 0L)) else default
     }
+}
+
+internal object PersonalExitAlertPolicy {
+    fun bypassesQuietHours(waitMode: String, readinessScore: Int): Boolean =
+        waitMode == "SELL" && readinessScore <= -99
 }
