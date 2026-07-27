@@ -36,6 +36,9 @@ class GeminiExperimentActivity : AppCompatActivity() {
     private lateinit var investedBar: View
     private lateinit var statistics: TextView
     private lateinit var currentPosition: TextView
+    private lateinit var positionPnl: TextView
+    private lateinit var positionChart: GeminiPositionChartView
+    private lateinit var microImpulse: TextView
     private lateinit var lastOperation: TextView
     private lateinit var lastDecision: TextView
     private lateinit var activityHistory: TextView
@@ -61,7 +64,7 @@ class GeminiExperimentActivity : AppCompatActivity() {
         root.addView(button("← НАЗАД", "#30363D").apply {
             setOnClickListener { finish() }
         }, LinearLayout.LayoutParams(-1, dp(48)))
-        root.addView(label("V3.13 • ВИРТУАЛЬНЫЙ ПОРТФЕЛЬ GEMINI", 24, "#F0F6FC", true))
+        root.addView(label("V3.14 • ВИРТУАЛЬНЫЙ ПОРТФЕЛЬ GEMINI", 24, "#F0F6FC", true))
         root.addView(label(
             "Отдельный виртуальный счёт со стартом €1 000. Gemini самостоятельно принимает решения, " +
                 "а приложение показывает деньги, вложение в PUMP, результат и операции. " +
@@ -108,6 +111,13 @@ class GeminiExperimentActivity : AppCompatActivity() {
         status = card("#172033")
         statistics = card("#161B22")
         currentPosition = card("#172033")
+        positionPnl = label("", 36, "#79C0FF", true).apply {
+            gravity = Gravity.CENTER
+            setBackgroundColor(Color.parseColor("#101820"))
+            setPadding(dp(12), dp(14), dp(12), dp(8))
+        }
+        positionChart = GeminiPositionChartView(this)
+        microImpulse = card("#101820")
         lastOperation = card("#161B22")
         lastDecision = card("#172033")
         activityHistory = card("#101820")
@@ -118,7 +128,12 @@ class GeminiExperimentActivity : AppCompatActivity() {
         root.addView(label("ВИРТУАЛЬНЫЕ ДЕНЬГИ GEMINI", 17, "#D2A8FF", true, 16))
         root.addView(portfolioPanel, cardParams(6))
         root.addView(lastOperation, cardParams())
-        root.addView(currentPosition, cardParams())
+        root.addView(label("ГРАФИК ОТКРЫТОЙ СДЕЛКИ", 17, "#D2A8FF", true, 16))
+        root.addView(positionPnl, cardParams(6))
+        root.addView(positionChart, LinearLayout.LayoutParams(-1, dp(220)))
+        root.addView(currentPosition, cardParams(6))
+        root.addView(label("MICRO IMPULSE • ТЕНЕВОЙ РЕЖИМ", 17, "#F0B72F", true, 16))
+        root.addView(microImpulse, cardParams(6))
         root.addView(lastDecision, cardParams())
         root.addView(statistics, cardParams())
         root.addView(status, cardParams())
@@ -453,9 +468,15 @@ class GeminiExperimentActivity : AppCompatActivity() {
                 activeBuy.price,
                 displayPrice
             )
-            currentPosition.setTextColor(Color.parseColor(
-                if (livePnlEur >= 0.0) "#7EE787" else "#FF7B72"
-            ))
+            val liveColor = if (livePnlEur >= 0.0) "#7EE787" else "#FF7B72"
+            currentPosition.setTextColor(Color.parseColor(liveColor))
+            positionPnl.text = String.format(
+                Locale.GERMANY,
+                "%+.2f%%\n%+.2f €",
+                livePnlPercent,
+                livePnlEur
+            )
+            positionPnl.setTextColor(Color.parseColor(liveColor))
         } else {
             currentPosition.text = String.format(
                 Locale.GERMANY,
@@ -463,7 +484,52 @@ class GeminiExperimentActivity : AppCompatActivity() {
                 cashEur
             )
             currentPosition.setTextColor(Color.parseColor("#79C0FF"))
+            positionPnl.text = "ПОЗИЦИЯ НЕ ОТКРЫТА"
+            positionPnl.setTextColor(Color.parseColor("#79C0FF"))
         }
+        positionChart.setPosition(
+            candles = snapshot.chart.candles,
+            entryTime = activeBuy?.time ?: 0L,
+            entry = activeBuy?.price ?: 0.0,
+            current = displayPrice,
+            active = p.inPosition
+        )
+
+        val micro = MicroImpulseStore.state(this)
+        microImpulse.text = buildString {
+            append("СОСТОЯНИЕ: ${micro.phase}  •  оценка ${micro.score}/100")
+            append("\nПоток: ${if (micro.connected) "подключён" else "переподключение"}")
+            if (micro.updatedAt > 0L) append("  •  обновлено ${activityTime(micro.updatedAt)}")
+            append(String.format(
+                Locale.GERMANY,
+                "\nСделки 5 с: %d  •  ускорение ×%.2f  •  покупки %.1f%%",
+                micro.trades5s,
+                micro.tradeAcceleration,
+                micro.aggressiveBuyPercent5s
+            ))
+            append(String.format(
+                Locale.GERMANY,
+                "\nПокупки 15 с: %.1f%%  •  цена 60 с: %+.3f%%",
+                micro.aggressiveBuyPercent15s,
+                micro.priceChange60sPercent
+            ))
+            micro.spreadPercent?.let {
+                append(String.format(Locale.GERMANY, "  •  spread %.4f%%", it))
+            }
+            micro.topBookImbalance?.let {
+                append(String.format(Locale.GERMANY, "\nВерх стакана: %+.2f", it))
+            }
+            if (micro.error.isNotBlank()) append("\nОшибка: ${micro.error}")
+            append("\nНаблюдает PUMP/USDT по секундам. Не покупает, не продаёт и не влияет на Gemini.")
+        }
+        microImpulse.setTextColor(Color.parseColor(
+            when (micro.phase) {
+                "IGNITION" -> "#FF7B72"
+                "CONFIRMATION" -> "#7EE787"
+                "PRESSURE" -> "#F0B72F"
+                else -> "#79C0FF"
+            }
+        ))
 
         statistics.text = String.format(
             Locale.GERMANY,
