@@ -520,7 +520,7 @@ class GeminiExperimentActivity : AppCompatActivity() {
                 append(String.format(Locale.GERMANY, "\nВерх стакана: %+.2f", it))
             }
             if (micro.error.isNotBlank()) append("\nОшибка: ${micro.error}")
-            append("\nНаблюдает PUMP/USDT по секундам. Не покупает, не продаёт и не влияет на Gemini.")
+            append("\nНаблюдает PUMP/USDT по секундам, пока включён основной монитор. Не покупает, не продаёт и не влияет на Gemini.")
         }
         microImpulse.setTextColor(Color.parseColor(
             when (micro.phase) {
