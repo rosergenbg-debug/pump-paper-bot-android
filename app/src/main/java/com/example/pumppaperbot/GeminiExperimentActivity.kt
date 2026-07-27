@@ -64,11 +64,9 @@ class GeminiExperimentActivity : AppCompatActivity() {
         root.addView(button("← НАЗАД", "#30363D").apply {
             setOnClickListener { finish() }
         }, LinearLayout.LayoutParams(-1, dp(48)))
-        root.addView(label("V3.14 • ВИРТУАЛЬНЫЙ ПОРТФЕЛЬ GEMINI", 24, "#F0F6FC", true))
+        root.addView(label("V3.15 • GEMINI", 24, "#F0F6FC", true))
         root.addView(label(
-            "Отдельный виртуальный счёт со стартом €1 000. Gemini самостоятельно принимает решения, " +
-                "а приложение показывает деньги, вложение в PUMP, результат и операции. " +
-                "Основную стратегию и реальные деньги этот модуль не меняет.",
+            "Виртуальные €1 000 • отдельные решения • без реальных денег.",
             14, "#C9D1D9", false, 8
         ))
 
@@ -142,15 +140,6 @@ class GeminiExperimentActivity : AppCompatActivity() {
         root.addView(trades, cardParams(6))
         root.addView(label("ИСТОРИЯ РЕШЕНИЙ", 17, "#79C0FF", true, 16))
         root.addView(history, cardParams(6))
-
-        root.addView(label("ЧЕСТНЫЙ КОНТРОЛЬ ИДЕИ", 17, "#F0B72F", true, 16))
-        root.addView(label(
-            "Повторный шестимесячный тест часовых рыночных признаков без подмешивания недоступного архива новостей не подтвердил цель. " +
-                "На validation поймано 24,1% подъёмов PUMP свыше 3% (7 из 29), на закрытом holdout — 27,3% (12 из 44), результат после комиссий −14,76%. " +
-                "Чтобы искусственно превысить 50% на validation, потребовалось 6,1 сигнала в сутки и 208 ложных из 223. " +
-                "Поэтому Gemini работает только как живой отдельный эксперимент и сам накапливает проверяемую статистику.",
-            14, "#F0B72F", false, 6
-        ))
 
         root.addView(label("ТЕХНИЧЕСКИЙ ЖУРНАЛ • 24 ЧАСА", 17, "#7EE787", true, 16))
         root.addView(activityToggle, LinearLayout.LayoutParams(-1, dp(48)).apply {
@@ -289,27 +278,9 @@ class GeminiExperimentActivity : AppCompatActivity() {
         }
         status.text = buildString {
             append("СТАТУС: $visibleStatus")
-            append("\nТекущая стадия: ${state.phase}")
-            append("\nКлюч: $keySource")
+            append("\n${state.phase} • $keySource")
             val activeModel = state.activeModel.ifBlank { state.model }
-            if (activeModel.isNotBlank()) append("\nМодель: $activeModel")
-            if (state.lastAttempt > 0L) {
-                append(
-                    "\nПоследнее обращение: ${PumpBotEngine.formatTime(state.lastAttempt)}" +
-                        " • попытка ${state.attemptsThisHour.coerceAtMost(3)}/3"
-                )
-            }
-            if (state.lastCycleStarted > 0L) {
-                append("\nПоследний цикл: ${activityTime(state.lastCycleStarted)}")
-                if (state.cycleSource.isNotBlank()) append(" • ${state.cycleSource}")
-            }
-            if (state.lastDataReady > 0L) {
-                append(
-                    "\nДанные собраны: ${activityTime(state.lastDataReady)}" +
-                        " • ${formatDuration(state.dataDurationMillis)}"
-                )
-            }
-            if (state.lastSuccess > 0L) append("\nПоследний успешный ответ: ${PumpBotEngine.formatTime(state.lastSuccess)}")
+            if (activeModel.isNotBlank()) append(" • $activeModel")
             val nextAt = maxOf(
                 GeminiHourlyRetryPolicy.nextVisibleActionAt(state, now),
                 budget.nextAllowedAt
@@ -324,19 +295,11 @@ class GeminiExperimentActivity : AppCompatActivity() {
                     append("\nПовтор разрешён после ${PumpBotEngine.formatTime(nextAt)}")
                 else -> append("\nНовый прогноз после ${PumpBotEngine.formatTime(nextAt)}")
             }
-            if (state.nextCheckAt > 0L && state.enabled) {
-                append(
-                    "\nСледующая проверка цикла: ${activityTime(state.nextCheckAt)}" +
-                        " • через ${countdown(state.nextCheckAt, now)}"
-                )
-            }
-            append("\nКонтроль жизни: ${cycleHealth(state, snapshot.running, now)}")
-            append("\nЦикл: рынок ~2 мин • RSS-новости ~10 мин • Gemini API после закрытия часа")
+            append("\nСистема: ${cycleHealth(state, snapshot.running, now)}")
             append(
-                "\nОбщий бюджет Gemini: ${budget.usedToday}/${GeminiRequestBudget.MAX_REQUESTS_PER_DAY}" +
-                    " • осталось ${budget.remainingToday}"
+                "\nGemini сегодня: ${budget.usedToday}/${GeminiRequestBudget.MAX_REQUESTS_PER_DAY}" +
+                    " запросов • ${state.totalTokensToday} токенов"
             )
-            append("\nЧасовой контур: ${state.requestsToday} запросов • ${state.totalTokensToday} токенов")
             if (state.error.isNotBlank()) append("\nОшибка: ${state.error}")
         }
         status.setTextColor(Color.parseColor(
@@ -520,7 +483,7 @@ class GeminiExperimentActivity : AppCompatActivity() {
                 append(String.format(Locale.GERMANY, "\nВерх стакана: %+.2f", it))
             }
             if (micro.error.isNotBlank()) append("\nОшибка: ${micro.error}")
-            append("\nНаблюдает PUMP/USDT по секундам, пока включён основной монитор. Не покупает, не продаёт и не влияет на Gemini.")
+            append("\nРанний датчик движения • без автопокупки")
         }
         microImpulse.setTextColor(Color.parseColor(
             when (micro.phase) {
