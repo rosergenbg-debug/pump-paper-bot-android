@@ -14,7 +14,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="PUMP Сигнал V3.10"
+            android:text="PUMP Сигнал V3.15"
             android:textColor="#F0F6FC"
             android:textSize="28sp"
             android:textStyle="bold" />
@@ -75,7 +75,7 @@
             android:layout_height="52dp"
             android:layout_marginTop="8dp"
             android:backgroundTint="#7C3AED"
-            android:text="АКТИВНОСТЬ GEMINI • ЖУРНАЛ И ПРОГНОЗЫ"
+            android:text="GEMINI • СЧЁТ И ПРОГНОЗ"
             android:textColor="#FFFFFF"
             android:textSize="13sp"
             android:textStyle="bold" />
@@ -116,12 +116,43 @@
                 android:textSize="14sp" />
 
             <TextView
+                android:id="@+id/tvManualPnl"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:background="#101820"
+                android:gravity="center"
+                android:minHeight="86dp"
+                android:padding="8dp"
+                android:text="МОЯ ПОЗИЦИЯ НЕ ОТКРЫТА"
+                android:textColor="#79C0FF"
+                android:textSize="28sp"
+                android:textStyle="bold" />
+
+            <com.example.pumppaperbot.ManualPositionChartView
+                android:id="@+id/manualPositionChart"
+                android:layout_width="match_parent"
+                android:layout_height="180dp"
+                android:layout_marginTop="6dp" />
+
+            <Button
+                android:id="@+id/btnManualHistory"
+                android:layout_width="match_parent"
+                android:layout_height="46dp"
+                android:layout_marginTop="6dp"
+                android:backgroundTint="#30363D"
+                android:text="ИСТОРИЯ МОИХ СДЕЛОК • 6 МЕС."
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                android:text="Коснитесь графика: откроются 6 месяцев, даты и точки входа/выхода"
+                android:text="ОБЩИЙ ГРАФИК РЫНКА • НАЖМИТЕ ДЛЯ 6 МЕС."
                 android:textColor="#58A6FF"
-                android:textSize="13sp"
+                android:textSize="12sp"
                 android:textStyle="bold" />
 
             <com.example.pumppaperbot.StrategyChartView
@@ -389,7 +420,7 @@
                 android:layout_height="54dp"
                 android:layout_weight="1"
                 android:backgroundTint="#30363D"
-                android:text="ПОЧЕМУ ТАКОЙ СИГНАЛ?"
+            android:text="ПОЧЕМУ?"
                 android:textColor="#FFFFFF"
                 android:textStyle="bold" />
 
@@ -400,7 +431,7 @@
                 android:layout_marginStart="8dp"
                 android:layout_weight="1"
                 android:backgroundTint="#2F81F7"
-                android:text="ПРОВЕРКА НАЗАД"
+                android:text="ТЕСТ НАЗАД"
                 android:textColor="#FFFFFF"
                 android:textStyle="bold" />
         </LinearLayout>
