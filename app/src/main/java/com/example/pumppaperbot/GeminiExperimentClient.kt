@@ -782,7 +782,8 @@ class GeminiExperimentClient {
             .put("pump_amount", portfolio.pumpAmount)
             .put("in_position", portfolio.inPosition)
             .put("entry_price_eur", portfolio.entryPrice)
-            .put("fixed_new_position_eur", GeminiPaperTrader.FIXED_TRADE_SIZE_EUR)
+            .put("next_buy_allocation_eur", portfolio.cashEur)
+            .put("buy_uses_all_available_cash", true)
         return """
             Выполни независимый прогноз PUMP/EUR по объективному рыночному кадру.
             Здесь намеренно нет готовых direction/activity/compression scores основной стратегии.
@@ -801,8 +802,8 @@ class GeminiExperimentClient {
             $news
             </untrusted_news_payload_json>
 
-            Выбери BUY, HOLD или SELL. Новый BUY имеет фиксированный размер €100, SELL закрывает
-            имеющуюся виртуальную позицию полностью. Комиссия 0,15% на каждую сторону.
+            Выбери BUY, HOLD или SELL. Новый BUY использует весь доступный остаток cash_eur,
+            SELL закрывает имеющуюся виртуальную позицию полностью. Комиссия 0,15% на каждую сторону.
             Выбери horizon_hours от 1 до 6: приложение оценит результат строго от фактической
             котировки после ответа до responseReceivedAt + horizon_hours.
             Если данные противоречат друг другу, предпочитай HOLD и снижай confidence.

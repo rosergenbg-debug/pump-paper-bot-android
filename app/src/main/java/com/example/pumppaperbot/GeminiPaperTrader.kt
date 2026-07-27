@@ -5,7 +5,6 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.max
-import kotlin.math.min
 
 data class GeminiPaperTrade(
     val time: Long,
@@ -300,7 +299,6 @@ internal object GeminiEvaluationWindow {
  */
 object GeminiPaperTrader {
     const val FEE_RATE = 0.0015
-    const val FIXED_TRADE_SIZE_EUR = 100.0
     private const val SURGE_THRESHOLD_PERCENT = 3.0
     private const val MIN_DIRECTION_MOVE_PERCENT = 0.25
 
@@ -328,10 +326,10 @@ object GeminiPaperTrader {
         }
         val execution = when {
             normalizedAction == "BUY" && !working.inPosition && working.cashEur > 0.01 -> {
-                val allocation = min(cash, FIXED_TRADE_SIZE_EUR)
+                val allocation = cash
                 val fee = allocation * FEE_RATE
                 amount = (allocation - fee) / price
-                cash -= allocation
+                cash = 0.0
                 entry = price
                 totalFees += fee
                 trades = addTrade(
@@ -349,7 +347,7 @@ object GeminiPaperTrader {
                         methodVersion = GeminiHourlyDecision.CAUSAL_EVALUATION_VERSION
                     )
                 )
-                "КУПЛЕНО на фиксированные €${FIXED_TRADE_SIZE_EUR.toInt()}"
+                "КУПЛЕНО на весь свободный остаток"
             }
             normalizedAction == "SELL" && working.inPosition -> {
                 val soldAmount = amount

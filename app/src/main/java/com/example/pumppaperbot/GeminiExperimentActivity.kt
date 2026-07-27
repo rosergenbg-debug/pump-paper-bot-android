@@ -393,7 +393,7 @@ class GeminiExperimentActivity : AppCompatActivity() {
         )
         allocation.text = String.format(
             Locale.GERMANY,
-            "НАЛИЧНЫЕ  €%.2f   •   В PUMP  €%.2f\nНовый вход €100  •  комиссии €%.2f",
+            "НАЛИЧНЫЕ  €%.2f   •   В PUMP  €%.2f\nНовый вход: весь остаток  •  комиссии €%.2f",
             cashEur,
             investedEur,
             p.totalFeesEur
