@@ -35,6 +35,8 @@ class GeminiExperimentActivity : AppCompatActivity() {
     private lateinit var cashBar: View
     private lateinit var investedBar: View
     private lateinit var statistics: TextView
+    private lateinit var currentPosition: TextView
+    private lateinit var lastOperation: TextView
     private lateinit var lastDecision: TextView
     private lateinit var activityHistory: TextView
     private lateinit var activityToggle: Button
@@ -59,7 +61,7 @@ class GeminiExperimentActivity : AppCompatActivity() {
         root.addView(button("← НАЗАД", "#30363D").apply {
             setOnClickListener { finish() }
         }, LinearLayout.LayoutParams(-1, dp(48)))
-        root.addView(label("V3.10 • ВИРТУАЛЬНЫЙ ПОРТФЕЛЬ GEMINI", 24, "#F0F6FC", true))
+        root.addView(label("V3.13 • ВИРТУАЛЬНЫЙ ПОРТФЕЛЬ GEMINI", 24, "#F0F6FC", true))
         root.addView(label(
             "Отдельный виртуальный счёт со стартом €1 000. Gemini самостоятельно принимает решения, " +
                 "а приложение показывает деньги, вложение в PUMP, результат и операции. " +
@@ -105,6 +107,8 @@ class GeminiExperimentActivity : AppCompatActivity() {
 
         status = card("#172033")
         statistics = card("#161B22")
+        currentPosition = card("#172033")
+        lastOperation = card("#161B22")
         lastDecision = card("#172033")
         activityHistory = card("#101820")
         activityToggle = button("ПОКАЗАТЬ ЖУРНАЛ", "#30363D")
@@ -113,6 +117,8 @@ class GeminiExperimentActivity : AppCompatActivity() {
 
         root.addView(label("ВИРТУАЛЬНЫЕ ДЕНЬГИ GEMINI", 17, "#D2A8FF", true, 16))
         root.addView(portfolioPanel, cardParams(6))
+        root.addView(lastOperation, cardParams())
+        root.addView(currentPosition, cardParams())
         root.addView(lastDecision, cardParams())
         root.addView(statistics, cardParams())
         root.addView(status, cardParams())
@@ -393,7 +399,7 @@ class GeminiExperimentActivity : AppCompatActivity() {
         )
         allocation.text = String.format(
             Locale.GERMANY,
-            "НАЛИЧНЫЕ  €%.2f   •   В PUMP  €%.2f\nНовый вход: весь остаток  •  комиссии €%.2f",
+            "СИНИЙ — СВОБОДНЫЕ EUR  €%.2f\nФИОЛЕТОВЫЙ — ВЛОЖЕНО В PUMP  €%.2f\nКомиссии за всё время €%.2f",
             cashEur,
             investedEur,
             p.totalFeesEur
@@ -401,11 +407,73 @@ class GeminiExperimentActivity : AppCompatActivity() {
         portfolio.setTextColor(Color.parseColor(
             if (p.profit(displayPrice) >= 0.0) "#D2A8FF" else "#FF7B72"
         ))
+
+        val latestTrade = p.trades.lastOrNull()
+        lastOperation.text = when (latestTrade?.action) {
+            "BUY" -> String.format(
+                Locale.GERMANY,
+                "● СЕЙЧАС: КУПЛЕНО PUMP\n%s • вложено €%.2f\nЦена покупки €%.8f • количество %.2f PUMP",
+                PumpBotEngine.formatTime(latestTrade.time),
+                latestTrade.amount * latestTrade.price + latestTrade.fee,
+                latestTrade.price,
+                latestTrade.amount
+            )
+            "SELL" -> String.format(
+                Locale.GERMANY,
+                "● СЕЙЧАС: ПРОДАНО — ДЕНЬГИ В EUR\n%s • получено €%.2f\nРезультат сделки %+.2f €",
+                PumpBotEngine.formatTime(latestTrade.time),
+                latestTrade.amount * latestTrade.price - latestTrade.fee,
+                latestTrade.pnlEur
+            )
+            else -> "● СЕЙЧАС: ОЖИДАНИЕ\nПокупок и продаж Gemini пока не было. Все €1 000,00 находятся в EUR."
+        }
+        lastOperation.setTextColor(Color.parseColor(
+            when (latestTrade?.action) {
+                "BUY" -> "#D2A8FF"
+                "SELL" -> if (latestTrade.pnlEur >= 0.0) "#7EE787" else "#FF7B72"
+                else -> "#79C0FF"
+            }
+        ))
+
+        val activeBuy = if (p.inPosition) p.trades.lastOrNull { it.action == "BUY" } else null
+        if (p.inPosition && activeBuy != null && displayPrice > 0.0) {
+            val positionCost = activeBuy.amount * activeBuy.price + activeBuy.fee
+            val livePnlEur = investedEur - positionCost
+            val livePnlPercent = if (positionCost > 0.0) livePnlEur / positionCost * 100.0 else 0.0
+            currentPosition.text = String.format(
+                Locale.GERMANY,
+                "ОТКРЫТАЯ ПОЗИЦИЯ — РЕЗУЛЬТАТ ПРЯМО СЕЙЧАС\n" +
+                    "Вложено €%.2f  →  сейчас стоит €%.2f\n" +
+                    "ТЕКУЩИЙ РЕЗУЛЬТАТ  %+.2f €  (%+.2f%%)\n" +
+                    "Покупка €%.8f  •  текущая цена €%.8f",
+                positionCost,
+                investedEur,
+                livePnlEur,
+                livePnlPercent,
+                activeBuy.price,
+                displayPrice
+            )
+            currentPosition.setTextColor(Color.parseColor(
+                if (livePnlEur >= 0.0) "#7EE787" else "#FF7B72"
+            ))
+        } else {
+            currentPosition.text = String.format(
+                Locale.GERMANY,
+                "ОТКРЫТОЙ ПОЗИЦИИ НЕТ\nВсе деньги сейчас в EUR: €%.2f\nПлавающий результат: €0,00",
+                cashEur
+            )
+            currentPosition.setTextColor(Color.parseColor("#79C0FF"))
+        }
+
         statistics.text = String.format(
             Locale.GERMANY,
-            "СТАТИСТИКА GEMINI С V3.7\nЗакрытых сделок %d • прибыльных %d • win rate %.1f%%\n" +
+            "ОБЩИЙ ИТОГ ВСЕЙ ТОРГОВЛИ\nРезультат %+.2f € (%+.2f%%) • стоимость €%.2f\n" +
+                "Закрытых сделок %d • прибыльных %d • win rate %.1f%%\n" +
                 "Макс. живая просадка %.2f%% • точность направления %.1f%% (%d прогнозов)\n" +
                 "Подъёмы >3%%: поймано %d из %d • %.1f%%",
+            p.profit(displayPrice),
+            p.profitPercent(displayPrice),
+            value,
             p.closedTrades,
             p.winningTrades,
             p.winRatePercent,
