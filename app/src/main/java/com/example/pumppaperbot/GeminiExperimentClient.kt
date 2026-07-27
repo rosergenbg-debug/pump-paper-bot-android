@@ -686,7 +686,7 @@ class GeminiExperimentClient {
         frame: GeminiMarketFrame,
         portfolio: GeminiPaperPortfolio
     ): GeminiHourlyApiResult {
-        val prompt = buildPrompt(frame, portfolio)
+        val prompt = buildPrompt(context, frame, portfolio)
         val schema = JSONObject()
             .put("type", "OBJECT")
             .put("properties", JSONObject()
@@ -745,7 +745,11 @@ class GeminiExperimentClient {
         }
     }
 
-    private fun buildPrompt(frame: GeminiMarketFrame, portfolio: GeminiPaperPortfolio): String {
+    private fun buildPrompt(
+        context: Context,
+        frame: GeminiMarketFrame,
+        portfolio: GeminiPaperPortfolio
+    ): String {
         fun JSONObject.putMetric(name: String, value: Double?): JSONObject =
             if (value != null && value.isFinite()) put(name, value) else put(name, JSONObject.NULL)
         val market = JSONObject()
@@ -790,6 +794,26 @@ class GeminiExperimentClient {
                     threeState(frame.snapshot.bookImbalance, -0.15, 0.15, "ask_heavy", "balanced", "bid_heavy")
                 )
             )
+        val micro = MicroImpulseStore.state(context)
+        val microAgeSeconds = if (micro.updatedAt > 0L) {
+            ((System.currentTimeMillis() - micro.updatedAt).coerceAtLeast(0L) / 1000L)
+        } else {
+            Long.MAX_VALUE
+        }
+        market.put(
+            "live_micro_impulse",
+            JSONObject()
+                .put("fresh", micro.connected && microAgeSeconds <= 45L)
+                .put("age_seconds", microAgeSeconds.coerceAtMost(86_400L))
+                .put("phase", micro.phase)
+                .put("score", micro.score)
+                .put("trade_acceleration", micro.tradeAcceleration)
+                .put("aggressive_buy_5s_pct", micro.aggressiveBuyPercent5s)
+                .put("aggressive_buy_15s_pct", micro.aggressiveBuyPercent15s)
+                .put("price_change_60s_pct", micro.priceChange60sPercent)
+                .putMetric("spread_pct", micro.spreadPercent)
+                .putMetric("top_book_imbalance", micro.topBookImbalance)
+        )
         val news = JSONArray().apply {
             frame.news.forEach {
                 put(JSONObject()
@@ -829,6 +853,10 @@ class GeminiExperimentClient {
             Выбери horizon_hours от 1 до 6: приложение оценит результат строго от фактической
             котировки после ответа до responseReceivedAt + horizon_hours.
             Если данные противоречат друг другу, предпочитай HOLD и снижай confidence.
+            BUY допустим только при двух или более независимых подтверждениях. Свежий
+            live_micro_impulse используй как раннее подтверждение нарастания покупательского
+            давления, но никогда как единственную причину BUY. WARMING UP, stale или fresh=false
+            считай отсутствием подтверждения. Не догоняй уже прошедший резкий рост.
             reason_ru должен содержать 2–5 конкретных предложений: главный аргумент,
             противоречащий фактор и условие отмены вывода. Не повторяй заголовки новостей.
         """.trimIndent()
