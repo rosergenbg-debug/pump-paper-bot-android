@@ -81,6 +81,26 @@ class GeminiPaperTraderTest {
         )
     }
 
+    @Test fun `buy alert is emitted only for a newly executed Gemini purchase`() {
+        val before = GeminiPaperPortfolio()
+        val bought = GeminiPaperTrader.applyDecision(
+            before, 0.002, 10L, 100L, recommendation("BUY"), 101L
+        )
+        val alertTrade = GeminiBuyAlertPolicy.newlyExecutedBuy(before, bought, 10L)
+
+        assertEquals("BUY", alertTrade?.action)
+        assertEquals(10L, alertTrade?.decisionId)
+        assertEquals(null, GeminiBuyAlertPolicy.newlyExecutedBuy(bought, bought, 10L))
+
+        val buyWhileInvested = GeminiPaperTrader.applyDecision(
+            bought, 0.0021, 11L, 200L, recommendation("BUY"), 201L
+        )
+        assertEquals(
+            null,
+            GeminiBuyAlertPolicy.newlyExecutedBuy(bought, buyWhileInvested, 11L)
+        )
+    }
+
     @Test fun `next hour grades direction and captured surge`() {
         val bought = GeminiPaperTrader.applyDecision(
             GeminiPaperPortfolio(), 0.002, 50L, 100L, recommendation("BUY", 80, 80), 101L

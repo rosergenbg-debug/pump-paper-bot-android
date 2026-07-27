@@ -22,6 +22,7 @@ object PumpAlert {
     private const val signalNotificationId = 3502
     private const val rapidDropNotificationId = 3503
     private const val eventRadarNotificationId = 3504
+    private const val geminiBuyNotificationId = 3505
     private val rapidDropVibration = longArrayOf(0, 1000, 180, 1000, 180, 1600)
 
     fun ensureChannels(context: Context) {
@@ -192,6 +193,38 @@ object PumpAlert {
         context.getSystemService(NotificationManager::class.java)
             .notify(eventRadarNotificationId, notification)
         vibrate(context, longArrayOf(0, 500, 180, 500))
+    }
+
+    fun showGeminiBuy(context: Context, trade: GeminiPaperTrade) {
+        ensureChannels(context)
+        val investedEur = trade.amount * trade.price + trade.fee
+        val text = String.format(
+            java.util.Locale.GERMANY,
+            "Gemini вложила виртуальные €%.2f по цене €%.8f. Комиссия €%.2f. " +
+                "Оценка %+d/100, уверенность %d/100. %s",
+            investedEur,
+            trade.price,
+            trade.fee,
+            trade.score,
+            trade.confidence,
+            trade.reason
+        )
+        val notification = NotificationCompat.Builder(context, signalChannelId)
+            .setSmallIcon(R.drawable.ic_launcher)
+            .setContentTitle("GEMINI: ВИРТУАЛЬНАЯ ПОКУПКА PUMP/EUR")
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setContentIntent(openAppIntent(context))
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setColor(0xFF7C3AED.toInt())
+            .setVibrate(longArrayOf(0, 700, 250, 700, 250, 1100))
+            .setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM))
+            .build()
+        context.getSystemService(NotificationManager::class.java)
+            .notify(geminiBuyNotificationId, notification)
+        vibrate(context)
     }
 
     fun monitorId(): Int = monitorNotificationId

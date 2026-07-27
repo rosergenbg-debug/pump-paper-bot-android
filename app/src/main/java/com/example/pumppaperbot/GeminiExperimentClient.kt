@@ -550,7 +550,29 @@ class GeminiExperimentClient {
             responseReceivedAt = pending.responseReceivedAt,
             executionQuoteAt = quote.receivedAt
         )
+        val executedBuy = GeminiBuyAlertPolicy.newlyExecutedBuy(
+            before = marked,
+            after = updated,
+            decisionId = pending.hourId
+        )
         GeminiPaperStore.completePending(context, updated, quote.receivedAt)
+        executedBuy?.let { trade ->
+            runCatching {
+                PumpAlert.showGeminiBuy(context, trade)
+            }.onFailure { error ->
+                GeminiPaperStore.recordActivity(
+                    context = context,
+                    stage = "ЗВОНОК BUY",
+                    result = "ERROR",
+                    detail = "Покупка выполнена, но уведомление не показано: " +
+                        (error.message ?: error.javaClass.simpleName),
+                    model = pending.recommendation.model,
+                    hourId = pending.hourId,
+                    attempt = attempt,
+                    at = quote.receivedAt
+                )
+            }
+        }
         GeminiPaperStore.recordActivity(
             context = context,
             stage = "РЕШЕНИЕ",

@@ -519,6 +519,24 @@ object GeminiPaperTrader {
         (old + trade).takeLast(200)
 }
 
+internal object GeminiBuyAlertPolicy {
+    fun newlyExecutedBuy(
+        before: GeminiPaperPortfolio,
+        after: GeminiPaperPortfolio,
+        decisionId: Long
+    ): GeminiPaperTrade? {
+        if (decisionId <= before.lastDecisionId || after.lastDecisionId != decisionId) return null
+        val trade = after.trades.lastOrNull {
+            it.decisionId == decisionId && it.action == "BUY"
+        } ?: return null
+        return trade.takeIf { candidate ->
+            before.trades.none {
+                it.decisionId == candidate.decisionId && it.action == candidate.action
+            }
+        }
+    }
+}
+
 data class GeminiExperimentState(
     val enabled: Boolean,
     val status: String,
