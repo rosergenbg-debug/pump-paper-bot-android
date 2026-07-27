@@ -275,16 +275,17 @@ object ImpulseRadarStore {
 
 object ImpulseObservationLog {
     private const val fileName = "pump_impulse_shadow_v33.csv"
-    private const val maxBytes = 8L * 1024L * 1024L
+    private const val PRUNE_INTERVAL_MILLIS = 60L * 60L * 1000L
+    private var lastPrunedAt = 0L
 
     fun appendIfNew(context: Context, snapshot: ImpulseSnapshot) {
         if (snapshot.candleTime <= 0L || !ImpulseRadarStore.shouldLog(context, snapshot.candleTime)) return
         runCatching {
             val file = File(context.filesDir, fileName)
-            if (file.exists() && file.length() > maxBytes) {
-                val old = File(file.parentFile, "$fileName.old")
-                if (old.exists()) old.delete()
-                file.renameTo(old)
+            val now = System.currentTimeMillis()
+            if (now - lastPrunedAt >= PRUNE_INTERVAL_MILLIS) {
+                RollingCsvRetention.prune(file, now)
+                lastPrunedAt = now
             }
             val newFile = !file.exists() || file.length() == 0L
             file.appendText(
@@ -292,7 +293,7 @@ object ImpulseObservationLog {
                     if (newFile) {
                         append("observed_at_ms,candle_close_ms,readiness,candidate,volume_ratio,spot_taker_ratio,futures_taker_ratio,return_15m,return_60m,compression_ratio,relative_strength_15m,oi_change_10m,breakout_60m,status\n")
                     }
-                    append(System.currentTimeMillis()).append(',')
+                    append(now).append(',')
                     append(snapshot.candleTime).append(',')
                     append(snapshot.readiness).append(',')
                     append(snapshot.candidate).append(',')
