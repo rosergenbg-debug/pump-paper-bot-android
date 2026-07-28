@@ -60,4 +60,15 @@ class V315RetentionTest {
         assertFalse(PersonalExitAlertPolicy.bypassesQuietHours("SELL", -98))
         assertFalse(PersonalExitAlertPolicy.bypassesQuietHours("BUY", 100))
     }
+
+    @Test
+    fun `manual buy and sell controls are always mutually exclusive`() {
+        val waitingForBuy = ManualPositionControlPolicy.forWaitMode("BUY")
+        assertTrue(waitingForBuy.buyEnabled)
+        assertFalse(waitingForBuy.sellEnabled)
+
+        val positionOpen = ManualPositionControlPolicy.forWaitMode("SELL")
+        assertFalse(positionOpen.buyEnabled)
+        assertTrue(positionOpen.sellEnabled)
+    }
 }
