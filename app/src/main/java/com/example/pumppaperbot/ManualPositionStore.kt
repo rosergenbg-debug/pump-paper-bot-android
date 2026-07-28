@@ -62,6 +62,17 @@ object ManualPositionStore {
         write(context, trades)
     }
 
+    fun ensureOpenPosition(context: Context, price: Double, at: Long) {
+        if (openTrade(context) != null || price <= 0.0 || !price.isFinite()) return
+        recordBuy(context, price, at.takeIf { it > 0L } ?: System.currentTimeMillis())
+    }
+
+    fun discardOpenPosition(context: Context) {
+        val trades = read(context)
+        val retained = trades.filter { it.closed }
+        if (retained != trades) write(context, retained)
+    }
+
     fun trades(context: Context, now: Long = System.currentTimeMillis()): List<ManualTrade> {
         val all = read(context)
         val current = retained(all, now)
