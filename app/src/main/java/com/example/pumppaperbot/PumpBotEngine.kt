@@ -141,6 +141,7 @@ data class LiveSnapshot(
     val signalAction: String,
     val signalReason: String,
     val entryPrice: Double,
+    val entryTime: Long,
     val highestClose: Double,
     val chart: ChartBundle,
     val marketGateActive: Boolean = false,
@@ -670,6 +671,7 @@ object PumpBotEngine {
             signalAction = p.getString(keySignalAction, "WAIT").orEmpty(),
             signalReason = p.getString(keySignalReason, "Сигнала нет").orEmpty(),
             entryPrice = p.getDouble(keyEntryPrice, 0.0),
+            entryTime = p.getLong(keyEntryTime, 0L),
             highestClose = p.getDouble(keyHighestClose, 0.0),
             chart = ChartBundle(
                 candles,
