@@ -59,9 +59,9 @@ class MainActivity : AppCompatActivity() {
     private var btnCheck: Button? = null
     private var btnStop: Button? = null
     private var btnReset: Button? = null
-    private var btnManual: Button? = null
+    private var btnManualBuy: Button? = null
+    private var btnManualSell: Button? = null
     private var btnManualHistory: Button? = null
-    private var btnToggleMode: Button? = null
     private var btnBacktest: Button? = null
     private var btnAlertSettings: Button? = null
     private var btnGeminiExperiment: Button? = null
@@ -95,9 +95,9 @@ class MainActivity : AppCompatActivity() {
         btnCheck = findViewById(R.id.btnCheck)
         btnStop = findViewById(R.id.btnStop)
         btnReset = findViewById(R.id.btnReset)
-        btnManual = findViewById(R.id.btnManual)
+        btnManualBuy = findViewById(R.id.btnManualBuy)
+        btnManualSell = findViewById(R.id.btnManualSell)
         btnManualHistory = findViewById(R.id.btnManualHistory)
-        btnToggleMode = findViewById(R.id.btnToggleMode)
         btnBacktest = findViewById(R.id.btnBacktest)
         btnAlertSettings = findViewById(R.id.btnAlertSettings)
         btnGeminiExperiment = findViewById(R.id.btnGeminiExperiment)
@@ -131,9 +131,9 @@ class MainActivity : AppCompatActivity() {
                 resetAll()
             }
         }
-        btnManual?.setOnClickListener { confirmManualAction() }
+        btnManualBuy?.setOnClickListener { confirmManualBuy() }
+        btnManualSell?.setOnClickListener { confirmManualSell() }
         btnManualHistory?.setOnClickListener { showManualHistory() }
-        btnToggleMode?.setOnClickListener { showSignalInfo() }
         btnBacktest?.setOnClickListener { startActivity(Intent(this, BacktestActivity::class.java)) }
         btnAlertSettings?.setOnClickListener { startActivity(Intent(this, AlertSettingsActivity::class.java)) }
         btnGeminiExperiment?.setOnClickListener {
@@ -190,6 +190,7 @@ class MainActivity : AppCompatActivity() {
         stopService(Intent(this, PumpSignalService::class.java))
         WorkManager.getInstance(this).cancelUniqueWork(PumpBotEngine.uniqueWorkName)
         PumpBotEngine.reset(this)
+        ManualPositionStore.discardOpenPosition(this)
         updateUi()
         checkNow()
     }
@@ -212,29 +213,33 @@ class MainActivity : AppCompatActivity() {
         handler.postDelayed({ updateUi() }, 6000)
     }
 
-    private fun confirmManualAction() {
+    private fun confirmManualBuy() {
         val snapshot = PumpBotEngine.snapshot(this)
-        if (snapshot.waitMode == "BUY") {
-            confirm("Подтвердить покупку?", "Приложение запомнит цену PUMP/EUR и режим ${snapshot.strategyMode}.") {
-                PumpBotEngine.confirmBought(this)
-                val opened = PumpBotEngine.snapshot(this)
-                ManualPositionStore.recordBuy(this, opened.entryPrice)
-                if (!opened.running) startMonitor()
-                updateUi()
-            }
-        } else if (snapshot.signalAction == StrategyV2.ACTION_SELL_HALF && !snapshot.partialTaken) {
-            val percent = if (snapshot.strategyMode == StrategyV2.MODE_EXHAUSTION) 40 else 50
-            val remains = 100 - percent
-            confirm("Подтвердить продажу $percent%?", "Оставшиеся $remains% будут защищены трейлингом 4%.") {
-                PumpBotEngine.confirmPartialSold(this)
-                updateUi()
-            }
-        } else {
-            confirm("Подтвердить продажу?", "Приложение очистит цену входа и начнет ждать сигнал на покупку.") {
-                ManualPositionStore.recordSell(this, snapshot.lastPrice)
-                PumpBotEngine.confirmSold(this)
-                updateUi()
-            }
+        if (snapshot.waitMode != "BUY") return
+        confirm("Я купил", "Запомнить текущую цену как цену покупки?") {
+            if (PumpBotEngine.snapshot(this).waitMode != "BUY") return@confirm
+            PumpBotEngine.confirmBought(this)
+            val opened = PumpBotEngine.snapshot(this)
+            ManualPositionStore.recordBuy(
+                this,
+                opened.entryPrice,
+                opened.entryTime.takeIf { it > 0L } ?: System.currentTimeMillis()
+            )
+            if (!opened.running) startMonitor()
+            updateUi()
+        }
+    }
+
+    private fun confirmManualSell() {
+        val snapshot = PumpBotEngine.snapshot(this)
+        if (snapshot.waitMode != "SELL") return
+        confirm("Я продал", "Закрыть позицию полностью и снова ждать покупку?") {
+            val current = PumpBotEngine.snapshot(this)
+            if (current.waitMode != "SELL") return@confirm
+            val sellPrice = current.lastPrice.takeIf { it > 0.0 } ?: current.entryPrice
+            ManualPositionStore.recordSell(this, sellPrice)
+            PumpBotEngine.confirmSold(this)
+            updateUi()
         }
     }
 
@@ -268,37 +273,6 @@ class MainActivity : AppCompatActivity() {
             .setTitle("Мои сделки • последние 6 месяцев")
             .setMessage(text)
             .setPositiveButton("Закрыть", null)
-            .show()
-    }
-
-    private fun showSignalInfo() {
-        val snapshot = PumpBotEngine.snapshot(this)
-        val profile = if (snapshot.aggressive) {
-            "Активный: четыре этапа, допускает вход после восстановления до −3% от максимума"
-        } else {
-            "Осторожный: четыре этапа, вход после серии падений только рядом с дном (до −6%)"
-        }
-        val details = if (snapshot.waitMode == "BUY") {
-            "Базовый тренд: ${snapshot.trendReadiness}/100\n" +
-                "Серия падений + разворот + покупатели + рынок: ${snapshot.shockReadiness}/100\n"
-        } else {
-            "Готовность к продаже: ${kotlin.math.abs(snapshot.readinessScore)}/100\n"
-        }
-        AlertDialog.Builder(this)
-            .setTitle("Как рассчитан сигнал")
-            .setMessage(
-                "$profile\n\n$details\n${snapshot.signalReason}\n\n" +
-                    "Дыхание: ${snapshot.breathingState}.\n${snapshot.breathingExplanation}\n\n" +
-                    "АКТИВНОСТЬ показывает силу текущего расширения, но не направление. ПОТОК показывает согласованное направление цены и taker-покупок. СОГЛАСОВАНО — качество и согласие доступных данных, а не вероятность прибыли. ПОЗДНИЙ ВХОД показывает риск покупки после уже прошедшего импульса.\n\n" +
-                    "Новая защита PUMP работает самостоятельно: высокий риск позднего входа блокирует покупку даже тогда, когда BTC и SOL не растут. Старый общерыночный фильтр остаётся дополнительной страховкой.\n\n" +
-                    "Недельный ритм показывается только как предупреждение: выходные обычно тише, понедельник 06–12 склонен к откату, четверг исторически слабее. Календарь сам не создаёт и не отменяет сделку.\n\n" +
-                    "V3 Радар читает небольшие обновления из официальных лент ФРС, ЕЦБ, SEC и BLS. Сначала он работает в режиме наблюдения: показывает возможное влияние и сравнивает его с движением рынка, но сам не создаёт покупку или продажу.\n\n" +
-                    "При падении PUMP/EUR на 25% и больше от максимума последних 24 часов включается отдельная аварийная тревога. Она не является командой купить: до подтверждённого отскока обычный сигнал покупки блокируется.\n\n" +
-                    "95–98 — только отображение приближения без звонка. 99 — звук и вибрация только при допустимом риске позднего входа и достаточной согласованности данных. " +
-                    "100 — условия стратегии полностью выполнены. " +
-                    "Это готовность правил, а не вероятность прибыли."
-            )
-            .setPositiveButton("Понятно", null)
             .show()
     }
 
@@ -385,14 +359,11 @@ class MainActivity : AppCompatActivity() {
         btnStart?.alpha = if (snapshot.running) 0.45f else 1f
         btnStop?.isEnabled = snapshot.running
         btnStop?.alpha = if (snapshot.running) 1f else 0.65f
-        btnManual?.text = when {
-            snapshot.waitMode == "BUY" -> "Я КУПИЛ — ЖДУ ПРОДАЖУ"
-            snapshot.signalAction == StrategyV2.ACTION_SELL_HALF && !snapshot.partialTaken -> {
-                if (snapshot.strategyMode == StrategyV2.MODE_EXHAUSTION) "Я ПРОДАЛ 40% — ВЕСТИ 60%" else "Я ПРОДАЛ 50% — ВЕСТИ ОСТАТОК"
-            }
-            else -> "Я ПРОДАЛ — ЖДУ ПОКУПКУ"
-        }
-        btnToggleMode?.text = "ПОЧЕМУ ТАКОЙ СИГНАЛ?"
+        val controls = ManualPositionControlPolicy.forWaitMode(snapshot.waitMode)
+        btnManualBuy?.isEnabled = controls.buyEnabled
+        btnManualBuy?.alpha = if (controls.buyEnabled) 1f else 0.35f
+        btnManualSell?.isEnabled = controls.sellEnabled
+        btnManualSell?.alpha = if (controls.sellEnabled) 1f else 0.35f
         val now = System.currentTimeMillis()
         val radar = EventRadarStore.state(this)
         val appCombinedDirection = radar.combinedDirection(snapshot.directionScore, now)
@@ -412,10 +383,19 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun renderManualPosition(snapshot: LiveSnapshot) {
-        val trade = ManualPositionStore.openTrade(this)
         val active = snapshot.waitMode == "SELL" && snapshot.entryPrice > 0.0
+        if (active) {
+            ManualPositionStore.ensureOpenPosition(
+                this,
+                snapshot.entryPrice,
+                snapshot.entryTime.takeIf { it > 0L } ?: snapshot.lastCandle
+            )
+        }
+        val trade = ManualPositionStore.openTrade(this)
         val entry = trade?.buyPrice?.takeIf { it > 0.0 } ?: snapshot.entryPrice
-        val boughtAt = trade?.boughtAt ?: 0L
+        val boughtAt = trade?.boughtAt
+            ?: snapshot.entryTime.takeIf { it > 0L }
+            ?: snapshot.lastCandle
         if (active && entry > 0.0 && snapshot.lastPrice > 0.0) {
             val pnl = (snapshot.lastPrice / entry - 1.0) * 100.0
             val color = if (pnl >= 0.0) "#7EE787" else "#FF7B72"
