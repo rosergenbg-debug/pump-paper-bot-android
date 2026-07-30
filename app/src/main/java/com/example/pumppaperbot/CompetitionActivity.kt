@@ -96,16 +96,16 @@ class CompetitionActivity : AppCompatActivity() {
             "GEMINI",
             summary(gemini.value(price), gemini.profitPercent(price), gemini.inPosition),
             candles,
-            gemini.trades.map { CompetitionMarker(it.time, it.action, it.price) }
+            gemini.trades.map { CompetitionMarker(it.time, it.action, it.price, it.pnlEur) }
         )
         charts[1].setData(
             "APP",
             summary(app.value(price), app.profitPercent(price), app.inPosition),
             candles,
-            app.trades.map { CompetitionMarker(it.candleTime, it.action, it.price) }
+            app.trades.map { CompetitionMarker(it.candleTime, it.action, it.price, it.pnlEur) }
         )
         charts[2].setData(
-            "Я",
+            "СЕРЖ",
             summary(user.value(price), user.profitPercent(price), user.inPosition),
             candles,
             user.trades.map { CompetitionMarker(it.time, it.action, it.price) }
