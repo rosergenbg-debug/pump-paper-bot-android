@@ -43,7 +43,7 @@ class AppPaperActivity : AppCompatActivity() {
         root.addView(button("← НАЗАД", "#30363D").apply {
             setOnClickListener { finish() }
         }, LinearLayout.LayoutParams(-1, dp(48)))
-        root.addView(label("GEMINI • APP • Я", 23, "#F0F6FC", true, 12))
+        root.addView(label("GEMINI • APP • СЕРЖ", 23, "#F0F6FC", true, 12))
         root.addView(label(
             "Три независимых виртуальных счёта по €1 000. Реальные деньги не используются.",
             14, "#C9D1D9", false, 6
@@ -133,7 +133,7 @@ class AppPaperActivity : AppCompatActivity() {
             gemini.trades.lastOrNull()?.time
         )
         userCard.text = accountText(
-            "Я",
+            "СЕРЖ",
             userValue,
             user.profitPercent(price),
             user.inPosition,
@@ -145,20 +145,20 @@ class AppPaperActivity : AppCompatActivity() {
         geminiCard.setTextColor(Color.parseColor(if (gemini.profit(price) >= 0.0) "#D2A8FF" else "#FF7B72"))
         userCard.setTextColor(Color.parseColor(if (user.profit(price) >= 0.0) "#79C0FF" else "#FF7B72"))
 
-        val ranking = listOf("APP" to appValue, "GEMINI" to geminiValue, "Я" to userValue)
+        val ranking = listOf("APP" to appValue, "GEMINI" to geminiValue, "СЕРЖ" to userValue)
             .sortedByDescending { it.second }
         val leader = "Сейчас впереди ${ranking.first().first} • €${money(ranking.first().second)}"
         comparison.text = buildString {
             append("СРАВНЕНИЕ В МОМЕНТЕ\n$leader")
             append("\nAPP: ${positionWord(app.inPosition)}")
             append("  •  Gemini: ${positionWord(gemini.inPosition)}")
-            append("  •  Я: ${positionWord(user.inPosition)}")
+            append("  •  Серж: ${positionWord(user.inPosition)}")
             val appLast = app.trades.lastOrNull()
             val geminiLast = gemini.trades.lastOrNull()
             val userLast = user.trades.lastOrNull()
             append("\nПоследнее действие APP: ${tradeWord(appLast?.action)} ${time(appLast?.time)}")
             append("\nПоследнее действие Gemini: ${tradeWord(geminiLast?.action)} ${time(geminiLast?.time)}")
-            append("\nПоследнее действие пользователя: ${tradeWord(userLast?.action)} ${time(userLast?.time)}")
+            append("\nПоследнее действие Сержа: ${tradeWord(userLast?.action)} ${time(userLast?.time)}")
             append("\n\nAPP работает по закрытым 30‑минутным свечам. Gemini принимает часовое решение. Пользователь — вручную.")
         }
 
