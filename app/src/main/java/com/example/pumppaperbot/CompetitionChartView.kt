@@ -15,7 +15,8 @@ import kotlin.math.min
 data class CompetitionMarker(
     val time: Long,
     val action: String,
-    val price: Double
+    val price: Double,
+    val pnlEur: Double = 0.0
 )
 
 class CompetitionChartView @JvmOverloads constructor(
@@ -34,6 +35,21 @@ class CompetitionChartView @JvmOverloads constructor(
     }
     private val buy = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#32C789") }
     private val sell = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#FF4D6D") }
+    private val tradeWin = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#32C789")
+        style = Paint.Style.STROKE
+        strokeWidth = dp(2f)
+    }
+    private val tradeLoss = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#FF4D6D")
+        style = Paint.Style.STROKE
+        strokeWidth = dp(2f)
+    }
+    private val resultText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        textSize = sp(8.5f)
+        isFakeBoldText = true
+    }
     private val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
         textSize = sp(11f)
@@ -153,27 +169,104 @@ class CompetitionChartView @JvmOverloads constructor(
 
         val firstTime = visible.first().openTime
         val lastTime = visible.last().closeTime
-        markers.filter { it.time in firstTime..lastTime && it.price > 0.0 }.forEach { marker ->
-            val index = visible.indices.minByOrNull { abs(visible[it].closeTime - marker.time) } ?: return@forEach
-            val px = x(index)
-            val py = y(marker.price).coerceIn(top, bottom)
-            val paint = if (marker.action.startsWith("BUY")) buy else sell
-            val direction = if (marker.action.startsWith("BUY")) -1f else 1f
+        val visibleMarkers = markers
+            .filter { it.time in firstTime..lastTime && it.price > 0.0 }
+            .sortedBy { it.time }
+
+        fun markerPoint(marker: CompetitionMarker): Pair<Float, Float> {
+            val index = visible.indices.minByOrNull {
+                abs(visible[it].closeTime - marker.time)
+            } ?: 0
+            return x(index) to y(marker.price).coerceIn(top, bottom)
+        }
+
+        val completedTrades =
+            ArrayList<Triple<CompetitionMarker, CompetitionMarker, Double>>()
+        var openBuy: CompetitionMarker? = null
+        var realizedEur = 0.0
+        visibleMarkers.forEach { marker ->
+            when {
+                marker.action.startsWith("BUY") -> {
+                    openBuy = marker
+                    realizedEur = 0.0
+                }
+                marker.action == "SELL_HALF" && openBuy != null -> {
+                    realizedEur += marker.pnlEur
+                }
+                marker.action == "SELL" && openBuy != null -> {
+                    realizedEur += marker.pnlEur
+                    completedTrades += Triple(openBuy!!, marker, realizedEur)
+                    openBuy = null
+                    realizedEur = 0.0
+                }
+            }
+        }
+
+        completedTrades.forEach { (entry, exit, pnlEur) ->
+            val (entryX, entryY) = markerPoint(entry)
+            val (exitX, exitY) = markerPoint(exit)
+            val netPercent =
+                ((exit.price / entry.price) *
+                    (1.0 - 0.0015) *
+                    (1.0 - 0.0015) - 1.0) * 100.0
+            val positive = netPercent >= 0.0
+            val connector = if (positive) tradeWin else tradeLoss
+            val tradePath = Path().apply {
+                moveTo(entryX, entryY)
+                lineTo(exitX, entryY)
+                lineTo(exitX, exitY)
+            }
+            canvas.drawPath(tradePath, connector)
+
+            val result = if (abs(pnlEur) >= 0.005) {
+                String.format(
+                    java.util.Locale.GERMANY,
+                    "%+.2f%%  %+.2f €",
+                    netPercent,
+                    pnlEur
+                )
+            } else {
+                String.format(java.util.Locale.GERMANY, "%+.2f%%", netPercent)
+            }
+            resultText.color = if (positive) tradeWin.color else tradeLoss.color
+            resultText.textAlign =
+                if (exitX > width * 0.68f) Paint.Align.RIGHT else Paint.Align.LEFT
+            val labelX =
+                if (resultText.textAlign == Paint.Align.RIGHT) exitX - dp(4f) else exitX + dp(4f)
+            val labelY = if (positive) {
+                (entryY - dp(5f)).coerceAtLeast(top + dp(9f))
+            } else {
+                (entryY + dp(13f)).coerceAtMost(bottom)
+            }
+            canvas.drawText(result, labelX, labelY, resultText)
+        }
+
+        visibleMarkers.forEach { marker ->
+            val (px, py) = markerPoint(marker)
+            val isBuy = marker.action.startsWith("BUY")
+            val paint = if (isBuy) buy else sell
+            // BUY points upward from below; SELL points downward from above.
+            val baseDirection = if (isBuy) 1f else -1f
             val markerPath = Path().apply {
                 moveTo(px, py)
-                lineTo(px - dp(6f), py + direction * dp(10f))
-                lineTo(px + dp(6f), py + direction * dp(10f))
+                lineTo(px - dp(7f), py + baseDirection * dp(12f))
+                lineTo(px + dp(7f), py + baseDirection * dp(12f))
                 close()
             }
             canvas.drawPath(markerPath, paint)
-            text.textAlign = Paint.Align.CENTER
-            canvas.drawText(
-                if (marker.action == "SELL_HALF") "½" else if (marker.action.startsWith("BUY")) "B" else "S",
-                px,
-                (py + direction * dp(20f)).coerceIn(top + dp(9f), bottom),
-                text
-            )
-            text.textAlign = Paint.Align.LEFT
+            resultText.color = paint.color
+            resultText.textAlign = Paint.Align.CENTER
+            val label = when {
+                marker.action == "SELL_HALF" -> "½ ВЫХОД"
+                isBuy -> "ВХОД"
+                else -> "ВЫХОД"
+            }
+            val labelY = if (isBuy) {
+                (py + dp(23f)).coerceAtMost(bottom)
+            } else {
+                (py - dp(15f)).coerceAtLeast(top + dp(8f))
+            }
+            canvas.drawText(label, px, labelY, resultText)
         }
     }
 
