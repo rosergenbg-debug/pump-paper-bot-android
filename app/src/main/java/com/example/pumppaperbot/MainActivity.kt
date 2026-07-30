@@ -66,6 +66,7 @@ class MainActivity : AppCompatActivity() {
     private var btnAlertSettings: Button? = null
     private var btnAppPaper: Button? = null
     private var btnGeminiExperiment: Button? = null
+    private var btnUserPaper: Button? = null
     private var btnCompetition: Button? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -104,6 +105,7 @@ class MainActivity : AppCompatActivity() {
         btnAlertSettings = findViewById(R.id.btnAlertSettings)
         btnAppPaper = findViewById(R.id.btnAppPaper)
         btnGeminiExperiment = findViewById(R.id.btnGeminiExperiment)
+        btnUserPaper = findViewById(R.id.btnUserPaper)
         btnCompetition = findViewById(R.id.btnCompetition)
 
         PumpBotEngine.ensureInitialized(this)
@@ -145,6 +147,9 @@ class MainActivity : AppCompatActivity() {
         }
         btnGeminiExperiment?.setOnClickListener {
             startActivity(Intent(this, GeminiExperimentActivity::class.java))
+        }
+        btnUserPaper?.setOnClickListener {
+            startActivity(Intent(this, AppPaperActivity::class.java))
         }
         btnCompetition?.setOnClickListener {
             startActivity(Intent(this, CompetitionActivity::class.java))
@@ -305,6 +310,25 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateUi() {
         val snapshot = PumpBotEngine.snapshot(this)
+        val accountPrice = snapshot.lastPrice
+        val appAccount = AppPaperStore.state(this)
+        val geminiAccount = GeminiPaperStore.state(this).portfolio
+        val sergeAccount = UserPaperStore.markToMarket(this, accountPrice)
+        btnAppPaper?.text = accountButtonText(
+            "APP",
+            appAccount.value(accountPrice),
+            appAccount.profitPercent(accountPrice)
+        )
+        btnGeminiExperiment?.text = accountButtonText(
+            "GEMINI",
+            geminiAccount.value(accountPrice),
+            geminiAccount.profitPercent(accountPrice)
+        )
+        btnUserPaper?.text = accountButtonText(
+            "СЕРЖ",
+            sergeAccount.value(accountPrice),
+            sergeAccount.profitPercent(accountPrice)
+        )
         tvStatus?.text = if (snapshot.running) {
             "Монитор включён • обновлено ${PumpBotEngine.formatTime(snapshot.lastSync)}"
         } else {
@@ -440,6 +464,15 @@ class MainActivity : AppCompatActivity() {
     private fun networkConstraints(): Constraints = Constraints.Builder()
         .setRequiredNetworkType(NetworkType.CONNECTED)
         .build()
+
+    private fun accountButtonText(name: String, value: Double, percent: Double): String =
+        String.format(
+            Locale.GERMANY,
+            "%s\n€%,.2f\n%+.2f%%",
+            name,
+            value,
+            percent
+        )
 
     private fun renderRapidDrop(snapshot: LiveSnapshot) {
         val drop = snapshot.rapidDrop
