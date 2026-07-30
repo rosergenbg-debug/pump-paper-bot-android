@@ -18,7 +18,7 @@ android {
         minSdk 24
         targetSdk 34
         versionCode 51
-        versionName "3.18"
+        versionName "3.19"
     }
 
     signingConfigs {
