@@ -38,6 +38,7 @@ class PumpBotWorker(
                 startedAt
             )
             val snapshot = PumpBotEngine.snapshot(applicationContext)
+            AppPaperStore.sync(applicationContext)
             val gemini = GeminiExperimentClient().sync(
                 applicationContext,
                 source = source

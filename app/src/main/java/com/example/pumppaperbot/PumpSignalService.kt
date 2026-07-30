@@ -82,6 +82,7 @@ class PumpSignalService : Service() {
                 val eventState = eventRadar.sync(this)
                 GeminiPaperStore.markDataReady(this, source, startedAt)
                 val snapshot = PumpBotEngine.snapshot(this)
+                AppPaperStore.sync(this)
                 val gemini = GeminiExperimentClient().sync(this, source = source)
                 val rapidDropAlerted = if (PumpBotEngine.shouldAlertRapidDrop(this, snapshot)) {
                     PumpAlert.showRapidDrop(this, snapshot)

@@ -14,7 +14,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="PUMP Сигнал V3.15"
+            android:text="PUMP Сигнал V3.18"
             android:textColor="#F0F6FC"
             android:textSize="28sp"
             android:textStyle="bold" />
@@ -69,13 +69,43 @@
             android:textStyle="bold"
             android:visibility="gone" />
 
-        <Button
-            android:id="@+id/btnGeminiExperiment"
+        <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="52dp"
+            android:layout_height="56dp"
             android:layout_marginTop="8dp"
-            android:backgroundTint="#7C3AED"
-            android:text="GEMINI • СЧЁТ И ПРОГНОЗ"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnAppPaper"
+                android:layout_width="0dp"
+                android:layout_height="56dp"
+                android:layout_weight="1"
+                android:backgroundTint="#238636"
+                android:text="APP&#10;€1 000"
+                android:textColor="#FFFFFF"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/btnGeminiExperiment"
+                android:layout_width="0dp"
+                android:layout_height="56dp"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:backgroundTint="#7C3AED"
+                android:text="GEMINI&#10;€1 000"
+                android:textColor="#FFFFFF"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <Button
+            android:id="@+id/btnCompetition"
+            android:layout_width="match_parent"
+            android:layout_height="50dp"
+            android:layout_marginTop="7dp"
+            android:backgroundTint="#1F6FEB"
+            android:text="СРАВНИТЬ 3  •  GEMINI  |  APP  |  Я"
             android:textColor="#FFFFFF"
             android:textSize="13sp"
             android:textStyle="bold" />
@@ -398,16 +428,6 @@
                 android:textStyle="bold" />
         </LinearLayout>
 
-        <Button
-            android:id="@+id/btnManual"
-            android:layout_width="match_parent"
-            android:layout_height="54dp"
-            android:layout_marginTop="8dp"
-            android:backgroundTint="#238636"
-            android:text="Я КУПИЛ — ЖДУ ПРОДАЖУ"
-            android:textColor="#FFFFFF"
-            android:textStyle="bold" />
-
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -415,25 +435,36 @@
             android:orientation="horizontal">
 
             <Button
-                android:id="@+id/btnToggleMode"
+                android:id="@+id/btnManualBuy"
                 android:layout_width="0dp"
                 android:layout_height="54dp"
                 android:layout_weight="1"
-                android:backgroundTint="#30363D"
-            android:text="ПОЧЕМУ?"
+                android:backgroundTint="#238636"
+                android:text="Я КУПИЛ"
                 android:textColor="#FFFFFF"
                 android:textStyle="bold" />
 
             <Button
-                android:id="@+id/btnBacktest"
+                android:id="@+id/btnManualSell"
                 android:layout_width="0dp"
                 android:layout_height="54dp"
                 android:layout_marginStart="8dp"
                 android:layout_weight="1"
-                android:backgroundTint="#2F81F7"
-                android:text="ТЕСТ НАЗАД"
+                android:backgroundTint="#DA3633"
+                android:enabled="false"
+                android:text="Я ПРОДАЛ"
                 android:textColor="#FFFFFF"
                 android:textStyle="bold" />
         </LinearLayout>
+
+        <Button
+            android:id="@+id/btnBacktest"
+            android:layout_width="match_parent"
+            android:layout_height="54dp"
+            android:layout_marginTop="8dp"
+            android:backgroundTint="#2F81F7"
+            android:text="ТЕСТ НАЗАД"
+            android:textColor="#FFFFFF"
+            android:textStyle="bold" />
     </LinearLayout>
 </ScrollView>

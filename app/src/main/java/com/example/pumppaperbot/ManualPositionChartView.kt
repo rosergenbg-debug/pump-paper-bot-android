@@ -51,7 +51,7 @@ class ManualPositionChartView @JvmOverloads constructor(
                 .toMutableList()
             if (points.isEmpty() || abs(points.first()) > 0.000001) points.add(0, 0.0)
             val live = (currentPrice / buyPrice - 1.0) * 100.0
-            if (points.isEmpty() || abs(points.last() - live) > 0.000001) points.add(live)
+            if (points.size < 2 || abs(points.last() - live) > 0.000001) points.add(live)
             points.takeLast(MAX_POINTS)
         } else emptyList()
         invalidate()

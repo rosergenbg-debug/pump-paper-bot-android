@@ -141,6 +141,7 @@ data class LiveSnapshot(
     val signalAction: String,
     val signalReason: String,
     val entryPrice: Double,
+    val entryTime: Long,
     val highestClose: Double,
     val chart: ChartBundle,
     val marketGateActive: Boolean = false,
@@ -174,8 +175,17 @@ data class SavedMarketPayloads(
     val fundingJson: String
 )
 
+data class AppPaperEvaluation(
+    val candleTime: Long,
+    val price: Double,
+    val action: String,
+    val reason: String,
+    val strategyMode: String,
+    val highestClose: Double
+)
+
 object PumpBotEngine {
-    const val appVersionName = "3.15"
+    const val appVersionName = "3.18"
     const val startBalance = 1000.0
     const val feeRate = 0.0015
     const val slippage = 0.0005
@@ -413,6 +423,53 @@ object PumpBotEngine {
             futuresJson = p.getString(keyFuturesJson, "").orEmpty(),
             premiumJson = p.getString(keyPremiumJson, "").orEmpty(),
             fundingJson = p.getString(keyFundingJson, "").orEmpty()
+        )
+    }
+
+    fun evaluateAppPaper(
+        context: Context,
+        portfolio: AppPaperPortfolio
+    ): AppPaperEvaluation {
+        ensureInitialized(context)
+        val p = prefs(context)
+        val candles = StrategyV2.synthesizeEur(
+            parseSavedCandles(p.getString(keyMarketJson, "").orEmpty()),
+            parseSavedCandles(p.getString(keyEurJson, "").orEmpty())
+        )
+        val evaluation = evaluateLive(
+            candles = candles,
+            btcCandles = parseSavedCandles(p.getString(keyBtcJson, "").orEmpty()),
+            ethCandles = parseSavedCandles(p.getString(keyEthJson, "").orEmpty()),
+            solCandles = parseSavedCandles(p.getString(keySolJson, "").orEmpty()),
+            futuresCandles = parseSavedCandles(p.getString(keyFuturesJson, "").orEmpty()),
+            premiumCandles = parseSavedCandles(p.getString(keyPremiumJson, "").orEmpty()),
+            funding = parseFunding(p.getString(keyFundingJson, "").orEmpty()),
+            waitMode = if (portfolio.inPosition) "SELL" else "BUY",
+            entryPrice = portfolio.entryPrice,
+            entryTime = portfolio.entryTime,
+            positionMode = portfolio.strategyMode,
+            partialTaken = portfolio.partialTaken,
+            partialCandle = portfolio.partialCandle,
+            storedHighest = portfolio.highestClose,
+            aggressive = p.getBoolean(keyAggressive, false),
+            orderBook = p.nullableDouble(keyBookImbalance)?.let { imbalance ->
+                OrderBookMetrics(
+                    imbalance = imbalance,
+                    spreadPercent = p.nullableDouble(keySpreadPercent) ?: 0.0,
+                    bidNotional = 0.0,
+                    askNotional = 0.0
+                )
+            },
+            openInterest = p.nullableDouble(keyOpenInterest),
+            openInterestChangePercent = p.nullableDouble(keyOpenInterestChange)
+        )
+        return AppPaperEvaluation(
+            candleTime = evaluation.lastCandle,
+            price = evaluation.lastPrice,
+            action = evaluation.signalAction,
+            reason = evaluation.signalReason,
+            strategyMode = evaluation.strategyMode,
+            highestClose = evaluation.highestClose
         )
     }
 
@@ -670,6 +727,7 @@ object PumpBotEngine {
             signalAction = p.getString(keySignalAction, "WAIT").orEmpty(),
             signalReason = p.getString(keySignalReason, "Сигнала нет").orEmpty(),
             entryPrice = p.getDouble(keyEntryPrice, 0.0),
+            entryTime = p.getLong(keyEntryTime, 0L),
             highestClose = p.getDouble(keyHighestClose, 0.0),
             chart = ChartBundle(
                 candles,
