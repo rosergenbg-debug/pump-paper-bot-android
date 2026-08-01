@@ -38,14 +38,14 @@ class CompetitionActivity : AppCompatActivity() {
             setPadding(dp(8), dp(6), dp(8), dp(8))
         }
         val back = Button(this).apply {
-            text = "←  СРАВНЕНИЕ ТРЁХ"
+            text = "←  СРАВНЕНИЕ ЧЕТЫРЁХ"
             setTextColor(Color.WHITE)
             setBackgroundColor(Color.parseColor("#30363D"))
             gravity = Gravity.CENTER
             setOnClickListener { finish() }
         }
         root.addView(back, LinearLayout.LayoutParams(-1, dp(44)))
-        repeat(3) {
+        repeat(4) {
             val chart = CompetitionChartView(this)
             charts += chart
             root.addView(chart, LinearLayout.LayoutParams(-1, 0, 1f).apply {
@@ -83,6 +83,8 @@ class CompetitionActivity : AppCompatActivity() {
         val price = snapshot.lastPrice
         val app = AppPaperStore.state(this)
         val gemini = GeminiPaperStore.state(this).portfolio
+        val geminiExitExperiment = GeminiExitExperimentStore.state(this)?.portfolio
+            ?: gemini
         val user = UserPaperStore.markToMarket(this, price)
         val candles = if (historicalCandles.isNotEmpty()) {
             (historicalCandles + snapshot.chart.candles)
@@ -99,12 +101,24 @@ class CompetitionActivity : AppCompatActivity() {
             gemini.trades.map { CompetitionMarker(it.time, it.action, it.price, it.pnlEur) }
         )
         charts[1].setData(
+            "GEMINI‑ЭКСПЕРИМЕНТ",
+            summary(
+                geminiExitExperiment.value(price),
+                geminiExitExperiment.profitPercent(price),
+                geminiExitExperiment.inPosition
+            ),
+            candles,
+            geminiExitExperiment.trades.map {
+                CompetitionMarker(it.time, it.action, it.price, it.pnlEur)
+            }
+        )
+        charts[2].setData(
             "APP",
             summary(app.value(price), app.profitPercent(price), app.inPosition),
             candles,
             app.trades.map { CompetitionMarker(it.candleTime, it.action, it.price, it.pnlEur) }
         )
-        charts[2].setData(
+        charts[3].setData(
             "СЕРЖ",
             summary(user.value(price), user.profitPercent(price), user.inPosition),
             candles,

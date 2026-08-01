@@ -86,18 +86,32 @@ class GeminiPaperTraderTest {
         val bought = GeminiPaperTrader.applyDecision(
             before, 0.002, 10L, 100L, recommendation("BUY"), 101L
         )
-        val alertTrade = GeminiBuyAlertPolicy.newlyExecutedBuy(before, bought, 10L)
+        val alertTrade = GeminiTradeAlertPolicy.newlyExecutedTrade(before, bought, 10L)
 
         assertEquals("BUY", alertTrade?.action)
         assertEquals(10L, alertTrade?.decisionId)
-        assertEquals(null, GeminiBuyAlertPolicy.newlyExecutedBuy(bought, bought, 10L))
+        assertEquals(null, GeminiTradeAlertPolicy.newlyExecutedTrade(bought, bought, 10L))
 
         val buyWhileInvested = GeminiPaperTrader.applyDecision(
             bought, 0.0021, 11L, 200L, recommendation("BUY"), 201L
         )
         assertEquals(
             null,
-            GeminiBuyAlertPolicy.newlyExecutedBuy(bought, buyWhileInvested, 11L)
+            GeminiTradeAlertPolicy.newlyExecutedTrade(bought, buyWhileInvested, 11L)
+        )
+    }
+
+    @Test fun `sell alert is emitted for a newly executed Gemini exit`() {
+        val bought = GeminiPaperTrader.applyDecision(
+            GeminiPaperPortfolio(), 0.002, 20L, 100L, recommendation("BUY"), 101L
+        )
+        val sold = GeminiPaperTrader.applyDecision(
+            bought, 0.0021, 21L, 200L, recommendation("SELL", -40, 80), 201L
+        )
+
+        assertEquals(
+            "SELL",
+            GeminiTradeAlertPolicy.newlyExecutedTrade(bought, sold, 21L)?.action
         )
     }
 

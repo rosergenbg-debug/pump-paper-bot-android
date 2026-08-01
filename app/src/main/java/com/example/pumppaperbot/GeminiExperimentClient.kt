@@ -312,8 +312,15 @@ class GeminiExperimentClient {
             frame.preRequestPrice
         )
         if (markedPortfolio != existing.portfolio) {
-            GeminiResearchStore.savePortfolioMetrics(context, markedPortfolio)
+            GeminiPaperStore.savePortfolio(context, markedPortfolio)
         }
+        GeminiExitExperimentStore.evaluate(
+            context = context,
+            controlPortfolio = markedPortfolio,
+            frame = frame,
+            impulse = ImpulseRadarStore.state(context),
+            now = observedAt
+        )
         val portfolio = GeminiPaperTrader.gradeCompletedHorizons(
             markedPortfolio,
             GeminiResearchStore.completedOutcomes(context, markedPortfolio.decisions)
@@ -550,21 +557,22 @@ class GeminiExperimentClient {
             responseReceivedAt = pending.responseReceivedAt,
             executionQuoteAt = quote.receivedAt
         )
-        val executedBuy = GeminiBuyAlertPolicy.newlyExecutedBuy(
+        val executedTrade = GeminiTradeAlertPolicy.newlyExecutedTrade(
             before = marked,
             after = updated,
             decisionId = pending.hourId
         )
         GeminiPaperStore.completePending(context, updated, quote.receivedAt)
-        executedBuy?.let { trade ->
+        executedTrade?.let { trade ->
+            GeminiExitExperimentStore.mirrorControlTrade(context, trade)
             runCatching {
-                PumpAlert.showGeminiBuy(context, trade)
+                PumpAlert.showGeminiTrade(context, trade)
             }.onFailure { error ->
                 GeminiPaperStore.recordActivity(
                     context = context,
-                    stage = "ЗВОНОК BUY",
+                    stage = "ЗВОНОК ${trade.action}",
                     result = "ERROR",
-                    detail = "Покупка выполнена, но уведомление не показано: " +
+                    detail = "Сделка ${trade.action} выполнена, но уведомление не показано: " +
                         (error.message ?: error.javaClass.simpleName),
                     model = pending.recommendation.model,
                     hourId = pending.hourId,

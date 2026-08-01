@@ -66,6 +66,7 @@ class MainActivity : AppCompatActivity() {
     private var btnAlertSettings: Button? = null
     private var btnAppPaper: Button? = null
     private var btnGeminiExperiment: Button? = null
+    private var btnGeminiExitExperiment: Button? = null
     private var btnUserPaper: Button? = null
     private var btnCompetition: Button? = null
 
@@ -105,6 +106,7 @@ class MainActivity : AppCompatActivity() {
         btnAlertSettings = findViewById(R.id.btnAlertSettings)
         btnAppPaper = findViewById(R.id.btnAppPaper)
         btnGeminiExperiment = findViewById(R.id.btnGeminiExperiment)
+        btnGeminiExitExperiment = findViewById(R.id.btnGeminiExitExperiment)
         btnUserPaper = findViewById(R.id.btnUserPaper)
         btnCompetition = findViewById(R.id.btnCompetition)
 
@@ -147,6 +149,9 @@ class MainActivity : AppCompatActivity() {
         }
         btnGeminiExperiment?.setOnClickListener {
             startActivity(Intent(this, GeminiExperimentActivity::class.java))
+        }
+        btnGeminiExitExperiment?.setOnClickListener {
+            startActivity(Intent(this, GeminiExitExperimentActivity::class.java))
         }
         btnUserPaper?.setOnClickListener {
             startActivity(Intent(this, AppPaperActivity::class.java))
@@ -313,6 +318,8 @@ class MainActivity : AppCompatActivity() {
         val accountPrice = snapshot.lastPrice
         val appAccount = AppPaperStore.state(this)
         val geminiAccount = GeminiPaperStore.state(this).portfolio
+        val geminiExitExperiment = GeminiExitExperimentStore.state(this)?.portfolio
+            ?: geminiAccount
         val sergeAccount = UserPaperStore.markToMarket(this, accountPrice)
         btnAppPaper?.text = accountButtonText(
             "APP",
@@ -323,6 +330,11 @@ class MainActivity : AppCompatActivity() {
             "GEMINI",
             geminiAccount.value(accountPrice),
             geminiAccount.profitPercent(accountPrice)
+        )
+        btnGeminiExitExperiment?.text = accountButtonText(
+            "GEMINI‑ЭКСП.",
+            geminiExitExperiment.value(accountPrice),
+            geminiExitExperiment.profitPercent(accountPrice)
         )
         btnUserPaper?.text = accountButtonText(
             "СЕРЖ",

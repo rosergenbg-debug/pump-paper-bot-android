@@ -153,14 +153,15 @@ class GeminiExperimentActivity : AppCompatActivity() {
             render()
         }
 
-        root.addView(button("СБРОСИТЬ ТОЛЬКО GEMINI‑ЭКСПЕРИМЕНТ", "#8E1519").apply {
+        root.addView(button("СБРОСИТЬ GEMINI И ЕГО ЭКСПЕРИМЕНТ", "#8E1519").apply {
             setOnClickListener {
                 AlertDialog.Builder(this@GeminiExperimentActivity)
                     .setTitle("Сбросить виртуальный счёт Gemini?")
-                    .setMessage("Удалятся только решения, виртуальные сделки и статистика Gemini. Основная стратегия не изменится.")
+                    .setMessage("Удалятся решения, виртуальные сделки и статистика Gemini и экспериментального выхода. APP и Серж не изменятся.")
                     .setNegativeButton("ОТМЕНА", null)
                     .setPositiveButton("СБРОСИТЬ") { _, _ ->
                         GeminiPaperStore.reset(this@GeminiExperimentActivity)
+                        GeminiExitExperimentStore.reset(this@GeminiExperimentActivity)
                         render()
                     }
                     .show()

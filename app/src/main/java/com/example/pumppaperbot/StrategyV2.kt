@@ -84,6 +84,28 @@ object StrategyV2 {
     private const val SHOCK_ARM_BARS = 36
     private const val EXHAUSTION_ARM_BARS = 12
 
+    internal object EntrySensitivity {
+        fun trendRecovered(
+            rsiNow: Double,
+            rsiPrevious: Double,
+            rsiTwoBarsAgo: Double,
+            aggressive: Boolean
+        ): Boolean {
+            val immediate = rsiNow in 45.0..57.0 && rsiPrevious < 45.0
+            val recentActiveRecovery = aggressive &&
+                rsiNow in 43.0..58.0 &&
+                rsiPrevious in 43.0..58.0 &&
+                rsiTwoBarsAgo < 45.0
+            return immediate || recentActiveRecovery
+        }
+
+        fun shockArmVolumeRatio(aggressive: Boolean): Double =
+            if (aggressive) 2.5 else 2.8
+
+        fun shockRsiReady(rsi: Double, aggressive: Boolean): Boolean =
+            if (aggressive) rsi in 43.0..58.0 else rsi in 44.0..57.0
+    }
+
     fun synthesizeEur(asset: List<PumpCandle>, eurUsdt: List<PumpCandle>): List<PumpCandle> {
         val eurByClose = eurUsdt.associateBy { it.closeTime }
         return asset.mapNotNull { coin ->
@@ -611,6 +633,7 @@ object StrategyV2 {
         val candle = pump.getOrNull(index) ?: return V2EntrySignal(MODE_NONE, "Нет свечи", 0.0, 0.0, 0.0, 0L)
         val rsiNow = indicators.rsi.getOrNull(index) ?: 0.0
         val rsiPrevious = indicators.rsi.getOrNull(index - 1) ?: 0.0
+        val rsiTwoBarsAgo = indicators.rsi.getOrNull(index - 2) ?: 0.0
         val emaNow = indicators.ema200.getOrNull(index) ?: 0.0
         val ema20Now = indicators.ema20.getOrNull(index) ?: 0.0
         val ema20Previous = indicators.ema20.getOrNull(index - 1) ?: 0.0
@@ -627,19 +650,28 @@ object StrategyV2 {
         for (j in max(0, index - TREND_ARM_BARS + 1)..index) {
             if ((indicators.rsi.getOrNull(j) ?: 100.0) <= 40.0) trendArmed = true
         }
-        val rsiCrossed = rsiNow in 45.0..55.0 && rsiPrevious < 45.0
+        val rsiCrossed = EntrySensitivity.trendRecovered(
+            rsiNow,
+            rsiPrevious,
+            rsiTwoBarsAgo,
+            aggressive
+        )
         val trend = trendArmed && rsiCrossed && priceReady && btcAbove && btcSlope && rate <= 0.0 && noChase
 
         var baseShockArmed = false
         for (j in max(1, index - SHOCK_ARM_BARS + 1)..index) {
-            if (indicators.ret1[j] <= -0.03 && indicators.volumeRatio[j] >= 3.0 &&
+            if (indicators.ret1[j] <= -0.03 &&
+                indicators.volumeRatio[j] >= EntrySensitivity.shockArmVolumeRatio(aggressive) &&
                 (indicators.rsi.getOrNull(j) ?: 100.0) <= 40.0
             ) baseShockArmed = true
         }
         val previousEma = indicators.ema200.getOrNull(index - 1) ?: 0.0
         val previousExtension = if (previousEma > 0.0) previousClose / previousEma - 1.0 else Double.POSITIVE_INFINITY
-        val previousReady = rsiPrevious in 45.0..55.0 && previousExtension in 0.0..0.035
-        val baseShock = baseShockArmed && rsiNow in 45.0..55.0 && priceReady && !previousReady && btcAbove && noChase
+        val previousReady = EntrySensitivity.shockRsiReady(rsiPrevious, aggressive) &&
+            previousExtension in 0.0..0.035
+        val baseShock = baseShockArmed &&
+            EntrySensitivity.shockRsiReady(rsiNow, aggressive) &&
+            priceReady && !previousReady && btcAbove && noChase
 
         var exhaustionArmed = false
         for (j in max(0, index - EXHAUSTION_ARM_BARS + 1)..index) {
@@ -678,7 +710,9 @@ object StrategyV2 {
             currentDrawdown = indicators.drawdown36h[index],
             currentDrawdownLimit = currentDrawdownLimit
         )
-        val baseShockReadiness = if (baseShock) 100 else if (baseShockArmed && rsiNow in 42.0..55.0 && btcAbove && noChase) 94 else 0
+        val baseShockReadiness = if (baseShock) 100 else if (
+            baseShockArmed && rsiNow in 42.0..58.0 && btcAbove && noChase
+        ) 94 else 0
         val shockReadiness = max(baseShockReadiness, exhaustionReadiness)
         val entryWouldBeActive = exhaustion || baseShock || trend
         val lateRiskLimit = if (aggressive) 70 else 60

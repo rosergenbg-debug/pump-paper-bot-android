@@ -240,6 +240,21 @@ object AppPaperTrader {
     ): List<AppPaperTrade> = previous + trade
 }
 
+internal object AppTradeAlertPolicy {
+    fun newlyExecutedTrades(
+        before: AppPaperPortfolio,
+        after: AppPaperPortfolio
+    ): List<AppPaperTrade> {
+        if (after.trades.size <= before.trades.size) return emptyList()
+        return after.trades.drop(before.trades.size)
+    }
+}
+
+data class AppPaperSyncResult(
+    val portfolio: AppPaperPortfolio,
+    val tradeAlerted: Boolean
+)
+
 object AppPaperStore {
     private const val PREFS = "app_paper_v317"
     private const val KEY_PORTFOLIO = "portfolio"
@@ -252,11 +267,18 @@ object AppPaperStore {
 
     @Synchronized
     fun sync(context: Context): AppPaperPortfolio {
+        return syncWithAlerts(context).portfolio
+    }
+
+    @Synchronized
+    fun syncWithAlerts(context: Context): AppPaperSyncResult {
         val current = state(context)
         val evaluation = PumpBotEngine.evaluateAppPaper(context, current)
         val next = AppPaperTrader.apply(current, evaluation)
         if (next != current) save(context, next)
-        return next
+        val trades = AppTradeAlertPolicy.newlyExecutedTrades(current, next)
+        trades.forEach { trade -> PumpAlert.showAppTrade(context, trade) }
+        return AppPaperSyncResult(next, trades.isNotEmpty())
     }
 
     fun reset(context: Context) {

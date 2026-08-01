@@ -71,59 +71,88 @@
 
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="68dp"
+            android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:orientation="horizontal">
+            android:orientation="vertical">
 
-            <Button
-                android:id="@+id/btnAppPaper"
-                android:layout_width="0dp"
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="68dp"
-                android:layout_weight="1"
-                android:backgroundTint="#238636"
-                android:includeFontPadding="false"
-                android:insetTop="0dp"
-                android:insetBottom="0dp"
-                android:maxLines="3"
-                android:padding="2dp"
-                android:text="APP&#10;€1 000,00&#10;+0,00%"
-                android:textColor="#FFFFFF"
-                android:textSize="10sp"
-                android:textStyle="bold" />
+                android:orientation="horizontal">
 
-            <Button
-                android:id="@+id/btnGeminiExperiment"
-                android:layout_width="0dp"
-                android:layout_height="68dp"
-                android:layout_marginStart="5dp"
-                android:layout_weight="1"
-                android:backgroundTint="#7C3AED"
-                android:includeFontPadding="false"
-                android:insetTop="0dp"
-                android:insetBottom="0dp"
-                android:maxLines="3"
-                android:padding="2dp"
-                android:text="GEMINI&#10;€1 000,00&#10;+0,00%"
-                android:textColor="#FFFFFF"
-                android:textSize="10sp"
-                android:textStyle="bold" />
+                <Button
+                    android:id="@+id/btnAppPaper"
+                    android:layout_width="0dp"
+                    android:layout_height="68dp"
+                    android:layout_weight="1"
+                    android:backgroundTint="#238636"
+                    android:includeFontPadding="false"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:maxLines="3"
+                    android:padding="2dp"
+                    android:text="APP&#10;€1 000,00&#10;+0,00%"
+                    android:textColor="#FFFFFF"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
 
-            <Button
-                android:id="@+id/btnUserPaper"
-                android:layout_width="0dp"
+                <Button
+                    android:id="@+id/btnGeminiExperiment"
+                    android:layout_width="0dp"
+                    android:layout_height="68dp"
+                    android:layout_marginStart="5dp"
+                    android:layout_weight="1"
+                    android:backgroundTint="#7C3AED"
+                    android:includeFontPadding="false"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:maxLines="3"
+                    android:padding="2dp"
+                    android:text="GEMINI&#10;€1 000,00&#10;+0,00%"
+                    android:textColor="#FFFFFF"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="68dp"
-                android:layout_marginStart="5dp"
-                android:layout_weight="1"
-                android:backgroundTint="#1F6FEB"
-                android:includeFontPadding="false"
-                android:insetTop="0dp"
-                android:insetBottom="0dp"
-                android:maxLines="3"
-                android:padding="2dp"
-                android:text="СЕРЖ&#10;€1 000,00&#10;+0,00%"
-                android:textColor="#FFFFFF"
-                android:textSize="10sp"
-                android:textStyle="bold" />
+                android:layout_marginTop="5dp"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/btnGeminiExitExperiment"
+                    android:layout_width="0dp"
+                    android:layout_height="68dp"
+                    android:layout_weight="1"
+                    android:backgroundTint="#9A6700"
+                    android:includeFontPadding="false"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:maxLines="3"
+                    android:padding="2dp"
+                    android:text="GEMINI‑ЭКСП.&#10;€1 000,00&#10;+0,00%"
+                    android:textColor="#FFFFFF"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+
+                <Button
+                    android:id="@+id/btnUserPaper"
+                    android:layout_width="0dp"
+                    android:layout_height="68dp"
+                    android:layout_marginStart="5dp"
+                    android:layout_weight="1"
+                    android:backgroundTint="#1F6FEB"
+                    android:includeFontPadding="false"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:maxLines="3"
+                    android:padding="2dp"
+                    android:text="СЕРЖ&#10;€1 000,00&#10;+0,00%"
+                    android:textColor="#FFFFFF"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
         </LinearLayout>
 
         <Button
@@ -132,7 +161,7 @@
             android:layout_height="50dp"
             android:layout_marginTop="7dp"
             android:backgroundTint="#1F6FEB"
-            android:text="СРАВНИТЬ 3  •  GEMINI  |  APP  |  СЕРЖ"
+            android:text="СРАВНИТЬ 4  •  APP | GEMINI | ЭКСП. | СЕРЖ"
             android:textColor="#FFFFFF"
             android:textSize="13sp"
             android:textStyle="bold" />

@@ -40,6 +40,10 @@
             android:exported="false"
             android:screenOrientation="portrait" />
         <activity
+            android:name=".GeminiExitExperimentActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+        <activity
             android:name=".AppPaperActivity"
             android:exported="false"
             android:screenOrientation="portrait" />

@@ -89,4 +89,20 @@ class AppPaperTraderTest {
         assertEquals(1, next.decisions.size)
         assertEquals("new", next.decisions.single().reason)
     }
+
+    @Test
+    fun `app trade alert policy returns only newly executed trades`() {
+        val before = AppPaperPortfolio()
+        val after = AppPaperTrader.apply(
+            before,
+            AppPaperEvaluation(
+                1_000L, 2.0, "BUY", "entry",
+                StrategyV2.MODE_TREND, 2.0
+            ),
+            now = 2_000L
+        )
+
+        assertEquals(listOf("BUY"), AppTradeAlertPolicy.newlyExecutedTrades(before, after).map { it.action })
+        assertTrue(AppTradeAlertPolicy.newlyExecutedTrades(after, after).isEmpty())
+    }
 }

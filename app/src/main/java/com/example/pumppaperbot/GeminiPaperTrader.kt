@@ -161,7 +161,8 @@ data class GeminiPaperPortfolio(
     val peakValueEur: Double = START_BALANCE,
     val maxDrawdownPercent: Double = 0.0,
     val causalPeakValueEur: Double = 0.0,
-    val causalMaxDrawdownPercent: Double = 0.0
+    val causalMaxDrawdownPercent: Double = 0.0,
+    val positionPeakPrice: Double = 0.0
 ) {
     fun value(price: Double): Double = cashEur + pumpAmount * max(0.0, price)
     fun profit(price: Double): Double = value(price) - START_BALANCE
@@ -440,7 +441,53 @@ object GeminiPaperTrader {
             peakValueEur = peak,
             maxDrawdownPercent = maxDrawdown,
             causalPeakValueEur = causalPeak,
-            causalMaxDrawdownPercent = causalMaxDrawdown
+            causalMaxDrawdownPercent = causalMaxDrawdown,
+            positionPeakPrice = when {
+                amount <= 0.0 -> 0.0
+                working.inPosition -> max(working.positionPeakPrice, price)
+                else -> price
+            }
+        )
+    }
+
+    fun applyProtectiveExit(
+        current: GeminiPaperPortfolio,
+        price: Double,
+        decisionId: Long,
+        reason: String,
+        now: Long = System.currentTimeMillis()
+    ): GeminiPaperPortfolio {
+        if (!current.inPosition || price <= 0.0 || decisionId <= 0L) return current
+        val soldAmount = current.pumpAmount
+        val gross = soldAmount * price
+        val fee = gross * FEE_RATE
+        val matchingBuy = current.trades.lastOrNull { it.action == "BUY" }
+        val buyFee = matchingBuy?.fee ?: 0.0
+        val pnl = gross - fee - (soldAmount * current.entryPrice + buyFee)
+        val trade = GeminiPaperTrade(
+            time = now,
+            decisionId = decisionId,
+            action = "SELL",
+            price = price,
+            amount = soldAmount,
+            fee = fee,
+            score = -100,
+            confidence = 100,
+            reason = reason,
+            pnlEur = pnl,
+            methodVersion = GeminiHourlyDecision.CAUSAL_EVALUATION_VERSION
+        )
+        val cash = current.cashEur + gross - fee
+        return current.copy(
+            cashEur = cash,
+            pumpAmount = 0.0,
+            entryPrice = 0.0,
+            lastDecisionId = max(current.lastDecisionId, decisionId),
+            trades = addTrade(current.trades, trade),
+            totalFeesEur = current.totalFeesEur + fee,
+            peakValueEur = max(current.peakValueEur, cash),
+            causalPeakValueEur = max(current.causalPeakValueEur, cash),
+            positionPeakPrice = 0.0
         )
     }
 
@@ -502,16 +549,23 @@ object GeminiPaperTrader {
         }
         val causalDrawdown = if (causalPeak > 0.0) (1.0 - value / causalPeak) * 100.0 else 0.0
         val causalMaxDrawdown = max(current.causalMaxDrawdownPercent, causalDrawdown)
+        val positionPeakPrice = if (current.inPosition) {
+            max(max(current.positionPeakPrice, current.entryPrice), price)
+        } else {
+            0.0
+        }
         return if (peak != current.peakValueEur ||
             maxDrawdown != current.maxDrawdownPercent ||
             causalPeak != current.causalPeakValueEur ||
-            causalMaxDrawdown != current.causalMaxDrawdownPercent
+            causalMaxDrawdown != current.causalMaxDrawdownPercent ||
+            positionPeakPrice != current.positionPeakPrice
         ) {
             current.copy(
                 peakValueEur = peak,
                 maxDrawdownPercent = maxDrawdown,
                 causalPeakValueEur = causalPeak,
-                causalMaxDrawdownPercent = causalMaxDrawdown
+                causalMaxDrawdownPercent = causalMaxDrawdown,
+                positionPeakPrice = positionPeakPrice
             )
         } else {
             current
@@ -551,21 +605,17 @@ internal object GeminiExecutionPolicy {
     }
 }
 
-internal object GeminiBuyAlertPolicy {
-    fun newlyExecutedBuy(
+internal object GeminiTradeAlertPolicy {
+    fun newlyExecutedTrade(
         before: GeminiPaperPortfolio,
         after: GeminiPaperPortfolio,
         decisionId: Long
     ): GeminiPaperTrade? {
-        if (decisionId <= before.lastDecisionId || after.lastDecisionId != decisionId) return null
-        val trade = after.trades.lastOrNull {
-            it.decisionId == decisionId && it.action == "BUY"
+        if (after.trades.size <= before.trades.size) return null
+        val trade = after.trades.drop(before.trades.size).lastOrNull {
+            it.decisionId == decisionId && it.action in setOf("BUY", "SELL")
         } ?: return null
-        return trade.takeIf { candidate ->
-            before.trades.none {
-                it.decisionId == candidate.decisionId && it.action == candidate.action
-            }
-        }
+        return trade
     }
 }
 
@@ -724,7 +774,7 @@ object GeminiPaperStore {
             context,
             stage = "УПРАВЛЕНИЕ",
             result = if (enabled) "OK" else "WAIT",
-            detail = if (enabled) "Gemini‑эксперимент включён" else "Gemini‑эксперимент выключен"
+            detail = if (enabled) "Gemini включён" else "Gemini выключен"
         )
     }
 
@@ -939,7 +989,7 @@ object GeminiPaperStore {
         prefs(context).edit().clear().putBoolean(KEY_ENABLED, true).apply()
     }
 
-    private fun loadPortfolio(raw: String?): GeminiPaperPortfolio {
+    internal fun loadPortfolio(raw: String?): GeminiPaperPortfolio {
         if (raw.isNullOrBlank()) return GeminiPaperPortfolio()
         return runCatching {
             val json = JSONObject(raw)
@@ -966,7 +1016,8 @@ object GeminiPaperStore {
                 causalMaxDrawdownPercent = json.optDouble(
                     "causalMaxDrawdownPercent",
                     0.0
-                )
+                ),
+                positionPeakPrice = json.optDouble("positionPeakPrice", 0.0)
             )
         }.getOrDefault(GeminiPaperPortfolio())
     }
@@ -981,7 +1032,7 @@ object GeminiPaperStore {
         }.getOrDefault(emptyList())
     }
 
-    private fun portfolioToJson(value: GeminiPaperPortfolio): JSONObject = JSONObject()
+    internal fun portfolioToJson(value: GeminiPaperPortfolio): JSONObject = JSONObject()
         .put("cashEur", value.cashEur)
         .put("pumpAmount", value.pumpAmount)
         .put("entryPrice", value.entryPrice)
@@ -993,6 +1044,7 @@ object GeminiPaperStore {
         .put("maxDrawdownPercent", value.maxDrawdownPercent)
         .put("causalPeakValueEur", value.causalPeakValueEur)
         .put("causalMaxDrawdownPercent", value.causalMaxDrawdownPercent)
+        .put("positionPeakPrice", value.positionPeakPrice)
 
     private fun loadPendingDecision(raw: String?): GeminiPendingDecision? {
         if (raw.isNullOrBlank()) return null
