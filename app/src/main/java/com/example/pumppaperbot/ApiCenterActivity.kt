@@ -1,6 +1,9 @@
 package com.example.pumppaperbot
 
 import android.app.AlertDialog
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Color
@@ -15,6 +18,7 @@ import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import java.util.Locale
 import java.util.concurrent.Executors
@@ -71,6 +75,9 @@ class ApiCenterActivity : AppCompatActivity() {
             setOnClickListener { testNow() }
         }, params(dp(58), dp(8)))
         if (provider == DEEPSEEK) {
+            content.addView(button("СКОПИРОВАТЬ ДИАГНОСТИКУ", "#1F6FEB").apply {
+                setOnClickListener { copyDiagnostics() }
+            }, params(dp(54), dp(4)))
             content.addView(button("ПОДЕЛИТЬСЯ ДИАГНОСТИКОЙ", "#1F6FEB").apply {
                 setOnClickListener { shareDiagnostics() }
             }, params(dp(54), dp(4)))
@@ -83,6 +90,7 @@ class ApiCenterActivity : AppCompatActivity() {
         usage = panel()
         content.addView(usage, params(-2, dp(8)))
         content.addView(label("ПОСЛЕДНИЕ ОБРАЩЕНИЯ", 19, "#F0F6FC", true))
+        content.addView(label("Новые записи сверху. События старых версий сохранены для истории и помечены отдельно.", 13, "#8B949E", false))
         log = panel()
         content.addView(log, params(-2, dp(4)))
         setContentView(ScrollView(this).apply { addView(content) })
@@ -264,9 +272,12 @@ class ApiCenterActivity : AppCompatActivity() {
     }
 
     private fun renderUsage() {
-        val summary = ApiUsageLogStore.summary(this, provider)
+        val summary = ApiUsageLogStore.summary(this, provider, appVersion = BuildConfig.VERSION_NAME)
+        val allVersions = ApiUsageLogStore.summary(this, provider)
+        val olderRequests = (allVersions.requestsToday - summary.requestsToday).coerceAtLeast(0)
+        val olderErrors = (allVersions.errorsToday - summary.errorsToday).coerceAtLeast(0)
         usage.text = buildString {
-            append("ФАКТИЧЕСКАЯ НАГРУЗКА\n")
+            append("ФАКТИЧЕСКАЯ НАГРУЗКА • V${BuildConfig.VERSION_NAME}\n")
             append("За 60 секунд: ${summary.requestsLastMinute} запросов • ${(summary.requestsLastMinute / 60.0).format(3)} запр./сек")
             append("\nЗа час: ${summary.requestsLastHour} • сегодня отправлено: ${summary.requestsToday}")
             append("\nУспешно: ${summary.successesToday} • ошибок: ${summary.errorsToday}")
@@ -277,6 +288,10 @@ class ApiCenterActivity : AppCompatActivity() {
                 append("\nОценка без скидки кэша: $${summary.estimatedCostUsdToday.format(4)} сегодня")
                 append(" • $${projected.format(2)} за 30 таких дней")
             }
+            if (olderRequests > 0 || olderErrors > 0) {
+                append("\nСтарые версии сегодня: $olderRequests запросов • $olderErrors ошибок")
+                append(" (не входят в показатели V${BuildConfig.VERSION_NAME})")
+            }
         }
     }
 
@@ -284,7 +299,9 @@ class ApiCenterActivity : AppCompatActivity() {
         val events = ApiUsageLogStore.list(this, provider).takeLast(20).asReversed()
         log.text = if (events.isEmpty()) "После первого реального обращения здесь появится точный журнал." else
             events.joinToString("\n\n") {
-                "${time(it.at)} • ${it.circuit} • ${shortModel(it.model)} • ${it.status}\n" +
+                val version = it.appVersion.takeIf(String::isNotBlank)?.let { value -> "V$value" }
+                    ?: "СТАРАЯ ВЕРСИЯ"
+                "${time(it.at)} • $version • ${it.circuit} • ${shortModel(it.model)} • ${it.status}\n" +
                     "${if (it.durationMillis > 0L) "${it.durationMillis / 1000.0} сек • " else ""}${it.detail}"
             }
     }
@@ -303,6 +320,13 @@ class ApiCenterActivity : AppCompatActivity() {
         startActivity(Intent.createChooser(intent, "Отправить диагностику"))
     }
 
+    private fun copyDiagnostics() {
+        val report = DeepSeekDiagnostics.report(this)
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText("PumpSignal diagnostics", report))
+        Toast.makeText(this, "Диагностика скопирована. Вставь её в ChatGPT.", Toast.LENGTH_LONG).show()
+    }
+
     private fun roleText(): String = if (provider == DEEPSEEK) {
         "Flash проверяет весь рынок каждые 5 минут и при существенном изменении сигнала. Pro подключается сразу после «Я купил» и при опасности."
     } else {
@@ -312,6 +336,7 @@ class ApiCenterActivity : AppCompatActivity() {
     private fun panel() = label("", 14, "#C9D1D9", false).apply {
         setBackgroundColor(Color.parseColor("#161B22"))
         setPadding(dp(10), dp(10), dp(10), dp(10))
+        setTextIsSelectable(true)
     }
 
     private fun shortModel(model: String): String = when {

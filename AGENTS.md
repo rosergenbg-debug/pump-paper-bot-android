@@ -56,6 +56,7 @@ Serge values timely, unmistakable phone alerts. APP and Gemini must each generat
 - V4.2: dedicated DeepSeek/Gemini API centers, DeepSeek signal gauge, five-minute rich-market analysis and two-hour routine Gemini cadence, code 57, current work.
 - V4.3: freshness-labelled live price, 15-second spot trade/top-book stream and closed 5-minute spot/futures flow supplied to DeepSeek without changing StrategyV2 or paid-call cadence, code 58, current work.
 - V4.4: finish-reason-aware DeepSeek JSON recovery, economical reasoning, stale-signal suppression and shareable redacted diagnostics, code 59, current work.
+- V4.5: copyable/selectable diagnostics with per-version API telemetry separation, code 60, current work.
 
 ## Verification before delivery
 

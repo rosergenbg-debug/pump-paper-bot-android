@@ -63,6 +63,20 @@ class DeepSeekStructuredResponseTest {
         assertEquals(1.305, DeepSeekCostPolicy.estimateUsd(pro), 0.000001)
     }
 
+    @Test fun `usage event keeps producing app version and reads legacy event safely`() {
+        val current = ApiUsageEvent("DEEPSEEK", "TEST", "deepseek-v4-flash", "OK", 1L)
+        val restored = ApiUsageEvent.fromJson(current.toJson())
+        val legacy = ApiUsageEvent.fromJson(JSONObject()
+            .put("provider", "DEEPSEEK")
+            .put("circuit", "TEST")
+            .put("model", "deepseek-v4-flash")
+            .put("status", "ERROR")
+            .put("at", 1L))
+
+        assertEquals(BuildConfig.VERSION_NAME, restored.appVersion)
+        assertEquals("", legacy.appVersion)
+    }
+
     @Test fun `signal becomes stale after twelve minutes`() {
         val state = DeepSeekPrimaryState(lastSuccess = 1_000L)
 

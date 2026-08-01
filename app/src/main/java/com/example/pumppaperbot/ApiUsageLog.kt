@@ -16,7 +16,8 @@ data class ApiUsageEvent(
     val durationMillis: Long = 0L,
     val promptTokens: Int = 0,
     val outputTokens: Int = 0,
-    val detail: String = ""
+    val detail: String = "",
+    val appVersion: String = BuildConfig.VERSION_NAME
 ) {
     fun toJson() = JSONObject()
         .put("provider", provider)
@@ -28,6 +29,7 @@ data class ApiUsageEvent(
         .put("promptTokens", promptTokens)
         .put("outputTokens", outputTokens)
         .put("detail", detail)
+        .put("appVersion", appVersion)
 
     companion object {
         fun fromJson(json: JSONObject) = ApiUsageEvent(
@@ -39,7 +41,8 @@ data class ApiUsageEvent(
             durationMillis = json.optLong("durationMillis"),
             promptTokens = json.optInt("promptTokens").coerceAtLeast(0),
             outputTokens = json.optInt("outputTokens").coerceAtLeast(0),
-            detail = json.optString("detail").take(500)
+            detail = json.optString("detail").take(500),
+            appVersion = json.optString("appVersion")
         )
     }
 }
@@ -82,8 +85,15 @@ object ApiUsageLogStore {
         if (provider == null) parsed else parsed.filter { it.provider.equals(provider, true) }
     }
 
-    fun summary(context: Context, provider: String, now: Long = System.currentTimeMillis()): ApiUsageSummary {
-        val events = list(context, provider)
+    fun summary(
+        context: Context,
+        provider: String,
+        now: Long = System.currentTimeMillis(),
+        appVersion: String? = null
+    ): ApiUsageSummary {
+        val events = list(context, provider).let { source ->
+            if (appVersion == null) source else source.filter { it.appVersion == appVersion }
+        }
         val todayStart = now - now % (24L * 60L * 60L * 1000L)
         val requests = events.filter { it.status == "START" || it.status == "RETRY" }
         val today = events.filter { it.at >= todayStart }
@@ -126,6 +136,7 @@ object DeepSeekDiagnostics {
         val impulse = ImpulseRadarStore.state(context)
         val micro = MicroImpulseStore.state(context)
         val usage = ApiUsageLogStore.summary(context, "DEEPSEEK", now)
+        val currentUsage = ApiUsageLogStore.summary(context, "DEEPSEEK", now, BuildConfig.VERSION_NAME)
         val events = ApiUsageLogStore.list(context, "DEEPSEEK").takeLast(60).asReversed()
         return buildString {
             appendLine("PumpSignal V${BuildConfig.VERSION_NAME} • DeepSeek diagnostics")
@@ -150,10 +161,11 @@ object DeepSeekDiagnostics {
             appendLine("USAGE TODAY")
             appendLine("httpRequests=${usage.requestsToday} ok=${usage.successesToday} errors=${usage.errorsToday} repairs=${usage.retriesToday}")
             appendLine("tokens=${usage.promptTokensToday} input + ${usage.outputTokensToday} output estimatedCostUsd=${"%.5f".format(Locale.US, usage.estimatedCostUsdToday)}")
+            appendLine("currentVersion=${BuildConfig.VERSION_NAME} httpRequests=${currentUsage.requestsToday} ok=${currentUsage.successesToday} errors=${currentUsage.errorsToday} repairs=${currentUsage.retriesToday}")
             appendLine()
             appendLine("RECENT API EVENTS (newest first)")
             events.forEach { event ->
-                appendLine("${stamp(event.at)} | ${event.circuit} | ${event.model} | ${event.status} | ${event.durationMillis}ms | ${event.promptTokens}+${event.outputTokens} | ${event.detail.replace('\n', ' ').take(500)}")
+                appendLine("${stamp(event.at)} | version=${event.appVersion.ifBlank { "legacy" }} | ${event.circuit} | ${event.model} | ${event.status} | ${event.durationMillis}ms | ${event.promptTokens}+${event.outputTokens} | ${event.detail.replace('\n', ' ').take(500)}")
             }
             appendLine()
             append("API keys and request payloads are intentionally excluded.")
