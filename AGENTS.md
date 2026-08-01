@@ -57,6 +57,7 @@ Serge values timely, unmistakable phone alerts. APP and Gemini must each generat
 - V4.3: freshness-labelled live price, 15-second spot trade/top-book stream and closed 5-minute spot/futures flow supplied to DeepSeek without changing StrategyV2 or paid-call cadence, code 58, current work.
 - V4.4: finish-reason-aware DeepSeek JSON recovery, economical reasoning, stale-signal suppression and shareable redacted diagnostics, code 59, current work.
 - V4.5: copyable/selectable diagnostics with per-version API telemetry separation, code 60, current work.
+- V4.6: provider-parity diagnostics, manual self-diagnostics, accurate completion timestamps and Russian-only visible AI output, code 61, current work.
 
 ## Accumulated next-release backlog
 
@@ -68,6 +69,8 @@ Serge values timely, unmistakable phone alerts. APP and Gemini must each generat
 - The manual provider check for both DeepSeek and Gemini must run an expanded self-diagnostic, not merely a connectivity ping. It must verify the provider/API path, selected model and response parsing, current market-data freshness/availability, relevant scheduler/circuit state, telemetry persistence and the provider's other implemented runtime prerequisites. Record a clear PASS/WARN/FAIL result for every check and append the run to the provider log.
 - The copied redacted report must be sufficiently complete for another AI or developer to audit observable behaviour: include sanitized input/context summaries, executed stages, accepted action/output and reason/evidence fields, timestamps/durations, token usage, finish state, errors and recovery attempts, plus the self-diagnostic results. Do not claim or attempt to expose a model's private chain-of-thought; use observable decision traces and concise model-supplied reasons instead. Continue excluding API keys, authorization data and full sensitive request payloads.
 - Implement the provider-diagnostics parity and expanded self-diagnostic together in a future accumulated release. Do not change either provider's trading authority, strategy thresholds or paid automatic cadence merely to add diagnostics, and do not create a standalone APK until the accumulated release is deliberately scoped.
+- V4.6 scopes all open items above together. Mark them complete only after tests, Android compilation, APK inspection and compatible final signing pass.
+- Permanent language invariant: all user-visible AI conclusions, reasons, evidence, risks, errors and copied diagnostics must be in Russian. DeepSeek/Gemini prompts must demand Russian, runtime validation must reject Han-script output, and persisted legacy text containing Han characters must be hidden behind a Russian explanatory placeholder rather than displayed.
 
 ## Verification before delivery
 

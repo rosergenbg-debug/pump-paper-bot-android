@@ -74,14 +74,12 @@ class ApiCenterActivity : AppCompatActivity() {
         content.addView(button("ПРОВЕРИТЬ API СЕЙЧАС", if (provider == DEEPSEEK) "#238636" else "#7C3AED").apply {
             setOnClickListener { testNow() }
         }, params(dp(58), dp(8)))
-        if (provider == DEEPSEEK) {
-            content.addView(button("СКОПИРОВАТЬ ДИАГНОСТИКУ", "#1F6FEB").apply {
-                setOnClickListener { copyDiagnostics() }
-            }, params(dp(54), dp(4)))
-            content.addView(button("ПОДЕЛИТЬСЯ ДИАГНОСТИКОЙ", "#1F6FEB").apply {
-                setOnClickListener { shareDiagnostics() }
-            }, params(dp(54), dp(4)))
-        }
+        content.addView(button("СКОПИРОВАТЬ ДИАГНОСТИКУ", "#1F6FEB").apply {
+            setOnClickListener { copyDiagnostics() }
+        }, params(dp(54), dp(4)))
+        content.addView(button("ПОДЕЛИТЬСЯ ДИАГНОСТИКОЙ", "#1F6FEB").apply {
+            setOnClickListener { shareDiagnostics() }
+        }, params(dp(54), dp(4)))
         progress = ProgressBar(this).apply { visibility = View.GONE }
         content.addView(progress, params(dp(36), dp(2)))
 
@@ -201,15 +199,19 @@ class ApiCenterActivity : AppCompatActivity() {
             return
         }
         progress.visibility = View.VISIBLE
-        liveStatus.text = "$provider: выполняется реальный контрольный запрос…"
+        liveStatus.text = "$provider: выполняется контрольный запрос и расширенная самодиагностика…"
         executor.execute {
-            if (provider == DEEPSEEK) {
-                val key = DeepSeekSecureKeyStore.read(this)
-                DeepSeekKeyVerifier().verify(this, key)
-                DeepSeekPrimaryAnalyst().sync(this, force = true)
-            } else {
-                EventRadarClient().testGemini(this)
+            val started = System.currentTimeMillis()
+            runCatching {
+                if (provider == DEEPSEEK) {
+                    val key = DeepSeekSecureKeyStore.read(this)
+                    DeepSeekKeyVerifier().verify(this, key)
+                    DeepSeekPrimaryAnalyst().sync(this, force = true)
+                } else {
+                    EventRadarClient().testGemini(this)
+                }
             }
+            ProviderSelfDiagnostics.run(this, provider, started)
             main.post {
                 progress.visibility = View.GONE
                 updateUi()
@@ -311,19 +313,19 @@ class ApiCenterActivity : AppCompatActivity() {
     } else EventRadarStore.apiKey(this).isNotBlank()
 
     private fun shareDiagnostics() {
-        val report = DeepSeekDiagnostics.report(this)
+        val report = ProviderDiagnostics.report(this, provider)
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
-            putExtra(Intent.EXTRA_SUBJECT, "PumpSignal V${BuildConfig.VERSION_NAME} DeepSeek diagnostics")
+            putExtra(Intent.EXTRA_SUBJECT, "PumpSignal V${BuildConfig.VERSION_NAME} • диагностика $provider")
             putExtra(Intent.EXTRA_TEXT, report)
         }
         startActivity(Intent.createChooser(intent, "Отправить диагностику"))
     }
 
     private fun copyDiagnostics() {
-        val report = DeepSeekDiagnostics.report(this)
+        val report = ProviderDiagnostics.report(this, provider)
         val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        clipboard.setPrimaryClip(ClipData.newPlainText("PumpSignal diagnostics", report))
+        clipboard.setPrimaryClip(ClipData.newPlainText("Диагностика PumpSignal $provider", report))
         Toast.makeText(this, "Диагностика скопирована. Вставь её в ChatGPT.", Toast.LENGTH_LONG).show()
     }
 

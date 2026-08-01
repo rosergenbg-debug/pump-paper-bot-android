@@ -58,8 +58,8 @@ data class PositionSupervisionState(
             exitBaselineDanger = json.optInt("exitBaselineDanger").coerceIn(0, 10),
             conditionDelta = json.optInt("conditionDelta").coerceIn(-10, 10),
             dangerLevel = json.optInt("dangerLevel").coerceIn(0, 10),
-            summary = json.optString("summary", "Ожидает открытия позиции"),
-            error = json.optString("error"),
+            summary = RussianOutputPolicy.visible(json.optString("summary", "Ожидает открытия позиции")),
+            error = RussianOutputPolicy.visible(json.optString("error")),
             promptTokens = json.optInt("promptTokens"),
             completionTokens = json.optInt("completionTokens")
         )
@@ -144,7 +144,8 @@ private data class SupervisorApiResult(
     val summary: String,
     val promptTokens: Int,
     val completionTokens: Int,
-    val repaired: Boolean
+    val repaired: Boolean,
+    val finishReason: String
 )
 
 class PositionSupervisorClient {
@@ -194,7 +195,11 @@ class PositionSupervisorClient {
         ApiUsageLogStore.record(context, ApiUsageEvent(
             provider = "DEEPSEEK", circuit = "ПОЗИЦИЯ СЕРЖА", model = model,
             status = "START", at = started,
-            detail = if (forceCritical) "немедленная усиленная проверка" else "контроль открытой позиции"
+            detail = buildString {
+                append(if (forceCritical) "немедленная усиленная проверка" else "контроль открытой позиции")
+                append(" • direction=${snapshot.directionScore} rsi=${snapshot.lastRsi}")
+                append(" entry=${snapshot.entryPrice}")
+            }
         ))
         return runCatching {
             var usedModel = model
@@ -210,12 +215,17 @@ class PositionSupervisorClient {
             usedModel to result
         }.fold(
             onSuccess = { (usedModel, result) ->
+                val completedAt = System.currentTimeMillis()
                 ApiUsageLogStore.record(context, ApiUsageEvent(
                     provider = "DEEPSEEK", circuit = "ПОЗИЦИЯ СЕРЖА", model = usedModel,
-                    status = "OK", at = System.currentTimeMillis(),
-                    durationMillis = System.currentTimeMillis() - started,
+                    status = "OK", at = completedAt,
+                    durationMillis = completedAt - started,
                     promptTokens = result.promptTokens, outputTokens = result.completionTokens,
-                    detail = if (result.repaired) "Ответ восстановлен коротким повтором • ${result.summary}" else result.summary
+                    detail = buildString {
+                        append("finish=${result.finishReason} • action=${result.action} danger=${result.dangerLevel} • ")
+                        if (result.repaired) append("ответ восстановлен коротким повтором • ")
+                        append(result.summary)
+                    }.take(500)
                 ))
                 val firstExit = result.action == "EXIT" && !previous.exitAdvised
                 val cancelExit = result.action == "CANCEL_EXIT" && previous.exitAdvised
@@ -227,7 +237,7 @@ class PositionSupervisorClient {
                 val updated = previous.copy(
                     positionEntryTime = snapshot.entryTime,
                     lastAttempt = now,
-                    lastSuccess = now,
+                    lastSuccess = completedAt,
                     model = usedModel,
                     action = result.action,
                     exitAdvised = stillExit,
@@ -362,6 +372,7 @@ class PositionSupervisorClient {
             просроченные/null-поля текущими. Краткий микровсплеск сам по себе не является причиной EXIT.
             Верни только JSON: action HOLD, EXIT или CANCEL_EXIT; condition_delta целое от -10 до +10;
             danger_level целое от 0 до 10; summary кратко по-русски.
+            Все текстовые значения пиши только на русском языке. Китайские иероглифы запрещены.
             condition_delta сравнивает ситуацию с моментом первого EXIT: отрицательное означает ухудшение,
             положительное — улучшение. CANCEL_EXIT допустим только если прежняя причина выхода действительно исчезла.
             Если previous_exit_advised=true, возвращай EXIT до тех пор, пока отмена не стала обоснованной;
@@ -381,6 +392,8 @@ class PositionSupervisorClient {
                     !json.has("condition_delta") -> "нет condition_delta"
                     !json.has("danger_level") -> "нет danger_level"
                     json.optString("summary").isBlank() -> "нет summary"
+                    RussianOutputPolicy.validate(json.optString("summary")) != null ->
+                        RussianOutputPolicy.validate(json.optString("summary"))
                     else -> null
                 }
             },
@@ -402,7 +415,8 @@ class PositionSupervisorClient {
             summary = json.optString("summary", "DeepSeek не дал пояснение").take(500),
             promptTokens = response.promptTokens,
             completionTokens = response.completionTokens,
-            repaired = response.repaired
+            repaired = response.repaired,
+            finishReason = response.finishReason
         )
     }
 }

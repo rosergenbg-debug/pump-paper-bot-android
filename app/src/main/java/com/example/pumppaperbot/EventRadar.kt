@@ -55,7 +55,7 @@ data class MarketEvent(
             source = json.optString("source"),
             sourceUrl = json.optString("sourceUrl"),
             title = json.optString("title"),
-            summary = json.optString("summary"),
+            summary = RussianOutputPolicy.visible(json.optString("summary")),
             link = json.optString("link"),
             publishedAt = json.optLong("publishedAt"),
             receivedAt = json.optLong("receivedAt"),
@@ -63,7 +63,7 @@ data class MarketEvent(
             importance = json.optInt("importance"),
             confidence = json.optInt("confidence"),
             category = json.optString("category"),
-            explanation = json.optString("explanation"),
+            explanation = RussianOutputPolicy.visible(json.optString("explanation")),
             aiAnalyzed = json.optBoolean("aiAnalyzed")
         )
     }
@@ -97,7 +97,7 @@ data class EventSourceCheck(
             downloadedBytes = json.optInt("downloadedBytes"),
             parsedEntries = json.optInt("parsedEntries"),
             checkedAt = json.optLong("checkedAt"),
-            error = json.optString("error")
+            error = RussianOutputPolicy.visible(json.optString("error"))
         )
     }
 }
@@ -157,11 +157,11 @@ data class GeminiDiagnostics(
             status = json.optString("status", "НЕ ПРОВЕРЕН"),
             httpCode = json.optInt("httpCode"),
             model = json.optString("model"),
-            inputTitle = json.optString("inputTitle"),
-            outputSummary = json.optString("outputSummary"),
-            detailedAnalysis = json.optString("detailedAnalysis"),
-            evidence = json.optJSONArray("evidence")?.toStringList().orEmpty(),
-            risks = json.optJSONArray("risks")?.toStringList().orEmpty(),
+            inputTitle = RussianOutputPolicy.visible(json.optString("inputTitle")),
+            outputSummary = RussianOutputPolicy.visible(json.optString("outputSummary")),
+            detailedAnalysis = RussianOutputPolicy.visible(json.optString("detailedAnalysis")),
+            evidence = json.optJSONArray("evidence")?.toStringList().orEmpty().map { RussianOutputPolicy.visible(it) },
+            risks = json.optJSONArray("risks")?.toStringList().orEmpty().map { RussianOutputPolicy.visible(it) },
             horizonHours = json.optInt("horizonHours"),
             directionScore = json.optInt("directionScore"),
             importance = json.optInt("importance"),
@@ -174,8 +174,8 @@ data class GeminiDiagnostics(
             webReferenceTitles = json.optJSONArray("webReferenceTitles")?.let { array ->
                 (0 until array.length()).mapNotNull { array.optString(it).takeIf(String::isNotBlank) }
             }.orEmpty(),
-            error = json.optString("error"),
-            lastAutoNote = json.optString("lastAutoNote")
+            error = RussianOutputPolicy.visible(json.optString("error")),
+            lastAutoNote = RussianOutputPolicy.visible(json.optString("lastAutoNote"))
         )
 
         private fun JSONArray.toStringList(): List<String> =

@@ -41,7 +41,7 @@ data class ApiUsageEvent(
             durationMillis = json.optLong("durationMillis"),
             promptTokens = json.optInt("promptTokens").coerceAtLeast(0),
             outputTokens = json.optInt("outputTokens").coerceAtLeast(0),
-            detail = json.optString("detail").take(500),
+            detail = RussianOutputPolicy.visible(json.optString("detail")).take(500),
             appVersion = json.optString("appVersion")
         )
     }
@@ -139,36 +139,38 @@ object DeepSeekDiagnostics {
         val currentUsage = ApiUsageLogStore.summary(context, "DEEPSEEK", now, BuildConfig.VERSION_NAME)
         val events = ApiUsageLogStore.list(context, "DEEPSEEK").takeLast(60).asReversed()
         return buildString {
-            appendLine("PumpSignal V${BuildConfig.VERSION_NAME} • DeepSeek diagnostics")
-            appendLine("Generated: ${stamp(now)}")
-            appendLine("Package: ${BuildConfig.APPLICATION_ID}")
+            appendLine("PumpSignal V${BuildConfig.VERSION_NAME} • Диагностика DeepSeek")
+            appendLine("Создано: ${stamp(now)}")
+            appendLine("Пакет: ${BuildConfig.APPLICATION_ID}")
             appendLine()
-            appendLine("PRIMARY")
-            appendLine("model=${primary.model} action=${primary.action} direction=${primary.direction} confidence=${primary.confidence} danger=${primary.danger}")
-            appendLine("lastAttempt=${stamp(primary.lastAttempt)} lastSuccess=${stamp(primary.lastSuccess)} fresh=${DeepSeekPrimaryPolicy.isFreshSignal(primary, now)}")
-            appendLine("summary=${primary.summary.take(500)}")
-            appendLine("error=${primary.error.ifBlank { "none" }.take(500)}")
+            appendLine("ОСНОВНОЙ КОНТУР")
+            appendLine("модель=${primary.model} действие=${primary.action} направление=${primary.direction} уверенность=${primary.confidence} опасность=${primary.danger}")
+            appendLine("последняяПопытка=${stamp(primary.lastAttempt)} последнийУспех=${stamp(primary.lastSuccess)} свежий=${DeepSeekPrimaryPolicy.isFreshSignal(primary, now)}")
+            appendLine("вывод=${primary.summary.take(500)}")
+            appendLine("факты=${primary.evidence.joinToString(" | ").ifBlank { "нет" }.take(1000)}")
+            appendLine("риски=${primary.risks.joinToString(" | ").ifBlank { "нет" }.take(1000)}")
+            appendLine("ошибка=${primary.error.ifBlank { "нет" }.take(500)}")
             appendLine()
-            appendLine("POSITION")
-            appendLine("open=${snapshot.waitMode == "SELL" && snapshot.entryPrice > 0.0} model=${position.model} action=${position.action} danger=${position.dangerLevel}")
-            appendLine("lastAttempt=${stamp(position.lastAttempt)} lastSuccess=${stamp(position.lastSuccess)} error=${position.error.ifBlank { "none" }.take(500)}")
+            appendLine("ПОЗИЦИЯ СЕРЖА")
+            appendLine("открыта=${snapshot.waitMode == "SELL" && snapshot.entryPrice > 0.0} модель=${position.model} действие=${position.action} опасность=${position.dangerLevel}")
+            appendLine("последняяПопытка=${stamp(position.lastAttempt)} последнийУспех=${stamp(position.lastSuccess)} ошибка=${position.error.ifBlank { "нет" }.take(500)}")
             appendLine()
-            appendLine("MARKET FRESHNESS")
-            appendLine("marketSyncAgeSec=${age(snapshot.lastSync, now)} livePriceAgeSec=${age(snapshot.livePriceAt, now)} closed30mAgeSec=${age(snapshot.lastCandle, now)}")
-            appendLine("microConnected=${micro.connected} microAgeSec=${age(micro.updatedAt, now)} microFresh=${micro.connected && DeepSeekFreshMarketContext.isFresh(micro.updatedAt, now, DeepSeekFreshMarketContext.MICRO_MAX_AGE)} microError=${micro.error.take(240)}")
-            appendLine("fiveMinuteAgeSec=${age(impulse.candleTime, now)} fiveMinuteFresh=${DeepSeekFreshMarketContext.isFresh(impulse.candleTime, now, DeepSeekFreshMarketContext.FIVE_MINUTE_MAX_AGE)} fiveMinuteError=${impulse.error.take(240)}")
+            appendLine("СВЕЖЕСТЬ РЫНКА")
+            appendLine("синхронизацияСек=${age(snapshot.lastSync, now)} живаяЦенаСек=${age(snapshot.livePriceAt, now)} свеча30мСек=${age(snapshot.lastCandle, now)}")
+            appendLine("микропотокПодключён=${micro.connected} возрастМикропотокаСек=${age(micro.updatedAt, now)} микропотокСвежий=${micro.connected && DeepSeekFreshMarketContext.isFresh(micro.updatedAt, now, DeepSeekFreshMarketContext.MICRO_MAX_AGE)} ошибкаМикропотока=${micro.error.take(240)}")
+            appendLine("слой5мВозрастСек=${age(impulse.candleTime, now)} слой5мСвежий=${DeepSeekFreshMarketContext.isFresh(impulse.candleTime, now, DeepSeekFreshMarketContext.FIVE_MINUTE_MAX_AGE)} ошибка5м=${impulse.error.take(240)}")
             appendLine()
-            appendLine("USAGE TODAY")
-            appendLine("httpRequests=${usage.requestsToday} ok=${usage.successesToday} errors=${usage.errorsToday} repairs=${usage.retriesToday}")
-            appendLine("tokens=${usage.promptTokensToday} input + ${usage.outputTokensToday} output estimatedCostUsd=${"%.5f".format(Locale.US, usage.estimatedCostUsdToday)}")
-            appendLine("currentVersion=${BuildConfig.VERSION_NAME} httpRequests=${currentUsage.requestsToday} ok=${currentUsage.successesToday} errors=${currentUsage.errorsToday} repairs=${currentUsage.retriesToday}")
+            appendLine("ИСПОЛЬЗОВАНИЕ СЕГОДНЯ")
+            appendLine("запросы=${usage.requestsToday} успешно=${usage.successesToday} ошибки=${usage.errorsToday} восстановления=${usage.retriesToday}")
+            appendLine("токены=${usage.promptTokensToday} вход + ${usage.outputTokensToday} выход оценкаСтоимостиUSD=${"%.5f".format(Locale.US, usage.estimatedCostUsdToday)}")
+            appendLine("текущаяВерсия=${BuildConfig.VERSION_NAME} запросы=${currentUsage.requestsToday} успешно=${currentUsage.successesToday} ошибки=${currentUsage.errorsToday} восстановления=${currentUsage.retriesToday}")
             appendLine()
-            appendLine("RECENT API EVENTS (newest first)")
+            appendLine("ПОСЛЕДНИЕ СОБЫТИЯ API (новые сверху)")
             events.forEach { event ->
-                appendLine("${stamp(event.at)} | version=${event.appVersion.ifBlank { "legacy" }} | ${event.circuit} | ${event.model} | ${event.status} | ${event.durationMillis}ms | ${event.promptTokens}+${event.outputTokens} | ${event.detail.replace('\n', ' ').take(500)}")
+                appendLine("${stamp(event.at)} | версия=${event.appVersion.ifBlank { "старая" }} | ${event.circuit} | ${event.model} | ${event.status} | ${event.durationMillis}мс | ${event.promptTokens}+${event.outputTokens} | ${event.detail.replace('\n', ' ').take(500)}")
             }
             appendLine()
-            append("API keys and request payloads are intentionally excluded.")
+            append("API-ключи, данные авторизации и полные запросы намеренно исключены.")
         }
     }
 

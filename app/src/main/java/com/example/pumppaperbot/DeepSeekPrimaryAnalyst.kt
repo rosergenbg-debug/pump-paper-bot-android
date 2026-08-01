@@ -62,7 +62,7 @@ data class DeepSeekPrimaryState(
             direction = json.optInt("direction").coerceIn(-100, 100),
             danger = json.optInt("danger").coerceIn(0, 10),
             confidence = json.optInt("confidence").coerceIn(0, 100),
-            summary = json.optString("summary", "Ожидает первый рыночный кадр"),
+            summary = RussianOutputPolicy.visible(json.optString("summary", "Ожидает первый рыночный кадр")),
             successfulToday = json.optInt("successfulToday").coerceAtLeast(0),
             failedToday = json.optInt("failedToday").coerceAtLeast(0),
             promptTokensToday = json.optInt("promptTokensToday").coerceAtLeast(0),
@@ -71,12 +71,12 @@ data class DeepSeekPrimaryState(
             lastLocalBuySignal = json.optBoolean("lastLocalBuySignal"),
             lastLocalSellSignal = json.optBoolean("lastLocalSellSignal"),
             evidence = json.optJSONArray("evidence")?.let { array ->
-                List(array.length()) { array.optString(it).take(240) }.filter { it.isNotBlank() }
+                List(array.length()) { RussianOutputPolicy.visible(array.optString(it)).take(240) }.filter { it.isNotBlank() }
             }.orEmpty(),
             risks = json.optJSONArray("risks")?.let { array ->
-                List(array.length()) { array.optString(it).take(240) }.filter { it.isNotBlank() }
+                List(array.length()) { RussianOutputPolicy.visible(array.optString(it)).take(240) }.filter { it.isNotBlank() }
             }.orEmpty(),
-            error = json.optString("error")
+            error = RussianOutputPolicy.visible(json.optString("error"))
         )
     }
 }
@@ -178,7 +178,8 @@ private data class DeepSeekPrimaryResult(
     val risks: List<String>,
     val promptTokens: Int,
     val completionTokens: Int,
-    val repaired: Boolean
+    val repaired: Boolean,
+    val finishReason: String
 )
 
 class DeepSeekPrimaryAnalyst {
@@ -223,24 +224,35 @@ class DeepSeekPrimaryAnalyst {
         ApiUsageLogStore.record(context, ApiUsageEvent(
             provider = "DEEPSEEK", circuit = "ОСНОВНОЙ РЫНОК",
             model = requestedModel, status = "START", at = started,
-            detail = when {
+            detail = buildString {
+                append(when {
                 force -> "ручная усиленная проверка"
                 materialChange -> "существенно изменился рыночный сигнал"
                 else -> "плановый анализ"
+                })
+                append(" • readiness=${snapshot.readinessScore} direction=${snapshot.directionScore}")
+                append(" price=${snapshot.livePrice?.takeIf { it > 0.0 } ?: snapshot.lastPrice}")
             }
         ))
         return runCatching { analyze(context, key, requestedModel, snapshot, EventRadarStore.state(context)) }.fold(
             onSuccess = { result ->
+                val completedAt = System.currentTimeMillis()
                 ApiUsageLogStore.record(context, ApiUsageEvent(
                     provider = "DEEPSEEK", circuit = "ОСНОВНОЙ РЫНОК",
-                    model = requestedModel, status = "OK", at = System.currentTimeMillis(),
-                    durationMillis = System.currentTimeMillis() - started,
+                    model = requestedModel, status = "OK", at = completedAt,
+                    durationMillis = completedAt - started,
                     promptTokens = result.promptTokens, outputTokens = result.completionTokens,
-                    detail = if (result.repaired) "Ответ восстановлен коротким повтором • ${result.summary}" else result.summary
+                    detail = buildString {
+                        append("finish=${result.finishReason} • action=${result.action} • ")
+                        if (result.repaired) append("ответ восстановлен коротким повтором • ")
+                        append(result.summary)
+                        if (result.evidence.isNotEmpty()) append(" • факты: ${result.evidence.joinToString("; ")}")
+                        if (result.risks.isNotEmpty()) append(" • риски: ${result.risks.joinToString("; ")}")
+                    }.take(500)
                 ))
                 previous.copy(
                     lastAttempt = now,
-                    lastSuccess = now,
+                    lastSuccess = completedAt,
                     model = requestedModel,
                     action = result.action,
                     direction = result.direction,
@@ -356,6 +368,7 @@ class DeepSeekPrimaryAnalyst {
             action BUY, HOLD, WATCH или EXIT; direction целое -100..100; danger целое 0..10;
             confidence целое 0..100; summary одно короткое конкретное предложение по-русски;
             evidence массив из 2–4 коротких фактов; risks массив из 1–3 условий, которые опровергнут вывод.
+            Все текстовые значения без исключения пиши только на русском языке. Китайские иероглифы запрещены.
             Если пользователь не в позиции, EXIT не используй. Если данных недостаточно, выбери WATCH.
         """.trimIndent()
         val response = DeepSeekStructuredClient(http).request(
@@ -372,6 +385,15 @@ class DeepSeekPrimaryAnalyst {
                     !json.has("danger") -> "нет danger"
                     !json.has("confidence") -> "нет confidence"
                     json.optString("summary").isBlank() -> "нет summary"
+                    RussianOutputPolicy.validate(
+                        json.optString("summary"),
+                        json.optJSONArray("evidence")?.toString().orEmpty(),
+                        json.optJSONArray("risks")?.toString().orEmpty()
+                    ) != null -> RussianOutputPolicy.validate(
+                        json.optString("summary"),
+                        json.optJSONArray("evidence")?.toString().orEmpty(),
+                        json.optJSONArray("risks")?.toString().orEmpty()
+                    )
                     else -> null
                 }
             },
@@ -402,7 +424,8 @@ class DeepSeekPrimaryAnalyst {
             }.orEmpty(),
             promptTokens = response.promptTokens,
             completionTokens = response.completionTokens,
-            repaired = response.repaired
+            repaired = response.repaired,
+            finishReason = response.finishReason
         )
     }
 }
