@@ -18,10 +18,19 @@ object PumpAlert {
     private const val signalChannelId = "pump_rsi_risk_signals"
     private const val rapidDropChannelId = "pump_rapid_drop_v26"
     private const val eventRadarChannelId = "pump_event_radar_v3"
+    private const val appTradeChannelId = "pump_app_trades_v319"
+    private const val geminiTradeChannelId = "pump_gemini_trades_v319"
+    private const val geminiExitExperimentChannelId = "pump_gemini_exit_experiment_v319"
     private const val monitorNotificationId = 3501
     private const val signalNotificationId = 3502
     private const val rapidDropNotificationId = 3503
     private const val eventRadarNotificationId = 3504
+    private const val geminiBuyNotificationId = 3505
+    private const val appBuyNotificationId = 3506
+    private const val appSellNotificationId = 3507
+    private const val geminiSellNotificationId = 3508
+    private const val geminiExperimentBuyNotificationId = 3509
+    private const val geminiExperimentSellNotificationId = 3510
     private val rapidDropVibration = longArrayOf(0, 1000, 180, 1000, 180, 1600)
 
     fun ensureChannels(context: Context) {
@@ -67,10 +76,43 @@ object PumpAlert {
             vibrationPattern = longArrayOf(0, 500, 180, 500)
             setSound(sound, attrs)
         }
+        val appTrades = NotificationChannel(
+            appTradeChannelId,
+            "APP: исполненные покупки и продажи",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "Отдельный громкий звонок после каждой виртуальной сделки стратегии APP"
+            enableVibration(true)
+            vibrationPattern = longArrayOf(0, 700, 250, 700, 250, 1100)
+            setSound(sound, attrs)
+        }
+        val geminiTrades = NotificationChannel(
+            geminiTradeChannelId,
+            "Gemini: исполненные покупки и продажи",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "Отдельный громкий звонок после каждой виртуальной сделки Gemini"
+            enableVibration(true)
+            vibrationPattern = longArrayOf(0, 700, 250, 700, 250, 1100)
+            setSound(sound, attrs)
+        }
+        val geminiExitExperiment = NotificationChannel(
+            geminiExitExperimentChannelId,
+            "Gemini‑эксперимент: входы и ранние выходы",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "Отдельный громкий звонок Gemini‑эксперимента с ранним входом и рыночным выходом"
+            enableVibration(true)
+            vibrationPattern = longArrayOf(0, 500, 180, 500, 180, 500, 180, 1100)
+            setSound(sound, attrs)
+        }
         manager.createNotificationChannel(monitor)
         manager.createNotificationChannel(signal)
         manager.createNotificationChannel(rapidDrop)
         manager.createNotificationChannel(eventRadar)
+        manager.createNotificationChannel(appTrades)
+        manager.createNotificationChannel(geminiTrades)
+        manager.createNotificationChannel(geminiExitExperiment)
     }
 
     fun monitorNotification(context: Context, text: String) =
@@ -91,11 +133,11 @@ object PumpAlert {
             delayed && AlertSchedule.pendingDirection(context) == "BUY" -> "PUMP/EUR: НОЧНОЙ СИГНАЛ — ВХОД ЕЩЁ ВОЗМОЖЕН"
             delayed -> "PUMP/EUR: НОЧНОЙ СИГНАЛ — ПРОВЕРЬТЕ ВЫХОД"
             score == 99 -> "PUMP/EUR: ГОТОВНОСТЬ К ПОКУПКЕ 99/100"
-            score == -99 -> "PUMP/EUR: ГОТОВНОСТЬ К ПРОДАЖЕ 99/100"
+            score == -99 -> "СРОЧНО ПРОВЕРЬТЕ ВЫХОД ИЗ PUMP/EUR"
             snapshot.signalAction == "BUY" -> "PUMP/EUR: +100 — ПОКУПАТЬ"
             snapshot.signalAction == StrategyV2.ACTION_SELL_HALF && snapshot.strategyMode == StrategyV2.MODE_EXHAUSTION -> "PUMP/EUR: −100 — ПРОДАТЬ 40%"
             snapshot.signalAction == StrategyV2.ACTION_SELL_HALF -> "PUMP/EUR: −100 — ПРОДАТЬ 50%"
-            else -> "PUMP/EUR: −100 — ПРОДАВАТЬ"
+            else -> "СРОЧНО ВЫЙТИ ИЗ PUMP/EUR"
         }
         val preparation = if (delayed) {
             "${AlertSchedule.delayedNotificationText(context)} "
@@ -105,6 +147,18 @@ object PumpAlert {
         val text = "$preparation${snapshot.signalReason}. Дыхание: ${snapshot.breathingState}; " +
             "поток ${if (snapshot.directionScore >= 0) "+" else ""}${snapshot.directionScore}/100; " +
             "поздний вход ${snapshot.lateEntryRisk}/100. Цена €${formatPrice(snapshot.lastPrice)}"
+        SignalAttributionStore.record(
+            context = context,
+            source = "APP",
+            kind = when {
+                kotlin.math.abs(score) == 99 -> "ГОТОВНОСТЬ ${kotlin.math.abs(score)}/100"
+                snapshot.signalAction == "BUY" -> "СИГНАЛ ВХОДА"
+                else -> "СИГНАЛ ВЫХОДА"
+            },
+            reason = "$preparation${snapshot.signalReason}",
+            at = snapshot.lastSync,
+            executedTrade = false
+        )
         val notification = NotificationCompat.Builder(context, signalChannelId)
             .setSmallIcon(R.drawable.ic_launcher)
             .setContentTitle(title)
@@ -192,6 +246,159 @@ object PumpAlert {
         context.getSystemService(NotificationManager::class.java)
             .notify(eventRadarNotificationId, notification)
         vibrate(context, longArrayOf(0, 500, 180, 500))
+    }
+
+    fun showAppTrade(context: Context, trade: AppPaperTrade) {
+        ensureChannels(context)
+        val buy = trade.action == "BUY"
+        val title = when (trade.action) {
+            "BUY" -> "APP: ВХОД В PUMP/EUR"
+            StrategyV2.ACTION_SELL_HALF -> "APP: ЧАСТИЧНЫЙ ВЫХОД ИЗ PUMP/EUR"
+            else -> "APP: ВЫХОД ИЗ PUMP/EUR"
+        }
+        val text = if (buy) {
+            String.format(
+                java.util.Locale.GERMANY,
+                "APP вложил виртуальные €%.2f по цене €%.8f. Комиссия €%.2f. %s",
+                trade.amount * trade.price + trade.fee,
+                trade.price,
+                trade.fee,
+                trade.reason
+            )
+        } else {
+            String.format(
+                java.util.Locale.GERMANY,
+                "APP продал по цене €%.8f. Результат сделки %+.2f €. Комиссия €%.2f. %s",
+                trade.price,
+                trade.pnlEur,
+                trade.fee,
+                trade.reason
+            )
+        }
+        SignalAttributionStore.record(
+            context,
+            "APP",
+            if (buy) "ВХОД" else "ВЫХОД",
+            trade.reason,
+            trade.time,
+            executedTrade = true
+        )
+        showTradeNotification(
+            context,
+            appTradeChannelId,
+            if (buy) appBuyNotificationId else appSellNotificationId,
+            title,
+            text,
+            if (buy) 0xFF238636.toInt() else 0xFFDA3633.toInt()
+        )
+    }
+
+    fun showGeminiTrade(context: Context, trade: GeminiPaperTrade) {
+        ensureChannels(context)
+        val buy = trade.action == "BUY"
+        val text = if (buy) {
+            String.format(
+                java.util.Locale.GERMANY,
+                "Gemini вложила виртуальные €%.2f по цене €%.8f. Комиссия €%.2f. " +
+                    "Оценка %+d/100, уверенность %d/100. %s",
+                trade.amount * trade.price + trade.fee,
+                trade.price,
+                trade.fee,
+                trade.score,
+                trade.confidence,
+                trade.reason
+            )
+        } else {
+            String.format(
+                java.util.Locale.GERMANY,
+                "Gemini продала всю виртуальную позицию по цене €%.8f. " +
+                    "Результат %+.2f €, комиссия €%.2f. %s",
+                trade.price,
+                trade.pnlEur,
+                trade.fee,
+                trade.reason
+            )
+        }
+        SignalAttributionStore.record(
+            context,
+            "GEMINI",
+            if (buy) "ВХОД" else "ВЫХОД",
+            trade.reason,
+            trade.time,
+            executedTrade = true
+        )
+        showTradeNotification(
+            context,
+            geminiTradeChannelId,
+            if (buy) geminiBuyNotificationId else geminiSellNotificationId,
+            if (buy) "GEMINI: ВХОД В PUMP/EUR" else "GEMINI: ВЫХОД ИЗ PUMP/EUR",
+            text,
+            if (buy) 0xFF7C3AED.toInt() else 0xFFDA3633.toInt()
+        )
+    }
+
+    fun showGeminiExitExperimentTrade(context: Context, trade: GeminiPaperTrade) {
+        ensureChannels(context)
+        val buy = trade.action == "BUY"
+        val text = if (buy) {
+            String.format(
+                java.util.Locale.GERMANY,
+                "Эксперимент вошёл по цене €%.8f и вложил виртуальные €%.2f. %s",
+                trade.price,
+                trade.amount * trade.price + trade.fee,
+                trade.reason
+            )
+        } else {
+            String.format(
+                java.util.Locale.GERMANY,
+                "Эксперимент вышел по цене €%.8f. Результат %+.2f €. Причина: %s",
+                trade.price,
+                trade.pnlEur,
+                trade.reason
+            )
+        }
+        SignalAttributionStore.record(
+            context,
+            "GEMINI‑ЭКСПЕРИМЕНТ",
+            if (buy) "ВХОД" else "ВЫХОД",
+            trade.reason,
+            trade.time,
+            executedTrade = true
+        )
+        showTradeNotification(
+            context,
+            geminiExitExperimentChannelId,
+            if (buy) geminiExperimentBuyNotificationId else geminiExperimentSellNotificationId,
+            if (buy) "GEMINI‑ЭКСПЕРИМЕНТ: ВХОД" else "GEMINI‑ЭКСПЕРИМЕНТ: ВЫХОД",
+            text,
+            if (buy) 0xFFD29922.toInt() else 0xFFFF7B72.toInt()
+        )
+    }
+
+    private fun showTradeNotification(
+        context: Context,
+        channelId: String,
+        notificationId: Int,
+        title: String,
+        text: String,
+        color: Int
+    ) {
+        val notification = NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(R.drawable.ic_launcher)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setContentIntent(openAppIntent(context))
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setColor(color)
+            .setVibrate(longArrayOf(0, 700, 250, 700, 250, 1100))
+            .setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM))
+            .build()
+        context.getSystemService(NotificationManager::class.java)
+            .notify(notificationId, notification)
+        vibrate(context)
     }
 
     fun monitorId(): Int = monitorNotificationId
