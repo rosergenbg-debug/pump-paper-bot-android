@@ -38,6 +38,7 @@ class PumpBotWorker(
                 startedAt
             )
             val snapshot = PumpBotEngine.snapshot(applicationContext)
+            val appTrade = AppPaperStore.syncWithAlerts(applicationContext)
             val gemini = GeminiExperimentClient().sync(
                 applicationContext,
                 source = source
@@ -47,12 +48,14 @@ class PumpBotWorker(
                 PumpBotEngine.markRapidDropAlerted(applicationContext, snapshot)
                 true
             } else false
-            val signalAlerted = if (!rapidDropAlerted && PumpBotEngine.shouldAlert(applicationContext, snapshot)) {
+            val signalAlerted = if (!rapidDropAlerted && !appTrade.tradeAlerted && PumpBotEngine.shouldAlert(applicationContext, snapshot)) {
                 PumpAlert.showSignal(applicationContext, snapshot)
                 PumpBotEngine.markAlerted(applicationContext, snapshot)
                 true
             } else false
-            if (!rapidDropAlerted && !signalAlerted && EventRadarStore.shouldAlert(applicationContext, eventState)) {
+            if (!rapidDropAlerted && !appTrade.tradeAlerted && !signalAlerted &&
+                EventRadarStore.shouldAlert(applicationContext, eventState)
+            ) {
                 PumpAlert.showEventRadar(applicationContext, eventState, snapshot)
                 EventRadarStore.markAlerted(applicationContext, eventState)
             }

@@ -12,9 +12,10 @@
         android:padding="14dp">
 
         <TextView
+            android:id="@+id/tvAppTitle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="PUMP Сигнал V3.10"
+            android:text="PUMP Сигнал"
             android:textColor="#F0F6FC"
             android:textSize="28sp"
             android:textStyle="bold" />
@@ -27,6 +28,19 @@
             android:text="Монитор остановлен"
             android:textColor="#8B949E"
             android:textSize="14sp" />
+
+        <TextView
+            android:id="@+id/tvLatestSignal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="9dp"
+            android:background="#172033"
+            android:minHeight="86dp"
+            android:padding="10dp"
+            android:text="ПОСЛЕДНИЙ СИГНАЛ\nПока сигналов нет"
+            android:textColor="#DDE7F7"
+            android:textSize="14sp"
+            android:textStyle="bold" />
 
         <TextView
             android:id="@+id/tvMode"
@@ -69,13 +83,99 @@
             android:textStyle="bold"
             android:visibility="gone" />
 
-        <Button
-            android:id="@+id/btnGeminiExperiment"
+        <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="52dp"
+            android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:backgroundTint="#7C3AED"
-            android:text="АКТИВНОСТЬ GEMINI • ЖУРНАЛ И ПРОГНОЗЫ"
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="68dp"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/btnAppPaper"
+                    android:layout_width="0dp"
+                    android:layout_height="68dp"
+                    android:layout_weight="1"
+                    android:backgroundTint="#238636"
+                    android:includeFontPadding="false"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:maxLines="3"
+                    android:padding="2dp"
+                    android:text="APP&#10;€1 000,00&#10;+0,00%"
+                    android:textColor="#FFFFFF"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+
+                <Button
+                    android:id="@+id/btnGeminiExperiment"
+                    android:layout_width="0dp"
+                    android:layout_height="68dp"
+                    android:layout_marginStart="5dp"
+                    android:layout_weight="1"
+                    android:backgroundTint="#7C3AED"
+                    android:includeFontPadding="false"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:maxLines="3"
+                    android:padding="2dp"
+                    android:text="GEMINI&#10;€1 000,00&#10;+0,00%"
+                    android:textColor="#FFFFFF"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="68dp"
+                android:layout_marginTop="5dp"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/btnGeminiExitExperiment"
+                    android:layout_width="0dp"
+                    android:layout_height="68dp"
+                    android:layout_weight="1"
+                    android:backgroundTint="#9A6700"
+                    android:includeFontPadding="false"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:maxLines="3"
+                    android:padding="2dp"
+                    android:text="GEMINI‑ЭКСП.&#10;€1 000,00&#10;+0,00%"
+                    android:textColor="#FFFFFF"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+
+                <Button
+                    android:id="@+id/btnUserPaper"
+                    android:layout_width="0dp"
+                    android:layout_height="68dp"
+                    android:layout_marginStart="5dp"
+                    android:layout_weight="1"
+                    android:backgroundTint="#1F6FEB"
+                    android:includeFontPadding="false"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:maxLines="3"
+                    android:padding="2dp"
+                    android:text="СЕРЖ&#10;€1 000,00&#10;+0,00%"
+                    android:textColor="#FFFFFF"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <Button
+            android:id="@+id/btnCompetition"
+            android:layout_width="match_parent"
+            android:layout_height="50dp"
+            android:layout_marginTop="7dp"
+            android:backgroundTint="#1F6FEB"
+            android:text="СРАВНИТЬ 4  •  APP | GEMINI | ЭКСП. | СЕРЖ"
             android:textColor="#FFFFFF"
             android:textSize="13sp"
             android:textStyle="bold" />
@@ -116,12 +216,43 @@
                 android:textSize="14sp" />
 
             <TextView
+                android:id="@+id/tvManualPnl"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:background="#101820"
+                android:gravity="center"
+                android:minHeight="86dp"
+                android:padding="8dp"
+                android:text="МОЯ ПОЗИЦИЯ НЕ ОТКРЫТА"
+                android:textColor="#79C0FF"
+                android:textSize="28sp"
+                android:textStyle="bold" />
+
+            <com.example.pumppaperbot.ManualPositionChartView
+                android:id="@+id/manualPositionChart"
+                android:layout_width="match_parent"
+                android:layout_height="180dp"
+                android:layout_marginTop="6dp" />
+
+            <Button
+                android:id="@+id/btnManualHistory"
+                android:layout_width="match_parent"
+                android:layout_height="46dp"
+                android:layout_marginTop="6dp"
+                android:backgroundTint="#30363D"
+                android:text="ИСТОРИЯ МОИХ СДЕЛОК • 6 МЕС."
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                android:text="Коснитесь графика: откроются 6 месяцев, даты и точки входа/выхода"
+                android:text="ОБЩИЙ ГРАФИК РЫНКА • НАЖМИТЕ ДЛЯ 6 МЕС."
                 android:textColor="#58A6FF"
-                android:textSize="13sp"
+                android:textSize="12sp"
                 android:textStyle="bold" />
 
             <com.example.pumppaperbot.StrategyChartView
@@ -265,7 +396,7 @@
             android:layout_marginTop="10dp"
             android:background="#161B22"
             android:padding="10dp"
-            android:text="Звонок: рабочий режим 06:00–23:00"
+            android:text="Звонок: ежедневно 06:15–23:00"
             android:textColor="#C9D1D9"
             android:textSize="13sp" />
 
@@ -367,16 +498,6 @@
                 android:textStyle="bold" />
         </LinearLayout>
 
-        <Button
-            android:id="@+id/btnManual"
-            android:layout_width="match_parent"
-            android:layout_height="54dp"
-            android:layout_marginTop="8dp"
-            android:backgroundTint="#238636"
-            android:text="Я КУПИЛ — ЖДУ ПРОДАЖУ"
-            android:textColor="#FFFFFF"
-            android:textStyle="bold" />
-
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -384,25 +505,36 @@
             android:orientation="horizontal">
 
             <Button
-                android:id="@+id/btnToggleMode"
+                android:id="@+id/btnManualBuy"
                 android:layout_width="0dp"
                 android:layout_height="54dp"
                 android:layout_weight="1"
-                android:backgroundTint="#30363D"
-                android:text="ПОЧЕМУ ТАКОЙ СИГНАЛ?"
+                android:backgroundTint="#238636"
+                android:text="Я КУПИЛ"
                 android:textColor="#FFFFFF"
                 android:textStyle="bold" />
 
             <Button
-                android:id="@+id/btnBacktest"
+                android:id="@+id/btnManualSell"
                 android:layout_width="0dp"
                 android:layout_height="54dp"
                 android:layout_marginStart="8dp"
                 android:layout_weight="1"
-                android:backgroundTint="#2F81F7"
-                android:text="ПРОВЕРКА НАЗАД"
+                android:backgroundTint="#DA3633"
+                android:enabled="false"
+                android:text="Я ПРОДАЛ"
                 android:textColor="#FFFFFF"
                 android:textStyle="bold" />
         </LinearLayout>
+
+        <Button
+            android:id="@+id/btnBacktest"
+            android:layout_width="match_parent"
+            android:layout_height="54dp"
+            android:layout_marginTop="8dp"
+            android:backgroundTint="#2F81F7"
+            android:text="ТЕСТ НАЗАД"
+            android:textColor="#FFFFFF"
+            android:textStyle="bold" />
     </LinearLayout>
 </ScrollView>

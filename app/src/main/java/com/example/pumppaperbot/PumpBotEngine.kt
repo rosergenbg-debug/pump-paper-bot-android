@@ -141,6 +141,7 @@ data class LiveSnapshot(
     val signalAction: String,
     val signalReason: String,
     val entryPrice: Double,
+    val entryTime: Long,
     val highestClose: Double,
     val chart: ChartBundle,
     val marketGateActive: Boolean = false,
@@ -174,8 +175,18 @@ data class SavedMarketPayloads(
     val fundingJson: String
 )
 
+data class AppPaperEvaluation(
+    val candleTime: Long,
+    val price: Double,
+    val action: String,
+    val reason: String,
+    val strategyMode: String,
+    val highestClose: Double,
+    val readinessScore: Int = 0
+)
+
 object PumpBotEngine {
-    const val appVersionName = "3.10"
+    val appVersionName: String get() = BuildConfig.VERSION_NAME
     const val startBalance = 1000.0
     const val feeRate = 0.0015
     const val slippage = 0.0005
@@ -413,6 +424,54 @@ object PumpBotEngine {
             futuresJson = p.getString(keyFuturesJson, "").orEmpty(),
             premiumJson = p.getString(keyPremiumJson, "").orEmpty(),
             fundingJson = p.getString(keyFundingJson, "").orEmpty()
+        )
+    }
+
+    fun evaluateAppPaper(
+        context: Context,
+        portfolio: AppPaperPortfolio
+    ): AppPaperEvaluation {
+        ensureInitialized(context)
+        val p = prefs(context)
+        val candles = StrategyV2.synthesizeEur(
+            parseSavedCandles(p.getString(keyMarketJson, "").orEmpty()),
+            parseSavedCandles(p.getString(keyEurJson, "").orEmpty())
+        )
+        val evaluation = evaluateLive(
+            candles = candles,
+            btcCandles = parseSavedCandles(p.getString(keyBtcJson, "").orEmpty()),
+            ethCandles = parseSavedCandles(p.getString(keyEthJson, "").orEmpty()),
+            solCandles = parseSavedCandles(p.getString(keySolJson, "").orEmpty()),
+            futuresCandles = parseSavedCandles(p.getString(keyFuturesJson, "").orEmpty()),
+            premiumCandles = parseSavedCandles(p.getString(keyPremiumJson, "").orEmpty()),
+            funding = parseFunding(p.getString(keyFundingJson, "").orEmpty()),
+            waitMode = if (portfolio.inPosition) "SELL" else "BUY",
+            entryPrice = portfolio.entryPrice,
+            entryTime = portfolio.entryTime,
+            positionMode = portfolio.strategyMode,
+            partialTaken = portfolio.partialTaken,
+            partialCandle = portfolio.partialCandle,
+            storedHighest = portfolio.highestClose,
+            aggressive = p.getBoolean(keyAggressive, false),
+            orderBook = p.nullableDouble(keyBookImbalance)?.let { imbalance ->
+                OrderBookMetrics(
+                    imbalance = imbalance,
+                    spreadPercent = p.nullableDouble(keySpreadPercent) ?: 0.0,
+                    bidNotional = 0.0,
+                    askNotional = 0.0
+                )
+            },
+            openInterest = p.nullableDouble(keyOpenInterest),
+            openInterestChangePercent = p.nullableDouble(keyOpenInterestChange)
+        )
+        return AppPaperEvaluation(
+            candleTime = evaluation.lastCandle,
+            price = evaluation.lastPrice,
+            action = evaluation.signalAction,
+            reason = evaluation.signalReason,
+            strategyMode = evaluation.strategyMode,
+            highestClose = evaluation.highestClose,
+            readinessScore = evaluation.readinessScore
         )
     }
 
@@ -670,6 +729,7 @@ object PumpBotEngine {
             signalAction = p.getString(keySignalAction, "WAIT").orEmpty(),
             signalReason = p.getString(keySignalReason, "Сигнала нет").orEmpty(),
             entryPrice = p.getDouble(keyEntryPrice, 0.0),
+            entryTime = p.getLong(keyEntryTime, 0L),
             highestClose = p.getDouble(keyHighestClose, 0.0),
             chart = ChartBundle(
                 candles,
@@ -731,17 +791,23 @@ object PumpBotEngine {
         if (!snapshot.running) return false
         val expected = (snapshot.waitMode == "BUY" && snapshot.readinessScore >= 99) ||
             (snapshot.waitMode == "SELL" && snapshot.readinessScore <= -99)
+        // A user-confirmed real position has priority over quiet hours.
+        // BUY alerts still follow the configured schedule.
+        val urgentPersonalExit = PersonalExitAlertPolicy.bypassesQuietHours(
+            snapshot.waitMode,
+            snapshot.readinessScore
+        )
         if (snapshot.waitMode == "BUY" &&
             (snapshot.lateEntryBlocked || snapshot.breathingConfidence < 50)
         ) return false
         if (snapshot.waitMode == "BUY" && snapshot.rapidDrop.active && !snapshot.rapidDrop.recoveryConfirmed) {
             return false
         }
-        if (expected && !AlertSchedule.isAllowedNow(context)) {
+        if (expected && !urgentPersonalExit && !AlertSchedule.isAllowedNow(context)) {
             AlertSchedule.rememberBlocked(context, snapshot)
             return false
         }
-        if (AlertSchedule.isAllowedNow(context)) {
+        if (!urgentPersonalExit && AlertSchedule.isAllowedNow(context)) {
             when (AlertSchedule.resolvePending(context, snapshot)) {
                 DelayedSignalState.POSSIBLE -> {
                     val delayedKey = alertKey(context, snapshot)
@@ -769,7 +835,9 @@ object PumpBotEngine {
 
     fun shouldAlertRapidDrop(context: Context, snapshot: LiveSnapshot): Boolean {
         if (!snapshot.running || !snapshot.rapidDrop.active) return false
-        if (!AlertSchedule.isAllowedNow(context)) return false
+        if (!PersonalExitAlertPolicy.bypassesQuietHours(snapshot.waitMode, -100) &&
+            !AlertSchedule.isAllowedNow(context)
+        ) return false
         val key = rapidDropAlertKey(snapshot)
         val p = prefs(context)
         if (key.isBlank() || key == p.getString(keyLastRapidDropAlertKey, "")) return false
@@ -1075,4 +1143,9 @@ object PumpBotEngine {
     private fun SharedPreferences.getDouble(key: String, default: Double): Double {
         return if (contains(key)) java.lang.Double.longBitsToDouble(getLong(key, 0L)) else default
     }
+}
+
+internal object PersonalExitAlertPolicy {
+    fun bypassesQuietHours(waitMode: String, readinessScore: Int): Boolean =
+        waitMode == "SELL" && readinessScore <= -99
 }

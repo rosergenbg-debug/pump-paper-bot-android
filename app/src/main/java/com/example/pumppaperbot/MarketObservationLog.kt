@@ -11,20 +11,25 @@ import java.util.Locale
  */
 object MarketObservationLog {
     private const val fileName = "pump_market_breathing.csv"
-    private const val maxBytes = 8L * 1024L * 1024L
+    private const val PRUNE_INTERVAL_MILLIS = 60L * 60L * 1000L
+    private var lastPrunedAt = 0L
 
     fun append(context: Context, snapshot: LiveSnapshot) {
         if (snapshot.lastPrice <= 0.0 || snapshot.lastCandle <= 0L) return
         runCatching {
             val file = File(context.filesDir, fileName)
-            if (file.exists() && file.length() > maxBytes) rotate(file)
+            val now = System.currentTimeMillis()
+            if (now - lastPrunedAt >= PRUNE_INTERVAL_MILLIS) {
+                RollingCsvRetention.prune(file, now)
+                lastPrunedAt = now
+            }
             val newFile = !file.exists() || file.length() == 0L
             file.appendText(
                 buildString {
                     if (newFile) {
                         append("observed_at_ms,candle_close_ms,price_eur,state,energy,compression,direction,confidence,late_risk,book_imbalance,spread_pct,open_interest,open_interest_change_pct,readiness,action\n")
                     }
-                    append(System.currentTimeMillis()).append(',')
+                    append(now).append(',')
                     append(snapshot.lastCandle).append(',')
                     append(format(snapshot.lastPrice)).append(',')
                     append(csv(snapshot.breathingState)).append(',')
@@ -43,12 +48,6 @@ object MarketObservationLog {
                 Charsets.UTF_8
             )
         }
-    }
-
-    private fun rotate(file: File) {
-        val old = File(file.parentFile, "$fileName.old")
-        if (old.exists()) old.delete()
-        file.renameTo(old)
     }
 
     private fun format(value: Double): String = String.format(Locale.US, "%.10f", value)

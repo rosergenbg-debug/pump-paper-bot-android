@@ -1,184 +1,61 @@
-# Инструкция проекта PumpSignal
+# PumpSignal working memory
 
-> СЛУЖЕБНАЯ ИНСТРУКЦИЯ ДЛЯ ИИ-АГЕНТА. Это не пользовательская документация. Серж не обязан читать, пересказывать или обслуживать этот файл.
+This file is mandatory context for every agent working in this repository.
 
-Этот файл — постоянная внешняя память ИИ о проекте. Он обязателен для любого агента, который открывает репозиторий PumpSignal в новом чате или рабочем сеансе.
+## Required startup sequence
 
-## Обязательный шлюз перед любой работой
+1. Read this file completely.
+2. Read `DEVELOPMENT_LOG.md` completely.
+3. Inspect the actual branch, `git status`, version name/code, package id, signing configuration and recent commits.
+4. Preserve unrelated worktree changes. Never assume `main` is current; the project has historically advanced through version branches.
+5. After every material code, build, release or repository change, append an accurate entry to `DEVELOPMENT_LOG.md`.
+6. Do not ask Serge to repeat old chat history when these files and the repository answer the question.
 
-Нельзя начинать анализ кода, предлагать новую версию, редактировать файлы, собирать APK или писать в GitHub, пока не выполнены первые два пункта ниже. Это обязанность агента, а не Сержа.
+## Product and user intent
 
-1. Полностью прочитать этот файл с начала до конца.
-2. Полностью прочитать `DEVELOPMENT_LOG.md`.
-3. Проверить фактическое состояние репозитория, активную ветку, открытый PR, текущие `versionName`, `versionCode`, `applicationId` и состояние рабочей директории.
-4. Сопоставить просьбу Сержа с уже реализованным кодом. Не придумывать заново то, что в проекте уже есть.
-5. Только после этого менять код.
-6. После каждого изменения самому обновлять `DEVELOPMENT_LOG.md` в том же коммите или PR.
-7. Перед финальным ответом повторно сверить результат с последней записью журнала и исходной просьбой Сержа.
+PumpSignal is an Android paper-trading and signal research application for PUMP/EUR. It never places real orders. Its purpose is to compare four independent participants:
 
-Если работа ведётся через GitHub без локального checkout, агент обязан самостоятельно получить оба файла из корня активной ветки через GitHub и прочитать их. Нельзя перекладывать это на Сержа.
+- APP: built-in StrategyV2 virtual account.
+- Gemini: independent hourly AI research circuit and virtual account.
+- Gemini experiment: a separate virtual account that can mirror Gemini's executed BUY or enter earlier from a signed APP/Gemini signal confirmed by buyer flow/CVD, then tests a market-evidence exit without changing the control Gemini.
+- SERGE: user-controlled virtual account.
 
-Если сохранённая память чата противоречит репозиторию, сначала выяснить причину расхождения. Фактический код и проверенный финальный APK важнее предположений, но этот файл фиксирует намерения пользователя, которые нельзя незаметно менять.
+All four must keep separate balances, trades and performance. The comparison view must show current money, signed percent return, entry/exit markers and trade profit/loss. Stored data must survive compatible APK updates.
 
-## Владелец и репозиторий
+Serge values timely, unmistakable phone alerts. APP and Gemini must each generate their own loud notification for an executed entry and exit. Do not let one participant's notification replace the other's. Quiet hours apply to ordinary preparatory signals, but actual requested trade alerts are intended to be delivered immediately.
 
-- Владелец проекта: Серж.
-- Репозиторий: `rosergenbg-debug/pump-paper-bot-android`.
-- Работать нужно только с этим Android-приложением PumpSignal.
-- Старый проект `price-tracker-android` не трогать.
-- Серж разрешил записывать согласованные изменения в GitHub, создавать рабочие ветки, PR, сборки и релизы.
-- Перед записью всегда проверять, нет ли чужих или незавершённых изменений. Не удалять и не перезаписывать их.
+## Current strategy direction
 
-## Суть проекта
+- Gemini's entry timing is considered strong and should not be weakened.
+- Gemini historically held too long, but remains the unchanged control for the exit experiment.
+- Gemini experiment may copy Gemini's executed BUY at the same price. From V3.20 it may also enter earlier when APP reaches 99/100 or a fresh positive Gemini direction is confirmed by PUMP momentum and buyer flow/CVD. Late-entry, overheat, unconfirmed rapid-drop and simultaneous BTC/SOL weakness vetoes remain mandatory. Its exit evaluates buyer flow, spot/futures CVD, BTC/SOL, open interest, order book, direction and a pullback scaled to current PUMP volatility. A moderate reversal needs two monitor cycles; a strong multi-group reversal may exit immediately. A 5% loss is only an emergency backstop.
+- APP's exit timing is considered strong.
+- APP historically entered too rarely. V3.19 modestly widens entry confirmation, especially in Active mode, while preserving late-entry, rapid-drop and market-overheat blocks.
+- Fees are 0.15% on entry and 0.15% on exit.
+- Gemini, Gemini experiment, APP and Serge remain separate. Experimental exit rules may manage only the Gemini experiment portfolio.
 
-PumpSignal — исследовательское Android-приложение для наблюдения за рынком PUMP/EUR и виртуальной торговли без реальных ордеров. Главная идея — пытаться выделять из хаотического движения рынка его ритм или «дыхание»: накопление, сжатие, ускорение, истощение, разворот и риск позднего входа.
+## Release invariants
 
-Приложение должно быть честным исследовательским инструментом. Оно не должно выдавать шкалу за вероятность прибыли, обещать доходность или подгонять исторические результаты под желаемый ответ.
+- Application id must remain `com.example.pumppaperbot.v8`.
+- The installed compatible line uses certificate SHA-256 beginning `1f778c4291c9` and ending `27dc7823`.
+- Never give Serge a GitHub intermediate APK as an installable update unless its signing certificate has been compared with the compatible line.
+- The user-facing download must be one direct `.apk` link, not a ZIP or artifact directory.
+- Never delete the installed app during an update; doing so loses local state.
+- Increase both `versionName` and `versionCode` exactly once for a new release and keep UI title, workflow checks, artifact name and README consistent.
 
-Основная рыночная пара для интерфейса и расчётов — PUMP/EUR. Она синтезируется из публичных данных Binance. Для контекста используются PUMP, BTC, ETH, SOL, spot и futures, taker-поток, объём, funding, premium, стакан и открытый интерес.
+## Current version chain
 
-## Главная цель
+- V3.17: installed predecessor, code 49.
+- V3.18: three-way APP/Gemini/Serge competition, code 50, compatible update over V3.17.
+- V3.19: trade alerts and entry/exit tuning, code 51, current work.
+- V3.20: attributed signals and confirmed early entry for Gemini experiment, code 52, current work.
+- V3.21: APP confirmed-trend continuation entry, code 53, current work.
+- V3.22: full audit fixes for durable trade-alert delivery, independent APP readiness, storage recovery and current UI text, code 54, current work.
 
-Нужно параллельно наблюдать и честно сравнивать три независимых способа принятия решений:
+## Verification before delivery
 
-- **APP** — стратегия самого приложения.
-- **GEMINI** — отдельный ИИ-трейдер в Shadow Mode.
-- **СЕРЖ** — ручные виртуальные решения пользователя.
-
-У каждого участника должен быть собственный виртуальный портфель, баланс, позиция, сделки, комиссии, прибыль или убыток, доходность и просадка. Один участник не должен незаметно управлять решениями другого.
-
-Итоговый экран сравнения должен позволять быстро понять:
-
-- сколько денег сейчас у каждого;
-- кто в плюсе или минусе и на сколько процентов;
-- где каждый вошёл и вышел;
-- сколько принесла или потеряла каждая завершённая сделка;
-- как менялись результаты всех троих на одном временном отрезке.
-
-## Текущий пользовательский замысел интерфейса
-
-На главном экране одновременно должны быть видны три живые карточки: **APP**, **GEMINI**, **СЕРЖ**. Карточка Сержа не должна называться «Я». В каждой карточке показываются актуальная стоимость виртуального счёта и общий результат со знаком плюс или минус в процентах.
-
-На графиках:
-
-- зелёная стрелка вверх означает вход;
-- красная стрелка вниз означает выход;
-- вход и окончательный выход соединяются понятной угловой линией;
-- прибыльная сделка и её результат показываются зелёным и располагаются визуально вверх;
-- убыточная сделка и её результат показываются красным и располагаются визуально вниз;
-- возле линии показываются результат в процентах и евро;
-- должно быть понятно, относится сделка к APP, GEMINI или СЕРЖУ;
-- сравнение троих должно открываться отдельной кнопкой и поддерживать крупный или полноэкранный просмотр.
-
-Интерфейс должен быть понятным без технических терминов. Главный график нельзя снова зажимать лишними карточками и длинными пояснениями.
-
-## Независимость логики
-
-- Основная стратегия приложения и её правила не меняются скрытно при работе над интерфейсом, Gemini или ручным портфелем.
-- Gemini остаётся в Shadow Mode и не отправляет реальные ордера.
-- Решения Gemini не должны напрямую изменять StrategyV2.
-- Ручные кнопки Сержа управляют только его виртуальным портфелем.
-- Все три портфеля сравниваются на одинаковых понятных условиях.
-- Базовая комиссия: 0,15% на вход и 0,15% на выход.
-- Для серьёзной исторической проверки отдельно учитывать реалистичное проскальзывание и причинность данных.
-- Нельзя использовать будущие данные, цену до получения ответа Gemini или иные формы look-ahead bias.
-
-## Сохранность данных и обновления Android
-
-Обновление должно устанавливаться поверх предыдущей рабочей версии без удаления приложения и без потери:
-
-- балансов;
-- виртуальных сделок;
-- истории;
-- настроек;
-- API-настроек;
-- статистики APP, Gemini и Сержа.
-
-Перед выдачей APK обязательно проверить:
-
-- неизменный `applicationId` рабочей линии: `com.example.pumppaperbot.v8`;
-- новая версия действительно выше установленной;
-- `versionName` соответствует названию релиза и надписи в приложении;
-- `versionCode` увеличен ровно и осознанно;
-- APK имеет правильный запускаемый экран;
-- APK целый и устанавливаемый;
-- подпись конечного APK совпадает с подписью рабочей установленной линии.
-
-Совместимый сертификат рабочей линии имеет SHA-256:
-
-`1f778c4291c9d11c5f89f4de8773bda35a0125031adc05785daee23f27dc7823`
-
-GitHub Actions может создать промежуточный APK с другим сертификатом. Такой файл нельзя выдавать Сержу как обновление. Конечный APK сначала должен быть подписан совместимым ключом и проверен через `apksigner`.
-
-Никогда не помещать в инструкции, журнал, код, коммиты или ответы пароли, приватные ключи, API-ключ Gemini и другие секреты.
-
-Сержу нужно отдавать одну прямую ссылку на чистый `.apk`, без ZIP и без необходимости распаковывать архив. Старую рабочую версию удалять нельзя, если цель — сохранить данные.
-
-## Gemini и фоновые процессы
-
-Gemini ведёт отдельный виртуальный портфель со стартовой суммой 1 000 €. Он анализирует закрытый час и свежий рыночный контекст, а новости получает через контролируемый RSS-контур.
-
-Важные требования:
-
-- один прогноз на полностью закрытый час;
-- защита от повторной операции за тот же час;
-- цена исполнения берётся после фактического ответа;
-- журнал показывает запросы, ответы, модель, ошибки, лимиты, таймеры и следующее действие;
-- HTTP 429 не должен вызывать бесконтрольный fallback или расход квоты;
-- фоновые циклы должны переживать обычное закрытие интерфейса и ждать доступную сеть;
-- тяжёлый журнал и живые наблюдения хранятся в SQLite с ротацией, а не бесконечно в SharedPreferences;
-- API-ключ хранится через Android Keystore/AES-GCM и не попадает в backup.
-
-## Уведомления
-
-Обычные тихие часы Сержа: с 23:00 до 06:00. Первое утреннее сообщение или отложенное предупреждение — около 06:15. Существующий пользовательский режим расписания нельзя менять без прямой просьбы.
-
-## Проверка стратегии
-
-Любое изменение торговых правил требует отдельного согласования с Сержем и причинного backtest. Нельзя смешивать:
-
-- улучшение интерфейса;
-- исправление ошибки расчёта;
-- изменение торговой стратегии.
-
-Результаты нужно проверять на раздельных train, validation и закрытом holdout, с комиссиями и несколькими уровнями проскальзывания. Неудачный эксперимент тоже фиксируется и не маскируется.
-
-## Правило версий
-
-Перед началом новой версии сначала установить, какая версия реально стоит у Сержа, а не выводить это только из названия ветки или старого чата.
-
-Исторически возникла путаница: установленной базой была V3.17, а работа с карточкой «СЕРЖ» и новыми обозначениями сделок должна стать V3.18. Сначала её ошибочно называли V3.19. Эта ошибка исправлена: правильная новая линия — **V3.18 / versionCode 50 поверх V3.17 / versionCode 49**.
-
-Номер нельзя оставлять прежним для функционально новой сборки и нельзя перескакивать вперёд без причины.
-
-## Как вести журнал
-
-После каждой фактической работы дописать в начало или конец `DEVELOPMENT_LOG.md` новую запись с датой:
-
-- что попросил Серж;
-- какую ветку и исходную версию использовали;
-- какие файлы и функции изменили;
-- менялась ли стратегия;
-- какой номер версии получился;
-- какие тесты и проверки прошли;
-- какой сертификат подтверждён у конечного APK;
-- где находится PR, коммит или релиз;
-- что осталось незавершённым;
-- какие ошибки были обнаружены и как не повторить их.
-
-Не писать, что задача завершена, пока фактическая проверка не закончилась. Если APK только собран в GitHub Actions, но ещё не подписан совместимо, так и написать: «промежуточный, пользователю не выдавать».
-
-## Текущая точка продолжения
-
-Активная работа находится в PR №27, ветка `agent/v3-18-three-way-competition`.
-
-Цель этой ветки — V3.18 с:
-
-- третьей живой карточкой **СЕРЖ**;
-- актуальным балансом и общей доходностью всех троих;
-- тремя графиками сравнения;
-- понятными входами, выходами и результатами сделок;
-- сохранением существующих данных;
-- совместимым обновлением поверх V3.17.
-
-Перед продолжением обязательно проверить фактический статус PR и код. Не считать старое описание чата доказательством того, что ветка уже слита в `main`.
+- Run unit tests and assemble the APK.
+- Inspect package id, version name/code and launchable activity with Android build tools.
+- Verify APK signature schemes and compare the final certificate fingerprint with the compatible line.
+- Confirm notification permission remains requested on Android 13+ and that notification channels use alarm sound/high importance.
+- Check the final APK directly, not merely a successful CI badge.

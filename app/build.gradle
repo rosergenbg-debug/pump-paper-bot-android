@@ -13,12 +13,16 @@ android {
     namespace 'com.example.pumppaperbot'
     compileSdk 34
 
+    buildFeatures {
+        buildConfig true
+    }
+
     defaultConfig {
         applicationId "com.example.pumppaperbot.v8"
         minSdk 24
         targetSdk 34
-        versionCode 42
-        versionName "3.10"
+        versionCode 54
+        versionName "3.22"
     }
 
     signingConfigs {

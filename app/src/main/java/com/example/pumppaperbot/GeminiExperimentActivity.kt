@@ -35,6 +35,11 @@ class GeminiExperimentActivity : AppCompatActivity() {
     private lateinit var cashBar: View
     private lateinit var investedBar: View
     private lateinit var statistics: TextView
+    private lateinit var currentPosition: TextView
+    private lateinit var positionPnl: TextView
+    private lateinit var positionChart: GeminiPositionChartView
+    private lateinit var microImpulse: TextView
+    private lateinit var lastOperation: TextView
     private lateinit var lastDecision: TextView
     private lateinit var activityHistory: TextView
     private lateinit var activityToggle: Button
@@ -59,11 +64,9 @@ class GeminiExperimentActivity : AppCompatActivity() {
         root.addView(button("← НАЗАД", "#30363D").apply {
             setOnClickListener { finish() }
         }, LinearLayout.LayoutParams(-1, dp(48)))
-        root.addView(label("V3.10 • ВИРТУАЛЬНЫЙ ПОРТФЕЛЬ GEMINI", 24, "#F0F6FC", true))
+        root.addView(label("V${BuildConfig.VERSION_NAME} • GEMINI", 24, "#F0F6FC", true))
         root.addView(label(
-            "Отдельный виртуальный счёт со стартом €1 000. Gemini самостоятельно принимает решения, " +
-                "а приложение показывает деньги, вложение в PUMP, результат и операции. " +
-                "Основную стратегию и реальные деньги этот модуль не меняет.",
+            "Виртуальные €1 000 • отдельные решения • без реальных денег.",
             14, "#C9D1D9", false, 8
         ))
 
@@ -105,6 +108,15 @@ class GeminiExperimentActivity : AppCompatActivity() {
 
         status = card("#172033")
         statistics = card("#161B22")
+        currentPosition = card("#172033")
+        positionPnl = label("", 36, "#79C0FF", true).apply {
+            gravity = Gravity.CENTER
+            setBackgroundColor(Color.parseColor("#101820"))
+            setPadding(dp(12), dp(14), dp(12), dp(8))
+        }
+        positionChart = GeminiPositionChartView(this)
+        microImpulse = card("#101820")
+        lastOperation = card("#161B22")
         lastDecision = card("#172033")
         activityHistory = card("#101820")
         activityToggle = button("ПОКАЗАТЬ ЖУРНАЛ", "#30363D")
@@ -113,6 +125,13 @@ class GeminiExperimentActivity : AppCompatActivity() {
 
         root.addView(label("ВИРТУАЛЬНЫЕ ДЕНЬГИ GEMINI", 17, "#D2A8FF", true, 16))
         root.addView(portfolioPanel, cardParams(6))
+        root.addView(lastOperation, cardParams())
+        root.addView(label("ГРАФИК ОТКРЫТОЙ СДЕЛКИ", 17, "#D2A8FF", true, 16))
+        root.addView(positionPnl, cardParams(6))
+        root.addView(positionChart, LinearLayout.LayoutParams(-1, dp(220)))
+        root.addView(currentPosition, cardParams(6))
+        root.addView(label("MICRO IMPULSE • ТЕНЕВОЙ РЕЖИМ", 17, "#F0B72F", true, 16))
+        root.addView(microImpulse, cardParams(6))
         root.addView(lastDecision, cardParams())
         root.addView(statistics, cardParams())
         root.addView(status, cardParams())
@@ -121,15 +140,6 @@ class GeminiExperimentActivity : AppCompatActivity() {
         root.addView(trades, cardParams(6))
         root.addView(label("ИСТОРИЯ РЕШЕНИЙ", 17, "#79C0FF", true, 16))
         root.addView(history, cardParams(6))
-
-        root.addView(label("ЧЕСТНЫЙ КОНТРОЛЬ ИДЕИ", 17, "#F0B72F", true, 16))
-        root.addView(label(
-            "Повторный шестимесячный тест часовых рыночных признаков без подмешивания недоступного архива новостей не подтвердил цель. " +
-                "На validation поймано 24,1% подъёмов PUMP свыше 3% (7 из 29), на закрытом holdout — 27,3% (12 из 44), результат после комиссий −14,76%. " +
-                "Чтобы искусственно превысить 50% на validation, потребовалось 6,1 сигнала в сутки и 208 ложных из 223. " +
-                "Поэтому Gemini работает только как живой отдельный эксперимент и сам накапливает проверяемую статистику.",
-            14, "#F0B72F", false, 6
-        ))
 
         root.addView(label("ТЕХНИЧЕСКИЙ ЖУРНАЛ • 24 ЧАСА", 17, "#7EE787", true, 16))
         root.addView(activityToggle, LinearLayout.LayoutParams(-1, dp(48)).apply {
@@ -143,14 +153,15 @@ class GeminiExperimentActivity : AppCompatActivity() {
             render()
         }
 
-        root.addView(button("СБРОСИТЬ ТОЛЬКО GEMINI‑ЭКСПЕРИМЕНТ", "#8E1519").apply {
+        root.addView(button("СБРОСИТЬ GEMINI И ЕГО ЭКСПЕРИМЕНТ", "#8E1519").apply {
             setOnClickListener {
                 AlertDialog.Builder(this@GeminiExperimentActivity)
                     .setTitle("Сбросить виртуальный счёт Gemini?")
-                    .setMessage("Удалятся только решения, виртуальные сделки и статистика Gemini. Основная стратегия не изменится.")
+                    .setMessage("Удалятся решения, виртуальные сделки и статистика Gemini и Gemini‑эксперимента. APP и Серж не изменятся.")
                     .setNegativeButton("ОТМЕНА", null)
                     .setPositiveButton("СБРОСИТЬ") { _, _ ->
                         GeminiPaperStore.reset(this@GeminiExperimentActivity)
+                        GeminiExitExperimentStore.reset(this@GeminiExperimentActivity)
                         render()
                     }
                     .show()
@@ -268,27 +279,9 @@ class GeminiExperimentActivity : AppCompatActivity() {
         }
         status.text = buildString {
             append("СТАТУС: $visibleStatus")
-            append("\nТекущая стадия: ${state.phase}")
-            append("\nКлюч: $keySource")
+            append("\n${state.phase} • $keySource")
             val activeModel = state.activeModel.ifBlank { state.model }
-            if (activeModel.isNotBlank()) append("\nМодель: $activeModel")
-            if (state.lastAttempt > 0L) {
-                append(
-                    "\nПоследнее обращение: ${PumpBotEngine.formatTime(state.lastAttempt)}" +
-                        " • попытка ${state.attemptsThisHour.coerceAtMost(3)}/3"
-                )
-            }
-            if (state.lastCycleStarted > 0L) {
-                append("\nПоследний цикл: ${activityTime(state.lastCycleStarted)}")
-                if (state.cycleSource.isNotBlank()) append(" • ${state.cycleSource}")
-            }
-            if (state.lastDataReady > 0L) {
-                append(
-                    "\nДанные собраны: ${activityTime(state.lastDataReady)}" +
-                        " • ${formatDuration(state.dataDurationMillis)}"
-                )
-            }
-            if (state.lastSuccess > 0L) append("\nПоследний успешный ответ: ${PumpBotEngine.formatTime(state.lastSuccess)}")
+            if (activeModel.isNotBlank()) append(" • $activeModel")
             val nextAt = maxOf(
                 GeminiHourlyRetryPolicy.nextVisibleActionAt(state, now),
                 budget.nextAllowedAt
@@ -303,19 +296,11 @@ class GeminiExperimentActivity : AppCompatActivity() {
                     append("\nПовтор разрешён после ${PumpBotEngine.formatTime(nextAt)}")
                 else -> append("\nНовый прогноз после ${PumpBotEngine.formatTime(nextAt)}")
             }
-            if (state.nextCheckAt > 0L && state.enabled) {
-                append(
-                    "\nСледующая проверка цикла: ${activityTime(state.nextCheckAt)}" +
-                        " • через ${countdown(state.nextCheckAt, now)}"
-                )
-            }
-            append("\nКонтроль жизни: ${cycleHealth(state, snapshot.running, now)}")
-            append("\nЦикл: рынок ~2 мин • RSS-новости ~10 мин • Gemini API после закрытия часа")
+            append("\nСистема: ${cycleHealth(state, snapshot.running, now)}")
             append(
-                "\nОбщий бюджет Gemini: ${budget.usedToday}/${GeminiRequestBudget.MAX_REQUESTS_PER_DAY}" +
-                    " • осталось ${budget.remainingToday}"
+                "\nGemini сегодня: ${budget.usedToday}/${GeminiRequestBudget.MAX_REQUESTS_PER_DAY}" +
+                    " запросов • ${state.totalTokensToday} токенов"
             )
-            append("\nЧасовой контур: ${state.requestsToday} запросов • ${state.totalTokensToday} токенов")
             if (state.error.isNotBlank()) append("\nОшибка: ${state.error}")
         }
         status.setTextColor(Color.parseColor(
@@ -393,7 +378,7 @@ class GeminiExperimentActivity : AppCompatActivity() {
         )
         allocation.text = String.format(
             Locale.GERMANY,
-            "НАЛИЧНЫЕ  €%.2f   •   В PUMP  €%.2f\nНовый вход €100  •  комиссии €%.2f",
+            "СИНИЙ — СВОБОДНЫЕ EUR  €%.2f\nФИОЛЕТОВЫЙ — ВЛОЖЕНО В PUMP  €%.2f\nКомиссии за всё время €%.2f",
             cashEur,
             investedEur,
             p.totalFeesEur
@@ -401,11 +386,124 @@ class GeminiExperimentActivity : AppCompatActivity() {
         portfolio.setTextColor(Color.parseColor(
             if (p.profit(displayPrice) >= 0.0) "#D2A8FF" else "#FF7B72"
         ))
+
+        val latestTrade = p.trades.lastOrNull()
+        lastOperation.text = when (latestTrade?.action) {
+            "BUY" -> String.format(
+                Locale.GERMANY,
+                "● СЕЙЧАС: КУПЛЕНО PUMP\n%s • вложено €%.2f\nЦена покупки €%.8f • количество %.2f PUMP",
+                PumpBotEngine.formatTime(latestTrade.time),
+                latestTrade.amount * latestTrade.price + latestTrade.fee,
+                latestTrade.price,
+                latestTrade.amount
+            )
+            "SELL" -> String.format(
+                Locale.GERMANY,
+                "● СЕЙЧАС: ПРОДАНО — ДЕНЬГИ В EUR\n%s • получено €%.2f\nРезультат сделки %+.2f €",
+                PumpBotEngine.formatTime(latestTrade.time),
+                latestTrade.amount * latestTrade.price - latestTrade.fee,
+                latestTrade.pnlEur
+            )
+            else -> "● СЕЙЧАС: ОЖИДАНИЕ\nПокупок и продаж Gemini пока не было. Все €1 000,00 находятся в EUR."
+        }
+        lastOperation.setTextColor(Color.parseColor(
+            when (latestTrade?.action) {
+                "BUY" -> "#D2A8FF"
+                "SELL" -> if (latestTrade.pnlEur >= 0.0) "#7EE787" else "#FF7B72"
+                else -> "#79C0FF"
+            }
+        ))
+
+        val activeBuy = if (p.inPosition) p.trades.lastOrNull { it.action == "BUY" } else null
+        if (p.inPosition && activeBuy != null && displayPrice > 0.0) {
+            val positionCost = activeBuy.amount * activeBuy.price + activeBuy.fee
+            val livePnlEur = investedEur - positionCost
+            val livePnlPercent = if (positionCost > 0.0) livePnlEur / positionCost * 100.0 else 0.0
+            currentPosition.text = String.format(
+                Locale.GERMANY,
+                "ОТКРЫТАЯ ПОЗИЦИЯ — РЕЗУЛЬТАТ ПРЯМО СЕЙЧАС\n" +
+                    "Вложено €%.2f  →  сейчас стоит €%.2f\n" +
+                    "ТЕКУЩИЙ РЕЗУЛЬТАТ  %+.2f €  (%+.2f%%)\n" +
+                    "Покупка €%.8f  •  текущая цена €%.8f",
+                positionCost,
+                investedEur,
+                livePnlEur,
+                livePnlPercent,
+                activeBuy.price,
+                displayPrice
+            )
+            val liveColor = if (livePnlEur >= 0.0) "#7EE787" else "#FF7B72"
+            currentPosition.setTextColor(Color.parseColor(liveColor))
+            positionPnl.text = String.format(
+                Locale.GERMANY,
+                "%+.2f%%\n%+.2f €",
+                livePnlPercent,
+                livePnlEur
+            )
+            positionPnl.setTextColor(Color.parseColor(liveColor))
+        } else {
+            currentPosition.text = String.format(
+                Locale.GERMANY,
+                "ОТКРЫТОЙ ПОЗИЦИИ НЕТ\nВсе деньги сейчас в EUR: €%.2f\nПлавающий результат: €0,00",
+                cashEur
+            )
+            currentPosition.setTextColor(Color.parseColor("#79C0FF"))
+            positionPnl.text = "ПОЗИЦИЯ НЕ ОТКРЫТА"
+            positionPnl.setTextColor(Color.parseColor("#79C0FF"))
+        }
+        positionChart.setPosition(
+            candles = snapshot.chart.candles,
+            entryTime = activeBuy?.time ?: 0L,
+            entry = activeBuy?.price ?: 0.0,
+            current = displayPrice,
+            active = p.inPosition
+        )
+
+        val micro = MicroImpulseStore.state(this)
+        microImpulse.text = buildString {
+            append("СОСТОЯНИЕ: ${micro.phase}  •  оценка ${micro.score}/100")
+            append("\nПоток: ${if (micro.connected) "подключён" else "переподключение"}")
+            if (micro.updatedAt > 0L) append("  •  обновлено ${activityTime(micro.updatedAt)}")
+            append(String.format(
+                Locale.GERMANY,
+                "\nСделки 5 с: %d  •  ускорение ×%.2f  •  покупки %.1f%%",
+                micro.trades5s,
+                micro.tradeAcceleration,
+                micro.aggressiveBuyPercent5s
+            ))
+            append(String.format(
+                Locale.GERMANY,
+                "\nПокупки 15 с: %.1f%%  •  цена 60 с: %+.3f%%",
+                micro.aggressiveBuyPercent15s,
+                micro.priceChange60sPercent
+            ))
+            micro.spreadPercent?.let {
+                append(String.format(Locale.GERMANY, "  •  spread %.4f%%", it))
+            }
+            micro.topBookImbalance?.let {
+                append(String.format(Locale.GERMANY, "\nВерх стакана: %+.2f", it))
+            }
+            if (micro.error.isNotBlank()) append("\nОшибка: ${micro.error}")
+            append("\nРанний датчик движения • без автопокупки")
+        }
+        microImpulse.setTextColor(Color.parseColor(
+            when (micro.phase) {
+                "IGNITION" -> "#FF7B72"
+                "CONFIRMATION" -> "#7EE787"
+                "PRESSURE" -> "#F0B72F"
+                else -> "#79C0FF"
+            }
+        ))
+
         statistics.text = String.format(
             Locale.GERMANY,
-            "СТАТИСТИКА GEMINI С V3.7\nЗакрытых сделок %d • прибыльных %d • win rate %.1f%%\n" +
+            "ОБЩИЙ ИТОГ ВСЕЙ ТОРГОВЛИ\nРезультат %+.2f € (%+.2f%%) • стоимость €%.2f\n" +
+                "Закрытых сделок %d • прибыльных %d • win rate %.1f%%\n" +
                 "Макс. живая просадка %.2f%% • точность направления %.1f%% (%d прогнозов)\n" +
                 "Подъёмы >3%%: поймано %d из %d • %.1f%%",
+            p.profit(displayPrice),
+            p.profitPercent(displayPrice),
+            value,
             p.closedTrades,
             p.winningTrades,
             p.winRatePercent,

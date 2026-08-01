@@ -21,7 +21,7 @@ class GeminiPaperTraderTest {
         model = "gemini-test"
     )
 
-    @Test fun `buys once for a fresh hourly decision`() {
+    @Test fun `buys once with all available cash for a fresh hourly decision`() {
         val bought = GeminiPaperTrader.applyDecision(
             GeminiPaperPortfolio(),
             price = 0.002,
@@ -32,8 +32,8 @@ class GeminiPaperTraderTest {
         )
         assertTrue(bought.inPosition)
         assertEquals(1, bought.trades.size)
-        assertEquals(900.0, bought.cashEur, 0.0001)
-        assertEquals(99.85 / 0.002, bought.pumpAmount, 0.0001)
+        assertEquals(0.0, bought.cashEur, 0.0001)
+        assertEquals(998.5 / 0.002, bought.pumpAmount, 0.0001)
 
         val duplicate = GeminiPaperTrader.applyDecision(
             bought,
@@ -55,10 +55,64 @@ class GeminiPaperTraderTest {
         )
         assertFalse(sold.inPosition)
         assertEquals(2, sold.trades.size)
-        assertEquals(1009.6702475, sold.cashEur, 0.0000001)
+        assertEquals(1096.702475, sold.cashEur, 0.0000001)
         assertEquals(1, sold.closedTrades)
         assertEquals(1, sold.winningTrades)
-        assertEquals(0.3147525, sold.totalFeesEur, 0.0000001)
+        assertEquals(3.147525, sold.totalFeesEur, 0.0000001)
+    }
+
+    @Test fun `reinvests the entire increased balance after a profitable sale`() {
+        val firstBuy = GeminiPaperTrader.applyDecision(
+            GeminiPaperPortfolio(), 0.002, 1L, 100L, recommendation("BUY"), 101L
+        )
+        val sold = GeminiPaperTrader.applyDecision(
+            firstBuy, 0.0022, 2L, 200L, recommendation("SELL", -60, 80), 201L
+        )
+        val nextBuy = GeminiPaperTrader.applyDecision(
+            sold, 0.002, 3L, 300L, recommendation("BUY"), 301L
+        )
+
+        assertTrue(sold.cashEur > GeminiPaperPortfolio.START_BALANCE)
+        assertEquals(0.0, nextBuy.cashEur, 0.0000001)
+        assertEquals(
+            sold.cashEur * (1.0 - GeminiPaperTrader.FEE_RATE) / 0.002,
+            nextBuy.pumpAmount,
+            0.0000001
+        )
+    }
+
+    @Test fun `buy alert is emitted only for a newly executed Gemini purchase`() {
+        val before = GeminiPaperPortfolio()
+        val bought = GeminiPaperTrader.applyDecision(
+            before, 0.002, 10L, 100L, recommendation("BUY"), 101L
+        )
+        val alertTrade = GeminiTradeAlertPolicy.newlyExecutedTrade(before, bought, 10L)
+
+        assertEquals("BUY", alertTrade?.action)
+        assertEquals(10L, alertTrade?.decisionId)
+        assertEquals(null, GeminiTradeAlertPolicy.newlyExecutedTrade(bought, bought, 10L))
+
+        val buyWhileInvested = GeminiPaperTrader.applyDecision(
+            bought, 0.0021, 11L, 200L, recommendation("BUY"), 201L
+        )
+        assertEquals(
+            null,
+            GeminiTradeAlertPolicy.newlyExecutedTrade(bought, buyWhileInvested, 11L)
+        )
+    }
+
+    @Test fun `sell alert is emitted for a newly executed Gemini exit`() {
+        val bought = GeminiPaperTrader.applyDecision(
+            GeminiPaperPortfolio(), 0.002, 20L, 100L, recommendation("BUY"), 101L
+        )
+        val sold = GeminiPaperTrader.applyDecision(
+            bought, 0.0021, 21L, 200L, recommendation("SELL", -40, 80), 201L
+        )
+
+        assertEquals(
+            "SELL",
+            GeminiTradeAlertPolicy.newlyExecutedTrade(bought, sold, 21L)?.action
+        )
     }
 
     @Test fun `next hour grades direction and captured surge`() {
@@ -145,8 +199,8 @@ class GeminiPaperTraderTest {
         )
         val marked = GeminiPaperTrader.markToMarket(bought, 0.0018)
 
-        assertTrue(marked.causalMaxDrawdownPercent > 0.9)
-        assertTrue(marked.causalMaxDrawdownPercent < 1.2)
+        assertTrue(marked.causalMaxDrawdownPercent > 9.9)
+        assertTrue(marked.causalMaxDrawdownPercent < 10.1)
     }
 
     @Test fun `rate limit never falls back to another model`() {

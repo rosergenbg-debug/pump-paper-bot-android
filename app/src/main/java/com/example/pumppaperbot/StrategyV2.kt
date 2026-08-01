@@ -84,6 +84,59 @@ object StrategyV2 {
     private const val SHOCK_ARM_BARS = 36
     private const val EXHAUSTION_ARM_BARS = 12
 
+    internal object EntrySensitivity {
+        const val NEUTRAL_FUNDING_MAX = 0.0001
+
+        fun trendRecovered(
+            rsiNow: Double,
+            rsiPrevious: Double,
+            rsiTwoBarsAgo: Double,
+            aggressive: Boolean
+        ): Boolean {
+            val immediate = rsiNow in 45.0..57.0 && rsiPrevious < 45.0
+            val recentActiveRecovery = aggressive &&
+                rsiNow in 43.0..58.0 &&
+                rsiPrevious in 43.0..58.0 &&
+                rsiTwoBarsAgo < 45.0
+            return immediate || recentActiveRecovery
+        }
+
+        fun shockArmVolumeRatio(aggressive: Boolean): Double =
+            if (aggressive) 2.5 else 2.8
+
+        fun shockRsiReady(rsi: Double, aggressive: Boolean): Boolean =
+            if (aggressive) rsi in 43.0..58.0 else rsi in 44.0..57.0
+
+        fun fundingIsNeutral(rate: Double): Boolean = rate <= NEUTRAL_FUNDING_MAX
+
+        fun continuationRsiReady(rsiNow: Double, rsiPrevious: Double): Boolean =
+            rsiNow in 47.0..60.0 && rsiPrevious in 45.0..60.0
+
+        fun twoClosedCandlesConfirmTrend(
+            currentClose: Double,
+            previousClose: Double,
+            twoBarsAgoClose: Double,
+            ema20Now: Double,
+            ema20Previous: Double
+        ): Boolean = currentClose > previousClose &&
+            previousClose > twoBarsAgoClose &&
+            ema20Now > ema20Previous &&
+            currentClose >= ema20Now &&
+            previousClose >= ema20Previous
+
+        fun continuationBuyerFlowReady(
+            spotFlow: Double?,
+            futuresFlow: Double?,
+            relativeSlope: Double?
+        ): Boolean {
+            val alignedSpotAndFutures = spotFlow != null && futuresFlow != null &&
+                spotFlow >= 0.0 && futuresFlow >= 0.0
+            val strongSpotAndRelativeStrength = spotFlow != null && relativeSlope != null &&
+                spotFlow >= 0.02 && relativeSlope >= 0.0
+            return alignedSpotAndFutures || strongSpotAndRelativeStrength
+        }
+    }
+
     fun synthesizeEur(asset: List<PumpCandle>, eurUsdt: List<PumpCandle>): List<PumpCandle> {
         val eurByClose = eurUsdt.associateBy { it.closeTime }
         return asset.mapNotNull { coin ->
@@ -611,13 +664,16 @@ object StrategyV2 {
         val candle = pump.getOrNull(index) ?: return V2EntrySignal(MODE_NONE, "Нет свечи", 0.0, 0.0, 0.0, 0L)
         val rsiNow = indicators.rsi.getOrNull(index) ?: 0.0
         val rsiPrevious = indicators.rsi.getOrNull(index - 1) ?: 0.0
+        val rsiTwoBarsAgo = indicators.rsi.getOrNull(index - 2) ?: 0.0
         val emaNow = indicators.ema200.getOrNull(index) ?: 0.0
         val ema20Now = indicators.ema20.getOrNull(index) ?: 0.0
         val ema20Previous = indicators.ema20.getOrNull(index - 1) ?: 0.0
         val previousClose = pump.getOrNull(index - 1)?.close ?: 0.0
+        val twoBarsAgoClose = pump.getOrNull(index - 2)?.close ?: 0.0
         val btcAbove = indicators.btcAbove200[candle.closeTime] == true
         val btcSlope = indicators.btcSlopePositive[candle.closeTime] == true
         val rate = fundingRateAt(funding, candle.closeTime)
+        val fundingReady = EntrySensitivity.fundingIsNeutral(rate)
         val extension = if (emaNow > 0.0) candle.close / emaNow - 1.0 else Double.POSITIVE_INFINITY
         val recentReturn6 = pump.getOrNull(index - 6)?.close?.takeIf { it > 0.0 }?.let { candle.close / it - 1.0 } ?: 0.0
         val noChase = indicators.ret1.getOrElse(index) { 0.0 } < 0.04 && recentReturn6 < 0.08 && extension <= 0.035
@@ -627,19 +683,28 @@ object StrategyV2 {
         for (j in max(0, index - TREND_ARM_BARS + 1)..index) {
             if ((indicators.rsi.getOrNull(j) ?: 100.0) <= 40.0) trendArmed = true
         }
-        val rsiCrossed = rsiNow in 45.0..55.0 && rsiPrevious < 45.0
-        val trend = trendArmed && rsiCrossed && priceReady && btcAbove && btcSlope && rate <= 0.0 && noChase
+        val rsiCrossed = EntrySensitivity.trendRecovered(
+            rsiNow,
+            rsiPrevious,
+            rsiTwoBarsAgo,
+            aggressive
+        )
+        val trend = trendArmed && rsiCrossed && priceReady && btcAbove && btcSlope && fundingReady && noChase
 
         var baseShockArmed = false
         for (j in max(1, index - SHOCK_ARM_BARS + 1)..index) {
-            if (indicators.ret1[j] <= -0.03 && indicators.volumeRatio[j] >= 3.0 &&
+            if (indicators.ret1[j] <= -0.03 &&
+                indicators.volumeRatio[j] >= EntrySensitivity.shockArmVolumeRatio(aggressive) &&
                 (indicators.rsi.getOrNull(j) ?: 100.0) <= 40.0
             ) baseShockArmed = true
         }
         val previousEma = indicators.ema200.getOrNull(index - 1) ?: 0.0
         val previousExtension = if (previousEma > 0.0) previousClose / previousEma - 1.0 else Double.POSITIVE_INFINITY
-        val previousReady = rsiPrevious in 45.0..55.0 && previousExtension in 0.0..0.035
-        val baseShock = baseShockArmed && rsiNow in 45.0..55.0 && priceReady && !previousReady && btcAbove && noChase
+        val previousReady = EntrySensitivity.shockRsiReady(rsiPrevious, aggressive) &&
+            previousExtension in 0.0..0.035
+        val baseShock = baseShockArmed &&
+            EntrySensitivity.shockRsiReady(rsiNow, aggressive) &&
+            priceReady && !previousReady && btcAbove && noChase
 
         var exhaustionArmed = false
         for (j in max(0, index - EXHAUSTION_ARM_BARS + 1)..index) {
@@ -662,8 +727,42 @@ object StrategyV2 {
         val exhaustion = exhaustionArmed && priceConfirmation && rsiNow in 43.0..58.0 &&
             flowReady && riskReady && indicators.drawdown36h[index] <= currentDrawdownLimit
 
-        val trendReadiness = baselineReadiness(
-            trend, trendArmed, rsiNow, rsiPrevious, extension, btcAbove, btcSlope, rate <= 0.0, noChase
+        // A separate route for an orderly uptrend.  Unlike the recovery modes it
+        // does not require a preceding RSI dip or shock, but it still needs two
+        // completed candles, real buyer participation and all anti-chase gates.
+        val continuationPriceConfirmed = EntrySensitivity.twoClosedCandlesConfirmTrend(
+            candle.close,
+            previousClose,
+            twoBarsAgoClose,
+            ema20Now,
+            ema20Previous
+        )
+        val continuationFlowReady = EntrySensitivity.continuationBuyerFlowReady(
+            spotFlow,
+            futuresFlow,
+            relativeSlope
+        )
+        val broadMarketSafe = marketReturn != null && marketReturn >= -0.01
+        val continuation = continuationPriceConfirmed &&
+            EntrySensitivity.continuationRsiReady(rsiNow, rsiPrevious) &&
+            priceReady && noChase && fundingReady && btcSlope && broadMarketSafe &&
+            continuationFlowReady
+
+        val continuationReadiness = continuationReadiness(
+            active = continuation,
+            priceConfirmed = continuationPriceConfirmed,
+            rsiReady = EntrySensitivity.continuationRsiReady(rsiNow, rsiPrevious),
+            priceReady = priceReady && noChase,
+            fundingReady = fundingReady,
+            marketReady = btcSlope && broadMarketSafe,
+            flowReady = continuationFlowReady
+        )
+
+        val trendReadiness = max(
+            baselineReadiness(
+                trend, trendArmed, rsiNow, rsiPrevious, extension, btcAbove, btcSlope, fundingReady, noChase
+            ),
+            continuationReadiness
         )
         val exhaustionReadiness = exhaustionReadiness(
             active = exhaustion,
@@ -678,9 +777,11 @@ object StrategyV2 {
             currentDrawdown = indicators.drawdown36h[index],
             currentDrawdownLimit = currentDrawdownLimit
         )
-        val baseShockReadiness = if (baseShock) 100 else if (baseShockArmed && rsiNow in 42.0..55.0 && btcAbove && noChase) 94 else 0
+        val baseShockReadiness = if (baseShock) 100 else if (
+            baseShockArmed && rsiNow in 42.0..58.0 && btcAbove && noChase
+        ) 94 else 0
         val shockReadiness = max(baseShockReadiness, exhaustionReadiness)
-        val entryWouldBeActive = exhaustion || baseShock || trend
+        val entryWouldBeActive = exhaustion || baseShock || trend || continuation
         val lateRiskLimit = if (aggressive) 70 else 60
         val lateEntryBlocked = breathing.lateEntryRisk >= lateRiskLimit &&
             (entryWouldBeActive || max(trendReadiness, shockReadiness) >= 90)
@@ -750,10 +851,16 @@ object StrategyV2 {
                 rsiNow, emaNow, rate, candle.closeTime, 100, shockReadiness,
                 breathing = breathing
             )
+            continuation -> V2EntrySignal(
+                MODE_TREND,
+                "ПОКУПКА: продолжение устойчивого тренда подтверждено двумя свечами, покупателями spot/futures и безопасным общим рынком",
+                rsiNow, emaNow, rate, candle.closeTime, 100, shockReadiness,
+                breathing = breathing
+            )
             else -> V2EntrySignal(
                 MODE_NONE,
                 waitingReason(
-                    rsiNow, extension, recentReturn6, trendReadiness, shockReadiness,
+                    rsiNow, extension, recentReturn6, trendReadiness, continuationReadiness, shockReadiness,
                     exhaustionArmed, priceConfirmation, flowReady, riskReady,
                     indicators.drawdown36h[index], currentDrawdownLimit
                 ),
@@ -943,11 +1050,31 @@ object StrategyV2 {
         return minOf(raw, 94)
     }
 
+    private fun continuationReadiness(
+        active: Boolean,
+        priceConfirmed: Boolean,
+        rsiReady: Boolean,
+        priceReady: Boolean,
+        fundingReady: Boolean,
+        marketReady: Boolean,
+        flowReady: Boolean
+    ): Int {
+        if (active) return 100
+        val checks = listOf(priceConfirmed, rsiReady, priceReady, fundingReady, marketReady, flowReady)
+        val passed = checks.count { it }
+        return when {
+            passed == checks.size - 1 -> 99
+            passed == checks.size - 2 -> 94
+            else -> passed * 14
+        }
+    }
+
     private fun waitingReason(
         rsi: Double,
         extension: Double,
         recentReturn6: Double,
         trendReadiness: Int,
+        continuationReadiness: Int,
         exhaustionReadiness: Int,
         armed: Boolean,
         priceReady: Boolean,
@@ -964,6 +1091,8 @@ object StrategyV2 {
             )
         }
         val stage = when {
+            continuationReadiness >= 99 -> "продолжение тренда 99/100: не хватает одного подтверждения"
+            continuationReadiness >= 94 -> "продолжение тренда близко: не хватает двух подтверждений"
             !armed -> "1/4: ждем три отдельных падения"
             currentDrawdown > limit -> "1/4 выполнен, но цена уже слишком далеко от дна"
             !priceReady -> "2/4: ждем подтвержденный разворот"
@@ -973,8 +1102,8 @@ object StrategyV2 {
         }
         return String.format(
             Locale.US,
-            "Покупка не подтверждена. Базовый %d/100; 4-этапный %d/100. %s. RSI %.1f.",
-            trendReadiness, exhaustionReadiness, stage, rsi
+            "Покупка не подтверждена. Тренд %d/100; продолжение %d/100; 4-этапный %d/100. %s. RSI %.1f.",
+            trendReadiness, continuationReadiness, exhaustionReadiness, stage, rsi
         )
     }
 

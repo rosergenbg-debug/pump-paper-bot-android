@@ -39,10 +39,10 @@ class AlertSettingsActivity : AppCompatActivity() {
         modes.addView(alwaysButton, LinearLayout.LayoutParams(0, dp(58), 1f).apply { leftMargin = dp(8) })
         root.addView(modes, LinearLayout.LayoutParams(-1, dp(58)).apply { topMargin = dp(14) })
 
-        root.addView(label("Рабочие дни: понедельник, вторник, четверг, пятница. В эти дни ночью звонка нет. В среду, субботу и воскресенье звонок разрешён круглосуточно.", 14, "#8B949E", false))
-        root.addView(label("Разрешённое время в рабочие дни", 17, "#F0F6FC", true))
+        root.addView(label("В рабочем режиме обычные подготовительные сигналы звонят ежедневно только в выбранное время. Исполненные виртуальные сделки и срочные выходы доставляются сразу.", 14, "#8B949E", false))
+        root.addView(label("Разрешённое время каждый день", 17, "#F0F6FC", true))
         val hours = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        startButton = button("С 06:00", "#238636").apply { setOnClickListener { pickTime(true) } }
+        startButton = button("С 06:15", "#238636").apply { setOnClickListener { pickTime(true) } }
         endButton = button("ДО 23:00", "#B62324").apply { setOnClickListener { pickTime(false) } }
         hours.addView(startButton, LinearLayout.LayoutParams(0, dp(58), 1f))
         hours.addView(endButton, LinearLayout.LayoutParams(0, dp(58), 1f).apply { leftMargin = dp(8) })
@@ -51,7 +51,7 @@ class AlertSettingsActivity : AppCompatActivity() {
         root.addView(label("Для отпуска или праздника включите «24 часа». Потом верните «Рабочий режим».", 14, "#F0B72F", true))
         status = label("", 15, "#58A6FF", true)
         root.addView(status)
-        root.addView(label("Если сигнал возник в запрещённое время, приложение сохранит цену и время. После 06:00 оно сообщит: вход ещё возможен или уже пропущен.", 14, "#C9D1D9", false))
+        root.addView(label("Если обычный сигнал возник в запрещённое время, приложение сохранит цену и время. После начала разрешённого периода оно сообщит: вход ещё возможен или уже пропущен.", 14, "#C9D1D9", false))
         setContentView(root)
         updateUi()
     }

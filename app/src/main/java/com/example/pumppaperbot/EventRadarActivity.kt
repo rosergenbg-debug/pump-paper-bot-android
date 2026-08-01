@@ -38,9 +38,9 @@ class EventRadarActivity : AppCompatActivity() {
             setBackgroundColor(Color.parseColor("#0D1117"))
         }
         content.addView(button("← НАЗАД", "#30363D").apply { setOnClickListener { finish() } }, params(dp(50)))
-        content.addView(label("V3.4 • РАДАР НОВОСТЕЙ + GEMINI", 25, "#F0F6FC", true))
+        content.addView(label("V${BuildConfig.VERSION_NAME} • РАДАР НОВОСТЕЙ + GEMINI", 25, "#F0F6FC", true))
         content.addView(label(
-            "Читает ФРС, ЕЦБ, SEC, BLS и свежие ленты PUMP, Bitcoin и Solana. Gemini сопоставляет их с текущим рынком. Поправка здесь ограничена ±12 и не меняет основную стратегию. Отдельный часовой Gemini‑эксперимент находится на главном экране.",
+            "Читает ФРС, ЕЦБ, SEC, BLS и свежие ленты PUMP, Bitcoin и Solana. Новостной Gemini сопоставляет их с текущим рынком. Поправка радара ограничена ±12 и не меняет APP. Отдельные участники Gemini и Gemini‑эксперимент находятся на главном экране.",
             15, "#C9D1D9", false
         ))
 
@@ -67,7 +67,7 @@ class EventRadarActivity : AppCompatActivity() {
 
         content.addView(label("КЛЮЧ GEMINI", 20, "#F0F6FC", true))
         content.addView(label(
-            "Готовый ключ в APK не вшивается. Вставьте личный API‑ключ один раз: он сохранится в закрытых данных приложения и используется радаром и отдельным часовым экспериментом.",
+            "Готовый ключ в APK не вшивается. Вставьте личный API‑ключ один раз: он сохранится в закрытых данных приложения и используется новостным радаром и отдельным часовым Gemini.",
             14, "#C9D1D9", false
         ))
         keyInput = EditText(this).apply {
