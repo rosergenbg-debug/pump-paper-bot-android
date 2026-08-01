@@ -115,6 +115,7 @@ object DeepSeekPrimaryPolicy {
             append(" • последний ${PumpBotEngine.formatTime(state.lastSuccess)}")
             if (state.error.isNotBlank()) append("\nПоследняя ошибка: ${state.error}")
         }
+    }
 
     private fun shortModel(model: String) = when {
         model.contains("pro", ignoreCase = true) -> "PRO"
