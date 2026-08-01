@@ -195,20 +195,33 @@ class PositionSupervisorClient {
             model = model,
             error = ""
         ))
+        val started = System.currentTimeMillis()
+        ApiUsageLogStore.record(context, ApiUsageEvent(
+            provider = "DEEPSEEK", circuit = "ПОЗИЦИЯ СЕРЖА", model = model,
+            status = "START", at = started,
+            detail = if (forceCritical) "немедленная усиленная проверка" else "контроль открытой позиции"
+        ))
         return runCatching {
             var usedModel = model
             val result = try {
-                analyze(key, model, snapshot, previous)
+                analyze(context, key, model, snapshot, previous)
             } catch (error: DeepSeekApiException) {
                 if (model != PositionSupervisorPolicy.PRO_MODEL ||
                     error.httpCode !in setOf(400, 404, 422)
                 ) throw error
                 usedModel = PositionSupervisorPolicy.FLASH_MODEL
-                analyze(key, usedModel, snapshot, previous, criticalReasoning = true)
+                analyze(context, key, usedModel, snapshot, previous, criticalReasoning = true)
             }
             usedModel to result
         }.fold(
             onSuccess = { (usedModel, result) ->
+                ApiUsageLogStore.record(context, ApiUsageEvent(
+                    provider = "DEEPSEEK", circuit = "ПОЗИЦИЯ СЕРЖА", model = usedModel,
+                    status = "OK", at = System.currentTimeMillis(),
+                    durationMillis = System.currentTimeMillis() - started,
+                    promptTokens = result.promptTokens, outputTokens = result.completionTokens,
+                    detail = result.summary
+                ))
                 val firstExit = result.action == "EXIT" && !previous.exitAdvised
                 val cancelExit = result.action == "CANCEL_EXIT" && previous.exitAdvised
                 val stillExit = when (result.action) {
@@ -265,6 +278,12 @@ class PositionSupervisorClient {
                 updated
             },
             onFailure = { error ->
+                ApiUsageLogStore.record(context, ApiUsageEvent(
+                    provider = "DEEPSEEK", circuit = "ПОЗИЦИЯ СЕРЖА", model = model,
+                    status = "ERROR", at = System.currentTimeMillis(),
+                    durationMillis = System.currentTimeMillis() - started,
+                    detail = error.message.orEmpty().take(300)
+                ))
                 previous.copy(
                     positionEntryTime = snapshot.entryTime,
                     lastAttempt = now,
@@ -276,12 +295,14 @@ class PositionSupervisorClient {
     }
 
     private fun analyze(
+        context: Context,
         apiKey: String,
         model: String,
         snapshot: LiveSnapshot,
         previous: PositionSupervisionState,
         criticalReasoning: Boolean = false
     ): SupervisorApiResult {
+        val hourly = GeminiMarketFrame.from(context)
         val frame = JSONObject()
             .put("symbol", "PUMP/EUR")
             .put("entry_price_eur", snapshot.entryPrice)
@@ -296,6 +317,18 @@ class PositionSupervisorClient {
             .put("book_imbalance", snapshot.bookImbalance ?: JSONObject.NULL)
             .put("spread_percent", snapshot.spreadPercent ?: JSONObject.NULL)
             .put("open_interest_change_percent", snapshot.openInterestChangePercent ?: JSONObject.NULL)
+            .put("pump_change_1h_pct", hourly?.pump1hPercent ?: JSONObject.NULL)
+            .put("pump_change_3h_pct", hourly?.pump3hPercent ?: JSONObject.NULL)
+            .put("btc_change_1h_pct", hourly?.btc1hPercent ?: JSONObject.NULL)
+            .put("btc_change_3h_pct", hourly?.btc3hPercent ?: JSONObject.NULL)
+            .put("sol_change_1h_pct", hourly?.sol1hPercent ?: JSONObject.NULL)
+            .put("sol_change_3h_pct", hourly?.sol3hPercent ?: JSONObject.NULL)
+            .put("spot_taker_buy_pct", hourly?.spotTakerBuyPercent ?: JSONObject.NULL)
+            .put("futures_taker_buy_pct", hourly?.futuresTakerBuyPercent ?: JSONObject.NULL)
+            .put("spot_cvd_proxy_pct", hourly?.spotCvdPercent ?: JSONObject.NULL)
+            .put("futures_cvd_proxy_pct", hourly?.futuresCvdPercent ?: JSONObject.NULL)
+            .put("premium_pct", hourly?.premiumPercent ?: JSONObject.NULL)
+            .put("realized_volatility_24h_pct", hourly?.realizedVolatility24hPercent ?: JSONObject.NULL)
             .put("rapid_drop_active", snapshot.rapidDrop.active)
             .put("local_exit_signal", snapshot.sellSignal)
             .put("local_reason", snapshot.signalReason.take(600))
@@ -314,6 +347,8 @@ class PositionSupervisorClient {
         val system = """
             Ты сопровождаешь уже открытую пользователем позицию PUMP/EUR. Не решай вопрос входа.
             Главная задача — вовремя заметить ухудшение и выход, но не создавать ложную тревогу по одному индикатору.
+            Сопоставляй PUMP 1ч/3ч, BTC/SOL, spot/futures taker flow и CVD, funding, premium,
+            open interest, стакан, RSI, волатильность и локальный сигнал выхода. Один показатель не достаточен.
             Верни только JSON: action HOLD, EXIT или CANCEL_EXIT; condition_delta целое от -10 до +10;
             danger_level целое от 0 до 10; summary кратко по-русски.
             condition_delta сравнивает ситуацию с моментом первого EXIT: отрицательное означает ухудшение,

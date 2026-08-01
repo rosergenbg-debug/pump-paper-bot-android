@@ -27,6 +27,11 @@ data class DeepSeekPrimaryState(
     val failedToday: Int = 0,
     val promptTokensToday: Int = 0,
     val completionTokensToday: Int = 0,
+    val lastInputReadiness: Int = 0,
+    val lastLocalBuySignal: Boolean = false,
+    val lastLocalSellSignal: Boolean = false,
+    val evidence: List<String> = emptyList(),
+    val risks: List<String> = emptyList(),
     val error: String = ""
 ) {
     fun toJson() = JSONObject()
@@ -43,6 +48,11 @@ data class DeepSeekPrimaryState(
         .put("failedToday", failedToday)
         .put("promptTokensToday", promptTokensToday)
         .put("completionTokensToday", completionTokensToday)
+        .put("lastInputReadiness", lastInputReadiness)
+        .put("lastLocalBuySignal", lastLocalBuySignal)
+        .put("lastLocalSellSignal", lastLocalSellSignal)
+        .put("evidence", JSONArray(evidence))
+        .put("risks", JSONArray(risks))
         .put("error", error)
 
     companion object {
@@ -60,6 +70,15 @@ data class DeepSeekPrimaryState(
             failedToday = json.optInt("failedToday").coerceAtLeast(0),
             promptTokensToday = json.optInt("promptTokensToday").coerceAtLeast(0),
             completionTokensToday = json.optInt("completionTokensToday").coerceAtLeast(0),
+            lastInputReadiness = json.optInt("lastInputReadiness").coerceIn(-100, 100),
+            lastLocalBuySignal = json.optBoolean("lastLocalBuySignal"),
+            lastLocalSellSignal = json.optBoolean("lastLocalSellSignal"),
+            evidence = json.optJSONArray("evidence")?.let { array ->
+                List(array.length()) { array.optString(it).take(240) }.filter { it.isNotBlank() }
+            }.orEmpty(),
+            risks = json.optJSONArray("risks")?.let { array ->
+                List(array.length()) { array.optString(it).take(240) }.filter { it.isNotBlank() }
+            }.orEmpty(),
             error = json.optString("error")
         )
     }
@@ -98,10 +117,28 @@ object DeepSeekPrimaryStore {
 }
 
 object DeepSeekPrimaryPolicy {
-    const val INTERVAL = 10L * 60L * 1000L
+    const val INTERVAL = 5L * 60L * 1000L
 
-    fun shouldRun(state: DeepSeekPrimaryState, hasMarketData: Boolean, force: Boolean, now: Long): Boolean =
-        hasMarketData && (force || state.lastAttempt <= 0L || now - state.lastAttempt >= INTERVAL)
+    fun chooseModel(snapshot: LiveSnapshot, force: Boolean, materialChange: Boolean): String {
+        val critical = snapshot.buySignal || snapshot.sellSignal || snapshot.rapidDrop.active ||
+            kotlin.math.abs(snapshot.readinessScore) >= 95 || kotlin.math.abs(snapshot.directionScore) >= 75 ||
+            (snapshot.waitMode == "SELL" && snapshot.entryPrice > 0.0 && snapshot.directionScore <= -55)
+        return if (force || (materialChange && critical)) {
+            PositionSupervisorPolicy.PRO_MODEL
+        } else {
+            PositionSupervisorPolicy.FLASH_MODEL
+        }
+    }
+
+    fun shouldRun(
+        state: DeepSeekPrimaryState,
+        hasMarketData: Boolean,
+        force: Boolean,
+        now: Long,
+        materialChange: Boolean = false
+    ): Boolean = hasMarketData && (
+        force || state.lastAttempt <= 0L || materialChange || now - state.lastAttempt >= INTERVAL
+    )
 
     fun compactStatus(state: DeepSeekPrimaryState, configured: Boolean): String = when {
         !configured -> "DEEPSEEK • ОСНОВНОЙ • ключ не введён"
@@ -131,6 +168,8 @@ private data class DeepSeekPrimaryResult(
     val danger: Int,
     val confidence: Int,
     val summary: String,
+    val evidence: List<String>,
+    val risks: List<String>,
     val promptTokens: Int,
     val completionTokens: Int
 )
@@ -149,24 +188,53 @@ class DeepSeekPrimaryAnalyst {
     ): DeepSeekPrimaryState {
         val snapshot = PumpBotEngine.snapshot(context)
         val previous = DeepSeekPrimaryStore.state(context, now)
-        if (!DeepSeekPrimaryPolicy.shouldRun(previous, snapshot.lastPrice > 0.0, force, now)) return previous
+        val materialChange = previous.lastAttempt > 0L && (
+            kotlin.math.abs(snapshot.readinessScore - previous.lastInputReadiness) >= 15 ||
+                snapshot.buySignal != previous.lastLocalBuySignal ||
+                snapshot.sellSignal != previous.lastLocalSellSignal
+            )
+        if (!DeepSeekPrimaryPolicy.shouldRun(
+                previous, snapshot.lastPrice > 0.0, force, now, materialChange
+            )) return previous
         val key = DeepSeekSecureKeyStore.read(context)
         if (key.isBlank()) return previous.copy(
             lastAttempt = now,
             error = "API-ключ DeepSeek не введён"
         ).also { DeepSeekPrimaryStore.save(context, it) }
 
+        val requestedModel = DeepSeekPrimaryPolicy.chooseModel(snapshot, force, materialChange)
+
         DeepSeekPrimaryStore.save(context, previous.copy(
             lastAttempt = now,
-            model = PositionSupervisorPolicy.FLASH_MODEL,
+            model = requestedModel,
+            lastInputReadiness = snapshot.readinessScore,
+            lastLocalBuySignal = snapshot.buySignal,
+            lastLocalSellSignal = snapshot.sellSignal,
             error = ""
         ))
-        return runCatching { analyze(key, snapshot, EventRadarStore.state(context)) }.fold(
+        val started = System.currentTimeMillis()
+        ApiUsageLogStore.record(context, ApiUsageEvent(
+            provider = "DEEPSEEK", circuit = "ОСНОВНОЙ РЫНОК",
+            model = requestedModel, status = "START", at = started,
+            detail = when {
+                force -> "ручная усиленная проверка"
+                materialChange -> "существенно изменился рыночный сигнал"
+                else -> "плановый анализ"
+            }
+        ))
+        return runCatching { analyze(context, key, requestedModel, snapshot, EventRadarStore.state(context)) }.fold(
             onSuccess = { result ->
+                ApiUsageLogStore.record(context, ApiUsageEvent(
+                    provider = "DEEPSEEK", circuit = "ОСНОВНОЙ РЫНОК",
+                    model = requestedModel, status = "OK", at = System.currentTimeMillis(),
+                    durationMillis = System.currentTimeMillis() - started,
+                    promptTokens = result.promptTokens, outputTokens = result.completionTokens,
+                    detail = result.summary
+                ))
                 previous.copy(
                     lastAttempt = now,
                     lastSuccess = now,
-                    model = PositionSupervisorPolicy.FLASH_MODEL,
+                    model = requestedModel,
                     action = result.action,
                     direction = result.direction,
                     danger = result.danger,
@@ -175,13 +243,26 @@ class DeepSeekPrimaryAnalyst {
                     successfulToday = previous.successfulToday + 1,
                     promptTokensToday = previous.promptTokensToday + result.promptTokens,
                     completionTokensToday = previous.completionTokensToday + result.completionTokens,
+                    lastInputReadiness = snapshot.readinessScore,
+                    lastLocalBuySignal = snapshot.buySignal,
+                    lastLocalSellSignal = snapshot.sellSignal,
+                    evidence = result.evidence,
+                    risks = result.risks,
                     error = ""
                 ).also { DeepSeekPrimaryStore.save(context, it) }
             },
             onFailure = { error ->
+                ApiUsageLogStore.record(context, ApiUsageEvent(
+                    provider = "DEEPSEEK", circuit = "ОСНОВНОЙ РЫНОК",
+                    model = requestedModel, status = "ERROR", at = System.currentTimeMillis(),
+                    durationMillis = System.currentTimeMillis() - started, detail = error.message.orEmpty().take(300)
+                ))
                 previous.copy(
                     lastAttempt = now,
-                    model = PositionSupervisorPolicy.FLASH_MODEL,
+                    model = requestedModel,
+                    lastInputReadiness = snapshot.readinessScore,
+                    lastLocalBuySignal = snapshot.buySignal,
+                    lastLocalSellSignal = snapshot.sellSignal,
                     failedToday = previous.failedToday + 1,
                     error = error.message.orEmpty().take(240)
                 ).also { DeepSeekPrimaryStore.save(context, it) }
@@ -189,7 +270,13 @@ class DeepSeekPrimaryAnalyst {
         )
     }
 
-    private fun analyze(apiKey: String, snapshot: LiveSnapshot, radar: EventRadarState): DeepSeekPrimaryResult {
+    private fun analyze(
+        context: Context,
+        apiKey: String,
+        model: String,
+        snapshot: LiveSnapshot,
+        radar: EventRadarState
+    ): DeepSeekPrimaryResult {
         val latestNews = radar.recent.take(5).map { event ->
             JSONObject()
                 .put("source", event.source)
@@ -198,6 +285,7 @@ class DeepSeekPrimaryAnalyst {
                 .put("direction", event.directionScore)
                 .put("published_at", event.publishedAt)
         }
+        val hourly = GeminiMarketFrame.from(context)
         val frame = JSONObject()
             .put("symbol", "PUMP/EUR")
             .put("price_eur", snapshot.lastPrice)
@@ -216,23 +304,42 @@ class DeepSeekPrimaryAnalyst {
             .put("local_sell_signal", snapshot.sellSignal)
             .put("local_reason", snapshot.signalReason.take(600))
             .put("user_position_open", snapshot.waitMode == "SELL" && snapshot.entryPrice > 0.0)
+            .put("pump_change_1h_pct", hourly?.pump1hPercent ?: JSONObject.NULL)
+            .put("pump_change_3h_pct", hourly?.pump3hPercent ?: JSONObject.NULL)
+            .put("pump_change_6h_pct", hourly?.pump6hPercent ?: JSONObject.NULL)
+            .put("btc_change_1h_pct", hourly?.btc1hPercent ?: JSONObject.NULL)
+            .put("btc_change_3h_pct", hourly?.btc3hPercent ?: JSONObject.NULL)
+            .put("sol_change_1h_pct", hourly?.sol1hPercent ?: JSONObject.NULL)
+            .put("sol_change_3h_pct", hourly?.sol3hPercent ?: JSONObject.NULL)
+            .put("spot_taker_buy_pct", hourly?.spotTakerBuyPercent ?: JSONObject.NULL)
+            .put("futures_taker_buy_pct", hourly?.futuresTakerBuyPercent ?: JSONObject.NULL)
+            .put("spot_cvd_proxy_pct", hourly?.spotCvdPercent ?: JSONObject.NULL)
+            .put("futures_cvd_proxy_pct", hourly?.futuresCvdPercent ?: JSONObject.NULL)
+            .put("premium_pct", hourly?.premiumPercent ?: JSONObject.NULL)
             .put("news", JSONArray(latestNews))
         val system = """
-            Ты основной независимый аналитик PumpSignal. Анализируй весь рыночный кадр и свежие новости.
-            Не подменяй локальную стратегию и не обещай прибыль. Верни только JSON:
+            Ты основной независимый аналитик PumpSignal для PUMP/EUR. Оцени цену на горизонте 1–6 часов.
+            Сначала сопоставь PUMP 1ч/3ч/6ч, BTC и SOL, spot/futures taker flow, CVD, funding,
+            premium, стакан, open interest, RSI, локальную StrategyV2 и свежие новости.
+            Не считай один индикатор или один заголовок достаточным основанием. Не догоняй уже перегретую цену.
+            BUY допустим только при подтверждении минимум двумя независимыми группами данных и отсутствии
+            late-entry/rapid-drop запрета. EXIT допустим только при открытой позиции и согласованном ухудшении.
+            Отделяй факты из кадра от предположений. Не подменяй StrategyV2 и не обещай прибыль.
+            Верни только JSON:
             action BUY, HOLD, WATCH или EXIT; direction целое -100..100; danger целое 0..10;
-            confidence целое 0..100; summary одно короткое конкретное предложение по-русски.
+            confidence целое 0..100; summary одно короткое конкретное предложение по-русски;
+            evidence массив из 2–4 коротких фактов; risks массив из 1–3 условий, которые опровергнут вывод.
             Если пользователь не в позиции, EXIT не используй. Если данных недостаточно, выбери WATCH.
         """.trimIndent()
         val body = JSONObject()
-            .put("model", PositionSupervisorPolicy.FLASH_MODEL)
+            .put("model", model)
             .put("messages", JSONArray()
                 .put(JSONObject().put("role", "system").put("content", system))
                 .put(JSONObject().put("role", "user").put("content", frame.toString())))
             .put("thinking", JSONObject().put("type", "enabled"))
-            .put("reasoning_effort", "low")
+            .put("reasoning_effort", if (model == PositionSupervisorPolicy.PRO_MODEL) "high" else "medium")
             .put("response_format", JSONObject().put("type", "json_object"))
-            .put("max_tokens", 650)
+            .put("max_tokens", if (model == PositionSupervisorPolicy.PRO_MODEL) 1800 else 1200)
         val request = Request.Builder()
             .url("https://api.deepseek.com/chat/completions")
             .header("Authorization", "Bearer $apiKey")
@@ -262,6 +369,14 @@ class DeepSeekPrimaryAnalyst {
                 danger = json.optInt("danger").coerceIn(0, 10),
                 confidence = json.optInt("confidence").coerceIn(0, 100),
                 summary = json.optString("summary", "DeepSeek не дал пояснение").take(400),
+                evidence = json.optJSONArray("evidence")?.let { array ->
+                    List(array.length().coerceAtMost(4)) { array.optString(it).take(240) }
+                        .filter { it.isNotBlank() }
+                }.orEmpty(),
+                risks = json.optJSONArray("risks")?.let { array ->
+                    List(array.length().coerceAtMost(3)) { array.optString(it).take(240) }
+                        .filter { it.isNotBlank() }
+                }.orEmpty(),
                 promptTokens = usage?.optInt("prompt_tokens") ?: 0,
                 completionTokens = usage?.optInt("completion_tokens") ?: 0
             )

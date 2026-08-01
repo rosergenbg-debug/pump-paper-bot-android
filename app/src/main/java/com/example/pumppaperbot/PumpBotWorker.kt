@@ -19,6 +19,7 @@ class PumpBotWorker(
             TimeUnit.MINUTES.toMillis(15)
         )
         val forcePositionPro = inputData.getBoolean(INPUT_FORCE_POSITION_PRO, false)
+        val forcePrimaryDeepSeek = inputData.getBoolean(INPUT_FORCE_PRIMARY_DEEPSEEK, false)
         if (!GeminiCycleGuard.tryEnter()) {
             GeminiPaperStore.recordActivity(
                 applicationContext,
@@ -35,7 +36,7 @@ class PumpBotWorker(
             val eventState = eventRadar.sync(applicationContext)
             val deepSeek = DeepSeekPrimaryAnalyst().sync(
                 applicationContext,
-                force = forcePositionPro
+                force = forcePositionPro || forcePrimaryDeepSeek
             )
             PositionSupervisorClient().sync(
                 applicationContext,
@@ -98,5 +99,6 @@ class PumpBotWorker(
         const val INPUT_CYCLE_SOURCE = "cycle_source"
         const val INPUT_CYCLE_INTERVAL = "cycle_interval"
         const val INPUT_FORCE_POSITION_PRO = "force_position_pro"
+        const val INPUT_FORCE_PRIMARY_DEEPSEEK = "force_primary_deepseek"
     }
 }

@@ -263,6 +263,13 @@ internal object GeminiFallbackPolicy {
  * A transient failure is retried at most three times for the same closed hour,
  * with a five-minute cooldown. Every network call has a hard total timeout.
  */
+internal object GeminiRoutinePolicy {
+    const val NORMAL_INTERVAL = 2L * 60L * 60L * 1000L
+
+    fun allowed(lastSuccess: Long, positionOpen: Boolean, force: Boolean, now: Long): Boolean =
+        force || positionOpen || lastSuccess <= 0L || now - lastSuccess >= NORMAL_INTERVAL
+}
+
 class GeminiExperimentClient {
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
@@ -396,6 +403,19 @@ class GeminiExperimentClient {
                     PumpBotEngine.formatTime(budgetBlockedUntil),
                 hourId = frame.hourId,
                 at = now
+            )
+            return GeminiPaperStore.state(context)
+        }
+        val positionOpen = PumpBotEngine.snapshot(context).let {
+            it.waitMode == "SELL" && it.entryPrice > 0.0
+        }
+        if (!GeminiRoutinePolicy.allowed(current.lastSuccess, positionOpen, force, now)) {
+            val nextAt = current.lastSuccess + GeminiRoutinePolicy.NORMAL_INTERVAL
+            GeminiPaperStore.markWaiting(context, "GEMINI В РЕЗЕРВЕ • ОБЗОР РАЗ В 2 ЧАСА")
+            GeminiPaperStore.recordActivity(
+                context, "РЕЗЕРВ GEMINI", "WAIT",
+                "$source: обычный обзор не нужен; следующий после ${PumpBotEngine.formatTime(nextAt)}",
+                hourId = frame.hourId, at = now
             )
             return GeminiPaperStore.state(context)
         }
@@ -626,6 +646,10 @@ class GeminiExperimentClient {
             val requestStarted = System.currentTimeMillis()
             try {
                 GeminiRequestBudget.requirePermit(context, requestStarted)
+                ApiUsageLogStore.record(context, ApiUsageEvent(
+                    provider = "GEMINI", circuit = "ЧАСОВОЙ ЭКСПЕРТ", model = model,
+                    status = "START", at = requestStarted, detail = "закрытый час ${frame.hourId}"
+                ))
                 GeminiPaperStore.markApiRequest(context, model)
                 GeminiPaperStore.recordActivity(
                     context = context,
@@ -654,6 +678,13 @@ class GeminiExperimentClient {
                     hourId = frame.hourId,
                     attempt = attempt
                 )
+                ApiUsageLogStore.record(context, ApiUsageEvent(
+                    provider = "GEMINI", circuit = "ЧАСОВОЙ ЭКСПЕРТ", model = result.recommendation.model,
+                    status = "OK", at = responseReceivedAt,
+                    durationMillis = responseReceivedAt - requestStarted,
+                    promptTokens = result.promptTokens, outputTokens = result.outputTokens,
+                    detail = result.recommendation.reason.take(300)
+                ))
                 return result
             } catch (blocked: GeminiRequestBlockedException) {
                 GeminiPaperStore.recordActivity(
@@ -668,6 +699,12 @@ class GeminiExperimentClient {
                 throw blocked
             } catch (error: GeminiApiException) {
                 lastError = error
+                ApiUsageLogStore.record(context, ApiUsageEvent(
+                    provider = "GEMINI", circuit = "ЧАСОВОЙ ЭКСПЕРТ", model = model,
+                    status = "ERROR", at = System.currentTimeMillis(),
+                    durationMillis = System.currentTimeMillis() - requestStarted,
+                    detail = "HTTP ${error.httpCode}: ${error.message}".take(300)
+                ))
                 val canFallback = GeminiFallbackPolicy.shouldFallback(error.httpCode)
                 GeminiPaperStore.recordActivity(
                     context = context,
@@ -688,6 +725,12 @@ class GeminiExperimentClient {
                 )
                 if (!canFallback || index == MODELS.lastIndex) throw error
             } catch (error: Exception) {
+                ApiUsageLogStore.record(context, ApiUsageEvent(
+                    provider = "GEMINI", circuit = "ЧАСОВОЙ ЭКСПЕРТ", model = model,
+                    status = "ERROR", at = System.currentTimeMillis(),
+                    durationMillis = System.currentTimeMillis() - requestStarted,
+                    detail = error.message.orEmpty().take(300)
+                ))
                 GeminiPaperStore.recordActivity(
                     context = context,
                     stage = "GEMINI API",
@@ -755,15 +798,16 @@ class GeminiExperimentClient {
         return client.newCall(request).execute().use { response ->
             val body = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
-                if (response.code == 429) {
-                    GeminiRequestBudget.recordRateLimit(
-                        context,
-                        response.header("Retry-After")?.trim()?.toLongOrNull()
-                    )
-                }
                 val message = runCatching {
                     JSONObject(body).optJSONObject("error")?.optString("message")
                 }.getOrNull().orEmpty().ifBlank { "Gemini HTTP ${response.code}" }
+                if (response.code == 429) {
+                    GeminiRequestBudget.recordRateLimit(
+                        context,
+                        response.header("Retry-After")?.trim()?.toLongOrNull(),
+                        dailyQuota = GeminiRequestBudget.isDailyQuotaMessage(message)
+                    )
+                }
                 throw GeminiApiException(response.code, message.take(500))
             }
             GeminiHourlyResponseParser.parse(body, model, response.code)

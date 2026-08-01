@@ -7,11 +7,8 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.text.InputType
 import android.view.View
-import android.app.AlertDialog
 import android.widget.Button
-import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.ScrollView
@@ -24,9 +21,6 @@ class EventRadarActivity : AppCompatActivity() {
     private val executor = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
     private lateinit var enabledButton: Button
-    private lateinit var aiButton: Button
-    private lateinit var geminiKeyUi: ApiKeyUi
-    private lateinit var deepSeekKeyUi: ApiKeyUi
     private lateinit var status: TextView
     private lateinit var events: TextView
     private lateinit var details: TextView
@@ -40,7 +34,7 @@ class EventRadarActivity : AppCompatActivity() {
             setBackgroundColor(Color.parseColor("#0D1117"))
         }
         content.addView(button("← НАЗАД", "#30363D").apply { setOnClickListener { finish() } }, params(dp(50)))
-        content.addView(label("V${BuildConfig.VERSION_NAME} • API И РАДАР НОВОСТЕЙ", 25, "#F0F6FC", true))
+        content.addView(label("V${BuildConfig.VERSION_NAME} • РАДАР НОВОСТЕЙ", 25, "#F0F6FC", true))
         content.addView(label(
             "Читает ФРС, ЕЦБ, SEC, BLS и свежие ленты PUMP, Bitcoin и Solana. Новостной Gemini сопоставляет их с текущим рынком. Поправка радара ограничена ±12 и не меняет APP. Отдельные участники Gemini и Gemini‑эксперимент находятся на главном экране.",
             15, "#C9D1D9", false
@@ -66,55 +60,6 @@ class EventRadarActivity : AppCompatActivity() {
         content.addView(checkButton, params(dp(58), dp(8)))
         progress = ProgressBar(this).apply { visibility = View.GONE }
         content.addView(progress, LinearLayout.LayoutParams(-1, dp(38)))
-
-        content.addView(label("API-КЛЮЧИ V4", 20, "#F0F6FC", true))
-        content.addView(label(
-            "Ключ показывается только во время ввода. После сохранения поле исчезает, поэтому случайное касание не может изменить или стереть ключ.",
-            14, "#C9D1D9", false
-        ))
-        geminiKeyUi = createApiKeyPanel(
-            provider = "GEMINI",
-            hint = "Вставьте личный Gemini API-ключ",
-            onSave = {
-                EventRadarStore.saveApiKey(this, it)
-                EventRadarStore.setUseAi(this, true)
-            },
-            onDelete = { EventRadarStore.saveApiKey(this, "") }
-        )
-        content.addView(geminiKeyUi.root, params(-2, dp(8)))
-        deepSeekKeyUi = createApiKeyPanel(
-            provider = "DEEPSEEK",
-            hint = "Вставьте личный DeepSeek API-ключ",
-            onSave = {
-                check(DeepSeekSecureKeyStore.save(this, it)) { "Android не смог защитить ключ" }
-                val key = it
-                executor.execute {
-                    DeepSeekKeyVerifier().verify(this, key)
-                    main.post { updateUi() }
-                }
-            },
-            onDelete = {
-                DeepSeekSecureKeyStore.save(this, "")
-                DeepSeekConnectionStore.clear(this)
-            }
-        )
-        content.addView(deepSeekKeyUi.root, params(-2, dp(8)))
-
-        aiButton = button("", "#30363D").apply {
-            setOnClickListener {
-                if (EventRadarStore.apiKey(this@EventRadarActivity).isNotBlank()) {
-                    EventRadarStore.setUseAi(this@EventRadarActivity, !EventRadarStore.useAi(this@EventRadarActivity))
-                    updateUi()
-                } else {
-                    status.text = "Сначала вставьте и сохраните бесплатный ключ Gemini. Без него радар продолжает работать по прозрачным правилам."
-                }
-            }
-        }
-        content.addView(aiButton, params(dp(58), dp(8)))
-
-        content.addView(button("ПРОВЕРИТЬ GEMINI — ПОЛУЧИТЬ ЖИВОЙ ОТВЕТ", "#7C3AED").apply {
-            setOnClickListener { testGeminiNow() }
-        }, params(dp(58), dp(8)))
 
         details = label("", 14, "#C9D1D9", false).apply {
             setBackgroundColor(Color.parseColor("#0B1320"))
@@ -166,33 +111,10 @@ class EventRadarActivity : AppCompatActivity() {
         }
     }
 
-    private fun testGeminiNow() {
-        progress.visibility = View.VISIBLE
-        status.text = "Отправляю реальный запрос в Gemini и жду JSON-ответ…"
-        executor.execute {
-            val state = EventRadarClient().testGemini(this)
-            main.post {
-                progress.visibility = View.GONE
-                updateUi(state)
-                details.visibility = View.VISIBLE
-                updateDetails(state)
-            }
-        }
-    }
-
     private fun updateUi(state: EventRadarState = EventRadarStore.state(this)) {
-        updateKeyPanels(state)
         enabledButton.text = if (state.enabled) "РАДАР ВКЛЮЧЁН" else "РАДАР ВЫКЛЮЧЕН"
         enabledButton.backgroundTintList = ColorStateList.valueOf(
             Color.parseColor(if (state.enabled) "#238636" else "#30363D")
-        )
-        aiButton.text = when {
-            !state.aiConfigured -> "GEMINI: КЛЮЧ НЕ НАЙДЕН"
-            state.aiEnabled -> "GEMINI ВКЛЮЧЁН"
-            else -> "GEMINI СОХРАНЁН, НО ВЫКЛЮЧЕН"
-        }
-        aiButton.backgroundTintList = ColorStateList.valueOf(
-            Color.parseColor(if (state.aiEnabled && state.aiConfigured) "#7C3AED" else "#30363D")
         )
         val latest = state.latest
         status.text = when {
@@ -207,21 +129,6 @@ class EventRadarActivity : AppCompatActivity() {
             }
         }
         if (state.error.isNotBlank()) status.append("\nНе все источники ответили: ${state.error}")
-        val gemini = state.gemini
-        val deepSeek = DeepSeekPrimaryStore.state(this)
-        status.append("\nDEEPSEEK ОСНОВНОЙ: ${deepSeek.action} • ${deepSeek.successfulToday} успешно / ${deepSeek.failedToday} ошибок")
-        if (deepSeek.lastSuccess > 0L) {
-            status.append(" • последний ${PumpBotEngine.formatTime(deepSeek.lastSuccess)}")
-            status.append("\nDeepSeek: ${deepSeek.summary}")
-        }
-        if (deepSeek.error.isNotBlank()) status.append("\nОшибка DeepSeek: ${deepSeek.error}")
-        status.append("\nGEMINI: ${gemini.status}")
-        if (gemini.lastSuccess > 0L) {
-            status.append(" • HTTP ${gemini.httpCode} • ${gemini.totalTokensToday} токенов сегодня")
-            status.append("\nПоправка Gemini: ${signed(state.informationAdjustment())} пунктов из ±12 (режим наблюдения)")
-        }
-        if (gemini.error.isNotBlank()) status.append("\nОшибка Gemini: ${gemini.error}")
-        if (gemini.lastAutoNote.isNotBlank()) status.append("\n${gemini.lastAutoNote}")
         status.append("\nТрафик V3 сегодня: ${EventRadarStore.trafficText(this)}")
 
         events.text = if (state.recent.isEmpty()) {
@@ -240,120 +147,6 @@ class EventRadarActivity : AppCompatActivity() {
         if (details.visibility == View.VISIBLE) updateDetails(state)
     }
 
-    private data class ApiKeyUi(
-        val root: LinearLayout,
-        val status: TextView,
-        val editor: LinearLayout,
-        val input: EditText,
-        val addButton: Button,
-        val actions: LinearLayout
-    )
-
-    private fun createApiKeyPanel(
-        provider: String,
-        hint: String,
-        onSave: (String) -> Unit,
-        onDelete: () -> Unit
-    ): ApiKeyUi {
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(10), dp(10), dp(10), dp(10))
-            setBackgroundColor(Color.parseColor("#161B22"))
-        }
-        val status = label("", 15, "#C9D1D9", true)
-        root.addView(status)
-        val input = EditText(this).apply {
-            this.hint = hint
-            setHintTextColor(Color.parseColor("#8B949E"))
-            setTextColor(Color.WHITE)
-            setBackgroundColor(Color.parseColor("#0D1117"))
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-            setPadding(dp(10), 0, dp(10), 0)
-        }
-        val editor = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        editor.addView(input, params(dp(58), dp(6)))
-        editor.addView(button("СОХРАНИТЬ API-КЛЮЧ", "#238636").apply {
-            setOnClickListener {
-                val clean = input.text.toString().trim()
-                if (clean.isBlank()) {
-                    status.text = "Ключ пустой — ничего не изменено"
-                    return@setOnClickListener
-                }
-                runCatching { onSave(clean) }.fold(
-                    onSuccess = {
-                        input.setText("")
-                        updateUi()
-                    },
-                    onFailure = { status.text = it.message ?: "Не удалось сохранить ключ" }
-                )
-            }
-        }, params(dp(54), dp(4)))
-        root.addView(editor)
-        val addButton = button("ВВЕСТИ API-КЛЮЧ", "#1F6FEB").apply {
-            setOnClickListener {
-                visibility = View.GONE
-                editor.visibility = View.VISIBLE
-                input.requestFocus()
-            }
-        }
-        root.addView(addButton, params(dp(54), dp(4)))
-        val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        actions.addView(button("ИЗМЕНИТЬ API", "#1F6FEB").apply {
-            setOnClickListener {
-                actions.visibility = View.GONE
-                editor.visibility = View.VISIBLE
-                input.setText("")
-                input.requestFocus()
-            }
-        }, LinearLayout.LayoutParams(0, dp(54), 1f))
-        actions.addView(button("УДАЛИТЬ", "#DA3633").apply {
-            setOnClickListener {
-                AlertDialog.Builder(this@EventRadarActivity)
-                    .setTitle("Удалить ключ $provider?")
-                    .setMessage("После удаления $provider перестанет получать новые запросы. Остальные данные приложения сохранятся.")
-                    .setPositiveButton("Удалить") { _, _ ->
-                        onDelete()
-                        input.setText("")
-                        updateUi()
-                    }
-                    .setNegativeButton("Отмена", null)
-                    .show()
-            }
-        }, LinearLayout.LayoutParams(0, dp(54), 1f).apply { leftMargin = dp(8) })
-        root.addView(actions, params(dp(54), dp(4)))
-        return ApiKeyUi(root, status, editor, input, addButton, actions)
-    }
-
-    private fun updateKeyPanels(state: EventRadarState) {
-        val geminiConfigured = EventRadarStore.apiKey(this).isNotBlank()
-        geminiKeyUi.editor.visibility = View.GONE
-        geminiKeyUi.addButton.visibility = if (geminiConfigured) View.GONE else View.VISIBLE
-        geminiKeyUi.actions.visibility = if (geminiConfigured) View.VISIBLE else View.GONE
-        geminiKeyUi.status.text = when {
-            !geminiConfigured -> "GEMINI • API-ключ не введён"
-            state.gemini.lastSuccess > 0L && state.gemini.error.isBlank() ->
-                "GEMINI • API-ключ введён • всё работает"
-            else -> "GEMINI • API-ключ введён • ожидает проверки"
-        }
-
-        val deepConfigured = DeepSeekSecureKeyStore.read(this).isNotBlank()
-        val supervisor = PositionSupervisorStore.state(this)
-        val deepConnection = DeepSeekConnectionStore.state(this)
-        deepSeekKeyUi.editor.visibility = View.GONE
-        deepSeekKeyUi.addButton.visibility = if (deepConfigured) View.GONE else View.VISIBLE
-        deepSeekKeyUi.actions.visibility = if (deepConfigured) View.VISIBLE else View.GONE
-        deepSeekKeyUi.status.text = when {
-            !deepConfigured -> "DEEPSEEK • API-ключ не введён"
-            deepConnection.lastSuccess > 0L && deepConnection.error.isBlank() ->
-                "DEEPSEEK • API-ключ введён • всё работает\n${deepConnection.models}"
-            supervisor.lastSuccess > 0L && supervisor.error.isBlank() ->
-                "DEEPSEEK • API-ключ введён • всё работает • ${supervisor.model}"
-            deepConnection.error.isNotBlank() ->
-                "DEEPSEEK • ключ сохранён, но проверка не прошла: ${deepConnection.error}"
-            else -> "DEEPSEEK • API-ключ введён • проверяю подключение…"
-        }
-    }
-
     private fun updateDetails(state: EventRadarState) {
         val sourceLines = if (state.sourceChecks.isEmpty()) {
             "Источники ещё не проверялись"
@@ -366,7 +159,6 @@ class EventRadarActivity : AppCompatActivity() {
             "${check.source}: $result"
         }
         val gemini = state.gemini
-        val budget = GeminiRequestBudget.state(this)
         val web = if (gemini.webReferenceTitles.isEmpty()) "дополнительных ссылок Google Search не вернул" else {
             gemini.webReferenceTitles.joinToString("\n") { "• $it" }
         }
@@ -382,12 +174,6 @@ class EventRadarActivity : AppCompatActivity() {
             append("\nПолучено: ${gemini.outputSummary.ifBlank { "—" }}")
             append("\nОценка: ${signed(gemini.directionScore)}/100 • важность ${gemini.importance}/100 • уверенность ${gemini.confidence}/100")
             append("\nПоправка к шкале: ${signed(state.informationAdjustment())} из ±12 • горизон ${gemini.horizonHours} ч")
-            append("\nНовостной контур: ${gemini.requestsToday} запросов • ${gemini.promptTokensToday} входных + ${gemini.outputTokensToday} выходных = ${gemini.totalTokensToday} токенов")
-            val positionOpen = PumpBotEngine.snapshot(this@EventRadarActivity).let {
-                it.waitMode == "SELL" && it.entryPrice > 0.0
-            }
-            append("\nБюджет Gemini: ${budget.usedToday}/${GeminiRequestBudget.activeLimit(positionOpen)} доступных сейчас")
-            append(" • резерв позиции ${GeminiRequestBudget.MAX_REQUESTS_PER_DAY - GeminiRequestBudget.NORMAL_REQUESTS_PER_DAY}")
             append("\nВнешние ссылки Gemini: ${gemini.webReferences}\n$web")
             if (gemini.detailedAnalysis.isNotBlank()) {
                 append("\n\nПОДРОБНЫЙ АНАЛИЗ\n${gemini.detailedAnalysis}")

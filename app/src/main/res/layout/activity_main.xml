@@ -441,29 +441,33 @@
             android:layout_marginTop="10dp"
             android:orientation="horizontal">
 
-            <TextView
-                android:id="@+id/tvBuySignal"
+            <Button
+                android:id="@+id/btnDeepSeekApi"
                 android:layout_width="0dp"
                 android:layout_height="72dp"
                 android:layout_weight="1"
-                android:background="#161B22"
+                android:backgroundTint="#174D2A"
                 android:gravity="center"
-                android:text="Покупка: нет"
-                android:textColor="#8B949E"
-                android:textSize="21sp"
+                android:maxLines="4"
+                android:padding="3dp"
+                android:text="DEEPSEEK API&#10;ОСНОВНОЙ&#10;открыть центр"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
                 android:textStyle="bold" />
 
-            <TextView
-                android:id="@+id/tvSellSignal"
+            <Button
+                android:id="@+id/btnGeminiApi"
                 android:layout_width="0dp"
                 android:layout_height="72dp"
                 android:layout_marginStart="8dp"
                 android:layout_weight="1"
-                android:background="#161B22"
+                android:backgroundTint="#5B318F"
                 android:gravity="center"
-                android:text="Продажа: нет"
-                android:textColor="#8B949E"
-                android:textSize="21sp"
+                android:maxLines="4"
+                android:padding="3dp"
+                android:text="GEMINI API&#10;РЕЗЕРВ&#10;открыть центр"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
                 android:textStyle="bold" />
         </LinearLayout>
 

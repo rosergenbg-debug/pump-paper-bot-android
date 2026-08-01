@@ -16,9 +16,7 @@ object SignalGaugeDialog {
     fun show(context: Context, snapshot: LiveSnapshot) {
         val now = System.currentTimeMillis()
         val radar = EventRadarStore.state(context)
-        val geminiState = GeminiPaperStore.state(context)
-        val geminiDecision = GeminiGaugePolicy.currentDecision(geminiState, now)
-        val lastGeminiDecision = geminiState.portfolio.decisions.lastOrNull()
+        val deepSeek = DeepSeekPrimaryStore.state(context)
         val internalScore = snapshot.directionScore
         val information = radar.informationAdjustment(now)
         val totalScore = radar.combinedDirection(internalScore, now)
@@ -39,8 +37,8 @@ object SignalGaugeDialog {
                 appInternal = internalScore,
                 appAdjustment = information,
                 appTotal = totalScore,
-                geminiScore = geminiDecision?.directionScore,
-                geminiConfidence = geminiDecision?.confidence ?: 0
+                geminiScore = deepSeek.direction.takeIf { deepSeek.lastSuccess > 0L },
+                geminiConfidence = deepSeek.confidence
             )
         }, LinearLayout.LayoutParams(-1, dp(context, 390)))
 
@@ -65,43 +63,30 @@ object SignalGaugeDialog {
         }))
 
         root.addView(section(context, "#211A36", buildString {
-            append("GEMINI • ВИРТУАЛЬНЫЙ ТРЕЙДЕР\n")
-            if (geminiDecision == null) {
-                append("Текущего числа на шкале нет. ")
-                append(GeminiGaugePolicy.unavailableReason(geminiState, now))
-                append("\nСтатус: ${GeminiHourlyRetryPolicy.visibleStatus(geminiState, now)}")
-                if (lastGeminiDecision != null) {
-                    append("\nПоследнее сохранённое решение: ${actionRu(lastGeminiDecision.requestedAction)}")
-                    append(" • ${signed(lastGeminiDecision.directionScore)}/100")
-                    append(" • уверенность ${lastGeminiDecision.confidence}/100")
-                    append(" • ${PumpBotEngine.formatTime(lastGeminiDecision.decidedAt)}")
-                }
+            append("DEEPSEEK • ОСНОВНОЙ АНАЛИТИК\n")
+            if (deepSeek.lastSuccess <= 0L) {
+                append("Текущего числа на шкале нет. ${deepSeek.error.ifBlank { "Ожидается первый рыночный анализ." }}")
             } else {
-                append("Решение: ${actionRu(geminiDecision.requestedAction)}")
-                append(" • направление ${signed(geminiDecision.directionScore)}/100")
-                append(" • уверенность ${geminiDecision.confidence}/100")
-                append("\nКогда: ${PumpBotEngine.formatTime(geminiDecision.decidedAt)}")
-                append(" • горизонт ${geminiDecision.horizonHours} ч")
-                if (geminiDecision.model.isNotBlank()) append(" • ${geminiDecision.model}")
-                append("\nЧто сделано: ${geminiDecision.execution}")
-                append("\nПочему: ${geminiDecision.reason}")
-                if (geminiDecision.risks.isNotEmpty()) {
-                    append("\nРиски: ${geminiDecision.risks.joinToString("; ")}")
-                }
+                append("Решение: ${actionRu(deepSeek.action)}")
+                append(" • направление ${signed(deepSeek.direction)}/100")
+                append(" • уверенность ${deepSeek.confidence}/100 • опасность ${deepSeek.danger}/10")
+                append("\nКогда: ${PumpBotEngine.formatTime(deepSeek.lastSuccess)} • ${deepSeek.model}")
+                append("\nПочему: ${deepSeek.summary}")
+                if (deepSeek.evidence.isNotEmpty()) append("\nФакты: ${deepSeek.evidence.joinToString("; ")}")
+                if (deepSeek.risks.isNotEmpty()) append("\nРиски: ${deepSeek.risks.joinToString("; ")}")
             }
-            append("\n\nКто считает: отдельный Gemini-контур после полностью закрытого часа.")
-            append("\nОн самостоятельно ведёт только виртуальные €1 000 и не меняет реальные BUY/SELL основной стратегии.")
+            append("\n\nКто считает: DeepSeek Flash по полному рыночному кадру каждые 5 минут и при существенном изменении сигнала.")
+            append("\nОн даёт независимый аналитический сигнал и не меняет сделки APP автоматически.")
         }))
 
         root.addView(section(context, "#101820", buildString {
             append("КАК ЧИТАТЬ ДВЕ ШКАЛЫ\n")
             append("APP обновляется по живому рынку и показывает общий фон приложения с небольшой новостной поправкой.")
-            append("\nGEMINI раз в час выдаёт отдельное решение для своего виртуального портфеля.")
+            append("\nDEEPSEEK регулярно выдаёт отдельное решение по тому же рынку.")
             append("\nПоэтому значения могут расходиться — это два независимых взгляда, а не ошибка.")
             append("\n\nРадар: ${radar.sourceCount}/${EventRadarClient.totalSources} источников • ${radar.parsedEntries} сообщений")
             append("\nНовостной Gemini: ${if (radar.aiEnabled) radar.gemini.status else "ВЫКЛЮЧЁН"}")
-            append(" • виртуальный Gemini: ${GeminiHourlyRetryPolicy.visibleStatus(geminiState, now)}")
-            append("\n\nСиний маркер APP — расчёт приложения без новостей. Фиолетовый — итог APP после новостной поправки. Оранжевый — самостоятельное решение Gemini.")
+            append("\n\nСиний маркер APP — расчёт приложения без новостей. Фиолетовый — итог APP после новостной поправки. Оранжевый — самостоятельное решение DeepSeek.")
             append("\nЭто шкалы направления, а не вероятность прибыли и не автоматический приказ купить.")
         }))
         AlertDialog.Builder(context)
@@ -139,7 +124,8 @@ object SignalGaugeDialog {
 
     private fun actionRu(value: String): String = when (value) {
         "BUY" -> "КУПИТЬ"
-        "SELL" -> "ПРОДАТЬ"
+        "SELL", "EXIT" -> "ПРОДАТЬ / ВЫЙТИ"
+        "WATCH" -> "НАБЛЮДАТЬ"
         else -> "ДЕРЖАТЬ / ЖДАТЬ"
     }
 }
@@ -173,7 +159,7 @@ private class DualSignalGaugeView(context: Context) : View(context) {
     private var geminiConfidence = 0
 
     init {
-        contentDescription = "Две шкалы от плюс ста до минус ста: итог приложения и самостоятельное решение Gemini"
+        contentDescription = "Две шкалы от плюс ста до минус ста: итог приложения и самостоятельное решение DeepSeek"
     }
 
     fun setScores(
@@ -234,7 +220,7 @@ private class DualSignalGaugeView(context: Context) : View(context) {
         drawTrack(appX)
         drawTrack(geminiX)
         canvas.drawText("APP", appX, dp(20f), text)
-        canvas.drawText("GEMINI", geminiX, dp(20f), text)
+        canvas.drawText("DEEPSEEK", geminiX, dp(20f), text)
         canvas.drawText("итог ${signed(appTotal)}", appX, dp(41f), small)
         canvas.drawText(
             geminiScore?.let { signed(it) } ?: "нет свежего",

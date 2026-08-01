@@ -611,7 +611,13 @@ internal class GeminiEventInterpreter(
             .header("x-goog-api-key", apiKey)
             .post(body)
             .build()
-        GeminiRequestBudget.requirePermit(context)
+        val requestStarted = System.currentTimeMillis()
+        GeminiRequestBudget.requirePermit(context, requestStarted)
+        ApiUsageLogStore.record(context, ApiUsageEvent(
+            provider = "GEMINI", circuit = "НОВОСТНОЙ РАДАР", model = model,
+            status = "START", at = requestStarted,
+            detail = if (detailed) "ручной подробный анализ" else "автоматический анализ новости"
+        ))
         EventRadarStore.markGeminiAttempt(
             context,
             event.title,
@@ -624,19 +630,33 @@ internal class GeminiEventInterpreter(
         return client.newCall(request).execute().use { response ->
             val responseBody = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
-                if (response.code == 429) {
-                    GeminiRequestBudget.recordRateLimit(
-                        context,
-                        response.header("Retry-After")?.trim()?.toLongOrNull()
-                    )
-                }
                 val message = runCatching {
                     JSONObject(responseBody).optJSONObject("error")?.optString("message")
                 }.getOrNull().orEmpty().ifBlank { "Gemini HTTP ${response.code}" }
+                if (response.code == 429) {
+                    GeminiRequestBudget.recordRateLimit(
+                        context,
+                        response.header("Retry-After")?.trim()?.toLongOrNull(),
+                        dailyQuota = GeminiRequestBudget.isDailyQuotaMessage(message)
+                    )
+                }
+                ApiUsageLogStore.record(context, ApiUsageEvent(
+                    provider = "GEMINI", circuit = "НОВОСТНОЙ РАДАР", model = model,
+                    status = "ERROR", at = System.currentTimeMillis(),
+                    durationMillis = System.currentTimeMillis() - requestStarted,
+                    detail = "HTTP ${response.code}: $message".take(300)
+                ))
                 throw GeminiApiException(response.code, message.take(500))
             }
             GeminiRequestBudget.recordSuccess(context)
-            GeminiResponseParser.parse(responseBody, event, response.code, model)
+            GeminiResponseParser.parse(responseBody, event, response.code, model).also {
+                ApiUsageLogStore.record(context, ApiUsageEvent(
+                    provider = "GEMINI", circuit = "НОВОСТНОЙ РАДАР", model = model,
+                    status = "OK", at = System.currentTimeMillis(),
+                    durationMillis = System.currentTimeMillis() - requestStarted,
+                    detail = event.title.take(260)
+                ))
+            }
         }
     }
 

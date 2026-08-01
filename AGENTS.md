@@ -53,6 +53,7 @@ Serge values timely, unmistakable phone alerts. APP and Gemini must each generat
 - V3.22: full audit fixes for durable trade-alert delivery, independent APP readiness, storage recovery and current UI text, code 54, current work.
 - V4.0: protected Gemini/DeepSeek key UX and DeepSeek Flash/Pro supervision of Serge's open position, code 55, current work.
 - V4.1: DeepSeek Flash primary market/news circuit, DeepSeek Pro position reserve and 50/50 Gemini daily quota split, code 56, current work.
+- V4.2: dedicated DeepSeek/Gemini API centers, DeepSeek signal gauge, five-minute rich-market analysis and two-hour routine Gemini cadence, code 57, current work.
 
 ## Verification before delivery
 

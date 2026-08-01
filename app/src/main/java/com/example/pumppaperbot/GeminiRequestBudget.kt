@@ -31,8 +31,8 @@ internal class GeminiRequestBlockedException(
  * The day follows the quota reset timezone used by Gemini API projects.
  */
 object GeminiRequestBudget {
-    const val MAX_REQUESTS_PER_DAY = 20
-    const val NORMAL_REQUESTS_PER_DAY = 10
+    const val MAX_REQUESTS_PER_DAY = 25
+    const val NORMAL_REQUESTS_PER_DAY = 12
 
     private const val PREFS = "gemini_request_budget_v37"
     private const val KEY_DAY = "pacific_day"
@@ -100,6 +100,7 @@ object GeminiRequestBudget {
     internal fun recordRateLimit(
         context: Context,
         retryAfterSeconds: Long? = null,
+        dailyQuota: Boolean = false,
         now: Long = System.currentTimeMillis()
     ): GeminiBudgetState = synchronized(lock) {
         resetDayIfNeeded(context, now)
@@ -114,7 +115,7 @@ object GeminiRequestBudget {
             ?.coerceIn(1L, 6L * 60L * 60L)
             ?.times(1000L)
             ?: 0L
-        val until = now + maxOf(fallbackDelay, serverDelay)
+        val until = if (dailyQuota) nextPacificReset(now) else now + maxOf(fallbackDelay, serverDelay)
         prefs.edit()
             .putInt(KEY_RATE_LIMIT_STRIKES, strikes)
             .putLong(KEY_BACKOFF_UNTIL, until)
@@ -148,6 +149,12 @@ object GeminiRequestBudget {
 
     internal fun activeLimit(positionOpen: Boolean): Int =
         if (positionOpen) MAX_REQUESTS_PER_DAY else NORMAL_REQUESTS_PER_DAY
+
+    internal fun isDailyQuotaMessage(message: String): Boolean {
+        val lower = message.lowercase(Locale.ROOT)
+        return "per day" in lower || "requests per day" in lower || "daily" in lower ||
+            "per_model_per_day" in lower || "rpd" in lower
+    }
 
     private fun stateLocked(context: Context, now: Long): GeminiBudgetState {
         val prefs = prefs(context)

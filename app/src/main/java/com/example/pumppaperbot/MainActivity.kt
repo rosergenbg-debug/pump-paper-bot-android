@@ -36,8 +36,6 @@ class MainActivity : AppCompatActivity() {
 
     private var tvStatus: TextView? = null
     private var tvLatestSignal: TextView? = null
-    private var tvBuySignal: TextView? = null
-    private var tvSellSignal: TextView? = null
     private var tvMode: TextView? = null
     private var tvReadiness: TextView? = null
     private var tvRapidDrop: TextView? = null
@@ -72,6 +70,8 @@ class MainActivity : AppCompatActivity() {
     private var btnGeminiExitExperiment: Button? = null
     private var btnUserPaper: Button? = null
     private var btnCompetition: Button? = null
+    private var btnDeepSeekApi: Button? = null
+    private var btnGeminiApi: Button? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -80,8 +80,6 @@ class MainActivity : AppCompatActivity() {
 
         tvStatus = findViewById(R.id.tvStatus)
         tvLatestSignal = findViewById(R.id.tvLatestSignal)
-        tvBuySignal = findViewById(R.id.tvBuySignal)
-        tvSellSignal = findViewById(R.id.tvSellSignal)
         tvMode = findViewById(R.id.tvMode)
         tvReadiness = findViewById(R.id.tvReadiness)
         tvRapidDrop = findViewById(R.id.tvRapidDrop)
@@ -116,6 +114,8 @@ class MainActivity : AppCompatActivity() {
         btnGeminiExitExperiment = findViewById(R.id.btnGeminiExitExperiment)
         btnUserPaper = findViewById(R.id.btnUserPaper)
         btnCompetition = findViewById(R.id.btnCompetition)
+        btnDeepSeekApi = findViewById(R.id.btnDeepSeekApi)
+        btnGeminiApi = findViewById(R.id.btnGeminiApi)
 
         PumpBotEngine.ensureInitialized(this)
         requestNotificationPermission()
@@ -165,6 +165,16 @@ class MainActivity : AppCompatActivity() {
         }
         btnCompetition?.setOnClickListener {
             startActivity(Intent(this, CompetitionActivity::class.java))
+        }
+        btnDeepSeekApi?.setOnClickListener {
+            startActivity(Intent(this, ApiCenterActivity::class.java).putExtra(
+                ApiCenterActivity.EXTRA_PROVIDER, ApiCenterActivity.DEEPSEEK
+            ))
+        }
+        btnGeminiApi?.setOnClickListener {
+            startActivity(Intent(this, ApiCenterActivity::class.java).putExtra(
+                ApiCenterActivity.EXTRA_PROVIDER, ApiCenterActivity.GEMINI
+            ))
         }
         chart?.setOnClickListener { startActivity(Intent(this, ChartDetailActivity::class.java)) }
 
@@ -234,7 +244,8 @@ class MainActivity : AppCompatActivity() {
             .setConstraints(networkConstraints())
             .setInputData(workDataOf(
                 PumpBotWorker.INPUT_CYCLE_SOURCE to "РУЧНАЯ ПРОВЕРКА",
-                PumpBotWorker.INPUT_CYCLE_INTERVAL to interval
+                PumpBotWorker.INPUT_CYCLE_INTERVAL to interval,
+                PumpBotWorker.INPUT_FORCE_PRIMARY_DEEPSEEK to true
             ))
             .build()
         WorkManager.getInstance(this).enqueue(request)
@@ -386,8 +397,7 @@ class MainActivity : AppCompatActivity() {
         renderBreathing(snapshot)
 
         renderStrategyButtons(snapshot.aggressive)
-        renderSignalBox(tvBuySignal, "BUY", snapshot.buySignal, snapshot.waitMode == "BUY")
-        renderSignalBox(tvSellSignal, "SELL", snapshot.sellSignal, snapshot.waitMode == "SELL")
+        renderApiButtons()
 
         tvPrice?.text = String.format(
             Locale.US,
@@ -441,17 +451,16 @@ class MainActivity : AppCompatActivity() {
         val now = System.currentTimeMillis()
         val radar = EventRadarStore.state(this)
         val appCombinedDirection = radar.combinedDirection(snapshot.directionScore, now)
-        val geminiState = GeminiPaperStore.state(this)
-        val currentGeminiDecision = GeminiGaugePolicy.currentDecision(geminiState, now)
+        val deepSeekSignal = DeepSeekPrimaryStore.state(this)
         chart?.setData(
             "PUMP/EUR • ДЫХАНИЕ РЫНКА",
             snapshot.chart.copy(
                 directionScore = appCombinedDirection,
                 showGeminiGauge = true,
-                geminiDirectionScore = currentGeminiDecision?.directionScore,
-                geminiConfidenceScore = currentGeminiDecision?.confidence ?: 0,
-                geminiAction = currentGeminiDecision?.requestedAction.orEmpty(),
-                geminiStatus = GeminiHourlyRetryPolicy.visibleStatus(geminiState, now)
+                geminiDirectionScore = deepSeekSignal.direction.takeIf { deepSeekSignal.lastSuccess > 0L },
+                geminiConfidenceScore = deepSeekSignal.confidence,
+                geminiAction = deepSeekSignal.action,
+                geminiStatus = if (deepSeekSignal.error.isNotBlank()) "ОШИБКА: ${deepSeekSignal.error}" else "DEEPSEEK РАБОТАЕТ"
             )
         )
     }
@@ -680,17 +689,19 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun renderSignalBox(view: TextView?, label: String, signal: Boolean, selectedMode: Boolean) {
-        val color = when {
-            signal && label == "BUY" -> "#238636"
-            signal && label == "SELL" -> "#DA3633"
-            selectedMode -> "#30363D"
-            else -> "#161B22"
+    private fun renderApiButtons() {
+        val deep = DeepSeekPrimaryStore.state(this)
+        btnDeepSeekApi?.text = if (DeepSeekSecureKeyStore.read(this).isBlank()) {
+            "DEEPSEEK API\nКЛЮЧ НЕ ВВЕДЁН\nоткрыть центр"
+        } else {
+            "DEEPSEEK • ОСНОВНОЙ\n${deep.action} ${signed(deep.direction)}/100\n${deep.successfulToday} OK • ${deep.failedToday} ERR"
         }
-        view?.setBackgroundColor(Color.parseColor(color))
-        val display = if (label == "BUY") "Покупка" else "Продажа"
-        view?.text = if (signal) "$display: СИГНАЛ" else "$display: нет"
-        view?.setTextColor(if (signal) Color.WHITE else Color.parseColor("#8B949E"))
+        val budget = GeminiRequestBudget.state(this)
+        btnGeminiApi?.text = if (EventRadarStore.apiKey(this).isBlank()) {
+            "GEMINI API\nКЛЮЧ НЕ ВВЕДЁН\nоткрыть центр"
+        } else {
+            "GEMINI • РЕЗЕРВ\n${budget.usedToday}/${GeminiRequestBudget.MAX_REQUESTS_PER_DAY} сегодня\nосталось ${budget.remainingToday}"
+        }
     }
 
     private fun requestNotificationPermission() {
