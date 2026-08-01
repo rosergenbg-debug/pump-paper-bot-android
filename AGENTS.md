@@ -58,6 +58,13 @@ Serge values timely, unmistakable phone alerts. APP and Gemini must each generat
 - V4.4: finish-reason-aware DeepSeek JSON recovery, economical reasoning, stale-signal suppression and shareable redacted diagnostics, code 59, current work.
 - V4.5: copyable/selectable diagnostics with per-version API telemetry separation, code 60, current work.
 
+## Accumulated next-release backlog
+
+- Record Serge's small, non-urgent corrections here as soon as they are agreed, instead of relying on chat memory or producing a separate APK for every minor issue.
+- Before scoping the next release, review every open item in this section, implement the compatible items together, add focused verification, and then remove or mark each completed item while recording the result in `DEVELOPMENT_LOG.md`.
+- Open diagnostic-timestamp correction: `lastAttempt` may continue to represent request start, but `lastSuccess` must be persisted and displayed as the completion/acceptance time of the successful response. In V4.5 it currently repeats the start time, even though the API event correctly records the later completion time. This is display/telemetry accuracy only and must not change DeepSeek scheduling or trading logic.
+- Do not create a standalone release solely for the timestamp correction; include it with the next suitable accumulated release unless it is found to affect runtime correctness.
+
 ## Verification before delivery
 
 - Run unit tests and assemble the APK.
