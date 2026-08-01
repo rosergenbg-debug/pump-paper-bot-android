@@ -294,7 +294,7 @@ object AppPaperStore {
         val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val current = state(context)
         check(p.getString(KEY_STORAGE_ERROR, "").isNullOrBlank()) {
-            p.getString(KEY_STORAGE_ERROR, "Ошибка хранилища APP")
+            p.getString(KEY_STORAGE_ERROR, "Ошибка хранилища APP").orEmpty()
         }
         val evaluation = PumpBotEngine.evaluateAppPaper(context, current)
         val next = AppPaperTrader.apply(current, evaluation)

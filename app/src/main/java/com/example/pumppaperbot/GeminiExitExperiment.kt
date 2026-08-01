@@ -530,7 +530,7 @@ object GeminiExitExperimentStore {
         flushPendingAlerts(context)
         val existing = state(context)
         check(prefs(context).getString(KEY_STORAGE_ERROR, "").isNullOrBlank()) {
-            prefs(context).getString(KEY_STORAGE_ERROR, "Ошибка хранилища Gemini‑эксперимента")
+            prefs(context).getString(KEY_STORAGE_ERROR, "Ошибка хранилища Gemini‑эксперимента").orEmpty()
         }
         var initial = GeminiExitExperimentEngine.bootstrap(existing, controlPortfolio, now)
         controlPortfolio.trades.maxByOrNull { it.decisionId }?.let { latest ->
@@ -586,7 +586,7 @@ object GeminiExitExperimentStore {
     fun mirrorControlTrade(context: Context, trade: GeminiPaperTrade): GeminiExitExperimentState {
         val current = state(context) ?: GeminiExitExperimentState(initializedAt = trade.time)
         check(prefs(context).getString(KEY_STORAGE_ERROR, "").isNullOrBlank()) {
-            prefs(context).getString(KEY_STORAGE_ERROR, "Ошибка хранилища Gemini‑эксперимента")
+            prefs(context).getString(KEY_STORAGE_ERROR, "Ошибка хранилища Gemini‑эксперимента").orEmpty()
         }
         val result = GeminiExitExperimentEngine.mirrorControlTrade(current, trade)
         save(context, result.state, result.executedTrade)

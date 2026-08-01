@@ -1035,7 +1035,7 @@ object GeminiPaperStore {
 
     fun requireHealthyPortfolio(context: Context) {
         check(prefs(context).getString(KEY_STORAGE_ERROR, "").isNullOrBlank()) {
-            prefs(context).getString(KEY_STORAGE_ERROR, "Ошибка хранилища Gemini")
+            prefs(context).getString(KEY_STORAGE_ERROR, "Ошибка хранилища Gemini").orEmpty()
         }
     }
 

@@ -86,3 +86,4 @@ This is the agent's chronological external memory. Append every material change;
 - Internal network identification now uses the build version instead of hard-coded `3.18`.
 - Removed the personal key fetch and plaintext signing password from the active GitHub workflow. CI produces and verifies only an intermediate debug APK; the installed-compatible personal signature is applied after CI verification.
 - Release metadata advanced once to V3.22/code 54. Added focused unit coverage for the 06:15 schedule boundary and independent APP readiness. Full CI build, APK inspection and compatible signature verification are pending.
+- GitHub Actions run #113 reached Kotlin compilation and exposed two build-only type issues: BuildConfig generation was disabled and storage-error message lambdas returned nullable strings. Enabled `buildConfig` and made all four messages non-null; no strategy logic changed. A clean CI rerun is required.
