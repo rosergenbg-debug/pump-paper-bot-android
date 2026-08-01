@@ -654,6 +654,8 @@ internal class GeminiEventInterpreter(
                     provider = "GEMINI", circuit = "НОВОСТНОЙ РАДАР", model = model,
                     status = "OK", at = System.currentTimeMillis(),
                     durationMillis = System.currentTimeMillis() - requestStarted,
+                    promptTokens = it.promptTokens,
+                    outputTokens = it.outputTokens,
                     detail = event.title.take(260)
                 ))
             }

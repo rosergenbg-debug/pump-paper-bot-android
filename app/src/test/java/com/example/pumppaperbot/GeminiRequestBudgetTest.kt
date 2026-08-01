@@ -19,4 +19,9 @@ class GeminiRequestBudgetTest {
         assertEquals("2026-07-25", GeminiRequestBudget.pacificDayKey(afterPacificMidnight))
         assertTrue(GeminiRequestBudget.nextPacificReset(beforePacificMidnight) > beforePacificMidnight)
     }
+
+    @Test fun `daily quota errors are distinguished from minute limits`() {
+        assertTrue(GeminiRequestBudget.isDailyQuotaMessage("GenerateRequestsPerModelPerDay-FreeTier"))
+        assertTrue(GeminiRequestBudget.isDailyQuotaMessage("Requests per day quota exceeded"))
+    }
 }

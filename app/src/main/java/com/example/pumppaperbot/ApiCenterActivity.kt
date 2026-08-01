@@ -233,7 +233,8 @@ class ApiCenterActivity : AppCompatActivity() {
                 append("\n${state.summary}")
                 if (state.evidence.isNotEmpty()) append("\nФакты: ${state.evidence.joinToString("; ")}")
                 if (state.risks.isNotEmpty()) append("\nРиски: ${state.risks.joinToString("; ")}")
-                append("\nПоследний ответ: ${time(state.lastSuccess)} • следующий плановый: ${time(state.lastAttempt + DeepSeekPrimaryPolicy.INTERVAL)}")
+                val next = state.lastAttempt.takeIf { it > 0L }?.plus(DeepSeekPrimaryPolicy.INTERVAL) ?: 0L
+                append("\nПоследний ответ: ${time(state.lastSuccess)} • следующий плановый: ${time(next)}")
                 append("\nПозиция Сержа: ${PositionSupervisorPolicy.statusText(position)}")
             }
         } else {
