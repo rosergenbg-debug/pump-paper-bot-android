@@ -32,11 +32,15 @@ class PumpBotWorker(
         GeminiPaperStore.beginCycle(applicationContext, source, interval, startedAt)
         return try {
             market.sync(applicationContext)
+            val eventState = eventRadar.sync(applicationContext)
+            val deepSeek = DeepSeekPrimaryAnalyst().sync(
+                applicationContext,
+                force = forcePositionPro
+            )
             PositionSupervisorClient().sync(
                 applicationContext,
                 forceCritical = forcePositionPro
             )
-            val eventState = eventRadar.sync(applicationContext)
             GeminiPaperStore.markDataReady(
                 applicationContext,
                 source,
@@ -70,7 +74,7 @@ class PumpBotWorker(
                 source,
                 startedAt,
                 finishedAt + interval,
-                "проверка завершена; Gemini: ${gemini.status}",
+                "проверка завершена; DeepSeek основной: ${deepSeek.action}; Gemini: ${gemini.status}",
                 finishedAt
             )
             Result.success()

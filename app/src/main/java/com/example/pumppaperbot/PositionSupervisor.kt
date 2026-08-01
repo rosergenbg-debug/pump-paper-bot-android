@@ -327,11 +327,13 @@ class PositionSupervisorClient {
             .put("messages", JSONArray()
                 .put(JSONObject().put("role", "system").put("content", system))
                 .put(JSONObject().put("role", "user").put("content", frame.toString())))
-            .put("thinking", JSONObject().put("type", "enabled").put(
-                "reasoning_effort", if (criticalReasoning || model == PositionSupervisorPolicy.PRO_MODEL) "max" else "low"
-            ))
+            .put("thinking", JSONObject().put("type", "enabled"))
+            .put(
+                "reasoning_effort",
+                if (criticalReasoning || model == PositionSupervisorPolicy.PRO_MODEL) "max" else "low"
+            )
             .put("response_format", JSONObject().put("type", "json_object"))
-            .put("max_tokens", if (model == PositionSupervisorPolicy.PRO_MODEL) 1200 else 500)
+            .put("max_tokens", if (model == PositionSupervisorPolicy.PRO_MODEL) 2200 else 700)
         val request = Request.Builder()
             .url("https://api.deepseek.com/chat/completions")
             .header("Authorization", "Bearer $apiKey")

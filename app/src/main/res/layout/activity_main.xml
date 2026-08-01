@@ -30,6 +30,19 @@
             android:textSize="14sp" />
 
         <TextView
+            android:id="@+id/tvDeepSeekPrimary"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="7dp"
+            android:background="#10251C"
+            android:minHeight="68dp"
+            android:padding="9dp"
+            android:text="DEEPSEEK • ОСНОВНОЙ • ожидает первый анализ"
+            android:textColor="#7EE787"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <TextView
             android:id="@+id/tvLatestSignal"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

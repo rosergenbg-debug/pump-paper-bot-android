@@ -52,6 +52,7 @@ Serge values timely, unmistakable phone alerts. APP and Gemini must each generat
 - V3.21: APP confirmed-trend continuation entry, code 53, current work.
 - V3.22: full audit fixes for durable trade-alert delivery, independent APP readiness, storage recovery and current UI text, code 54, current work.
 - V4.0: protected Gemini/DeepSeek key UX and DeepSeek Flash/Pro supervision of Serge's open position, code 55, current work.
+- V4.1: DeepSeek Flash primary market/news circuit, DeepSeek Pro position reserve and 50/50 Gemini daily quota split, code 56, current work.
 
 ## Verification before delivery
 

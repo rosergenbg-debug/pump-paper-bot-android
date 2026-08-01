@@ -52,6 +52,7 @@ class MainActivity : AppCompatActivity() {
     private var tvPosition: TextView? = null
     private var tvManualPnl: TextView? = null
     private var tvPositionSupervisor: TextView? = null
+    private var tvDeepSeekPrimary: TextView? = null
     private var tvAlertStatus: TextView? = null
     private var chart: StrategyChartView? = null
     private var manualPositionChart: ManualPositionChartView? = null
@@ -95,6 +96,7 @@ class MainActivity : AppCompatActivity() {
         tvPosition = findViewById(R.id.tvPosition)
         tvManualPnl = findViewById(R.id.tvManualPnl)
         tvPositionSupervisor = findViewById(R.id.tvPositionSupervisor)
+        tvDeepSeekPrimary = findViewById(R.id.tvDeepSeekPrimary)
         tvAlertStatus = findViewById(R.id.tvAlertStatus)
         chart = findViewById(R.id.chart)
         manualPositionChart = findViewById(R.id.manualPositionChart)
@@ -354,6 +356,14 @@ class MainActivity : AppCompatActivity() {
         } else {
             "Монитор остановлен • последнее обновление ${PumpBotEngine.formatTime(snapshot.lastSync)}"
         }
+        val deepSeekPrimary = DeepSeekPrimaryStore.state(this)
+        tvDeepSeekPrimary?.text = DeepSeekPrimaryPolicy.compactStatus(
+            deepSeekPrimary,
+            DeepSeekSecureKeyStore.read(this).isNotBlank()
+        )
+        tvDeepSeekPrimary?.setTextColor(Color.parseColor(
+            if (deepSeekPrimary.error.isBlank()) "#7EE787" else "#FF7B72"
+        ))
         renderLatestSignal()
         tvMode?.text = if (snapshot.rapidDrop.active) {
             String.format(Locale.GERMANY, "АВАРИЙНОЕ ПАДЕНИЕ −%.1f%% — ПРОВЕРЬТЕ РЫНОК", snapshot.rapidDrop.dropPercent)

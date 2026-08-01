@@ -208,6 +208,13 @@ class EventRadarActivity : AppCompatActivity() {
         }
         if (state.error.isNotBlank()) status.append("\nНе все источники ответили: ${state.error}")
         val gemini = state.gemini
+        val deepSeek = DeepSeekPrimaryStore.state(this)
+        status.append("\nDEEPSEEK ОСНОВНОЙ: ${deepSeek.action} • ${deepSeek.successfulToday} успешно / ${deepSeek.failedToday} ошибок")
+        if (deepSeek.lastSuccess > 0L) {
+            status.append(" • последний ${PumpBotEngine.formatTime(deepSeek.lastSuccess)}")
+            status.append("\nDeepSeek: ${deepSeek.summary}")
+        }
+        if (deepSeek.error.isNotBlank()) status.append("\nОшибка DeepSeek: ${deepSeek.error}")
         status.append("\nGEMINI: ${gemini.status}")
         if (gemini.lastSuccess > 0L) {
             status.append(" • HTTP ${gemini.httpCode} • ${gemini.totalTokensToday} токенов сегодня")
@@ -376,7 +383,11 @@ class EventRadarActivity : AppCompatActivity() {
             append("\nОценка: ${signed(gemini.directionScore)}/100 • важность ${gemini.importance}/100 • уверенность ${gemini.confidence}/100")
             append("\nПоправка к шкале: ${signed(state.informationAdjustment())} из ±12 • горизон ${gemini.horizonHours} ч")
             append("\nНовостной контур: ${gemini.requestsToday} запросов • ${gemini.promptTokensToday} входных + ${gemini.outputTokensToday} выходных = ${gemini.totalTokensToday} токенов")
-            append("\nОбщий бюджет Gemini: ${budget.usedToday}/${GeminiRequestBudget.MAX_REQUESTS_PER_DAY} • осталось ${budget.remainingToday}")
+            val positionOpen = PumpBotEngine.snapshot(this@EventRadarActivity).let {
+                it.waitMode == "SELL" && it.entryPrice > 0.0
+            }
+            append("\nБюджет Gemini: ${budget.usedToday}/${GeminiRequestBudget.activeLimit(positionOpen)} доступных сейчас")
+            append(" • резерв позиции ${GeminiRequestBudget.MAX_REQUESTS_PER_DAY - GeminiRequestBudget.NORMAL_REQUESTS_PER_DAY}")
             append("\nВнешние ссылки Gemini: ${gemini.webReferences}\n$web")
             if (gemini.detailedAnalysis.isNotBlank()) {
                 append("\n\nПОДРОБНЫЙ АНАЛИЗ\n${gemini.detailedAnalysis}")

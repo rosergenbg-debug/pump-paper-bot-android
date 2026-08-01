@@ -79,8 +79,9 @@ class PumpSignalService : Service() {
             GeminiPaperStore.beginCycle(this, source, cycleIntervalMillis, startedAt)
             try {
                 market.sync(this)
-                PositionSupervisorClient().sync(this)
                 val eventState = eventRadar.sync(this)
+                val deepSeek = DeepSeekPrimaryAnalyst().sync(this)
+                PositionSupervisorClient().sync(this)
                 GeminiPaperStore.markDataReady(this, source, startedAt)
                 val snapshot = PumpBotEngine.snapshot(this)
                 val appTrade = AppPaperStore.syncWithAlerts(this)
@@ -107,7 +108,7 @@ class PumpSignalService : Service() {
                     source,
                     startedAt,
                     finishedAt + cycleIntervalMillis,
-                    "проверка завершена; Gemini: ${gemini.status}",
+                    "проверка завершена; DeepSeek основной: ${deepSeek.action}; Gemini: ${gemini.status}",
                     finishedAt
                 )
             } catch (error: Exception) {
