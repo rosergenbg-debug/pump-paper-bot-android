@@ -452,15 +452,20 @@ class MainActivity : AppCompatActivity() {
         val radar = EventRadarStore.state(this)
         val appCombinedDirection = radar.combinedDirection(snapshot.directionScore, now)
         val deepSeekSignal = DeepSeekPrimaryStore.state(this)
+        val deepSeekFresh = DeepSeekPrimaryPolicy.isFreshSignal(deepSeekSignal, now)
         chart?.setData(
             "PUMP/EUR • ДЫХАНИЕ РЫНКА",
             snapshot.chart.copy(
                 directionScore = appCombinedDirection,
                 showGeminiGauge = true,
-                geminiDirectionScore = deepSeekSignal.direction.takeIf { deepSeekSignal.lastSuccess > 0L },
-                geminiConfidenceScore = deepSeekSignal.confidence,
-                geminiAction = deepSeekSignal.action,
-                geminiStatus = if (deepSeekSignal.error.isNotBlank()) "ОШИБКА: ${deepSeekSignal.error}" else "DEEPSEEK РАБОТАЕТ"
+                geminiDirectionScore = deepSeekSignal.direction.takeIf { deepSeekFresh },
+                geminiConfidenceScore = if (deepSeekFresh) deepSeekSignal.confidence else 0,
+                geminiAction = if (deepSeekFresh) deepSeekSignal.action else "STALE",
+                geminiStatus = when {
+                    deepSeekSignal.error.isNotBlank() -> "ОШИБКА: ${deepSeekSignal.error}"
+                    !deepSeekFresh -> "ПОСЛЕДНИЙ СИГНАЛ УСТАРЕЛ"
+                    else -> "DEEPSEEK РАБОТАЕТ"
+                }
             )
         )
     }
@@ -694,7 +699,8 @@ class MainActivity : AppCompatActivity() {
         btnDeepSeekApi?.text = if (DeepSeekSecureKeyStore.read(this).isBlank()) {
             "DEEPSEEK API\nКЛЮЧ НЕ ВВЕДЁН\nоткрыть центр"
         } else {
-            "DEEPSEEK • ОСНОВНОЙ\n${deep.action} ${signed(deep.direction)}/100\n${deep.successfulToday} OK • ${deep.failedToday} ERR"
+            val fresh = DeepSeekPrimaryPolicy.isFreshSignal(deep)
+            "DEEPSEEK • ОСНОВНОЙ\n${if (fresh) deep.action else "УСТАРЕЛ"} ${if (fresh) signed(deep.direction) + "/100" else ""}\n${deep.successfulToday} OK • ${deep.failedToday} ERR"
         }
         val budget = GeminiRequestBudget.state(this)
         btnGeminiApi?.text = if (EventRadarStore.apiKey(this).isBlank()) {

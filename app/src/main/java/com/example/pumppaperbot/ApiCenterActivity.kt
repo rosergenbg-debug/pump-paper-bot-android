@@ -1,6 +1,7 @@
 package com.example.pumppaperbot
 
 import android.app.AlertDialog
+import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Color
 import android.os.Bundle
@@ -69,6 +70,11 @@ class ApiCenterActivity : AppCompatActivity() {
         content.addView(button("ПРОВЕРИТЬ API СЕЙЧАС", if (provider == DEEPSEEK) "#238636" else "#7C3AED").apply {
             setOnClickListener { testNow() }
         }, params(dp(58), dp(8)))
+        if (provider == DEEPSEEK) {
+            content.addView(button("ПОДЕЛИТЬСЯ ДИАГНОСТИКОЙ", "#1F6FEB").apply {
+                setOnClickListener { shareDiagnostics() }
+            }, params(dp(54), dp(4)))
+        }
         progress = ProgressBar(this).apply { visibility = View.GONE }
         content.addView(progress, params(dp(36), dp(2)))
 
@@ -231,6 +237,7 @@ class ApiCenterActivity : AppCompatActivity() {
                 append(if (connection.lastSuccess > 0L && connection.error.isBlank()) "РАБОТАЕТ" else if (connection.error.isNotBlank()) "ОШИБКА: ${connection.error}" else "ожидает проверки")
                 append("\nОсновной рынок: ${state.action} • направление ${signed(state.direction)}/100 • уверенность ${state.confidence}% • опасность ${state.danger}/10")
                 append("\n${state.summary}")
+                append("\nАктуальность сигнала: ${if (DeepSeekPrimaryPolicy.isFreshSignal(state)) "СВЕЖИЙ" else "УСТАРЕЛ — не используется на шкале"}")
                 if (state.evidence.isNotEmpty()) append("\nФакты: ${state.evidence.joinToString("; ")}")
                 if (state.risks.isNotEmpty()) append("\nРиски: ${state.risks.joinToString("; ")}")
                 val next = state.lastAttempt.takeIf { it > 0L }?.plus(DeepSeekPrimaryPolicy.INTERVAL) ?: 0L
@@ -263,7 +270,13 @@ class ApiCenterActivity : AppCompatActivity() {
             append("За 60 секунд: ${summary.requestsLastMinute} запросов • ${(summary.requestsLastMinute / 60.0).format(3)} запр./сек")
             append("\nЗа час: ${summary.requestsLastHour} • сегодня отправлено: ${summary.requestsToday}")
             append("\nУспешно: ${summary.successesToday} • ошибок: ${summary.errorsToday}")
+            append(" • восстановлений: ${summary.retriesToday}")
             append("\nТокены ответов журнала: ${summary.promptTokensToday} вход + ${summary.outputTokensToday} выход")
+            if (provider == DEEPSEEK) {
+                val projected = summary.estimatedCostUsdToday * 30.0
+                append("\nОценка без скидки кэша: $${summary.estimatedCostUsdToday.format(4)} сегодня")
+                append(" • $${projected.format(2)} за 30 таких дней")
+            }
         }
     }
 
@@ -279,6 +292,16 @@ class ApiCenterActivity : AppCompatActivity() {
     private fun configured(): Boolean = if (provider == DEEPSEEK) {
         DeepSeekSecureKeyStore.read(this).isNotBlank()
     } else EventRadarStore.apiKey(this).isNotBlank()
+
+    private fun shareDiagnostics() {
+        val report = DeepSeekDiagnostics.report(this)
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_SUBJECT, "PumpSignal V${BuildConfig.VERSION_NAME} DeepSeek diagnostics")
+            putExtra(Intent.EXTRA_TEXT, report)
+        }
+        startActivity(Intent.createChooser(intent, "Отправить диагностику"))
+    }
 
     private fun roleText(): String = if (provider == DEEPSEEK) {
         "Flash проверяет весь рынок каждые 5 минут и при существенном изменении сигнала. Pro подключается сразу после «Я купил» и при опасности."

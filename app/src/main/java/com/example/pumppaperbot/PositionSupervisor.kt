@@ -1,11 +1,7 @@
 package com.example.pumppaperbot
 
 import android.content.Context
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
-import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
@@ -147,10 +143,9 @@ private data class SupervisorApiResult(
     val dangerLevel: Int,
     val summary: String,
     val promptTokens: Int,
-    val completionTokens: Int
+    val completionTokens: Int,
+    val repaired: Boolean
 )
-
-private class DeepSeekApiException(val httpCode: Int, message: String) : RuntimeException(message)
 
 class PositionSupervisorClient {
     private val http = OkHttpClient.Builder()
@@ -205,7 +200,7 @@ class PositionSupervisorClient {
             var usedModel = model
             val result = try {
                 analyze(context, key, model, snapshot, previous)
-            } catch (error: DeepSeekApiException) {
+            } catch (error: DeepSeekStructuredException) {
                 if (model != PositionSupervisorPolicy.PRO_MODEL ||
                     error.httpCode !in setOf(400, 404, 422)
                 ) throw error
@@ -220,7 +215,7 @@ class PositionSupervisorClient {
                     status = "OK", at = System.currentTimeMillis(),
                     durationMillis = System.currentTimeMillis() - started,
                     promptTokens = result.promptTokens, outputTokens = result.completionTokens,
-                    detail = result.summary
+                    detail = if (result.repaired) "Ответ восстановлен коротким повтором • ${result.summary}" else result.summary
                 ))
                 val firstExit = result.action == "EXIT" && !previous.exitAdvised
                 val cancelExit = result.action == "CANCEL_EXIT" && previous.exitAdvised
@@ -278,11 +273,17 @@ class PositionSupervisorClient {
                 updated
             },
             onFailure = { error ->
+                val structured = error as? DeepSeekStructuredException
                 ApiUsageLogStore.record(context, ApiUsageEvent(
                     provider = "DEEPSEEK", circuit = "ПОЗИЦИЯ СЕРЖА", model = model,
                     status = "ERROR", at = System.currentTimeMillis(),
                     durationMillis = System.currentTimeMillis() - started,
-                    detail = error.message.orEmpty().take(300)
+                    promptTokens = structured?.promptTokens ?: 0,
+                    outputTokens = structured?.completionTokens ?: 0,
+                    detail = buildString {
+                        append(error.message.orEmpty().take(240))
+                        structured?.finishReason?.takeIf { it.isNotBlank() }?.let { append(" • finish_reason=$it") }
+                    }
                 ))
                 previous.copy(
                     positionEntryTime = snapshot.entryTime,
@@ -367,47 +368,41 @@ class PositionSupervisorClient {
             HOLD после уже выданного выхода не используй.
             danger_level 10 означает критическую угрозу позиции. Это аналитический сигнал, не гарантия результата.
         """.trimIndent()
-        val body = JSONObject()
-            .put("model", model)
-            .put("messages", JSONArray()
-                .put(JSONObject().put("role", "system").put("content", system))
-                .put(JSONObject().put("role", "user").put("content", frame.toString())))
-            .put("thinking", JSONObject().put("type", "enabled"))
-            .put(
-                "reasoning_effort",
-                if (criticalReasoning || model == PositionSupervisorPolicy.PRO_MODEL) "max" else "low"
-            )
-            .put("response_format", JSONObject().put("type", "json_object"))
-            .put("max_tokens", if (model == PositionSupervisorPolicy.PRO_MODEL) 2200 else 700)
-        val request = Request.Builder()
-            .url("https://api.deepseek.com/chat/completions")
-            .header("Authorization", "Bearer $apiKey")
-            .header("Content-Type", "application/json")
-            .post(body.toString().toRequestBody("application/json".toMediaType()))
-            .build()
-        http.newCall(request).execute().use { response ->
-            val raw = response.body?.string().orEmpty()
-            if (!response.isSuccessful) {
-                val message = runCatching {
-                    JSONObject(raw).optJSONObject("error")?.optString("message")
-                }.getOrNull().orEmpty().ifBlank { "DeepSeek HTTP ${response.code}" }
-                throw DeepSeekApiException(response.code, message.take(300))
+        val response = DeepSeekStructuredClient(http).request(
+            apiKey = apiKey,
+            model = model,
+            system = system,
+            frame = frame,
+            reasoningEffort = if (criticalReasoning) "max" else if (model == PositionSupervisorPolicy.PRO_MODEL) "high" else "low",
+            maxTokens = if (model == PositionSupervisorPolicy.PRO_MODEL) 3200 else 1400,
+            validate = { json ->
+                when {
+                    json.optString("action").uppercase() !in setOf("HOLD", "EXIT", "CANCEL_EXIT") -> "action отсутствует или недопустим"
+                    !json.has("condition_delta") -> "нет condition_delta"
+                    !json.has("danger_level") -> "нет danger_level"
+                    json.optString("summary").isBlank() -> "нет summary"
+                    else -> null
+                }
+            },
+            onRepairStart = { reason ->
+                ApiUsageLogStore.record(context, ApiUsageEvent(
+                    provider = "DEEPSEEK", circuit = "ВОССТАНОВЛЕНИЕ ПОЗИЦИИ",
+                    model = model, status = "RETRY", at = System.currentTimeMillis(),
+                    detail = reason.take(260)
+                ))
             }
-            val root = JSONObject(raw)
-            val content = root.optJSONArray("choices")?.optJSONObject(0)
-                ?.optJSONObject("message")?.optString("content").orEmpty()
-            val json = JSONObject(content)
-            val usage = root.optJSONObject("usage")
-            val action = json.optString("action", "HOLD").uppercase()
-                .takeIf { it in setOf("HOLD", "EXIT", "CANCEL_EXIT") } ?: "HOLD"
-            return SupervisorApiResult(
-                action = action,
-                conditionDelta = json.optInt("condition_delta").coerceIn(-10, 10),
-                dangerLevel = json.optInt("danger_level").coerceIn(0, 10),
-                summary = json.optString("summary", "DeepSeek не дал пояснение").take(500),
-                promptTokens = usage?.optInt("prompt_tokens") ?: 0,
-                completionTokens = usage?.optInt("completion_tokens") ?: 0
-            )
-        }
+        )
+        val json = response.json
+        val action = json.optString("action", "HOLD").uppercase()
+            .takeIf { it in setOf("HOLD", "EXIT", "CANCEL_EXIT") } ?: "HOLD"
+        return SupervisorApiResult(
+            action = action,
+            conditionDelta = json.optInt("condition_delta").coerceIn(-10, 10),
+            dangerLevel = json.optInt("danger_level").coerceIn(0, 10),
+            summary = json.optString("summary", "DeepSeek не дал пояснение").take(500),
+            promptTokens = response.promptTokens,
+            completionTokens = response.completionTokens,
+            repaired = response.repaired
+        )
     }
 }

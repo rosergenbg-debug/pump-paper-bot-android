@@ -1,10 +1,7 @@
 package com.example.pumppaperbot
 
 import android.content.Context
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
@@ -118,6 +115,10 @@ object DeepSeekPrimaryStore {
 
 object DeepSeekPrimaryPolicy {
     const val INTERVAL = 5L * 60L * 1000L
+    const val SIGNAL_MAX_AGE = 12L * 60L * 1000L
+
+    fun isFreshSignal(state: DeepSeekPrimaryState, now: Long = System.currentTimeMillis()): Boolean =
+        state.lastSuccess > 0L && now >= state.lastSuccess && now - state.lastSuccess <= SIGNAL_MAX_AGE
 
     fun chooseModel(snapshot: LiveSnapshot, force: Boolean, materialChange: Boolean): String {
         val critical = snapshot.buySignal || snapshot.sellSignal || snapshot.rapidDrop.active ||
@@ -140,13 +141,18 @@ object DeepSeekPrimaryPolicy {
         force || state.lastAttempt <= 0L || materialChange || now - state.lastAttempt >= INTERVAL
     )
 
-    fun compactStatus(state: DeepSeekPrimaryState, configured: Boolean): String = when {
+    fun compactStatus(
+        state: DeepSeekPrimaryState,
+        configured: Boolean,
+        now: Long = System.currentTimeMillis()
+    ): String = when {
         !configured -> "DEEPSEEK • ОСНОВНОЙ • ключ не введён"
         state.lastSuccess <= 0L && state.error.isNotBlank() ->
             "DEEPSEEK • ОСНОВНОЙ • ошибка: ${state.error}\nЗапросы сегодня: 0 успешно • ${state.failedToday} ошибок"
         state.lastSuccess <= 0L -> "DEEPSEEK • ОСНОВНОЙ • ожидает первый анализ"
         else -> buildString {
-            append("DEEPSEEK • ОСНОВНОЙ • ${shortModel(state.model)} • ${state.action}")
+            append("DEEPSEEK • ОСНОВНОЙ • ${shortModel(state.model)} • ")
+            append(if (isFreshSignal(state, now)) state.action else "РЕЗУЛЬТАТ УСТАРЕЛ")
             append("\n${state.summary}")
             append("\nСегодня: ${state.successfulToday} успешно • ${state.failedToday} ошибок")
             append(" • последний ${PumpBotEngine.formatTime(state.lastSuccess)}")
@@ -171,7 +177,8 @@ private data class DeepSeekPrimaryResult(
     val evidence: List<String>,
     val risks: List<String>,
     val promptTokens: Int,
-    val completionTokens: Int
+    val completionTokens: Int,
+    val repaired: Boolean
 )
 
 class DeepSeekPrimaryAnalyst {
@@ -229,7 +236,7 @@ class DeepSeekPrimaryAnalyst {
                     model = requestedModel, status = "OK", at = System.currentTimeMillis(),
                     durationMillis = System.currentTimeMillis() - started,
                     promptTokens = result.promptTokens, outputTokens = result.completionTokens,
-                    detail = result.summary
+                    detail = if (result.repaired) "Ответ восстановлен коротким повтором • ${result.summary}" else result.summary
                 ))
                 previous.copy(
                     lastAttempt = now,
@@ -252,10 +259,17 @@ class DeepSeekPrimaryAnalyst {
                 ).also { DeepSeekPrimaryStore.save(context, it) }
             },
             onFailure = { error ->
+                val structured = error as? DeepSeekStructuredException
                 ApiUsageLogStore.record(context, ApiUsageEvent(
                     provider = "DEEPSEEK", circuit = "ОСНОВНОЙ РЫНОК",
                     model = requestedModel, status = "ERROR", at = System.currentTimeMillis(),
-                    durationMillis = System.currentTimeMillis() - started, detail = error.message.orEmpty().take(300)
+                    durationMillis = System.currentTimeMillis() - started,
+                    promptTokens = structured?.promptTokens ?: 0,
+                    outputTokens = structured?.completionTokens ?: 0,
+                    detail = buildString {
+                        append(error.message.orEmpty().take(240))
+                        structured?.finishReason?.takeIf { it.isNotBlank() }?.let { append(" • finish_reason=$it") }
+                    }
                 ))
                 previous.copy(
                     lastAttempt = now,
@@ -323,6 +337,8 @@ class DeepSeekPrimaryAnalyst {
             .put("premium_last_full_hour_pct", hourly?.premiumPercent ?: JSONObject.NULL)
             .put("news", JSONArray(latestNews))
         DeepSeekFreshMarketContext.append(context, frame, snapshot, now)
+        val positionOpen = snapshot.waitMode == "SELL" && snapshot.entryPrice > 0.0
+        val allowedActions = if (positionOpen) setOf("BUY", "HOLD", "WATCH", "EXIT") else setOf("BUY", "HOLD", "WATCH")
         val system = """
             Ты основной независимый аналитик PumpSignal для PUMP/EUR. Оцени цену на горизонте 1–6 часов.
             Сначала сопоставь PUMP 1ч/3ч/6ч, BTC и SOL, spot/futures taker flow, CVD, funding,
@@ -342,55 +358,51 @@ class DeepSeekPrimaryAnalyst {
             evidence массив из 2–4 коротких фактов; risks массив из 1–3 условий, которые опровергнут вывод.
             Если пользователь не в позиции, EXIT не используй. Если данных недостаточно, выбери WATCH.
         """.trimIndent()
-        val body = JSONObject()
-            .put("model", model)
-            .put("messages", JSONArray()
-                .put(JSONObject().put("role", "system").put("content", system))
-                .put(JSONObject().put("role", "user").put("content", frame.toString())))
-            .put("thinking", JSONObject().put("type", "enabled"))
-            .put("reasoning_effort", if (model == PositionSupervisorPolicy.PRO_MODEL) "high" else "medium")
-            .put("response_format", JSONObject().put("type", "json_object"))
-            .put("max_tokens", if (model == PositionSupervisorPolicy.PRO_MODEL) 1800 else 1200)
-        val request = Request.Builder()
-            .url("https://api.deepseek.com/chat/completions")
-            .header("Authorization", "Bearer $apiKey")
-            .header("Content-Type", "application/json")
-            .post(body.toString().toRequestBody("application/json".toMediaType()))
-            .build()
-        http.newCall(request).execute().use { response ->
-            val raw = response.body?.string().orEmpty()
-            if (!response.isSuccessful) {
-                val message = runCatching {
-                    JSONObject(raw).optJSONObject("error")?.optString("message")
-                }.getOrNull().orEmpty().ifBlank { "DeepSeek HTTP ${response.code}" }
-                error(message.take(240))
+        val response = DeepSeekStructuredClient(http).request(
+            apiKey = apiKey,
+            model = model,
+            system = system,
+            frame = frame,
+            reasoningEffort = if (model == PositionSupervisorPolicy.PRO_MODEL) "high" else "low",
+            maxTokens = if (model == PositionSupervisorPolicy.PRO_MODEL) 3200 else 1600,
+            validate = { json ->
+                when {
+                    json.optString("action").uppercase(Locale.ROOT) !in allowedActions -> "action отсутствует или недопустим"
+                    !json.has("direction") -> "нет direction"
+                    !json.has("danger") -> "нет danger"
+                    !json.has("confidence") -> "нет confidence"
+                    json.optString("summary").isBlank() -> "нет summary"
+                    else -> null
+                }
+            },
+            onRepairStart = { reason ->
+                ApiUsageLogStore.record(context, ApiUsageEvent(
+                    provider = "DEEPSEEK", circuit = "ВОССТАНОВЛЕНИЕ РЫНКА",
+                    model = model, status = "RETRY", at = System.currentTimeMillis(),
+                    detail = reason.take(260)
+                ))
             }
-            val root = JSONObject(raw)
-            val content = root.optJSONArray("choices")?.optJSONObject(0)
-                ?.optJSONObject("message")?.optString("content").orEmpty()
-            val json = JSONObject(content)
-            val usage = root.optJSONObject("usage")
-            val positionOpen = snapshot.waitMode == "SELL" && snapshot.entryPrice > 0.0
-            val allowed = if (positionOpen) setOf("BUY", "HOLD", "WATCH", "EXIT") else setOf("BUY", "HOLD", "WATCH")
-            val action = json.optString("action", "WATCH").uppercase(Locale.ROOT)
-                .takeIf { it in allowed } ?: "WATCH"
-            return DeepSeekPrimaryResult(
-                action = action,
-                direction = json.optInt("direction").coerceIn(-100, 100),
-                danger = json.optInt("danger").coerceIn(0, 10),
-                confidence = json.optInt("confidence").coerceIn(0, 100),
-                summary = json.optString("summary", "DeepSeek не дал пояснение").take(400),
-                evidence = json.optJSONArray("evidence")?.let { array ->
-                    List(array.length().coerceAtMost(4)) { array.optString(it).take(240) }
-                        .filter { it.isNotBlank() }
-                }.orEmpty(),
-                risks = json.optJSONArray("risks")?.let { array ->
-                    List(array.length().coerceAtMost(3)) { array.optString(it).take(240) }
-                        .filter { it.isNotBlank() }
-                }.orEmpty(),
-                promptTokens = usage?.optInt("prompt_tokens") ?: 0,
-                completionTokens = usage?.optInt("completion_tokens") ?: 0
-            )
-        }
+        )
+        val json = response.json
+        val action = json.optString("action", "WATCH").uppercase(Locale.ROOT)
+            .takeIf { it in allowedActions } ?: "WATCH"
+        return DeepSeekPrimaryResult(
+            action = action,
+            direction = json.optInt("direction").coerceIn(-100, 100),
+            danger = json.optInt("danger").coerceIn(0, 10),
+            confidence = json.optInt("confidence").coerceIn(0, 100),
+            summary = json.optString("summary", "DeepSeek не дал пояснение").take(400),
+            evidence = json.optJSONArray("evidence")?.let { array ->
+                List(array.length().coerceAtMost(4)) { array.optString(it).take(240) }
+                    .filter { it.isNotBlank() }
+            }.orEmpty(),
+            risks = json.optJSONArray("risks")?.let { array ->
+                List(array.length().coerceAtMost(3)) { array.optString(it).take(240) }
+                    .filter { it.isNotBlank() }
+            }.orEmpty(),
+            promptTokens = response.promptTokens,
+            completionTokens = response.completionTokens,
+            repaired = response.repaired
+        )
     }
 }
