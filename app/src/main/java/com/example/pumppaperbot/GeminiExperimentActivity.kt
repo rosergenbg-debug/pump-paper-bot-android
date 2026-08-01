@@ -64,7 +64,7 @@ class GeminiExperimentActivity : AppCompatActivity() {
         root.addView(button("← НАЗАД", "#30363D").apply {
             setOnClickListener { finish() }
         }, LinearLayout.LayoutParams(-1, dp(48)))
-        root.addView(label("V3.15 • GEMINI", 24, "#F0F6FC", true))
+        root.addView(label("V${BuildConfig.VERSION_NAME} • GEMINI", 24, "#F0F6FC", true))
         root.addView(label(
             "Виртуальные €1 000 • отдельные решения • без реальных денег.",
             14, "#C9D1D9", false, 8
@@ -157,7 +157,7 @@ class GeminiExperimentActivity : AppCompatActivity() {
             setOnClickListener {
                 AlertDialog.Builder(this@GeminiExperimentActivity)
                     .setTitle("Сбросить виртуальный счёт Gemini?")
-                    .setMessage("Удалятся решения, виртуальные сделки и статистика Gemini и экспериментального выхода. APP и Серж не изменятся.")
+                    .setMessage("Удалятся решения, виртуальные сделки и статистика Gemini и Gemini‑эксперимента. APP и Серж не изменятся.")
                     .setNegativeButton("ОТМЕНА", null)
                     .setPositiveButton("СБРОСИТЬ") { _, _ ->
                         GeminiPaperStore.reset(this@GeminiExperimentActivity)

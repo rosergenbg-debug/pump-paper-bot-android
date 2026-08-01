@@ -181,11 +181,12 @@ data class AppPaperEvaluation(
     val action: String,
     val reason: String,
     val strategyMode: String,
-    val highestClose: Double
+    val highestClose: Double,
+    val readinessScore: Int = 0
 )
 
 object PumpBotEngine {
-    const val appVersionName = "3.18"
+    val appVersionName: String get() = BuildConfig.VERSION_NAME
     const val startBalance = 1000.0
     const val feeRate = 0.0015
     const val slippage = 0.0005
@@ -469,7 +470,8 @@ object PumpBotEngine {
             action = evaluation.signalAction,
             reason = evaluation.signalReason,
             strategyMode = evaluation.strategyMode,
-            highestClose = evaluation.highestClose
+            highestClose = evaluation.highestClose,
+            readinessScore = evaluation.readinessScore
         )
     }
 

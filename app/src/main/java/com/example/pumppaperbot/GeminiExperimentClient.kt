@@ -285,7 +285,9 @@ class GeminiExperimentClient {
         source: String
     ): GeminiExperimentState {
         val now = System.currentTimeMillis()
+        GeminiPaperStore.flushPendingTradeAlerts(context)
         val existing = GeminiPaperStore.state(context)
+        GeminiPaperStore.requireHealthyPortfolio(context)
         if (!existing.enabled && !force) {
             GeminiPaperStore.recordActivity(
                 context, "ПРОВЕРКА ЧАСА", "WAIT",
@@ -314,12 +316,17 @@ class GeminiExperimentClient {
         if (markedPortfolio != existing.portfolio) {
             GeminiPaperStore.savePortfolio(context, markedPortfolio)
         }
+        val appEvaluation = PumpBotEngine.evaluateAppPaper(
+            context,
+            AppPaperStore.state(context)
+        )
         GeminiExitExperimentStore.evaluate(
             context = context,
             controlPortfolio = markedPortfolio,
             controlDecision = GeminiGaugePolicy.currentDecision(existing, observedAt),
             frame = frame,
             impulse = ImpulseRadarStore.state(context),
+            appEvaluation = appEvaluation,
             now = observedAt
         )
         val portfolio = GeminiPaperTrader.gradeCompletedHorizons(
@@ -563,7 +570,12 @@ class GeminiExperimentClient {
             after = updated,
             decisionId = pending.hourId
         )
-        GeminiPaperStore.completePending(context, updated, quote.receivedAt)
+        GeminiPaperStore.completePending(
+            context,
+            updated,
+            pendingTrade = executedTrade,
+            now = quote.receivedAt
+        )
         val completedDecision = updated.decisions.lastOrNull { it.id == pending.hourId }
         if (executedTrade == null &&
             (pending.recommendation.action == "BUY" || pending.recommendation.directionScore >= 20)
@@ -584,22 +596,8 @@ class GeminiExperimentClient {
         }
         executedTrade?.let { trade ->
             GeminiExitExperimentStore.mirrorControlTrade(context, trade)
-            runCatching {
-                PumpAlert.showGeminiTrade(context, trade)
-            }.onFailure { error ->
-                GeminiPaperStore.recordActivity(
-                    context = context,
-                    stage = "ЗВОНОК ${trade.action}",
-                    result = "ERROR",
-                    detail = "Сделка ${trade.action} выполнена, но уведомление не показано: " +
-                        (error.message ?: error.javaClass.simpleName),
-                    model = pending.recommendation.model,
-                    hourId = pending.hourId,
-                    attempt = attempt,
-                    at = quote.receivedAt
-                )
-            }
         }
+        GeminiPaperStore.flushPendingTradeAlerts(context)
         GeminiPaperStore.recordActivity(
             context = context,
             stage = "РЕШЕНИЕ",

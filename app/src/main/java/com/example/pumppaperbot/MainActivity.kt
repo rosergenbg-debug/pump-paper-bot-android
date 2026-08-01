@@ -74,6 +74,7 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+        findViewById<TextView>(R.id.tvAppTitle).text = "PUMP Сигнал V${BuildConfig.VERSION_NAME}"
 
         tvStatus = findViewById(R.id.tvStatus)
         tvLatestSignal = findViewById(R.id.tvLatestSignal)

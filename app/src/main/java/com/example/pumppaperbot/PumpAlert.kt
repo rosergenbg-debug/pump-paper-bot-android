@@ -12,6 +12,8 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 
 object PumpAlert {
     private const val monitorChannelId = "pump_rsi_risk_monitor"
@@ -383,6 +385,7 @@ object PumpAlert {
         text: String,
         color: Int
     ) {
+        requireTradeNotificationsAvailable(context)
         val notification = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.drawable.ic_launcher)
             .setContentTitle(title)
@@ -399,6 +402,20 @@ object PumpAlert {
         context.getSystemService(NotificationManager::class.java)
             .notify(notificationId, notification)
         vibrate(context)
+    }
+
+    private fun requireTradeNotificationsAvailable(context: Context) {
+        if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) {
+            error("уведомления приложения отключены в Android")
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(
+                context,
+                android.Manifest.permission.POST_NOTIFICATIONS
+            ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            error("Android не дал разрешение на уведомления")
+        }
     }
 
     fun monitorId(): Int = monitorNotificationId

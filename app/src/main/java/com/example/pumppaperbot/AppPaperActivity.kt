@@ -23,6 +23,7 @@ class AppPaperActivity : AppCompatActivity() {
     }
     private lateinit var appCard: TextView
     private lateinit var geminiCard: TextView
+    private lateinit var experimentCard: TextView
     private lateinit var userCard: TextView
     private lateinit var comparison: TextView
     private lateinit var appTrades: TextView
@@ -43,24 +44,30 @@ class AppPaperActivity : AppCompatActivity() {
         root.addView(button("← НАЗАД", "#30363D").apply {
             setOnClickListener { finish() }
         }, LinearLayout.LayoutParams(-1, dp(48)))
-        root.addView(label("GEMINI • APP • СЕРЖ", 23, "#F0F6FC", true, 12))
+        root.addView(label("APP • GEMINI • ЭКСПЕРИМЕНТ • СЕРЖ", 22, "#F0F6FC", true, 12))
         root.addView(label(
-            "Три независимых виртуальных счёта по €1 000. Реальные деньги не используются.",
+            "Четыре независимых виртуальных счёта по €1 000. Реальные деньги не используются.",
             14, "#C9D1D9", false, 6
         ))
 
-        val accounts = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val accounts = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val firstRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val secondRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         appCard = card("#132A20")
         geminiCard = card("#211A36")
+        experimentCard = card("#33270D")
         userCard = card("#172033")
-        accounts.addView(appCard, LinearLayout.LayoutParams(0, dp(196), 1f))
-        accounts.addView(geminiCard, LinearLayout.LayoutParams(0, dp(196), 1f).apply {
+        firstRow.addView(appCard, LinearLayout.LayoutParams(0, dp(156), 1f))
+        firstRow.addView(geminiCard, LinearLayout.LayoutParams(0, dp(156), 1f).apply {
             leftMargin = dp(8)
         })
-        accounts.addView(userCard, LinearLayout.LayoutParams(0, dp(196), 1f).apply {
+        secondRow.addView(experimentCard, LinearLayout.LayoutParams(0, dp(156), 1f))
+        secondRow.addView(userCard, LinearLayout.LayoutParams(0, dp(156), 1f).apply {
             leftMargin = dp(8)
         })
-        root.addView(accounts, LinearLayout.LayoutParams(-1, dp(196)).apply { topMargin = dp(12) })
+        accounts.addView(firstRow)
+        accounts.addView(secondRow, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        root.addView(accounts, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
 
         comparison = card("#172033")
         root.addView(comparison, cardParams(10))
@@ -81,7 +88,7 @@ class AppPaperActivity : AppCompatActivity() {
             setOnClickListener {
                 AlertDialog.Builder(this@AppPaperActivity)
                     .setTitle("Начать счёт App заново с €1 000?")
-                    .setMessage("Удалятся сделки и решения только виртуального App. Gemini и твоя ручная позиция не изменятся.")
+                    .setMessage("Удалятся сделки и решения только виртуального APP. Gemini, Gemini‑эксперимент и счёт Сержа не изменятся.")
                     .setNegativeButton("ОТМЕНА", null)
                     .setPositiveButton("СБРОСИТЬ") { _, _ ->
                         AppPaperStore.reset(this@AppPaperActivity)
@@ -109,9 +116,11 @@ class AppPaperActivity : AppCompatActivity() {
         val app = AppPaperStore.state(this)
         val geminiState = GeminiPaperStore.state(this)
         val gemini = geminiState.portfolio
+        val experiment = GeminiExitExperimentStore.state(this)?.portfolio ?: gemini
         val user = UserPaperStore.markToMarket(this, price)
         val appValue = app.value(price)
         val geminiValue = gemini.value(price)
+        val experimentValue = experiment.value(price)
         val userValue = user.value(price)
 
         appCard.text = accountText(
@@ -132,6 +141,15 @@ class AppPaperActivity : AppCompatActivity() {
             gemini.trades.lastOrNull()?.action,
             gemini.trades.lastOrNull()?.time
         )
+        experimentCard.text = accountText(
+            "GEMINI‑ЭКСП.",
+            experimentValue,
+            experiment.profitPercent(price),
+            experiment.inPosition,
+            experiment.entryPrice,
+            experiment.trades.lastOrNull()?.action,
+            experiment.trades.lastOrNull()?.time
+        )
         userCard.text = accountText(
             "СЕРЖ",
             userValue,
@@ -143,23 +161,32 @@ class AppPaperActivity : AppCompatActivity() {
         )
         appCard.setTextColor(Color.parseColor(if (app.profit(price) >= 0.0) "#7EE787" else "#FF7B72"))
         geminiCard.setTextColor(Color.parseColor(if (gemini.profit(price) >= 0.0) "#D2A8FF" else "#FF7B72"))
+        experimentCard.setTextColor(Color.parseColor(if (experiment.profit(price) >= 0.0) "#F2CC60" else "#FF7B72"))
         userCard.setTextColor(Color.parseColor(if (user.profit(price) >= 0.0) "#79C0FF" else "#FF7B72"))
 
-        val ranking = listOf("APP" to appValue, "GEMINI" to geminiValue, "СЕРЖ" to userValue)
+        val ranking = listOf(
+            "APP" to appValue,
+            "GEMINI" to geminiValue,
+            "GEMINI‑ЭКСП." to experimentValue,
+            "СЕРЖ" to userValue
+        )
             .sortedByDescending { it.second }
         val leader = "Сейчас впереди ${ranking.first().first} • €${money(ranking.first().second)}"
         comparison.text = buildString {
             append("СРАВНЕНИЕ В МОМЕНТЕ\n$leader")
             append("\nAPP: ${positionWord(app.inPosition)}")
             append("  •  Gemini: ${positionWord(gemini.inPosition)}")
+            append("  •  Эксп.: ${positionWord(experiment.inPosition)}")
             append("  •  Серж: ${positionWord(user.inPosition)}")
             val appLast = app.trades.lastOrNull()
             val geminiLast = gemini.trades.lastOrNull()
+            val experimentLast = experiment.trades.lastOrNull()
             val userLast = user.trades.lastOrNull()
             append("\nПоследнее действие APP: ${tradeWord(appLast?.action)} ${time(appLast?.time)}")
             append("\nПоследнее действие Gemini: ${tradeWord(geminiLast?.action)} ${time(geminiLast?.time)}")
+            append("\nПоследнее действие Gemini‑эксп.: ${tradeWord(experimentLast?.action)} ${time(experimentLast?.time)}")
             append("\nПоследнее действие Сержа: ${tradeWord(userLast?.action)} ${time(userLast?.time)}")
-            append("\n\nAPP работает по закрытым 30‑минутным свечам. Gemini принимает часовое решение. Пользователь — вручную.")
+            append("\n\nAPP работает по закрытым 30‑минутным свечам. Gemini принимает часовое решение. Gemini‑эксперимент проверяет ранний вход и рыночный выход. Серж действует вручную.")
         }
 
         appTrades.text = app.trades.takeLast(40).asReversed().joinToString("\n\n") { trade ->

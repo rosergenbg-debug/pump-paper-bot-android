@@ -1,6 +1,7 @@
 package com.example.pumppaperbot
 
 import android.content.Context
+import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Locale
 import kotlin.math.max
@@ -19,12 +20,13 @@ data class GeminiEntryEvidence(
         fun from(
             frame: GeminiMarketFrame,
             impulse: ImpulseSnapshot,
-            controlDecision: GeminiHourlyDecision?
+            controlDecision: GeminiHourlyDecision?,
+            appEvaluation: AppPaperEvaluation
         ): GeminiEntryEvidence {
             val snapshot = frame.snapshot
             val impulseFresh = impulse.candleTime > 0L &&
                 snapshot.lastSync - impulse.candleTime in 0L..20L * 60L * 1000L
-            val appReady = snapshot.waitMode == "BUY" && snapshot.readinessScore >= 99
+            val appReady = GeminiAppReadinessPolicy.isReady(appEvaluation)
             val geminiPositive = controlDecision != null &&
                 controlDecision.requestedAction != "SELL" &&
                 controlDecision.directionScore >= 20 &&
@@ -76,7 +78,7 @@ data class GeminiEntryEvidence(
                 else -> ""
             }
             val source = buildList {
-                if (appReady) add("APP ${snapshot.readinessScore}/100")
+                if (appReady) add("APP ${appEvaluation.readinessScore}/100")
                 if (geminiPositive) add(
                     "Gemini ${controlDecision?.directionScore}/100, уверенность ${controlDecision?.confidence}/100"
                 )
@@ -92,7 +94,7 @@ data class GeminiEntryEvidence(
             }
             val evidenceText = facts.joinToString("; ").ifBlank { "рыночных подтверждений пока нет" }
             val anchorId = max(
-                if (appReady) snapshot.lastCandle else 0L,
+                if (appReady) appEvaluation.candleTime else 0L,
                 if (geminiPositive) controlDecision?.id ?: 0L else 0L
             )
             return GeminiEntryEvidence(
@@ -107,6 +109,14 @@ data class GeminiEntryEvidence(
             )
         }
     }
+}
+
+internal object GeminiAppReadinessPolicy {
+    fun isReady(evaluation: AppPaperEvaluation): Boolean =
+        evaluation.candleTime > 0L &&
+            evaluation.action != StrategyV2.ACTION_SELL &&
+            evaluation.action != StrategyV2.ACTION_SELL_HALF &&
+            evaluation.readinessScore >= 99
 }
 
 data class GeminiExitEvidence(
@@ -459,14 +469,37 @@ internal object GeminiExitExperimentEngine {
 object GeminiExitExperimentStore {
     private const val PREFS = "gemini_exit_experiment_v319"
     private const val KEY_STATE = "state"
+    private const val KEY_STATE_BACKUP = "state_backup_v322"
+    private const val KEY_PENDING_ALERTS = "pending_trade_alerts_v322"
+    private const val KEY_STORAGE_ERROR = "state_storage_error_v322"
 
     private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     @Synchronized
     fun state(context: Context): GeminiExitExperimentState? {
-        val raw = prefs(context).getString(KEY_STATE, null) ?: return null
+        val p = prefs(context)
+        val raw = p.getString(KEY_STATE, null) ?: return null
+        parseState(raw)?.let { return it }
+        val recovered = parseState(p.getString(KEY_STATE_BACKUP, null))
+        if (recovered != null) {
+            p.edit()
+                .putString(KEY_STATE, stateToJson(recovered).toString())
+                .remove(KEY_STORAGE_ERROR)
+                .commit()
+            return recovered
+        }
+        p.edit().putString(
+            KEY_STORAGE_ERROR,
+            "Повреждены данные Gemini‑эксперимента; торговля остановлена до восстановления или сброса"
+        ).commit()
+        return null
+    }
+
+    private fun parseState(raw: String?): GeminiExitExperimentState? {
+        if (raw.isNullOrBlank()) return null
         return runCatching {
             val json = JSONObject(raw)
+            JSONObject(json.getString("portfolio"))
             GeminiExitExperimentState(
                 initializedAt = json.optLong("initializedAt"),
                 portfolio = GeminiPaperStore.loadPortfolio(json.optString("portfolio")),
@@ -491,11 +524,31 @@ object GeminiExitExperimentStore {
         controlDecision: GeminiHourlyDecision?,
         frame: GeminiMarketFrame,
         impulse: ImpulseSnapshot,
+        appEvaluation: AppPaperEvaluation,
         now: Long
     ): GeminiExitExperimentState {
-        val initial = GeminiExitExperimentEngine.bootstrap(state(context), controlPortfolio, now)
+        flushPendingAlerts(context)
+        val existing = state(context)
+        check(prefs(context).getString(KEY_STORAGE_ERROR, "").isNullOrBlank()) {
+            prefs(context).getString(KEY_STORAGE_ERROR, "Ошибка хранилища Gemini‑эксперимента")
+        }
+        var initial = GeminiExitExperimentEngine.bootstrap(existing, controlPortfolio, now)
+        controlPortfolio.trades.maxByOrNull { it.decisionId }?.let { latest ->
+            val mirrored = GeminiExitExperimentEngine.mirrorControlTrade(initial, latest)
+            initial = mirrored.state
+            if (mirrored.executedTrade != null) {
+                save(context, initial, mirrored.executedTrade)
+                flushPendingAlerts(context)
+                return initial
+            }
+        }
         val marked = GeminiPaperTrader.markToMarket(initial.portfolio, frame.preRequestPrice)
-        val entryEvidence = GeminiEntryEvidence.from(frame, impulse, controlDecision)
+        val entryEvidence = GeminiEntryEvidence.from(
+            frame,
+            impulse,
+            controlDecision,
+            appEvaluation
+        )
         val result = if (!marked.inPosition) {
             GeminiExitExperimentEngine.considerEntry(
                 initial.copy(portfolio = marked),
@@ -514,10 +567,8 @@ object GeminiExitExperimentStore {
                 now
             )
         }
-        save(context, result.state)
-        result.executedTrade?.let {
-            runCatching { PumpAlert.showGeminiExitExperimentTrade(context, it) }
-        }
+        save(context, result.state, result.executedTrade)
+        flushPendingAlerts(context)
         if (result.executedTrade == null && entryEvidence.signalActive && !marked.inPosition) {
             SignalAttributionStore.record(
                 context,
@@ -534,11 +585,12 @@ object GeminiExitExperimentStore {
     @Synchronized
     fun mirrorControlTrade(context: Context, trade: GeminiPaperTrade): GeminiExitExperimentState {
         val current = state(context) ?: GeminiExitExperimentState(initializedAt = trade.time)
-        val result = GeminiExitExperimentEngine.mirrorControlTrade(current, trade)
-        save(context, result.state)
-        result.executedTrade?.let {
-            runCatching { PumpAlert.showGeminiExitExperimentTrade(context, it) }
+        check(prefs(context).getString(KEY_STORAGE_ERROR, "").isNullOrBlank()) {
+            prefs(context).getString(KEY_STORAGE_ERROR, "Ошибка хранилища Gemini‑эксперимента")
         }
+        val result = GeminiExitExperimentEngine.mirrorControlTrade(current, trade)
+        save(context, result.state, result.executedTrade)
+        flushPendingAlerts(context)
         return result.state
     }
 
@@ -547,8 +599,23 @@ object GeminiExitExperimentStore {
         prefs(context).edit().clear().apply()
     }
 
-    private fun save(context: Context, state: GeminiExitExperimentState) {
-        val json = JSONObject()
+    private fun save(
+        context: Context,
+        state: GeminiExitExperimentState,
+        pendingTrade: GeminiPaperTrade? = null
+    ) {
+        val json = stateToJson(state)
+        val pending = (pendingAlerts(context) + listOfNotNull(pendingTrade))
+            .distinctBy(::alertId)
+        prefs(context).edit()
+            .putString(KEY_STATE, json.toString())
+            .putString(KEY_STATE_BACKUP, json.toString())
+            .putString(KEY_PENDING_ALERTS, JSONArray(pending.map { it.toJson() }).toString())
+            .remove(KEY_STORAGE_ERROR)
+            .commit()
+    }
+
+    private fun stateToJson(state: GeminiExitExperimentState): JSONObject = JSONObject()
             .put("initializedAt", state.initializedAt)
             .put("portfolio", GeminiPaperStore.portfolioToJson(state.portfolio).toString())
             .put("lastControlDecisionId", state.lastControlDecisionId)
@@ -561,6 +628,30 @@ object GeminiExitExperimentStore {
             .put("adaptivePullbackPercent", state.adaptivePullbackPercent)
             .put("lastPhase", state.lastPhase)
             .put("lastEntryAnchorId", state.lastEntryAnchorId)
-        prefs(context).edit().putString(KEY_STATE, json.toString()).apply()
+
+    private fun pendingAlerts(context: Context): List<GeminiPaperTrade> = runCatching {
+        val json = JSONArray(prefs(context).getString(KEY_PENDING_ALERTS, "[]").orEmpty())
+        (0 until json.length()).mapNotNull { index ->
+            json.optJSONObject(index)?.let(GeminiPaperTrade::fromJson)
+        }
+    }.getOrDefault(emptyList())
+
+    private fun flushPendingAlerts(context: Context) {
+        val pending = pendingAlerts(context)
+        if (pending.isEmpty()) return
+        var delivered = 0
+        for (trade in pending) {
+            if (runCatching { PumpAlert.showGeminiExitExperimentTrade(context, trade) }.isFailure) break
+            delivered++
+        }
+        if (delivered > 0) {
+            prefs(context).edit().putString(
+                KEY_PENDING_ALERTS,
+                JSONArray(pending.drop(delivered).map { it.toJson() }).toString()
+            ).commit()
+        }
     }
+
+    private fun alertId(trade: GeminiPaperTrade): String =
+        "${trade.time}:${trade.decisionId}:${trade.action}"
 }

@@ -50,6 +50,7 @@ Serge values timely, unmistakable phone alerts. APP and Gemini must each generat
 - V3.19: trade alerts and entry/exit tuning, code 51, current work.
 - V3.20: attributed signals and confirmed early entry for Gemini experiment, code 52, current work.
 - V3.21: APP confirmed-trend continuation entry, code 53, current work.
+- V3.22: full audit fixes for durable trade-alert delivery, independent APP readiness, storage recovery and current UI text, code 54, current work.
 
 ## Verification before delivery
 

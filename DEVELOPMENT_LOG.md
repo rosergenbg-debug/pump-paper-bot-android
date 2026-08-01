@@ -73,3 +73,16 @@ This is the agent's chronological external memory. Append every material change;
 - Opened draft PR #29 as the Android Build trigger. GitHub Actions run #111 completed successfully, including unit tests, `assembleDebug`, package/version/activity checks and intermediate APK verification.
 - Re-signed the CI APK with the installed-compatible personal update key. Final certificate SHA-256: `1f778c4291c9d11c5f89f4de8773bda35a0125031adc05785daee23f27dc7823`; APK Signature Schemes v2 and v3 verify successfully.
 - Final APK: `PumpSignal-V3.21-Compatible-FINAL.apk`, 7,059,759 bytes, SHA-256 `a8d22bd12834c2eab7e44250a1d47097d702a15723589df27b8048e112fcc4be`. Its `AndroidManifest.xml` and `classes.dex` hashes exactly match the CI-verified intermediate APK.
+
+## V3.22 — full audit fixes
+
+- Serge requested one combined release from the full V3.21 control-flow audit and the separate visible-text audit, without changing trading thresholds.
+- Added persistent per-participant trade-alert outboxes. APP, Gemini and Gemini-experiment now commit the new portfolio and pending trade alert together before attempting the Android notification. A failed/disabled notification remains queued and is retried in later cycles; the virtual trade itself is not repeated.
+- Android notification permission and app-level notification availability are checked before a trade alert is considered accepted by the notification manager.
+- Gemini-experiment entry now reads readiness from `PumpBotEngine.evaluateAppPaper()` with the independent APP portfolio. It no longer uses the manual Serge position's `waitMode/readinessScore`. The experiment also reconciles the latest control-Gemini trade each cycle so an interruption between control BUY persistence and mirroring cannot permanently drop that command.
+- APP, Gemini and Gemini-experiment stores now keep a last-good JSON backup. If both primary and backup data are unreadable, automated trading stops with an explicit storage error instead of silently replacing history with a fresh €1,000 account.
+- Ordinary quiet hours now apply every day and migrate the old default start from 06:00 to 06:15. Executed trade alerts and urgent exits remain immediate. Settings and status text were updated accordingly.
+- User-visible release headers now use `BuildConfig.VERSION_NAME`; stale V3.15/V3.4 headers, radar explanations, reset wording and the old three-account details screen were updated for the four-participant architecture.
+- Internal network identification now uses the build version instead of hard-coded `3.18`.
+- Removed the personal key fetch and plaintext signing password from the active GitHub workflow. CI produces and verifies only an intermediate debug APK; the installed-compatible personal signature is applied after CI verification.
+- Release metadata advanced once to V3.22/code 54. Added focused unit coverage for the 06:15 schedule boundary and independent APP readiness. Full CI build, APK inspection and compatible signature verification are pending.

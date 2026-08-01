@@ -258,11 +258,29 @@ data class AppPaperSyncResult(
 object AppPaperStore {
     private const val PREFS = "app_paper_v317"
     private const val KEY_PORTFOLIO = "portfolio"
+    private const val KEY_PORTFOLIO_BACKUP = "portfolio_backup_v322"
+    private const val KEY_PENDING_ALERTS = "pending_trade_alerts_v322"
+    private const val KEY_STORAGE_ERROR = "portfolio_storage_error_v322"
 
     fun state(context: Context): AppPaperPortfolio {
-        val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getString(KEY_PORTFOLIO, null)
-        return load(raw)
+        val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val raw = p.getString(KEY_PORTFOLIO, null)
+        loadOrNull(raw)?.let { return it }
+        val recovered = loadOrNull(p.getString(KEY_PORTFOLIO_BACKUP, null))
+        if (recovered != null) {
+            p.edit()
+                .putString(KEY_PORTFOLIO, toJson(recovered).toString())
+                .remove(KEY_STORAGE_ERROR)
+                .commit()
+            return recovered
+        }
+        if (!raw.isNullOrBlank()) {
+            p.edit().putString(
+                KEY_STORAGE_ERROR,
+                "Повреждены основные данные APP; торговля остановлена до восстановления или сброса"
+            ).commit()
+        }
+        return AppPaperPortfolio()
     }
 
     @Synchronized
@@ -272,12 +290,19 @@ object AppPaperStore {
 
     @Synchronized
     fun syncWithAlerts(context: Context): AppPaperSyncResult {
+        flushPendingAlerts(context)
+        val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val current = state(context)
+        check(p.getString(KEY_STORAGE_ERROR, "").isNullOrBlank()) {
+            p.getString(KEY_STORAGE_ERROR, "Ошибка хранилища APP")
+        }
         val evaluation = PumpBotEngine.evaluateAppPaper(context, current)
         val next = AppPaperTrader.apply(current, evaluation)
-        if (next != current) save(context, next)
         val trades = AppTradeAlertPolicy.newlyExecutedTrades(current, next)
-        trades.forEach { trade -> PumpAlert.showAppTrade(context, trade) }
+        if (next != current || trades.isNotEmpty()) {
+            save(context, next, (pendingAlerts(context) + trades).distinctBy(::alertId))
+        }
+        flushPendingAlerts(context)
         return AppPaperSyncResult(next, trades.isNotEmpty())
     }
 
@@ -285,15 +310,23 @@ object AppPaperStore {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().commit()
     }
 
-    private fun save(context: Context, value: AppPaperPortfolio) {
+    private fun save(
+        context: Context,
+        value: AppPaperPortfolio,
+        pending: List<AppPaperTrade> = pendingAlerts(context)
+    ) {
+        val raw = toJson(value).toString()
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit()
-            .putString(KEY_PORTFOLIO, toJson(value).toString())
+            .putString(KEY_PORTFOLIO, raw)
+            .putString(KEY_PORTFOLIO_BACKUP, raw)
+            .putString(KEY_PENDING_ALERTS, JSONArray(pending.map { it.toJson() }).toString())
+            .remove(KEY_STORAGE_ERROR)
             .commit()
     }
 
-    private fun load(raw: String?): AppPaperPortfolio {
-        if (raw.isNullOrBlank()) return AppPaperPortfolio()
+    private fun loadOrNull(raw: String?): AppPaperPortfolio? {
+        if (raw.isNullOrBlank()) return null
         return runCatching {
             val json = JSONObject(raw)
             val tradesJson = json.optJSONArray("trades") ?: JSONArray()
@@ -318,8 +351,39 @@ object AppPaperStore {
                     decisionsJson.optJSONObject(it)?.let(AppPaperDecision::fromJson)
                 }
             )
-        }.getOrDefault(AppPaperPortfolio())
+        }.getOrNull()
     }
+
+    private fun pendingAlerts(context: Context): List<AppPaperTrade> = runCatching {
+        val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString(KEY_PENDING_ALERTS, "[]").orEmpty()
+        val json = JSONArray(raw)
+        (0 until json.length()).mapNotNull { index ->
+            json.optJSONObject(index)?.let(AppPaperTrade::fromJson)
+        }
+    }.getOrDefault(emptyList())
+
+    private fun flushPendingAlerts(context: Context) {
+        val pending = pendingAlerts(context)
+        if (pending.isEmpty()) return
+        var delivered = 0
+        for (trade in pending) {
+            val success = runCatching { PumpAlert.showAppTrade(context, trade) }.isSuccess
+            if (!success) break
+            delivered++
+        }
+        if (delivered > 0) {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .putString(
+                    KEY_PENDING_ALERTS,
+                    JSONArray(pending.drop(delivered).map { it.toJson() }).toString()
+                )
+                .commit()
+        }
+    }
+
+    private fun alertId(trade: AppPaperTrade): String =
+        "${trade.time}:${trade.candleTime}:${trade.action}"
 
     private fun toJson(value: AppPaperPortfolio): JSONObject = JSONObject()
         .put("cashEur", value.cashEur)

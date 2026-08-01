@@ -728,6 +728,9 @@ object GeminiCycleGuard {
 object GeminiPaperStore {
     private const val PREFS = "gemini_paper_v34"
     private const val KEY_PORTFOLIO = "portfolio"
+    private const val KEY_PORTFOLIO_BACKUP = "portfolio_backup_v322"
+    private const val KEY_PENDING_ALERTS = "pending_trade_alerts_v322"
+    private const val KEY_STORAGE_ERROR = "portfolio_storage_error_v322"
     private const val KEY_ENABLED = "enabled"
     private const val KEY_STATUS = "status"
     private const val KEY_PHASE = "phase"
@@ -789,7 +792,7 @@ object GeminiPaperStore {
             totalTokensToday = p.getInt(KEY_TOTAL_TOKENS, 0),
             portfolio = GeminiResearchStore.applyPortfolioMetrics(
                 context,
-                loadPortfolio(p.getString(KEY_PORTFOLIO, null))
+                loadPortfolioRecovering(context)
             ),
             pendingDecision = loadPendingDecision(p.getString(KEY_PENDING_DECISION, null)),
             activity = if (includeActivity) {
@@ -805,7 +808,7 @@ object GeminiPaperStore {
             .putBoolean(KEY_ENABLED, enabled)
             .putString(KEY_STATUS, if (enabled) "ЖДЁМ ЗАКРЫТИЯ ЧАСА" else "ВЫКЛЮЧЕН")
             .putString(KEY_PHASE, if (enabled) "ОЖИДАНИЕ ЦИКЛА" else "ВЫКЛЮЧЕН")
-            .apply()
+            .commit()
         recordActivity(
             context,
             stage = "УПРАВЛЕНИЕ",
@@ -984,17 +987,24 @@ object GeminiPaperStore {
     fun completePending(
         context: Context,
         portfolio: GeminiPaperPortfolio,
+        pendingTrade: GeminiPaperTrade? = null,
         now: Long = System.currentTimeMillis()
     ) {
         GeminiResearchStore.savePortfolioMetrics(context, portfolio)
+        val raw = portfolioToJson(portfolio).toString()
+        val pending = (pendingTradeAlerts(context) + listOfNotNull(pendingTrade))
+            .distinctBy(::alertId)
         prefs(context).edit()
-            .putString(KEY_PORTFOLIO, portfolioToJson(portfolio).toString())
+            .putString(KEY_PORTFOLIO, raw)
+            .putString(KEY_PORTFOLIO_BACKUP, raw)
+            .putString(KEY_PENDING_ALERTS, JSONArray(pending.map { it.toJson() }).toString())
             .remove(KEY_PENDING_DECISION)
+            .remove(KEY_STORAGE_ERROR)
             .putLong(KEY_LAST_SUCCESS, now)
             .putString(KEY_STATUS, "РАБОТАЕТ")
             .putString(KEY_PHASE, "РЕШЕНИЕ ИСПОЛНЕНО ПО СВЕЖЕЙ ЦЕНЕ")
             .putString(KEY_ERROR, "")
-            .apply()
+            .commit()
     }
 
     fun saveFailure(context: Context, error: String, now: Long = System.currentTimeMillis()) {
@@ -1015,9 +1025,47 @@ object GeminiPaperStore {
 
     fun savePortfolio(context: Context, portfolio: GeminiPaperPortfolio) {
         GeminiResearchStore.savePortfolioMetrics(context, portfolio)
+        val raw = portfolioToJson(portfolio).toString()
         prefs(context).edit()
-            .putString(KEY_PORTFOLIO, portfolioToJson(portfolio).toString())
-            .apply()
+            .putString(KEY_PORTFOLIO, raw)
+            .putString(KEY_PORTFOLIO_BACKUP, raw)
+            .remove(KEY_STORAGE_ERROR)
+            .commit()
+    }
+
+    fun requireHealthyPortfolio(context: Context) {
+        check(prefs(context).getString(KEY_STORAGE_ERROR, "").isNullOrBlank()) {
+            prefs(context).getString(KEY_STORAGE_ERROR, "Ошибка хранилища Gemini")
+        }
+    }
+
+    fun flushPendingTradeAlerts(context: Context) {
+        val pending = pendingTradeAlerts(context)
+        if (pending.isEmpty()) return
+        var delivered = 0
+        var failure = ""
+        for (trade in pending) {
+            val result = runCatching { PumpAlert.showGeminiTrade(context, trade) }
+            if (result.isFailure) {
+                failure = result.exceptionOrNull()?.message ?: "уведомление не принято Android"
+                break
+            }
+            delivered++
+        }
+        if (delivered > 0) {
+            prefs(context).edit().putString(
+                KEY_PENDING_ALERTS,
+                JSONArray(pending.drop(delivered).map { it.toJson() }).toString()
+            ).commit()
+        }
+        if (failure.isNotBlank()) {
+            recordActivity(
+                context,
+                "ОЧЕРЕДЬ ЗВОНКОВ",
+                "WAIT",
+                "Сделка сохранена; звонок будет повторён: $failure"
+            )
+        }
     }
 
     fun reset(context: Context) {
@@ -1026,7 +1074,11 @@ object GeminiPaperStore {
     }
 
     internal fun loadPortfolio(raw: String?): GeminiPaperPortfolio {
-        if (raw.isNullOrBlank()) return GeminiPaperPortfolio()
+        return parsePortfolio(raw) ?: GeminiPaperPortfolio()
+    }
+
+    private fun parsePortfolio(raw: String?): GeminiPaperPortfolio? {
+        if (raw.isNullOrBlank()) return null
         return runCatching {
             val json = JSONObject(raw)
             val tradesJson = json.optJSONArray("trades") ?: JSONArray()
@@ -1055,8 +1107,39 @@ object GeminiPaperStore {
                 ),
                 positionPeakPrice = json.optDouble("positionPeakPrice", 0.0)
             )
-        }.getOrDefault(GeminiPaperPortfolio())
+        }.getOrNull()
     }
+
+    private fun loadPortfolioRecovering(context: Context): GeminiPaperPortfolio {
+        val p = prefs(context)
+        val primary = p.getString(KEY_PORTFOLIO, null)
+        parsePortfolio(primary)?.let { return it }
+        val recovered = parsePortfolio(p.getString(KEY_PORTFOLIO_BACKUP, null))
+        if (recovered != null) {
+            p.edit()
+                .putString(KEY_PORTFOLIO, portfolioToJson(recovered).toString())
+                .remove(KEY_STORAGE_ERROR)
+                .commit()
+            return recovered
+        }
+        if (!primary.isNullOrBlank()) {
+            p.edit().putString(
+                KEY_STORAGE_ERROR,
+                "Повреждены основные данные Gemini; торговля остановлена до восстановления или сброса"
+            ).commit()
+        }
+        return GeminiPaperPortfolio()
+    }
+
+    private fun pendingTradeAlerts(context: Context): List<GeminiPaperTrade> = runCatching {
+        val json = JSONArray(prefs(context).getString(KEY_PENDING_ALERTS, "[]").orEmpty())
+        (0 until json.length()).mapNotNull { index ->
+            json.optJSONObject(index)?.let(GeminiPaperTrade::fromJson)
+        }
+    }.getOrDefault(emptyList())
+
+    private fun alertId(trade: GeminiPaperTrade): String =
+        "${trade.time}:${trade.decisionId}:${trade.action}"
 
     private fun loadActivity(raw: String?): List<GeminiActivityEvent> {
         if (raw.isNullOrBlank()) return emptyList()
