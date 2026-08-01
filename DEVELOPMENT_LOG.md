@@ -1,205 +1,68 @@
-# Журнал разработки PumpSignal
-
-> СЛУЖЕБНАЯ ПАМЯТЬ ДЛЯ ИИ-АГЕНТА. Серж не обязан читать этот журнал или напоминать агенту о его содержимом.
-
-Этот файл хранит непрерывную историю решений и изменений проекта. Новая запись обязательна при каждой работе с приложением, репозиторием, сборкой, версией, подписью, данными или документацией.
-
-Записи должны описывать факты. Незавершённая работа не отмечается как готовая. Агент сам читает журнал перед работой и сам дописывает его после работы.
-
----
-
-## 30 июля 2026 — создана постоянная память проекта
-
-### Запрос Сержа
-
-Создать внутри репозитория два постоянных файла, чтобы при переполнении чата новая рабочая сессия не теряла цели, решения и последовательность разработки:
-
-- инструкцию с сутью проекта, целями и правилами;
-- журнал всех изменений приложения и файлов.
-
-### Сделано
-
-- Создан `AGENTS.md` — обязательная инструкция проекта, которую Codex должен читать перед работой.
-- Создан `DEVELOPMENT_LOG.md` — этот последовательный журнал.
-- Зафиксированы цель соревнования APP, Gemini и Сержа, правила независимых портфелей, требования к интерфейсу, сохранению данных, версиям, подписи APK, тестированию и ведению дальнейшей истории.
-- Зафиксировано текущее состояние V3.18 и ошибка прошлой нумерации/подписи.
-- Торговая стратегия и код приложения в этой работе не менялись.
-
-### Обязательное продолжение
-
-Каждое следующее изменение должно обновлять этот журнал в том же коммите или PR. Перед новой работой нужно полностью читать оба файла.
-
----
-
-## 30 июля 2026 — правильная V3.18 поверх установленной V3.17
-
-### Запрос Сержа
-
-На главном экране не хватало самого Сержа: были видны APP и Gemini, хотя сравнение заявлено для троих. Нужно показать карточку **СЕРЖ** с актуальной суммой денег и общим результатом в процентах.
-
-На графиках нужно понятнее показывать:
-
-- зелёной стрелкой вверх — вход;
-- красной стрелкой вниз — выход;
-- линией между входом и выходом — завершённую сделку;
-- зелёным вверх — прибыль;
-- красным вниз — убыток;
-- возле линии — результат в процентах и евро.
-
-### Реализованная работа
-
-Работа ведётся в PR №27, ветка `agent/v3-18-three-way-competition`.
-
-В код добавлены или исправлены:
-
-- третья живая карточка **СЕРЖ** на главном экране;
-- актуальный баланс и общий процент результата APP, Gemini и Сержа;
-- использование сохранённых ручных операций «Я КУПИЛ / Я ПРОДАЛ» для портфеля Сержа;
-- три синхронных графика сравнения;
-- зелёные обозначения входа;
-- красные обозначения выхода;
-- угловая связь входа с окончательным выходом;
-- подписи прибыли или убытка в процентах и евро;
-- правильное визуальное направление прибыльного и убыточного результата.
-
-Торговая стратегия APP не менялась. Gemini остаётся независимым Shadow-портфелем. Портфель Сержа остаётся ручным.
-
-### Ошибка нумерации и её исправление
-
-Изначально новая работа была ошибочно оставлена под старым номером V3.18, затем переименована в V3.19. Серж указал, что реально установленная рабочая база — V3.17.
-
-После проверки установлена правильная цепочка:
-
-- установленная база: V3.17 / versionCode 49;
-- новая версия с карточкой Сержа: V3.18 / versionCode 50.
-
-Название приложения, `versionName`, `versionCode`, README, PR и имя сборки должны соответствовать V3.18.
-
-### Ошибка подписи и её исправление
-
-Первый APK из GitHub Actions был подписан промежуточным сертификатом. Наличие подписи было ошибочно принято за совместимость обновления. Android не может обновить установленную программу APK с другим сертификатом.
-
-Подтверждена рабочая линия подписи:
-
-`SHA-256 1f778c4291c9d11c5f89f4de8773bda35a0125031adc05785daee23f27dc7823`
-
-Промежуточный сертификат GitHub Actions начинается с `1133e7d3…` и не подходит для обновления установленной версии.
-
-Финальный V3.18 APK был повторно подписан совместимым ключом и проверен. Пользователю был выдан чистый APK без ZIP:
-
-`PumpSignal-V3.18-Compatible-FINAL.apk`
-
-### Проверки финального APK
-
-Подтверждены:
-
-- пакет `com.example.pumppaperbot.v8`;
-- версия V3.18;
-- versionCode 50;
-- подписи APK Signature Scheme v2/v3;
-- сертификат рабочей линии `1f778c42…27dc7823`;
-- целостность ZIP-контейнера APK;
-- совпадение содержимого с успешно собранным промежуточным APK.
-
-### Важный урок
-
-Нельзя определять базовую установленную версию только по истории GitHub. Нельзя отдавать пользователю APK сразу после зелёной сборки. Сначала нужно сравнить сертификат конечного файла с рабочей установленной линией.
-
----
-
-## Ранее реализованное состояние проекта
-
-Ниже — восстановленная краткая история, необходимая для понимания текущего приложения. Подробные технические отчёты и backtest находятся в репозитории.
-
-### Начальная стратегия и график
-
-Приложение стало бумажным торговым помощником PUMP/EUR без реальных ордеров. Были добавлены:
-
-- осторожный и активный профили;
-- сигналы входа и выхода;
-- комиссии 0,15% на каждую сторону;
-- ограничение убытка;
-- исторический backtest;
-- крупный вертикальный график;
-- прокрутка истории по датам;
-- стрелки входа и выхода;
-- линия, связывающая завершённую сделку;
-- прибыль, убыток и время в позиции;
-- шкала от −100 до +100;
-- предупреждение при готовности около 99;
-- тихие часы и сохранение ночного сигнала.
-
-### Исследование «дыхания рынка»
-
-Вместо простой реакции на рост введено раздельное наблюдение за:
-
-- активностью;
-- направлением потока;
-- согласованностью данных;
-- риском позднего входа;
-- сжатием и ускорением;
-- taker-потоком;
-- стаканом;
-- открытым интересом;
-- поведением BTC, ETH и SOL.
-
-Главная задача — уменьшать риск покупки уже после состоявшегося пампа. Шкала не считается вероятностью прибыли.
-
-### Gemini Shadow Mode
-
-Gemini добавлен как независимый эксперимент, а не как управляющая часть основной стратегии.
-
-Реализованы:
-
-- отдельный виртуальный счёт Gemini со стартовыми 1 000 €;
-- самостоятельные BUY, HOLD и SELL;
-- один прогноз на закрытый час;
-- защита от повторной сделки за тот же час;
-- отдельные баланс, позиция, комиссии, P/L, win rate и просадка;
-- журнал активности;
-- таймеры следующей проверки;
-- отображение модели, попыток, ошибок и квоты;
-- RSS-новости;
-- ограниченный fallback моделей;
-- защита при HTTP 429;
-- исполнение после получения ответа, без цены из будущего;
-- SQLite для журнала и живых наблюдений;
-- Keystore/AES-GCM для API-ключа;
-- WorkManager только при наличии сети;
-- фоновый монитор рынка.
-
-Исторические проверки быстрых Gemini-входов не подтвердили желаемую доходность. Поэтому Gemini остаётся Shadow-экспериментом, а правила основной стратегии не ослаблены.
-
-### Соревнование троих
-
-После сравнения APP и Gemini Серж предложил добавить себя как третьего участника. Цель — не декоративная карточка, а три настоящих независимых виртуальных портфеля:
-
-- APP;
-- GEMINI;
-- СЕРЖ.
-
-Для каждого нужны актуальные деньги, процент результата, сделки и график. Должен существовать общий экран сравнения и крупный просмотр результатов.
-
----
-
-## Шаблон следующей записи
-
-### Дата и краткое название
-
-**Запрос Сержа:** что именно требовалось.
-
-**Исходное состояние:** ветка, версия и важные ограничения.
-
-**Изменено:** конкретные файлы, экраны, расчёты или процессы.
-
-**Стратегия:** менялась или не менялась.
-
-**Версия:** versionName и versionCode.
-
-**Проверено:** тесты, сборка, установка, данные, пакет и подпись.
-
-**Результат:** коммит, PR, релиз или путь к APK.
-
-**Осталось:** незавершённые пункты и следующий шаг.
-
-**Ошибки и уроки:** что нельзя повторять.
+# PumpSignal development log
+
+This is the agent's chronological external memory. Append every material change; do not rewrite history to match an assumption.
+
+## Recovered baseline
+
+- Project repository: `rosergenbg-debug/pump-paper-bot-android`. Never modify the old `price-tracker-android` project.
+- StrategyV2 and Gemini use separate virtual portfolios. User/Serge is the third independent virtual portfolio.
+- Gemini runs as an hourly independent Shadow experiment. It receives market/news context, uses a fresh post-response execution quote, and does not control StrategyV2.
+- Monitoring uses a foreground service near every two minutes plus WorkManager reserve cycles. Ordinary alerts include quiet-hour scheduling; urgent personal exits may bypass it.
+- Signing history caused failed Android updates. Compatible release certificate SHA-256 is `1f778c4291c9…27dc7823`; GitHub intermediate builds previously used a different certificate and must not be handed to Serge as final updates.
+
+## V3.18 — three-way competition
+
+- Added APP, Gemini and SERGE virtual competition, balances, signed returns and graph trade markers.
+- Correct release is V3.18/code 50 over V3.17/code 49. Earlier temporary V3.19 labels on the same feature were a numbering mistake and were reverted.
+- Final V3.18 APK was signed with the compatible certificate and delivered as a direct APK.
+
+## V3.19 — trade alerts and timing tuning
+
+- Request: always ring for APP entry, APP exit, Gemini entry and Gemini exit. Gemini entry timing is good; Gemini exit is late. APP exit is good; APP entry is too rare.
+- Added fresh high-importance alarm channels for APP trades and Gemini trades. BUY and SELL use distinct notification ids, so APP and Gemini events cannot overwrite one another.
+- Alerts are triggered by newly appended executed trades, not only by a readiness gauge. When an APP trade alert fires, the generic APP readiness alert is suppressed for that cycle to avoid a duplicate ring.
+- Replaced Gemini BUY-only alert detection with BUY/SELL trade detection.
+- Initial implementation added fixed Gemini exits at −3% or after +2% and a 1.2% pullback. Serge rejected fixed percentages as the main decision logic before release, so this was removed from the control Gemini.
+- Modestly widened APP entry confirmation: cautious RSI recovery accepts up to 57; Active mode keeps a valid RSI recovery for one extra closed candle, accepts a wider RSI band and slightly lower shock-volume threshold. Late-entry, rapid-drop and PUMP/BTC/SOL overheat vetoes remain unchanged.
+- Added unit coverage for APP/Gemini executed-trade detection, Gemini protective exit and APP entry sensitivity.
+- Release metadata set to V3.19/code 51. Final build/signature verification remains required before delivery.
+- Local commit `83ea1ae` was created on `agent/v3-19-trade-alerts-and-tuning`. Push was blocked by the workspace publication guard pending explicit user approval for this exact repository/branch; no remote V3.19 branch or CI build exists yet.
+
+## V3.19 — Gemini exit experiment
+
+- Request: add a fourth visible participant, «Gemini‑эксперимент», alongside APP, Gemini and Serge. It must send its own entry and exit signals and be visible in a four-way comparison.
+- Kept Gemini as the control. Removed the unreleased fixed-percentage protective exit and the prompt wording that would have changed Gemini's exit behaviour.
+- Added a separate persistent experimental portfolio. On first run it starts from an exact checkpoint copy of Gemini; afterwards it mirrors only Gemini's newly executed BUY at the same quote. Gemini SELL does not close the experiment.
+- The experimental exit checks every monitor cycle. Evidence groups are adaptive price pullback, spot/futures buyer flow, spot/futures CVD, BTC/SOL, open interest, order-book imbalance and the existing market-direction score. A moderate multi-group reversal must persist across two checks; a strong reversal can exit immediately. A −5% loss is only the emergency backstop.
+- Added distinct high-importance alarm notifications «GEMINI‑ЭКСПЕРИМЕНТ: ВХОД/ВЫХОД», separate ids and a separate Android channel.
+- Main screen now uses a 2×2 account grid. The comparison screen renders four synchronized graphs. A dedicated experiment screen shows balance, return, position, evidence score, confirmation streak, adaptive noise allowance and trades.
+- Added pure unit coverage for checkpoint initialization, mirrored entry, ignored control SELL, two-cycle confirmation, isolated-indicator rejection and emergency backstop.
+
+## V3.19 — build and compatible APK
+
+- Serge explicitly authorized publishing `agent/v3-19-trade-alerts-and-tuning` to `rosergenbg-debug/pump-paper-bot-android` and running the V3.19 build on 2026-08-01.
+- Published the exact local V3.19 tree `43140c1fb6e4967b1bdb3aaa31ff69cc197330e0` through GitHub. Remote branch head after reconciling the independent `main` history: `ce24b2b9bdec89f303e58d198a294a9cdf45225f`.
+- Opened draft PR #28 only as the safe Android Build trigger. GitHub Actions run #109 completed successfully, including unit tests, `assembleDebug`, package/version/activity checks and intermediate APK verification.
+- Re-signed the verified intermediate APK with the installed-compatible personal update key. Final certificate SHA-256: `1f778c4291c9d11c5f89f4de8773bda35a0125031adc05785daee23f27dc7823`; APK Signature Schemes v2 and v3 verify successfully.
+- Final APK: `PumpSignal-V3.19-Compatible-FINAL.apk`, 7,047,471 bytes, SHA-256 `e6d48beb303a38e5e837771ffb6029bbced7c79ed625708e3f48ec0ad14e4bf9`. Its `AndroidManifest.xml` and `classes.dex` hashes exactly match the CI-verified intermediate APK.
+
+## V3.20 — attributed signals and earlier Gemini experiment entry
+
+- Serge reported a correctly timed preparatory signal followed by a strong rise, but could not tell which participant generated it or why no virtual account bought. He requested a persistent top-screen source/reason label and a moderately earlier entry for Gemini experiment.
+- Root cause confirmed in V3.19 code: Gemini experiment had no independent entry path. While in EUR it could only wait for and mirror an already executed control-Gemini BUY; visible positive gauges/evidence could never open its portfolio.
+- Added a persistent top signal attribution panel. It records source, signal/trade type, full reason, time and whether a virtual trade was actually executed. APP 99/100 is explicitly marked as no trade; APP, Gemini and Gemini-experiment trades are distinct.
+- Added an independent early-entry path for Gemini experiment. Its anchor is APP readiness 99/100 or a fresh positive Gemini direction (at least +20 direction and 55 confidence). Entry additionally requires confirmed PUMP momentum and either aligned spot/futures buyer flow or positive spot/futures CVD.
+- Preserved hard entry vetoes for late price, broad overheat, unconfirmed rapid drop, simultaneous BTC/SOL weakness and missing independent buyer confirmation. A blocked signal remains visible with its exact reason.
+- Kept control-Gemini entry mirroring as a fallback and kept all portfolios independent. Existing V3.19 experiment state remains readable; new `lastPhase` state defaults safely for old JSON.
+- Added unit cases for confirmed independent entry, visible non-executed preparation and late-entry veto. Release metadata advanced once to V3.20/code 52; build and final compatible-signature verification remain pending.
+- Changes were committed locally on `agent/v3-20-signal-source-and-early-entry` as `d9f8f1f`. The worktree was clean after the commit. Full Android compilation remains pending because this workspace has neither Gradle nor the required authenticated `gh` CLI.
+
+## V3.21 — APP confirmed trend continuation
+
+- Serge reported that APP remained in EUR throughout a long, orderly rise even though the visible market setup looked ideal. Code review confirmed that every APP entry path required a preceding RSI dip, shock or multi-drop exhaustion; there was no continuation entry for a clean rising trend.
+- Added a separate continuation path that requires two completed rising 30-minute candles above a rising EMA20, RSI 47–60, safe distance from EMA200, no three-hour chase, positive BTC trend and a non-weak broad market.
+- Buyer confirmation is mandatory: aligned non-negative spot/futures taker imbalance, or stronger spot imbalance with non-negative relative-strength slope. The old late-entry, broad overheat and rapid-drop vetoes remain in force.
+- Funding up to and including `+0.01%` is treated as neutral (`0.0001` raw), fixing the prior rejection of a harmless `+0.005%` rate. The same neutral threshold now applies to the original trend-recovery path.
+- The new entry opens the existing `TREND` position mode so saved-state compatibility and the established APP exit remain unchanged. Continuation readiness contributes a visible 99/100 preparatory signal when exactly one independent confirmation is still missing.
+- Added focused unit coverage for the funding boundary, two-candle confirmation, RSI band and buyer-flow alternatives. Release metadata advanced once to V3.21/code 53; README, UI title and GitHub workflow checks/artifact names were updated consistently.
+- Static diff/XML checks pass. Full Gradle unit tests, APK assembly and compatible-certificate verification remain pending because `gh` is not installed in the workspace; the mandatory GitHub publish procedure requires authenticated GitHub CLI and forbids bypassing this prerequisite.
