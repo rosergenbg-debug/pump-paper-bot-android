@@ -66,3 +66,10 @@ This is the agent's chronological external memory. Append every material change;
 - The new entry opens the existing `TREND` position mode so saved-state compatibility and the established APP exit remain unchanged. Continuation readiness contributes a visible 99/100 preparatory signal when exactly one independent confirmation is still missing.
 - Added focused unit coverage for the funding boundary, two-candle confirmation, RSI band and buyer-flow alternatives. Release metadata advanced once to V3.21/code 53; README, UI title and GitHub workflow checks/artifact names were updated consistently.
 - Static diff/XML checks pass. Full Gradle unit tests, APK assembly and compatible-certificate verification remain pending because `gh` is not installed in the workspace; the mandatory GitHub publish procedure requires authenticated GitHub CLI and forbids bypassing this prerequisite.
+
+## V3.21 — build and compatible APK
+
+- Published the exact local V3.21 tree `38d20a82dbd1e19f0271dc08843888179585621f` to `agent/v3-21-app-trend-continuation`; the remote tree matches local commit `8cdec01` byte-for-byte.
+- Opened draft PR #29 as the Android Build trigger. GitHub Actions run #111 completed successfully, including unit tests, `assembleDebug`, package/version/activity checks and intermediate APK verification.
+- Re-signed the CI APK with the installed-compatible personal update key. Final certificate SHA-256: `1f778c4291c9d11c5f89f4de8773bda35a0125031adc05785daee23f27dc7823`; APK Signature Schemes v2 and v3 verify successfully.
+- Final APK: `PumpSignal-V3.21-Compatible-FINAL.apk`, 7,059,759 bytes, SHA-256 `a8d22bd12834c2eab7e44250a1d47097d702a15723589df27b8048e112fcc4be`. Its `AndroidManifest.xml` and `classes.dex` hashes exactly match the CI-verified intermediate APK.
