@@ -18,6 +18,7 @@ class PumpBotWorker(
             INPUT_CYCLE_INTERVAL,
             TimeUnit.MINUTES.toMillis(15)
         )
+        val forcePositionPro = inputData.getBoolean(INPUT_FORCE_POSITION_PRO, false)
         if (!GeminiCycleGuard.tryEnter()) {
             GeminiPaperStore.recordActivity(
                 applicationContext,
@@ -31,6 +32,10 @@ class PumpBotWorker(
         GeminiPaperStore.beginCycle(applicationContext, source, interval, startedAt)
         return try {
             market.sync(applicationContext)
+            PositionSupervisorClient().sync(
+                applicationContext,
+                forceCritical = forcePositionPro
+            )
             val eventState = eventRadar.sync(applicationContext)
             GeminiPaperStore.markDataReady(
                 applicationContext,
@@ -88,5 +93,6 @@ class PumpBotWorker(
     companion object {
         const val INPUT_CYCLE_SOURCE = "cycle_source"
         const val INPUT_CYCLE_INTERVAL = "cycle_interval"
+        const val INPUT_FORCE_POSITION_PRO = "force_position_pro"
     }
 }

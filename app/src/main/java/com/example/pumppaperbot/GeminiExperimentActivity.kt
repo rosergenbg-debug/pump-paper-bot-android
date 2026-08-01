@@ -79,7 +79,7 @@ class GeminiExperimentActivity : AppCompatActivity() {
         })
         root.addView(buttons, LinearLayout.LayoutParams(-1, dp(56)).apply { topMargin = dp(12) })
 
-        root.addView(button("КЛЮЧ GEMINI И РАДАР НОВОСТЕЙ", "#30363D").apply {
+        root.addView(button("API-КЛЮЧИ GEMINI / DEEPSEEK И РАДАР", "#30363D").apply {
             setOnClickListener {
                 startActivity(Intent(this@GeminiExperimentActivity, EventRadarActivity::class.java))
             }

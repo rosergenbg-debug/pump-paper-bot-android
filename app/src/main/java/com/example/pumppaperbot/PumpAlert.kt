@@ -23,6 +23,7 @@ object PumpAlert {
     private const val appTradeChannelId = "pump_app_trades_v319"
     private const val geminiTradeChannelId = "pump_gemini_trades_v319"
     private const val geminiExitExperimentChannelId = "pump_gemini_exit_experiment_v319"
+    private const val positionSupervisorChannelId = "pump_position_supervisor_v4"
     private const val monitorNotificationId = 3501
     private const val signalNotificationId = 3502
     private const val rapidDropNotificationId = 3503
@@ -33,6 +34,7 @@ object PumpAlert {
     private const val geminiSellNotificationId = 3508
     private const val geminiExperimentBuyNotificationId = 3509
     private const val geminiExperimentSellNotificationId = 3510
+    private const val positionSupervisorNotificationId = 3511
     private val rapidDropVibration = longArrayOf(0, 1000, 180, 1000, 180, 1600)
 
     fun ensureChannels(context: Context) {
@@ -108,6 +110,16 @@ object PumpAlert {
             vibrationPattern = longArrayOf(0, 500, 180, 500, 180, 500, 180, 1100)
             setSound(sound, attrs)
         }
+        val positionSupervisor = NotificationChannel(
+            positionSupervisorChannelId,
+            "Серж: сопровождение открытой позиции",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "Выход, ухудшение, улучшение и отмена выхода по открытой позиции Сержа"
+            enableVibration(true)
+            vibrationPattern = longArrayOf(0, 900, 180, 900, 180, 1300)
+            setSound(sound, attrs)
+        }
         manager.createNotificationChannel(monitor)
         manager.createNotificationChannel(signal)
         manager.createNotificationChannel(rapidDrop)
@@ -115,6 +127,7 @@ object PumpAlert {
         manager.createNotificationChannel(appTrades)
         manager.createNotificationChannel(geminiTrades)
         manager.createNotificationChannel(geminiExitExperiment)
+        manager.createNotificationChannel(positionSupervisor)
     }
 
     fun monitorNotification(context: Context, text: String) =
@@ -375,6 +388,37 @@ object PumpAlert {
             text,
             if (buy) 0xFFD29922.toInt() else 0xFFFF7B72.toInt()
         )
+    }
+
+    fun showPositionSupervision(context: Context, state: PositionSupervisionState) {
+        ensureChannels(context)
+        val title = when {
+            state.action == "CANCEL_EXIT" -> "ОТМЕНА ВЫХОДА — ПРОДОЛЖАЕМ"
+            state.exitAdvised && state.dangerLevel >= 9 -> "КРИТИЧЕСКАЯ СИТУАЦИЯ ${state.dangerLevel}/10"
+            state.exitAdvised && state.conditionDelta < 0 ->
+                "СИТУАЦИЯ УХУДШАЕТСЯ ${state.conditionDelta}/−10"
+            state.exitAdvised && state.conditionDelta > 0 ->
+                "СИТУАЦИЯ УЛУЧШАЕТСЯ +${state.conditionDelta}/+10"
+            else -> "DEEPSEEK РЕКОМЕНДУЕТ ВЫХОД"
+        }
+        val text = PositionSupervisorPolicy.statusText(state) +
+            "\nМодель: ${state.model}. Решение о продаже остаётся за вами."
+        val notification = NotificationCompat.Builder(context, positionSupervisorChannelId)
+            .setSmallIcon(R.drawable.ic_launcher)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setContentIntent(openAppIntent(context))
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setColor(if (state.action == "CANCEL_EXIT") 0xFF238636.toInt() else 0xFFDA3633.toInt())
+            .setVibrate(longArrayOf(0, 900, 180, 900, 180, 1300))
+            .setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM))
+            .build()
+        context.getSystemService(NotificationManager::class.java)
+            .notify(positionSupervisorNotificationId, notification)
+        vibrate(context, longArrayOf(0, 900, 180, 900, 180, 1300))
     }
 
     private fun showTradeNotification(

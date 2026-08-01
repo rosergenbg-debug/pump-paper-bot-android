@@ -9,6 +9,7 @@ import android.os.Handler
 import android.os.Looper
 import android.text.InputType
 import android.view.View
+import android.app.AlertDialog
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -24,7 +25,8 @@ class EventRadarActivity : AppCompatActivity() {
     private val main = Handler(Looper.getMainLooper())
     private lateinit var enabledButton: Button
     private lateinit var aiButton: Button
-    private lateinit var keyInput: EditText
+    private lateinit var geminiKeyUi: ApiKeyUi
+    private lateinit var deepSeekKeyUi: ApiKeyUi
     private lateinit var status: TextView
     private lateinit var events: TextView
     private lateinit var details: TextView
@@ -38,7 +40,7 @@ class EventRadarActivity : AppCompatActivity() {
             setBackgroundColor(Color.parseColor("#0D1117"))
         }
         content.addView(button("← НАЗАД", "#30363D").apply { setOnClickListener { finish() } }, params(dp(50)))
-        content.addView(label("V${BuildConfig.VERSION_NAME} • РАДАР НОВОСТЕЙ + GEMINI", 25, "#F0F6FC", true))
+        content.addView(label("V${BuildConfig.VERSION_NAME} • API И РАДАР НОВОСТЕЙ", 25, "#F0F6FC", true))
         content.addView(label(
             "Читает ФРС, ЕЦБ, SEC, BLS и свежие ленты PUMP, Bitcoin и Solana. Новостной Gemini сопоставляет их с текущим рынком. Поправка радара ограничена ±12 и не меняет APP. Отдельные участники Gemini и Gemini‑эксперимент находятся на главном экране.",
             15, "#C9D1D9", false
@@ -65,40 +67,38 @@ class EventRadarActivity : AppCompatActivity() {
         progress = ProgressBar(this).apply { visibility = View.GONE }
         content.addView(progress, LinearLayout.LayoutParams(-1, dp(38)))
 
-        content.addView(label("КЛЮЧ GEMINI", 20, "#F0F6FC", true))
+        content.addView(label("API-КЛЮЧИ V4", 20, "#F0F6FC", true))
         content.addView(label(
-            "Готовый ключ в APK не вшивается. Вставьте личный API‑ключ один раз: он сохранится в закрытых данных приложения и используется новостным радаром и отдельным часовым Gemini.",
+            "Ключ показывается только во время ввода. После сохранения поле исчезает, поэтому случайное касание не может изменить или стереть ключ.",
             14, "#C9D1D9", false
         ))
-        keyInput = EditText(this).apply {
-            hint = "Вставьте личный Gemini API‑ключ"
-            setHintTextColor(Color.parseColor("#8B949E"))
-            setTextColor(Color.WHITE)
-            setBackgroundColor(Color.parseColor("#161B22"))
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-            setPadding(dp(10), 0, dp(10), 0)
-            setText("")
-        }
-        content.addView(keyInput, params(dp(58), dp(6)))
-
-        val keyButtons = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        keyButtons.addView(button("СОХРАНИТЬ КЛЮЧ", "#238636").apply {
-            setOnClickListener {
-                EventRadarStore.saveApiKey(this@EventRadarActivity, keyInput.text.toString())
-                EventRadarStore.setUseAi(this@EventRadarActivity, true)
-                keyInput.setText("")
-                updateUi()
+        geminiKeyUi = createApiKeyPanel(
+            provider = "GEMINI",
+            hint = "Вставьте личный Gemini API-ключ",
+            onSave = {
+                EventRadarStore.saveApiKey(this, it)
+                EventRadarStore.setUseAi(this, true)
+            },
+            onDelete = { EventRadarStore.saveApiKey(this, "") }
+        )
+        content.addView(geminiKeyUi.root, params(-2, dp(8)))
+        deepSeekKeyUi = createApiKeyPanel(
+            provider = "DEEPSEEK",
+            hint = "Вставьте личный DeepSeek API-ключ",
+            onSave = {
+                check(DeepSeekSecureKeyStore.save(this, it)) { "Android не смог защитить ключ" }
+                val key = it
+                executor.execute {
+                    DeepSeekKeyVerifier().verify(this, key)
+                    main.post { updateUi() }
+                }
+            },
+            onDelete = {
+                DeepSeekSecureKeyStore.save(this, "")
+                DeepSeekConnectionStore.clear(this)
             }
-        }, LinearLayout.LayoutParams(0, dp(56), 1f))
-        keyButtons.addView(button("УДАЛИТЬ КЛЮЧ", "#30363D").apply {
-            setOnClickListener {
-                keyInput.setText("")
-                EventRadarStore.saveApiKey(this@EventRadarActivity, "")
-                EventRadarStore.setUseAi(this@EventRadarActivity, true)
-                updateUi()
-            }
-        }, LinearLayout.LayoutParams(0, dp(56), 1f).apply { leftMargin = dp(8) })
-        content.addView(keyButtons, params(dp(56), dp(8)))
+        )
+        content.addView(deepSeekKeyUi.root, params(-2, dp(8)))
 
         aiButton = button("", "#30363D").apply {
             setOnClickListener {
@@ -181,6 +181,7 @@ class EventRadarActivity : AppCompatActivity() {
     }
 
     private fun updateUi(state: EventRadarState = EventRadarStore.state(this)) {
+        updateKeyPanels(state)
         enabledButton.text = if (state.enabled) "РАДАР ВКЛЮЧЁН" else "РАДАР ВЫКЛЮЧЕН"
         enabledButton.backgroundTintList = ColorStateList.valueOf(
             Color.parseColor(if (state.enabled) "#238636" else "#30363D")
@@ -230,6 +231,120 @@ class EventRadarActivity : AppCompatActivity() {
             }.joinToString("\n\n") + "\n\nКоснитесь списка, чтобы открыть источник самого свежего события."
         }
         if (details.visibility == View.VISIBLE) updateDetails(state)
+    }
+
+    private data class ApiKeyUi(
+        val root: LinearLayout,
+        val status: TextView,
+        val editor: LinearLayout,
+        val input: EditText,
+        val addButton: Button,
+        val actions: LinearLayout
+    )
+
+    private fun createApiKeyPanel(
+        provider: String,
+        hint: String,
+        onSave: (String) -> Unit,
+        onDelete: () -> Unit
+    ): ApiKeyUi {
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(10), dp(10), dp(10), dp(10))
+            setBackgroundColor(Color.parseColor("#161B22"))
+        }
+        val status = label("", 15, "#C9D1D9", true)
+        root.addView(status)
+        val input = EditText(this).apply {
+            this.hint = hint
+            setHintTextColor(Color.parseColor("#8B949E"))
+            setTextColor(Color.WHITE)
+            setBackgroundColor(Color.parseColor("#0D1117"))
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            setPadding(dp(10), 0, dp(10), 0)
+        }
+        val editor = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        editor.addView(input, params(dp(58), dp(6)))
+        editor.addView(button("СОХРАНИТЬ API-КЛЮЧ", "#238636").apply {
+            setOnClickListener {
+                val clean = input.text.toString().trim()
+                if (clean.isBlank()) {
+                    status.text = "Ключ пустой — ничего не изменено"
+                    return@setOnClickListener
+                }
+                runCatching { onSave(clean) }.fold(
+                    onSuccess = {
+                        input.setText("")
+                        updateUi()
+                    },
+                    onFailure = { status.text = it.message ?: "Не удалось сохранить ключ" }
+                )
+            }
+        }, params(dp(54), dp(4)))
+        root.addView(editor)
+        val addButton = button("ВВЕСТИ API-КЛЮЧ", "#1F6FEB").apply {
+            setOnClickListener {
+                visibility = View.GONE
+                editor.visibility = View.VISIBLE
+                input.requestFocus()
+            }
+        }
+        root.addView(addButton, params(dp(54), dp(4)))
+        val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        actions.addView(button("ИЗМЕНИТЬ API", "#1F6FEB").apply {
+            setOnClickListener {
+                actions.visibility = View.GONE
+                editor.visibility = View.VISIBLE
+                input.setText("")
+                input.requestFocus()
+            }
+        }, LinearLayout.LayoutParams(0, dp(54), 1f))
+        actions.addView(button("УДАЛИТЬ", "#DA3633").apply {
+            setOnClickListener {
+                AlertDialog.Builder(this@EventRadarActivity)
+                    .setTitle("Удалить ключ $provider?")
+                    .setMessage("После удаления $provider перестанет получать новые запросы. Остальные данные приложения сохранятся.")
+                    .setPositiveButton("Удалить") { _, _ ->
+                        onDelete()
+                        input.setText("")
+                        updateUi()
+                    }
+                    .setNegativeButton("Отмена", null)
+                    .show()
+            }
+        }, LinearLayout.LayoutParams(0, dp(54), 1f).apply { leftMargin = dp(8) })
+        root.addView(actions, params(dp(54), dp(4)))
+        return ApiKeyUi(root, status, editor, input, addButton, actions)
+    }
+
+    private fun updateKeyPanels(state: EventRadarState) {
+        val geminiConfigured = EventRadarStore.apiKey(this).isNotBlank()
+        geminiKeyUi.editor.visibility = View.GONE
+        geminiKeyUi.addButton.visibility = if (geminiConfigured) View.GONE else View.VISIBLE
+        geminiKeyUi.actions.visibility = if (geminiConfigured) View.VISIBLE else View.GONE
+        geminiKeyUi.status.text = when {
+            !geminiConfigured -> "GEMINI • API-ключ не введён"
+            state.gemini.lastSuccess > 0L && state.gemini.error.isBlank() ->
+                "GEMINI • API-ключ введён • всё работает"
+            else -> "GEMINI • API-ключ введён • ожидает проверки"
+        }
+
+        val deepConfigured = DeepSeekSecureKeyStore.read(this).isNotBlank()
+        val supervisor = PositionSupervisorStore.state(this)
+        val deepConnection = DeepSeekConnectionStore.state(this)
+        deepSeekKeyUi.editor.visibility = View.GONE
+        deepSeekKeyUi.addButton.visibility = if (deepConfigured) View.GONE else View.VISIBLE
+        deepSeekKeyUi.actions.visibility = if (deepConfigured) View.VISIBLE else View.GONE
+        deepSeekKeyUi.status.text = when {
+            !deepConfigured -> "DEEPSEEK • API-ключ не введён"
+            deepConnection.lastSuccess > 0L && deepConnection.error.isBlank() ->
+                "DEEPSEEK • API-ключ введён • всё работает\n${deepConnection.models}"
+            supervisor.lastSuccess > 0L && supervisor.error.isBlank() ->
+                "DEEPSEEK • API-ключ введён • всё работает • ${supervisor.model}"
+            deepConnection.error.isNotBlank() ->
+                "DEEPSEEK • ключ сохранён, но проверка не прошла: ${deepConnection.error}"
+            else -> "DEEPSEEK • API-ключ введён • проверяю подключение…"
+        }
     }
 
     private fun updateDetails(state: EventRadarState) {

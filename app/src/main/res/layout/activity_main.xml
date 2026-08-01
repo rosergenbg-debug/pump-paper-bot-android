@@ -229,6 +229,18 @@
                 android:textSize="28sp"
                 android:textStyle="bold" />
 
+            <TextView
+                android:id="@+id/tvPositionSupervisor"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:background="#201522"
+                android:padding="10dp"
+                android:text="DEEPSEEK • ожидает открытия позиции"
+                android:textColor="#D2A8FF"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
             <com.example.pumppaperbot.ManualPositionChartView
                 android:id="@+id/manualPositionChart"
                 android:layout_width="match_parent"

@@ -79,6 +79,7 @@ class PumpSignalService : Service() {
             GeminiPaperStore.beginCycle(this, source, cycleIntervalMillis, startedAt)
             try {
                 market.sync(this)
+                PositionSupervisorClient().sync(this)
                 val eventState = eventRadar.sync(this)
                 GeminiPaperStore.markDataReady(this, source, startedAt)
                 val snapshot = PumpBotEngine.snapshot(this)

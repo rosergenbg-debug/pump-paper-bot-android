@@ -51,6 +51,7 @@ class MainActivity : AppCompatActivity() {
     private var tvReason: TextView? = null
     private var tvPosition: TextView? = null
     private var tvManualPnl: TextView? = null
+    private var tvPositionSupervisor: TextView? = null
     private var tvAlertStatus: TextView? = null
     private var chart: StrategyChartView? = null
     private var manualPositionChart: ManualPositionChartView? = null
@@ -93,6 +94,7 @@ class MainActivity : AppCompatActivity() {
         tvReason = findViewById(R.id.tvReason)
         tvPosition = findViewById(R.id.tvPosition)
         tvManualPnl = findViewById(R.id.tvManualPnl)
+        tvPositionSupervisor = findViewById(R.id.tvPositionSupervisor)
         tvAlertStatus = findViewById(R.id.tvAlertStatus)
         chart = findViewById(R.id.chart)
         manualPositionChart = findViewById(R.id.manualPositionChart)
@@ -215,6 +217,7 @@ class MainActivity : AppCompatActivity() {
         PumpBotEngine.reset(this)
         UserPaperStore.discardOpenPosition(this)
         ManualPositionStore.discardOpenPosition(this)
+        PositionSupervisorStore.clearPosition(this)
         updateUi()
         checkNow()
     }
@@ -255,6 +258,7 @@ class MainActivity : AppCompatActivity() {
                 opened.entryTime.takeIf { it > 0L } ?: System.currentTimeMillis()
             )
             if (!opened.running) startMonitor()
+            schedulePositionCheck(forceCritical = true)
             updateUi()
         }
     }
@@ -270,6 +274,7 @@ class MainActivity : AppCompatActivity() {
             ManualPositionStore.recordSell(this, sellPrice, soldAt)
             UserPaperStore.recordSell(this, sellPrice, soldAt)
             PumpBotEngine.confirmSold(this)
+            PositionSupervisorStore.clearPosition(this)
             updateUi()
         }
     }
@@ -411,6 +416,7 @@ class MainActivity : AppCompatActivity() {
             "Сделка: не открыта"
         }
         renderManualPosition(snapshot)
+        renderPositionSupervisor(snapshot)
         tvAlertStatus?.text = AlertSchedule.statusText(this)
 
         btnStart?.isEnabled = !snapshot.running
@@ -475,6 +481,35 @@ class MainActivity : AppCompatActivity() {
             buyPrice = entry,
             currentPrice = snapshot.lastPrice
         )
+    }
+
+    private fun renderPositionSupervisor(snapshot: LiveSnapshot) {
+        if (snapshot.waitMode != "SELL") {
+            tvPositionSupervisor?.text = "DEEPSEEK • ожидает нажатия «Я купил»"
+            tvPositionSupervisor?.setTextColor(Color.parseColor("#8B949E"))
+            return
+        }
+        val state = PositionSupervisorStore.state(this)
+        tvPositionSupervisor?.text = PositionSupervisorPolicy.statusText(state) +
+            "\n${state.model.ifBlank { "DeepSeek ещё не вызывался" }}"
+        val color = when {
+            state.action == "CANCEL_EXIT" -> "#7EE787"
+            state.exitAdvised -> "#FF7B72"
+            else -> "#D2A8FF"
+        }
+        tvPositionSupervisor?.setTextColor(Color.parseColor(color))
+    }
+
+    private fun schedulePositionCheck(forceCritical: Boolean) {
+        val request = OneTimeWorkRequestBuilder<PumpBotWorker>()
+            .setConstraints(networkConstraints())
+            .setInputData(workDataOf(
+                PumpBotWorker.INPUT_CYCLE_SOURCE to "СЕРЖ КУПИЛ • DEEPSEEK PRO",
+                PumpBotWorker.INPUT_CYCLE_INTERVAL to TimeUnit.MINUTES.toMillis(2),
+                PumpBotWorker.INPUT_FORCE_POSITION_PRO to forceCritical
+            ))
+            .build()
+        WorkManager.getInstance(this).enqueue(request)
     }
 
     private fun networkConstraints(): Constraints = Constraints.Builder()
