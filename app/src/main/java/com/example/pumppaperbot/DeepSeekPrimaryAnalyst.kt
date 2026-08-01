@@ -277,6 +277,7 @@ class DeepSeekPrimaryAnalyst {
         snapshot: LiveSnapshot,
         radar: EventRadarState
     ): DeepSeekPrimaryResult {
+        val now = System.currentTimeMillis()
         val latestNews = radar.recent.take(5).map { event ->
             JSONObject()
                 .put("source", event.source)
@@ -288,7 +289,7 @@ class DeepSeekPrimaryAnalyst {
         val hourly = GeminiMarketFrame.from(context)
         val frame = JSONObject()
             .put("symbol", "PUMP/EUR")
-            .put("price_eur", snapshot.lastPrice)
+            .put("closed_30m_price_eur", snapshot.lastPrice)
             .put("rsi", snapshot.lastRsi)
             .put("ema_200", snapshot.lastEma200)
             .put("funding_rate", snapshot.fundingRate)
@@ -298,29 +299,39 @@ class DeepSeekPrimaryAnalyst {
             .put("energy_score", snapshot.energyScore)
             .put("book_imbalance", snapshot.bookImbalance ?: JSONObject.NULL)
             .put("spread_percent", snapshot.spreadPercent ?: JSONObject.NULL)
-            .put("open_interest_change_percent", snapshot.openInterestChangePercent ?: JSONObject.NULL)
+            .put("open_interest_contracts", snapshot.openInterest ?: JSONObject.NULL)
+            .put("open_interest_change_since_previous_sync_pct", snapshot.openInterestChangePercent ?: JSONObject.NULL)
             .put("rapid_drop_active", snapshot.rapidDrop.active)
             .put("local_buy_signal", snapshot.buySignal)
             .put("local_sell_signal", snapshot.sellSignal)
             .put("local_reason", snapshot.signalReason.take(600))
             .put("user_position_open", snapshot.waitMode == "SELL" && snapshot.entryPrice > 0.0)
-            .put("pump_change_1h_pct", hourly?.pump1hPercent ?: JSONObject.NULL)
-            .put("pump_change_3h_pct", hourly?.pump3hPercent ?: JSONObject.NULL)
-            .put("pump_change_6h_pct", hourly?.pump6hPercent ?: JSONObject.NULL)
-            .put("btc_change_1h_pct", hourly?.btc1hPercent ?: JSONObject.NULL)
-            .put("btc_change_3h_pct", hourly?.btc3hPercent ?: JSONObject.NULL)
-            .put("sol_change_1h_pct", hourly?.sol1hPercent ?: JSONObject.NULL)
-            .put("sol_change_3h_pct", hourly?.sol3hPercent ?: JSONObject.NULL)
-            .put("spot_taker_buy_pct", hourly?.spotTakerBuyPercent ?: JSONObject.NULL)
-            .put("futures_taker_buy_pct", hourly?.futuresTakerBuyPercent ?: JSONObject.NULL)
-            .put("spot_cvd_proxy_pct", hourly?.spotCvdPercent ?: JSONObject.NULL)
-            .put("futures_cvd_proxy_pct", hourly?.futuresCvdPercent ?: JSONObject.NULL)
-            .put("premium_pct", hourly?.premiumPercent ?: JSONObject.NULL)
+            .put("hourly_context_age_seconds", hourly?.let {
+                DeepSeekFreshMarketContext.ageSeconds(it.candleTime, now)
+            } ?: JSONObject.NULL)
+            .put("hourly_pump_change_1h_pct", hourly?.pump1hPercent ?: JSONObject.NULL)
+            .put("hourly_pump_change_3h_pct", hourly?.pump3hPercent ?: JSONObject.NULL)
+            .put("hourly_pump_change_6h_pct", hourly?.pump6hPercent ?: JSONObject.NULL)
+            .put("hourly_btc_change_1h_pct", hourly?.btc1hPercent ?: JSONObject.NULL)
+            .put("hourly_btc_change_3h_pct", hourly?.btc3hPercent ?: JSONObject.NULL)
+            .put("hourly_sol_change_1h_pct", hourly?.sol1hPercent ?: JSONObject.NULL)
+            .put("hourly_sol_change_3h_pct", hourly?.sol3hPercent ?: JSONObject.NULL)
+            .put("hourly_spot_taker_buy_pct", hourly?.spotTakerBuyPercent ?: JSONObject.NULL)
+            .put("hourly_futures_taker_buy_pct", hourly?.futuresTakerBuyPercent ?: JSONObject.NULL)
+            .put("hourly_spot_cvd_proxy_pct", hourly?.spotCvdPercent ?: JSONObject.NULL)
+            .put("hourly_futures_cvd_proxy_pct", hourly?.futuresCvdPercent ?: JSONObject.NULL)
+            .put("premium_last_full_hour_pct", hourly?.premiumPercent ?: JSONObject.NULL)
             .put("news", JSONArray(latestNews))
+        DeepSeekFreshMarketContext.append(context, frame, snapshot, now)
         val system = """
             Ты основной независимый аналитик PumpSignal для PUMP/EUR. Оцени цену на горизонте 1–6 часов.
             Сначала сопоставь PUMP 1ч/3ч/6ч, BTC и SOL, spot/futures taker flow, CVD, funding,
             premium, стакан, open interest, RSI, локальную StrategyV2 и свежие новости.
+            Поля real_time_spot_flow — анонимные исполненные spot-сделки и лучший bid/ask, а не личности трейдеров.
+            Поля five_minute_flow — последние закрытые 5-минутные spot/futures данные. Часовые CVD являются
+            прокси по taker-volume закрытых свечей, а funding_rate — последняя рассчитанная ставка, не прогноз.
+            Всегда учитывай age_seconds и fresh. Просроченные или null-поля не используй как текущий факт.
+            Краткий real-time всплеск используй как подтверждение либо предупреждение, но не как самостоятельный BUY.
             Не считай один индикатор или один заголовок достаточным основанием. Не догоняй уже перегретую цену.
             BUY допустим только при подтверждении минимум двумя независимыми группами данных и отсутствии
             late-entry/rapid-drop запрета. EXIT допустим только при открытой позиции и согласованном ухудшении.

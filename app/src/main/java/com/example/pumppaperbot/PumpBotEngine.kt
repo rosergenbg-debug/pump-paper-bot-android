@@ -159,7 +159,9 @@ data class LiveSnapshot(
     val openInterest: Double? = null,
     val openInterestChangePercent: Double? = null,
     val rapidDrop: RapidDropState = RapidDropState.none(),
-    val weekRhythm: WeekRhythmContext = WeekRhythm.at(0L)
+    val weekRhythm: WeekRhythmContext = WeekRhythm.at(0L),
+    val livePrice: Double? = null,
+    val livePriceAt: Long = 0L
 )
 
 data class CoinOption(val name: String, val symbol: String)
@@ -213,6 +215,8 @@ object PumpBotEngine {
     private const val keyLastSync = "last_sync"
     private const val keyLastCandle = "last_candle"
     private const val keyLastPrice = "last_price"
+    private const val keyLivePrice = "live_price"
+    private const val keyLivePriceAt = "live_price_at"
     private const val keyLastRsi = "last_rsi"
     private const val keyLastEma200 = "last_ema200"
     private const val keyFundingRate = "funding_rate"
@@ -631,6 +635,7 @@ object PumpBotEngine {
             openInterestChangePercent = openInterestChange
         )
 
+        val syncedAt = System.currentTimeMillis()
         val editor = p.edit()
             .putString(keyMarketJson, pumpJson)
             .putString(keyEurJson, eurJson)
@@ -640,7 +645,7 @@ object PumpBotEngine {
             .putString(keyFuturesJson, futuresJson)
             .putString(keyPremiumJson, premiumJson)
             .putString(keyFundingJson, fundingJson)
-            .putLong(keyLastSync, System.currentTimeMillis())
+            .putLong(keyLastSync, syncedAt)
             .putLong(keyLastCandle, evaluation.lastCandle)
             .putDouble(keyLastPrice, evaluation.lastPrice)
             .putDouble(keyLastRsi, evaluation.lastRsi)
@@ -683,6 +688,10 @@ object PumpBotEngine {
                 } else evaluation.signalReason
             )
             .putDouble(keyHighestClose, evaluation.highestClose)
+        if (livePumpEur != null && livePumpEur > 0.0) {
+            editor.putDouble(keyLivePrice, livePumpEur)
+                .putLong(keyLivePriceAt, syncedAt)
+        }
         if (evaluation.marketGateActive || kotlin.math.abs(evaluation.readinessScore) < 90) {
             editor.putString(keyLastAlertKey, "")
         }
@@ -777,7 +786,9 @@ object PumpBotEngine {
                 reboundPercent = p.getDouble(keyRapidDropRebound, 0.0),
                 recoveryConfirmed = p.getBoolean(keyRapidDropRecovery, false)
             ),
-            weekRhythm = WeekRhythm.at(p.getLong(keyLastCandle, 0L))
+            weekRhythm = WeekRhythm.at(p.getLong(keyLastCandle, 0L)),
+            livePrice = p.nullableDouble(keyLivePrice),
+            livePriceAt = p.getLong(keyLivePriceAt, 0L)
         )
     }
 

@@ -242,7 +242,7 @@ class PositionSupervisorClient {
                         else -> 0L
                     },
                     exitBaselinePrice = when {
-                        firstExit -> snapshot.lastPrice
+                        firstExit -> DeepSeekFreshMarketContext.analysisPrice(snapshot, now)
                         stillExit -> previous.exitBaselinePrice
                         else -> 0.0
                     },
@@ -302,13 +302,15 @@ class PositionSupervisorClient {
         previous: PositionSupervisionState,
         criticalReasoning: Boolean = false
     ): SupervisorApiResult {
+        val now = System.currentTimeMillis()
+        val currentPrice = DeepSeekFreshMarketContext.analysisPrice(snapshot, now)
         val hourly = GeminiMarketFrame.from(context)
         val frame = JSONObject()
             .put("symbol", "PUMP/EUR")
             .put("entry_price_eur", snapshot.entryPrice)
-            .put("current_price_eur", snapshot.lastPrice)
+            .put("closed_30m_price_eur", snapshot.lastPrice)
             .put("highest_price_since_entry_eur", snapshot.highestClose)
-            .put("pnl_percent", (snapshot.lastPrice / snapshot.entryPrice - 1.0) * 100.0)
+            .put("pnl_percent", (currentPrice / snapshot.entryPrice - 1.0) * 100.0)
             .put("rsi", snapshot.lastRsi)
             .put("funding_rate", snapshot.fundingRate)
             .put("direction_score", snapshot.directionScore)
@@ -316,18 +318,22 @@ class PositionSupervisorClient {
             .put("energy_score", snapshot.energyScore)
             .put("book_imbalance", snapshot.bookImbalance ?: JSONObject.NULL)
             .put("spread_percent", snapshot.spreadPercent ?: JSONObject.NULL)
-            .put("open_interest_change_percent", snapshot.openInterestChangePercent ?: JSONObject.NULL)
-            .put("pump_change_1h_pct", hourly?.pump1hPercent ?: JSONObject.NULL)
-            .put("pump_change_3h_pct", hourly?.pump3hPercent ?: JSONObject.NULL)
-            .put("btc_change_1h_pct", hourly?.btc1hPercent ?: JSONObject.NULL)
-            .put("btc_change_3h_pct", hourly?.btc3hPercent ?: JSONObject.NULL)
-            .put("sol_change_1h_pct", hourly?.sol1hPercent ?: JSONObject.NULL)
-            .put("sol_change_3h_pct", hourly?.sol3hPercent ?: JSONObject.NULL)
-            .put("spot_taker_buy_pct", hourly?.spotTakerBuyPercent ?: JSONObject.NULL)
-            .put("futures_taker_buy_pct", hourly?.futuresTakerBuyPercent ?: JSONObject.NULL)
-            .put("spot_cvd_proxy_pct", hourly?.spotCvdPercent ?: JSONObject.NULL)
-            .put("futures_cvd_proxy_pct", hourly?.futuresCvdPercent ?: JSONObject.NULL)
-            .put("premium_pct", hourly?.premiumPercent ?: JSONObject.NULL)
+            .put("open_interest_contracts", snapshot.openInterest ?: JSONObject.NULL)
+            .put("open_interest_change_since_previous_sync_pct", snapshot.openInterestChangePercent ?: JSONObject.NULL)
+            .put("hourly_context_age_seconds", hourly?.let {
+                DeepSeekFreshMarketContext.ageSeconds(it.candleTime, now)
+            } ?: JSONObject.NULL)
+            .put("hourly_pump_change_1h_pct", hourly?.pump1hPercent ?: JSONObject.NULL)
+            .put("hourly_pump_change_3h_pct", hourly?.pump3hPercent ?: JSONObject.NULL)
+            .put("hourly_btc_change_1h_pct", hourly?.btc1hPercent ?: JSONObject.NULL)
+            .put("hourly_btc_change_3h_pct", hourly?.btc3hPercent ?: JSONObject.NULL)
+            .put("hourly_sol_change_1h_pct", hourly?.sol1hPercent ?: JSONObject.NULL)
+            .put("hourly_sol_change_3h_pct", hourly?.sol3hPercent ?: JSONObject.NULL)
+            .put("hourly_spot_taker_buy_pct", hourly?.spotTakerBuyPercent ?: JSONObject.NULL)
+            .put("hourly_futures_taker_buy_pct", hourly?.futuresTakerBuyPercent ?: JSONObject.NULL)
+            .put("hourly_spot_cvd_proxy_pct", hourly?.spotCvdPercent ?: JSONObject.NULL)
+            .put("hourly_futures_cvd_proxy_pct", hourly?.futuresCvdPercent ?: JSONObject.NULL)
+            .put("premium_last_full_hour_pct", hourly?.premiumPercent ?: JSONObject.NULL)
             .put("realized_volatility_24h_pct", hourly?.realizedVolatility24hPercent ?: JSONObject.NULL)
             .put("rapid_drop_active", snapshot.rapidDrop.active)
             .put("local_exit_signal", snapshot.sellSignal)
@@ -344,11 +350,15 @@ class PositionSupervisorClient {
                 .put("rsi", previous.exitBaselineRsi)
                 .put("danger_level", previous.exitBaselineDanger)
             )
+        DeepSeekFreshMarketContext.append(context, frame, snapshot, now)
         val system = """
             Ты сопровождаешь уже открытую пользователем позицию PUMP/EUR. Не решай вопрос входа.
             Главная задача — вовремя заметить ухудшение и выход, но не создавать ложную тревогу по одному индикатору.
             Сопоставляй PUMP 1ч/3ч, BTC/SOL, spot/futures taker flow и CVD, funding, premium,
             open interest, стакан, RSI, волатильность и локальный сигнал выхода. Один показатель не достаточен.
+            real_time_spot_flow — анонимный поток исполненных сделок и лучший bid/ask; five_minute_flow —
+            закрытые 5-минутные spot/futures данные. Всегда проверяй fresh и age_seconds, не считай
+            просроченные/null-поля текущими. Краткий микровсплеск сам по себе не является причиной EXIT.
             Верни только JSON: action HOLD, EXIT или CANCEL_EXIT; condition_delta целое от -10 до +10;
             danger_level целое от 0 до 10; summary кратко по-русски.
             condition_delta сравнивает ситуацию с моментом первого EXIT: отрицательное означает ухудшение,
