@@ -153,7 +153,7 @@ object GeminiRequestBudget {
     internal fun isDailyQuotaMessage(message: String): Boolean {
         val lower = message.lowercase(Locale.ROOT)
         return "per day" in lower || "requests per day" in lower || "daily" in lower ||
-            "per_model_per_day" in lower || "rpd" in lower
+            "per_model_per_day" in lower || "permodelperday" in lower || "rpd" in lower
     }
 
     private fun stateLocked(context: Context, now: Long): GeminiBudgetState {
