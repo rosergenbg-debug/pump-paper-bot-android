@@ -17,6 +17,7 @@ class PumpSignalService : Service() {
     private val eventRadar = EventRadarClient()
     private val cycleIntervalMillis = TimeUnit.MINUTES.toMillis(2)
     private val cycleQueuedOrRunning = AtomicBoolean(false)
+    private lateinit var microImpulse: MicroImpulseStream
 
     private val loop = object : Runnable {
         override fun run() {
@@ -28,6 +29,7 @@ class PumpSignalService : Service() {
     override fun onCreate() {
         super.onCreate()
         PumpAlert.ensureChannels(this)
+        microImpulse = MicroImpulseStream(this)
         startForeground(
             PumpAlert.monitorId(),
             PumpAlert.monitorNotification(this, "Проверяет PUMP примерно каждые 2 минуты.")
@@ -36,6 +38,7 @@ class PumpSignalService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         PumpBotEngine.setRunning(this, true)
+        microImpulse.start()
         handler.removeCallbacks(loop)
         handler.post(loop)
         return START_STICKY
@@ -43,6 +46,7 @@ class PumpSignalService : Service() {
 
     override fun onDestroy() {
         handler.removeCallbacks(loop)
+        microImpulse.stop()
         executor.shutdownNow()
         super.onDestroy()
     }
@@ -78,18 +82,21 @@ class PumpSignalService : Service() {
                 val eventState = eventRadar.sync(this)
                 GeminiPaperStore.markDataReady(this, source, startedAt)
                 val snapshot = PumpBotEngine.snapshot(this)
+                val appTrade = AppPaperStore.syncWithAlerts(this)
                 val gemini = GeminiExperimentClient().sync(this, source = source)
                 val rapidDropAlerted = if (PumpBotEngine.shouldAlertRapidDrop(this, snapshot)) {
                     PumpAlert.showRapidDrop(this, snapshot)
                     PumpBotEngine.markRapidDropAlerted(this, snapshot)
                     true
                 } else false
-                val signalAlerted = if (!rapidDropAlerted && PumpBotEngine.shouldAlert(this, snapshot)) {
+                val signalAlerted = if (!rapidDropAlerted && !appTrade.tradeAlerted && PumpBotEngine.shouldAlert(this, snapshot)) {
                     PumpAlert.showSignal(this, snapshot)
                     PumpBotEngine.markAlerted(this, snapshot)
                     true
                 } else false
-                if (!rapidDropAlerted && !signalAlerted && EventRadarStore.shouldAlert(this, eventState)) {
+                if (!rapidDropAlerted && !appTrade.tradeAlerted && !signalAlerted &&
+                    EventRadarStore.shouldAlert(this, eventState)
+                ) {
                     PumpAlert.showEventRadar(this, eventState, snapshot)
                     EventRadarStore.markAlerted(this, eventState)
                 }
