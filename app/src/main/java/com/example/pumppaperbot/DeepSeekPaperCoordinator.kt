@@ -32,6 +32,22 @@ internal object DeepSeekPaperPolicy {
 
     fun isNewDecision(state: DeepSeekPrimaryState, portfolio: GeminiPaperPortfolio): Boolean =
         state.lastSuccess > 0L && state.lastSuccess > portfolio.lastDecisionId
+
+    fun executableRecommendation(
+        state: DeepSeekPrimaryState,
+        now: Long
+    ): GeminiHourlyRecommendation {
+        val recommendation = recommendation(state)
+        if (recommendation.action !in setOf("BUY", "SELL")) return recommendation
+        if (PaperExecutionPolicy.isFreshDecision(state.lastSuccess, now)) return recommendation
+        return recommendation.copy(
+            action = "HOLD",
+            directionScore = 0,
+            confidence = 0,
+            reason = "Торговое решение DeepSeek пропущено: срок действия 12 минут истёк. " +
+                "Ждём новый анализ свежего рынка."
+        )
+    }
 }
 
 object DeepSeekTradeOwnership {
@@ -91,7 +107,7 @@ class DeepSeekPaperCoordinator {
 
         var executed: GeminiPaperTrade? = null
         if (DeepSeekTradeOwnership.shouldProcess(context, deepSeek, portfolio)) {
-            val recommendation = DeepSeekPaperPolicy.recommendation(deepSeek)
+            val recommendation = DeepSeekPaperPolicy.executableRecommendation(deepSeek, now)
             val tradeRequested = recommendation.action == "BUY" || recommendation.action == "SELL"
             val quote = if (tradeRequested) {
                 GeminiExecutionQuoteClient().fetch()
@@ -99,9 +115,14 @@ class DeepSeekPaperCoordinator {
                 GeminiExecutionQuote(frame.preRequestPrice, now)
             }
             val before = GeminiPaperTrader.markToMarket(portfolio, quote.priceEur)
+            val executionPrice = if (tradeRequested) {
+                PaperExecutionPolicy.executionPrice(quote.priceEur, recommendation.action)
+            } else {
+                quote.priceEur
+            }
             val updated = GeminiPaperTrader.applyDecision(
                 current = before,
-                price = quote.priceEur,
+                price = executionPrice,
                 decisionId = deepSeek.lastSuccess,
                 candleTime = frame.candleTime,
                 recommendation = recommendation,

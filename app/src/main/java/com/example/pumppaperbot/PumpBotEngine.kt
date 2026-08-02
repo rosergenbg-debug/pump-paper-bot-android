@@ -479,7 +479,12 @@ object PumpBotEngine {
         )
     }
 
-    fun confirmBought(context: Context) {
+    fun confirmBought(
+        context: Context,
+        executionPrice: Double,
+        confirmedAt: Long = System.currentTimeMillis()
+    ) {
+        require(executionPrice > 0.0) { "Нет свежей цены покупки" }
         val s = snapshot(context)
         val confirmedMode = when {
             s.strategyMode == StrategyV2.MODE_EXHAUSTION -> StrategyV2.MODE_EXHAUSTION
@@ -490,9 +495,9 @@ object PumpBotEngine {
         }
         prefs(context).edit()
             .putString(keyWaitMode, "SELL")
-            .putDouble(keyEntryPrice, if (s.lastPrice > 0.0) s.lastPrice else s.entryPrice)
-            .putDouble(keyHighestClose, if (s.lastPrice > 0.0) s.lastPrice else s.highestClose)
-            .putLong(keyEntryTime, s.lastCandle)
+            .putDouble(keyEntryPrice, executionPrice)
+            .putDouble(keyHighestClose, executionPrice)
+            .putLong(keyEntryTime, confirmedAt)
             .putString(keyStrategyMode, confirmedMode)
             .putBoolean(keyPartialTaken, false)
             .putLong(keyPartialCandle, 0L)

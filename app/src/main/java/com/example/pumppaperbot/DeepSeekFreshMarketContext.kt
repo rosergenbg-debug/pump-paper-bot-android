@@ -8,7 +8,7 @@ import org.json.JSONObject
  * changing StrategyV2, which intentionally continues to trade on closed bars.
  */
 object DeepSeekFreshMarketContext {
-    const val LIVE_PRICE_MAX_AGE = 5L * 60L * 1000L
+    const val LIVE_PRICE_MAX_AGE = PaperExecutionPolicy.MAX_LIVE_PRICE_AGE_MILLIS
     const val MICRO_MAX_AGE = 45L * 1000L
     const val FIVE_MINUTE_MAX_AGE = 10L * 60L * 1000L
 

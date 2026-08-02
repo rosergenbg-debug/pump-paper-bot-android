@@ -296,7 +296,24 @@ object AppPaperStore {
         check(p.getString(KEY_STORAGE_ERROR, "").isNullOrBlank()) {
             p.getString(KEY_STORAGE_ERROR, "Ошибка хранилища APP").orEmpty()
         }
-        val evaluation = PumpBotEngine.evaluateAppPaper(context, current)
+        val rawEvaluation = PumpBotEngine.evaluateAppPaper(context, current)
+        val evaluation = if (rawEvaluation.candleTime > current.lastCandleTime) {
+            if (PaperExecutionPolicy.isTradeAction(rawEvaluation.action)) {
+                val quote = GeminiExecutionQuoteClient().fetch()
+                PaperExecutionPolicy.prepareAppEvaluation(
+                    rawEvaluation,
+                    quote.priceEur,
+                    quote.receivedAt
+                )
+            } else {
+                rawEvaluation.copy(
+                    price = PaperExecutionPolicy.displayPrice(PumpBotEngine.snapshot(context))
+                        .takeIf { it > 0.0 } ?: rawEvaluation.price
+                )
+            }
+        } else {
+            rawEvaluation
+        }
         val next = AppPaperTrader.apply(current, evaluation)
         val trades = AppTradeAlertPolicy.newlyExecutedTrades(current, next)
         if (next != current || trades.isNotEmpty()) {

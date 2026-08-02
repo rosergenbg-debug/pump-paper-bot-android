@@ -186,7 +186,7 @@ class AppPaperActivity : AppCompatActivity() {
             append("\nПоследнее действие DeepSeek: ${tradeWord(geminiLast?.action)} ${time(geminiLast?.time)}")
             append("\nПоследнее действие DeepSeek‑эксп.: ${tradeWord(experimentLast?.action)} ${time(experimentLast?.time)}")
             append("\nПоследнее действие Сержа: ${tradeWord(userLast?.action)} ${time(userLast?.time)}")
-            append("\n\nAPP работает по закрытым 30‑минутным свечам. DeepSeek принимает решение примерно раз в 2 минуты и отдельно перепроверяет BUY/EXIT. DeepSeek‑эксперимент проверяет ранний вход и рыночный выход. Gemini доступен только вручную как второе мнение. Серж действует вручную.")
+            append("\n\nAPP принимает решение по закрытым 30‑минутным свечам, но исполняет его только по свежей цене и не догоняет рост. DeepSeek принимает решение примерно раз в 2 минуты и отдельно перепроверяет BUY/EXIT. DeepSeek‑эксперимент проверяет ранний вход и раньше защищает взятую вершину. Gemini не торгует виртуальными счетами, но автоматически даёт второе мнение только по открытой позиции Сержа. Серж действует вручную.")
         }
 
         appTrades.text = app.trades.takeLast(40).asReversed().joinToString("\n\n") { trade ->

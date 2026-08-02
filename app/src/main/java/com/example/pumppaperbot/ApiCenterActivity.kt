@@ -246,14 +246,17 @@ class ApiCenterActivity : AppCompatActivity() {
         } else {
             val radar = EventRadarStore.state(this)
             val budget = GeminiRequestBudget.state(this)
+            val position = GeminiPositionAdvisorStore.state(this)
             liveStatus.text = buildString {
-                append("РОЛЬ: РУЧНОЕ ВТОРОЕ МНЕНИЕ БЕЗ ТОРГОВЫХ ПРАВ\n")
-                append("Автоматические запросы Gemini отключены")
+                append("РОЛЬ: ВТОРОЕ МНЕНИЕ БЕЗ ТОРГОВЫХ ПРАВ\n")
+                append("Рынок/новости вручную; позиция Сержа контролируется автоматически по квоте")
                 append("\nПоследняя ручная проверка: ${radar.gemini.status}")
+                append("\nПозиция Сержа: ${GeminiPositionAdvisorPolicy.statusText(position)}")
                 append("\nДоступно по наблюдаемой квоте: ${budget.remainingToday}")
                 append("\nСброс квоты: ${time(budget.dayResetsAt)}")
-                if (radar.gemini.error.isNotBlank()) append("\nПоследняя ошибка: ${radar.gemini.error}")
-                append("\nЗапрос выполняется только кнопкой «Проверить API сейчас» и не меняет ни один виртуальный счёт.")
+                val error = position.error.ifBlank { radar.gemini.error }
+                if (error.isNotBlank()) append("\nПоследняя ошибка: $error")
+                append("\nGemini не меняет ни один виртуальный счёт и не продаёт реальную позицию.")
             }
         }
     }

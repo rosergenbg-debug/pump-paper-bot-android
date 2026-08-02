@@ -13,6 +13,7 @@ import android.os.Looper
 import android.view.View
 import android.widget.Button
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.work.Constraints
@@ -256,9 +257,28 @@ class MainActivity : AppCompatActivity() {
     private fun confirmManualBuy() {
         val snapshot = PumpBotEngine.snapshot(this)
         if (snapshot.waitMode != "BUY") return
-        confirm("Я купил", "Запомнить текущую цену как цену покупки?") {
-            if (PumpBotEngine.snapshot(this).waitMode != "BUY") return@confirm
-            PumpBotEngine.confirmBought(this)
+        val shownPrice = PaperExecutionPolicy.freshLivePrice(snapshot)
+        if (shownPrice == null) {
+            Toast.makeText(this, "Свежей цены нет — запускаю новую проверку рынка", Toast.LENGTH_LONG).show()
+            checkNow()
+            return
+        }
+        confirm(
+            "Я купил",
+            String.format(Locale.GERMANY, "Запомнить свежую цену €%.8f как цену покупки?", shownPrice)
+        ) {
+            val current = PumpBotEngine.snapshot(this)
+            if (current.waitMode != "BUY") return@confirm
+            val executionPrice = PaperExecutionPolicy.freshLivePrice(current)
+            if (executionPrice == null) {
+                Toast.makeText(this, "Цена успела устареть — повторите после проверки", Toast.LENGTH_LONG).show()
+                checkNow()
+                return@confirm
+            }
+            val confirmedAt = System.currentTimeMillis()
+            PumpBotEngine.confirmBought(this, executionPrice, confirmedAt)
+            EntryAlertReminderStore.clear(this)
+            PersonalPositionGuardStore.open(this, executionPrice, confirmedAt)
             val opened = PumpBotEngine.snapshot(this)
             ManualPositionStore.recordBuy(
                 this,
@@ -282,12 +302,16 @@ class MainActivity : AppCompatActivity() {
         confirm("Я продал", "Закрыть позицию полностью и снова ждать покупку?") {
             val current = PumpBotEngine.snapshot(this)
             if (current.waitMode != "SELL") return@confirm
-            val sellPrice = current.lastPrice.takeIf { it > 0.0 } ?: current.entryPrice
+            val sellPrice = PaperExecutionPolicy.freshLivePrice(current)
+                ?: PaperExecutionPolicy.displayPrice(current).takeIf { it > 0.0 }
+                ?: current.entryPrice
             val soldAt = System.currentTimeMillis()
             ManualPositionStore.recordSell(this, sellPrice, soldAt)
             UserPaperStore.recordSell(this, sellPrice, soldAt)
             PumpBotEngine.confirmSold(this)
             PositionSupervisorStore.clearPosition(this)
+            GeminiPositionAdvisorStore.clearPosition(this)
+            PersonalPositionGuardStore.clear(this)
             updateUi()
         }
     }
@@ -336,7 +360,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateUi() {
         val snapshot = PumpBotEngine.snapshot(this)
-        val accountPrice = snapshot.lastPrice
+        val now = System.currentTimeMillis()
+        val accountPrice = PaperExecutionPolicy.displayPrice(snapshot, now)
         val appAccount = AppPaperStore.state(this)
         val geminiAccount = GeminiPaperStore.state(this).portfolio
         val geminiExitExperiment = GeminiExitExperimentStore.state(this)?.portfolio
@@ -399,10 +424,14 @@ class MainActivity : AppCompatActivity() {
         renderStrategyButtons(snapshot.aggressive)
         renderApiButtons()
 
+        val livePrice = PaperExecutionPolicy.freshLivePrice(snapshot, now)
+        val priceAge = if (livePrice != null) ((now - snapshot.livePriceAt) / 1000L).coerceAtLeast(0L) else -1L
         tvPrice?.text = String.format(
             Locale.US,
-            "Цена €%.8f • свеча %s\nRSI %.1f • EMA200 %.8f • funding %+.5f%%",
-            snapshot.lastPrice,
+            "%s €%.8f%s • свеча %s\nRSI %.1f • EMA200 %.8f • funding %+.5f%%",
+            if (livePrice != null) "Живая цена" else "Закрытие 30м (живая цена недоступна)",
+            accountPrice,
+            if (priceAge >= 0L) " • возраст ${priceAge}с" else "",
             PumpBotEngine.formatTime(snapshot.lastCandle),
             snapshot.lastRsi,
             snapshot.lastEma200,
@@ -448,7 +477,6 @@ class MainActivity : AppCompatActivity() {
         btnManualBuy?.alpha = if (controls.buyEnabled) 1f else 0.35f
         btnManualSell?.isEnabled = controls.sellEnabled
         btnManualSell?.alpha = if (controls.sellEnabled) 1f else 0.35f
-        val now = System.currentTimeMillis()
         val radar = EventRadarStore.state(this)
         val appCombinedDirection = radar.combinedDirection(snapshot.directionScore, now)
         val deepSeekSignal = DeepSeekPrimaryStore.state(this)
@@ -484,15 +512,16 @@ class MainActivity : AppCompatActivity() {
         val boughtAt = trade?.boughtAt
             ?: snapshot.entryTime.takeIf { it > 0L }
             ?: snapshot.lastCandle
-        if (active && entry > 0.0 && snapshot.lastPrice > 0.0) {
-            val pnl = (snapshot.lastPrice / entry - 1.0) * 100.0
+        val currentPrice = PaperExecutionPolicy.displayPrice(snapshot)
+        if (active && entry > 0.0 && currentPrice > 0.0) {
+            val pnl = (currentPrice / entry - 1.0) * 100.0
             val color = if (pnl >= 0.0) "#7EE787" else "#FF7B72"
             tvManualPnl?.text = String.format(
                 Locale.GERMANY,
                 "МОЯ ПОЗИЦИЯ  %+.2f%%\n€%.8f → €%.8f",
                 pnl,
                 entry,
-                snapshot.lastPrice
+                currentPrice
             )
             tvManualPnl?.setTextColor(Color.parseColor(color))
         } else {
@@ -503,7 +532,7 @@ class MainActivity : AppCompatActivity() {
             candles = snapshot.chart.candles,
             boughtAt = boughtAt,
             buyPrice = entry,
-            currentPrice = snapshot.lastPrice
+            currentPrice = currentPrice
         )
     }
 
@@ -514,9 +543,13 @@ class MainActivity : AppCompatActivity() {
             return
         }
         val state = PositionSupervisorStore.state(this)
+        val gemini = GeminiPositionAdvisorStore.state(this)
         tvPositionSupervisor?.text = PositionSupervisorPolicy.statusText(state) +
-            "\n${state.model.ifBlank { "DeepSeek ещё не вызывался" }}"
+            "\n${state.model.ifBlank { "DeepSeek ещё не вызывался" }}" +
+            "\n\n${GeminiPositionAdvisorPolicy.statusText(gemini)}" +
+            "\n${gemini.model.ifBlank { "Gemini ещё не вызывался" }}"
         val color = when {
+            gemini.action == "EXIT" -> "#FF7B72"
             state.action == "CANCEL_EXIT" -> "#7EE787"
             state.exitAdvised -> "#FF7B72"
             else -> "#D2A8FF"

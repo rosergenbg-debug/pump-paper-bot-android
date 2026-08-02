@@ -36,7 +36,7 @@ class EventRadarActivity : AppCompatActivity() {
         content.addView(button("← НАЗАД", "#30363D").apply { setOnClickListener { finish() } }, params(dp(50)))
         content.addView(label("V${BuildConfig.VERSION_NAME} • РАДАР НОВОСТЕЙ", 25, "#F0F6FC", true))
         content.addView(label(
-            "Читает ФРС, ЕЦБ, SEC, BLS и свежие ленты PUMP, Bitcoin и Solana. Автоматически новости оцениваются прозрачными правилами; Gemini доступен только вручную как второе мнение. Радар не управляет счетами APP или DeepSeek.",
+            "Читает ФРС, ЕЦБ, SEC, BLS и свежие ленты PUMP, Bitcoin и Solana. Обычно новости оцениваются прозрачными правилами; ручной подробный разбор Gemini сохранён, а при открытой позиции Сержа отдельный квотный Gemini‑контроль проверяет свежий фон автоматически. Радар не управляет счетами APP или DeepSeek.",
             15, "#C9D1D9", false
         ))
 

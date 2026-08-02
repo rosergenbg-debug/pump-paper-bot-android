@@ -32,6 +32,7 @@ Serge values timely, unmistakable phone alerts. APP, DeepSeek and DeepSeek exper
 - APP historically entered too rarely. V3.19 modestly widens entry confirmation, especially in Active mode, while preserving late-entry, rapid-drop and market-overheat blocks.
 - Fees are 0.15% on entry and 0.15% on exit.
 - DeepSeek, DeepSeek experiment, APP and Serge remain separate. Gemini is a manual second-opinion provider only: it has no automatic cadence and no trading authority. Experimental exit rules may manage only the DeepSeek experiment portfolio.
+- Pressing `Я купил` activates the highest-priority personal-position protection mode for the entire time Serge's position remains open. Protecting Serge's real position outranks routine market analysis, virtual-portfolio research and conserving AI quota or cost for a later trade/day. DeepSeek position supervision must not be blocked by the ordinary daily cost ceiling, and Gemini position supervision may use the entire remaining provider quota for that day. Lower-priority automatic calls should yield first when a provider limit is shared. Use the available budget intelligently across the life of the position, with immediate checks after entry and escalation on fresh danger, but do not weaken, delay or stop useful supervision merely to save resources: Serge normally opens no more than one real position per day and accepts exhausting that day's remaining AI resources for it. Hard provider rate/quota limits, credential/network availability and local safety fallbacks still apply; exhausting a provider must never disable the free local guard or urgent alarms.
 
 ## Release invariants
 
@@ -41,6 +42,18 @@ Serge values timely, unmistakable phone alerts. APP, DeepSeek and DeepSeek exper
 - The user-facing download must be one direct `.apk` link, not a ZIP or artifact directory.
 - Never delete the installed app during an update; doing so loses local state.
 - Increase both `versionName` and `versionCode` exactly once for a new release and keep UI title, workflow checks, artifact name and README consistent.
+
+## Mandatory collaboration and repository order
+
+- Every project must keep exactly these two coordination records at the repository root: `AGENTS.md` for durable rules/current truth and `DEVELOPMENT_LOG.md` for chronological work history. If either is missing, create it before material work. Every agent must read both files completely before planning or editing.
+- `main` is the only canonical development line. Inspect existing branches and pull requests before creating anything. Reuse an already active branch for the same release/task; never create a parallel version branch merely because another agent or chat started the work.
+- A temporary branch is allowed only for an active, bounded change. Merge it into `main` after verification, then delete the temporary branch. Do not leave finished draft PRs or abandoned agent branches behind. Never force-push or delete unmerged work unless Serge explicitly authorizes repository cleanup and the retained commit/tag has first been verified.
+- Update `DEVELOPMENT_LOG.md` in the same branch and commit as each material code, configuration, build, release or repository operation. Each entry must say: date/time and agent, what changed, why, exact files/branch/commit/release affected, verification performed, and any remaining risk or next step. Do not record secrets, API keys, signing-key material, private payloads or chain-of-thought.
+- Keep `AGENTS.md` concise and current: update it when a durable product rule, architecture invariant, workflow rule or active-version fact changes. Do not use it as a second chronological log. When the log becomes long, retain it as history rather than starting an unlinked replacement.
+- A completed version must exist on `main`, have an immutable `vX.Y` tag, and be published as a GitHub Release. The Release must contain one compatible final APK named `PumpSignal-VX.Y-Compatible-FINAL.apk` plus checksum/signature facts in the notes. Never store an APK as Base64 chunks or commit build outputs to the source tree.
+- Keep only the latest two user-facing releases/APKs readily available (currently V4.8 and V4.9). Older temporary build artifacts, redundant release branches and finished agent branches may be removed only after confirming that their source history is retained by `main` or an immutable tag. Source history itself must not be rewritten merely to save space.
+- Before giving Serge a download, verify the final APK itself: package id, version name/code, launch activity, ZIP integrity, signature schemes and compatible certificate fingerprint. Then provide both (1) a clickable local `sandbox:` link when the file exists in the current workspace and (2) the direct GitHub Release asset link for durable download. Never offer an expiring Actions artifact or an intermediate/debug-signed APK as the installable update.
+- At the end of every task, leave one clear handoff: canonical branch/commit, tests/build result, direct artifact link if applicable, and the exact unfinished items. If a requested upload or deletion could not be performed, state that plainly instead of inventing a location or claiming success.
 
 ## Current version chain
 
@@ -59,6 +72,7 @@ Serge values timely, unmistakable phone alerts. APP, DeepSeek and DeepSeek exper
 - V4.6: provider-parity diagnostics, manual self-diagnostics, accurate completion timestamps and Russian-only visible AI output, code 61, current work.
 - V4.7: DeepSeek owns both former Gemini AI trading roles; Gemini becomes manual-only second opinion, code 62, current work.
 - V4.8: two-minute primary DeepSeek cadence, independent high-reasoning trade verification, confirmed intrabar entry and a $0.50 daily safety ceiling, code 63, current work.
+- V4.9: fresh/slipped paper execution, bounded independent entry reminders, post-buy alert suppression with uninterrupted virtual competition, local peak protection, faster DeepSeek position supervision and quota-aware Gemini position/news supervision, code 64, current work.
 
 ## Accumulated next-release backlog
 

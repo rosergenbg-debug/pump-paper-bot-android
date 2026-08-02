@@ -34,6 +34,7 @@ class PumpBotWorker(
         return try {
             market.sync(applicationContext)
             val eventState = eventRadar.sync(applicationContext)
+            val personalGuard = PersonalPositionGuardStore.sync(applicationContext)
             DeepSeekTradeOwnership.activate(
                 applicationContext,
                 DeepSeekPrimaryStore.state(applicationContext).lastSuccess
@@ -44,7 +45,11 @@ class PumpBotWorker(
             )
             PositionSupervisorClient().sync(
                 applicationContext,
-                forceCritical = forcePositionPro
+                forceCritical = forcePositionPro || personalGuard.forceCriticalAi
+            )
+            GeminiPositionAdvisorClient().sync(
+                applicationContext,
+                forceCritical = forcePositionPro || personalGuard.forceCriticalAi
             )
             GeminiPaperStore.markDataReady(
                 applicationContext,
@@ -72,13 +77,14 @@ class PumpBotWorker(
                 PumpAlert.showEventRadar(applicationContext, eventState, snapshot)
                 EventRadarStore.markAlerted(applicationContext, eventState)
             }
+            EntryAlertReminderStore.flush(applicationContext)
             val finishedAt = System.currentTimeMillis()
             GeminiPaperStore.finishCycle(
                 applicationContext,
                 source,
                 startedAt,
                 finishedAt + interval,
-                "проверка завершена; DeepSeek: ${deepSeek.action}; виртуальный счёт: ${deepSeekPaper.status}; Gemini только вручную",
+                "проверка завершена; DeepSeek: ${deepSeek.action}; виртуальный счёт: ${deepSeekPaper.status}; Gemini контролирует только открытую позицию Сержа",
                 finishedAt
             )
             Result.success()
