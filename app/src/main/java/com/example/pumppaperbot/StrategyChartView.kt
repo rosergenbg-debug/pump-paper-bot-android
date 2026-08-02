@@ -649,14 +649,12 @@ class StrategyChartView @JvmOverloads constructor(
         }
 
         val action = when {
-            data.geminiStatus.startsWith("ОШИБКА") -> "G ERR"
-            data.geminiStatus.startsWith("ПОВТОР") -> "G WAIT"
-            data.geminiStatus.startsWith("ПРЕДЫДУЩИЙ") -> "G WAIT"
-            data.geminiStatus == "GEMINI АНАЛИЗИРУЕТ" -> "G …"
-            data.geminiAction == "BUY" -> "G BUY"
-            data.geminiAction == "SELL" -> "G SELL"
-            data.geminiAction == "HOLD" -> "G HOLD"
-            else -> "G —"
+            data.geminiStatus.startsWith("ОШИБКА") -> "D ERR"
+            data.geminiAction == "BUY" -> "D BUY"
+            data.geminiAction == "EXIT" -> "D EXIT"
+            data.geminiAction == "HOLD" -> "D HOLD"
+            data.geminiAction == "WATCH" -> "D WATCH"
+            else -> "D —"
         }
         canvas.drawText(action, (left + right) / 2f, top + dp(24f), gaugeTextPaint)
         val confidence = if (score == null) "нет" else "${data.geminiConfidenceScore.coerceIn(0, 100)}%"

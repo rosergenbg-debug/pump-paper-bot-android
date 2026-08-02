@@ -90,7 +90,7 @@ class GeminiPositionChartView @JvmOverloads constructor(
             textPaint.textAlign = Paint.Align.CENTER
             textPaint.textSize = dp(14f)
             textPaint.color = Color.parseColor("#79C0FF")
-            canvas.drawText("График начнётся после покупки Gemini", width / 2f, height / 2f, textPaint)
+            canvas.drawText("График начнётся после покупки DeepSeek", width / 2f, height / 2f, textPaint)
             return
         }
 

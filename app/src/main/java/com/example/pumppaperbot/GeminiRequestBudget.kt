@@ -31,7 +31,8 @@ internal class GeminiRequestBlockedException(
  * The day follows the quota reset timezone used by Gemini API projects.
  */
 object GeminiRequestBudget {
-    const val MAX_REQUESTS_PER_DAY = 50
+    const val MAX_REQUESTS_PER_DAY = 25
+    const val NORMAL_REQUESTS_PER_DAY = 12
 
     private const val PREFS = "gemini_request_budget_v37"
     private const val KEY_DAY = "pacific_day"
@@ -55,11 +56,19 @@ object GeminiRequestBudget {
     ): GeminiBudgetPermit = synchronized(lock) {
         resetDayIfNeeded(context, now)
         val current = stateLocked(context, now)
-        if (current.remainingToday <= 0) {
+        val positionOpen = PumpBotEngine.snapshot(context).let {
+            it.waitMode == "SELL" && it.entryPrice > 0.0
+        }
+        val activeLimit = activeLimit(positionOpen)
+        if (current.usedToday >= activeLimit) {
             return@synchronized GeminiBudgetPermit(
                 false,
                 current,
-                "Достигнут общий предел $MAX_REQUESTS_PER_DAY Gemini API-запросов за сутки"
+                if (positionOpen) {
+                    "Достигнут общий предел $MAX_REQUESTS_PER_DAY Gemini API-запросов за сутки"
+                } else {
+                    "Обычные 50% квоты Gemini использованы; ${MAX_REQUESTS_PER_DAY - NORMAL_REQUESTS_PER_DAY} запросов сохранены для открытой позиции"
+                }
             )
         }
         if (now < current.nextAllowedAt) {
@@ -91,6 +100,7 @@ object GeminiRequestBudget {
     internal fun recordRateLimit(
         context: Context,
         retryAfterSeconds: Long? = null,
+        dailyQuota: Boolean = false,
         now: Long = System.currentTimeMillis()
     ): GeminiBudgetState = synchronized(lock) {
         resetDayIfNeeded(context, now)
@@ -105,7 +115,7 @@ object GeminiRequestBudget {
             ?.coerceIn(1L, 6L * 60L * 60L)
             ?.times(1000L)
             ?: 0L
-        val until = now + maxOf(fallbackDelay, serverDelay)
+        val until = if (dailyQuota) nextPacificReset(now) else now + maxOf(fallbackDelay, serverDelay)
         prefs.edit()
             .putInt(KEY_RATE_LIMIT_STRIKES, strikes)
             .putLong(KEY_BACKOFF_UNTIL, until)
@@ -137,12 +147,24 @@ object GeminiRequestBudget {
         return calendar.timeInMillis
     }
 
+    internal fun activeLimit(positionOpen: Boolean): Int =
+        if (positionOpen) MAX_REQUESTS_PER_DAY else NORMAL_REQUESTS_PER_DAY
+
+    internal fun isDailyQuotaMessage(message: String): Boolean {
+        val lower = message.lowercase(Locale.ROOT)
+        return "per day" in lower || "requests per day" in lower || "daily" in lower ||
+            "per_model_per_day" in lower || "permodelperday" in lower || "rpd" in lower
+    }
+
     private fun stateLocked(context: Context, now: Long): GeminiBudgetState {
         val prefs = prefs(context)
         val used = prefs.getInt(KEY_REQUESTS, 0).coerceAtLeast(0)
+        val positionOpen = PumpBotEngine.snapshot(context).let {
+            it.waitMode == "SELL" && it.entryPrice > 0.0
+        }
         return GeminiBudgetState(
             usedToday = used,
-            remainingToday = (MAX_REQUESTS_PER_DAY - used).coerceAtLeast(0),
+            remainingToday = (activeLimit(positionOpen) - used).coerceAtLeast(0),
             nextAllowedAt = prefs.getLong(KEY_BACKOFF_UNTIL, 0L),
             dayResetsAt = nextPacificReset(now),
             rateLimitStrikes = prefs.getInt(KEY_RATE_LIMIT_STRIKES, 0)

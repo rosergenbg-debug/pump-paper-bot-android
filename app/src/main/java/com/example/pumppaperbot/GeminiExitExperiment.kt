@@ -20,18 +20,19 @@ data class GeminiEntryEvidence(
         fun from(
             frame: GeminiMarketFrame,
             impulse: ImpulseSnapshot,
-            controlDecision: GeminiHourlyDecision?,
+            deepSeekDecision: DeepSeekPrimaryState,
             appEvaluation: AppPaperEvaluation
         ): GeminiEntryEvidence {
             val snapshot = frame.snapshot
             val impulseFresh = impulse.candleTime > 0L &&
                 snapshot.lastSync - impulse.candleTime in 0L..20L * 60L * 1000L
             val appReady = GeminiAppReadinessPolicy.isReady(appEvaluation)
-            val geminiPositive = controlDecision != null &&
-                controlDecision.requestedAction != "SELL" &&
-                controlDecision.directionScore >= 20 &&
-                controlDecision.confidence >= 55
-            val signalActive = appReady || geminiPositive
+            val deepSeekPositive = DeepSeekPrimaryPolicy.isFreshSignal(
+                deepSeekDecision,
+                System.currentTimeMillis()
+            ) && deepSeekDecision.action !in setOf("EXIT", "SELL") &&
+                deepSeekDecision.direction >= 20 && deepSeekDecision.confidence >= 55
+            val signalActive = appReady || deepSeekPositive
 
             val spotStrong = listOfNotNull(
                 frame.spotTakerBuyPercent?.let { it >= 51.0 },
@@ -79,8 +80,8 @@ data class GeminiEntryEvidence(
             }
             val source = buildList {
                 if (appReady) add("APP ${appEvaluation.readinessScore}/100")
-                if (geminiPositive) add(
-                    "Gemini ${controlDecision?.directionScore}/100, уверенность ${controlDecision?.confidence}/100"
+                if (deepSeekPositive) add(
+                    "DeepSeek ${deepSeekDecision.direction}/100, уверенность ${deepSeekDecision.confidence}/100"
                 )
             }.joinToString(" + ").ifBlank { "сигнала входа нет" }
             val facts = buildList {
@@ -95,7 +96,7 @@ data class GeminiEntryEvidence(
             val evidenceText = facts.joinToString("; ").ifBlank { "рыночных подтверждений пока нет" }
             val anchorId = max(
                 if (appReady) appEvaluation.candleTime else 0L,
-                if (geminiPositive) controlDecision?.id ?: 0L else 0L
+                if (deepSeekPositive) deepSeekDecision.lastSuccess else 0L
             )
             return GeminiEntryEvidence(
                 signalActive = signalActive,
@@ -264,7 +265,7 @@ internal object GeminiExitExperimentEngine {
         portfolio = control,
         lastControlDecisionId = control.trades.maxOfOrNull { it.decisionId } ?: 0L,
         lastEntryAnchorId = control.trades.lastOrNull { it.action == "BUY" }?.decisionId ?: 0L,
-        lastReason = "Эксперимент начат с точной копии текущего портфеля Gemini"
+        lastReason = "DeepSeek‑эксперимент продолжает сохранённый виртуальный портфель"
     )
 
     fun mirrorControlTrade(
@@ -280,9 +281,9 @@ internal object GeminiExitExperimentEngine {
             directionScore = trade.score,
             confidence = trade.confidence,
             horizonHours = 1,
-            reason = "Тот же вход, что у контрольного Gemini. ${trade.reason}",
+            reason = "Тот же вход, что у основного DeepSeek. ${trade.reason}",
             risks = emptyList(),
-            model = "gemini-exit-experiment"
+            model = "deepseek-market-experiment"
         )
         val bought = GeminiPaperTrader.applyDecision(
             current = state.portfolio,
@@ -306,7 +307,7 @@ internal object GeminiExitExperimentEngine {
                 lastControlDecisionId = trade.decisionId,
                 dangerStreak = 0,
                 lastSignal = if (executed != null) "BUY" else state.lastSignal,
-                lastReason = if (executed != null) "Вход скопирован у контрольного Gemini" else state.lastReason,
+                lastReason = if (executed != null) "Вход скопирован у основного DeepSeek" else state.lastReason,
                 lastPhase = "ENTRY",
                 lastEntryAnchorId = if (executed != null) {
                     max(state.lastEntryAnchorId, trade.decisionId)
@@ -329,8 +330,8 @@ internal object GeminiExitExperimentEngine {
         if (marked.inPosition) return GeminiExitEvaluationResult(state.copy(portfolio = marked))
         val alreadyUsed = evidence.anchorId > 0L && evidence.anchorId <= state.lastEntryAnchorId
         val statusReason = when {
-            !evidence.signalActive -> "В евро; ждём подписанный сигнал APP 99/100 или свежий положительный Gemini"
-            alreadyUsed -> "РАННИЙ ВХОД НЕ ВЫПОЛНЕН: этот же сигнал уже использовался для входа; ждём новую закрытую свечу или новое решение Gemini. ${evidence.reason}"
+            !evidence.signalActive -> "В евро; ждём сигнал APP 99/100 или свежий положительный DeepSeek"
+            alreadyUsed -> "РАННИЙ ВХОД НЕ ВЫПОЛНЕН: этот же сигнал уже использовался; ждём новую закрытую свечу или новое решение DeepSeek. ${evidence.reason}"
             !evidence.eligible -> "РАННИЙ ВХОД НЕ ВЫПОЛНЕН: ${evidence.blockedReason}. ${evidence.reason}"
             else -> "РАННИЙ ВХОД ПОДТВЕРЖДЁН: ${evidence.reason}. Оценка ${evidence.score}/9, групп ${evidence.groups}/6."
         }
@@ -397,7 +398,7 @@ internal object GeminiExitExperimentEngine {
                     lastEvaluationAt = now,
                     lastScore = evidence.score,
                     lastGroups = evidence.groups,
-                    lastReason = "В евро; ждём следующий фактический вход контрольного Gemini",
+                    lastReason = "В евро; ждём следующий фактический вход основного DeepSeek",
                     adaptivePullbackPercent = evidence.adaptivePullbackPercent,
                     lastPhase = "ENTRY"
                 )
@@ -521,7 +522,7 @@ object GeminiExitExperimentStore {
     fun evaluate(
         context: Context,
         controlPortfolio: GeminiPaperPortfolio,
-        controlDecision: GeminiHourlyDecision?,
+        deepSeekDecision: DeepSeekPrimaryState,
         frame: GeminiMarketFrame,
         impulse: ImpulseSnapshot,
         appEvaluation: AppPaperEvaluation,
@@ -546,7 +547,7 @@ object GeminiExitExperimentStore {
         val entryEvidence = GeminiEntryEvidence.from(
             frame,
             impulse,
-            controlDecision,
+            deepSeekDecision,
             appEvaluation
         )
         val result = if (!marked.inPosition) {
@@ -572,7 +573,7 @@ object GeminiExitExperimentStore {
         if (result.executedTrade == null && entryEvidence.signalActive && !marked.inPosition) {
             SignalAttributionStore.record(
                 context,
-                "GEMINI‑ЭКСПЕРИМЕНТ",
+                "DEEPSEEK‑ЭКСПЕРИМЕНТ",
                 "СИГНАЛ ВХОДА ЗАБЛОКИРОВАН",
                 result.state.lastReason,
                 now,

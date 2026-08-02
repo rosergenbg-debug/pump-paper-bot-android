@@ -18,6 +18,8 @@ class PumpBotWorker(
             INPUT_CYCLE_INTERVAL,
             TimeUnit.MINUTES.toMillis(15)
         )
+        val forcePositionPro = inputData.getBoolean(INPUT_FORCE_POSITION_PRO, false)
+        val forcePrimaryDeepSeek = inputData.getBoolean(INPUT_FORCE_PRIMARY_DEEPSEEK, false)
         if (!GeminiCycleGuard.tryEnter()) {
             GeminiPaperStore.recordActivity(
                 applicationContext,
@@ -32,6 +34,18 @@ class PumpBotWorker(
         return try {
             market.sync(applicationContext)
             val eventState = eventRadar.sync(applicationContext)
+            DeepSeekTradeOwnership.activate(
+                applicationContext,
+                DeepSeekPrimaryStore.state(applicationContext).lastSuccess
+            )
+            val deepSeek = DeepSeekPrimaryAnalyst().sync(
+                applicationContext,
+                force = forcePositionPro || forcePrimaryDeepSeek
+            )
+            PositionSupervisorClient().sync(
+                applicationContext,
+                forceCritical = forcePositionPro
+            )
             GeminiPaperStore.markDataReady(
                 applicationContext,
                 source,
@@ -39,9 +53,8 @@ class PumpBotWorker(
             )
             val snapshot = PumpBotEngine.snapshot(applicationContext)
             val appTrade = AppPaperStore.syncWithAlerts(applicationContext)
-            val gemini = GeminiExperimentClient().sync(
-                applicationContext,
-                source = source
+            val deepSeekPaper = DeepSeekPaperCoordinator().sync(
+                applicationContext, deepSeek, source
             )
             val rapidDropAlerted = if (PumpBotEngine.shouldAlertRapidDrop(applicationContext, snapshot)) {
                 PumpAlert.showRapidDrop(applicationContext, snapshot)
@@ -65,7 +78,7 @@ class PumpBotWorker(
                 source,
                 startedAt,
                 finishedAt + interval,
-                "проверка завершена; Gemini: ${gemini.status}",
+                "проверка завершена; DeepSeek: ${deepSeek.action}; виртуальный счёт: ${deepSeekPaper.status}; Gemini только вручную",
                 finishedAt
             )
             Result.success()
@@ -88,5 +101,7 @@ class PumpBotWorker(
     companion object {
         const val INPUT_CYCLE_SOURCE = "cycle_source"
         const val INPUT_CYCLE_INTERVAL = "cycle_interval"
+        const val INPUT_FORCE_POSITION_PRO = "force_position_pro"
+        const val INPUT_FORCE_PRIMARY_DEEPSEEK = "force_primary_deepseek"
     }
 }

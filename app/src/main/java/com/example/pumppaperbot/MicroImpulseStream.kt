@@ -160,11 +160,11 @@ class MicroImpulseStream(context: Context) : WebSocketListener() {
             ignitionAt = now
             ignitionPrice = currentPrice
         }
-        if (ignitionAt > 0L && now - ignitionAt > 90_000L) {
+        if (ignitionAt > 0L && now - ignitionAt > CONFIRMATION_WINDOW_MILLIS) {
             ignitionAt = 0L
             ignitionPrice = 0.0
         }
-        val confirming = ignitionAt > 0L && now - ignitionAt <= 90_000L &&
+        val confirming = ignitionAt > 0L && now - ignitionAt <= CONFIRMATION_WINDOW_MILLIS &&
             currentPrice >= ignitionPrice * 0.999 && buyRatio15 >= 0.55
         val pressure = five.size >= 4 && tradeAcceleration >= 1.5 &&
             buyRatio15 >= 0.56 && change60 > -0.10
@@ -213,6 +213,7 @@ class MicroImpulseStream(context: Context) : WebSocketListener() {
         const val HISTORY_MILLIS = 300_000L
         const val SAVE_INTERVAL_MILLIS = 15_000L
         const val WARMUP_MILLIS = 60_000L
+        const val CONFIRMATION_WINDOW_MILLIS = 3L * 60L * 1000L
         const val RECONNECT_MILLIS = 5_000L
     }
 }

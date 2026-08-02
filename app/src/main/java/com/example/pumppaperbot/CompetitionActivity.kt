@@ -95,13 +95,13 @@ class CompetitionActivity : AppCompatActivity() {
         }
 
         charts[0].setData(
-            "GEMINI",
+            "DEEPSEEK",
             summary(gemini.value(price), gemini.profitPercent(price), gemini.inPosition),
             candles,
             gemini.trades.map { CompetitionMarker(it.time, it.action, it.price, it.pnlEur) }
         )
         charts[1].setData(
-            "GEMINI‑ЭКСПЕРИМЕНТ",
+            "DEEPSEEK‑ЭКСПЕРИМЕНТ",
             summary(
                 geminiExitExperiment.value(price),
                 geminiExitExperiment.profitPercent(price),

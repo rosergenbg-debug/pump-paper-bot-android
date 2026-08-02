@@ -23,6 +23,7 @@ object PumpAlert {
     private const val appTradeChannelId = "pump_app_trades_v319"
     private const val geminiTradeChannelId = "pump_gemini_trades_v319"
     private const val geminiExitExperimentChannelId = "pump_gemini_exit_experiment_v319"
+    private const val positionSupervisorChannelId = "pump_position_supervisor_v4"
     private const val monitorNotificationId = 3501
     private const val signalNotificationId = 3502
     private const val rapidDropNotificationId = 3503
@@ -33,6 +34,7 @@ object PumpAlert {
     private const val geminiSellNotificationId = 3508
     private const val geminiExperimentBuyNotificationId = 3509
     private const val geminiExperimentSellNotificationId = 3510
+    private const val positionSupervisorNotificationId = 3511
     private val rapidDropVibration = longArrayOf(0, 1000, 180, 1000, 180, 1600)
 
     fun ensureChannels(context: Context) {
@@ -90,22 +92,32 @@ object PumpAlert {
         }
         val geminiTrades = NotificationChannel(
             geminiTradeChannelId,
-            "Gemini: исполненные покупки и продажи",
+            "DeepSeek: исполненные покупки и продажи",
             NotificationManager.IMPORTANCE_HIGH
         ).apply {
-            description = "Отдельный громкий звонок после каждой виртуальной сделки Gemini"
+            description = "Отдельный громкий звонок после каждой виртуальной сделки DeepSeek"
             enableVibration(true)
             vibrationPattern = longArrayOf(0, 700, 250, 700, 250, 1100)
             setSound(sound, attrs)
         }
         val geminiExitExperiment = NotificationChannel(
             geminiExitExperimentChannelId,
-            "Gemini‑эксперимент: входы и ранние выходы",
+            "DeepSeek‑эксперимент: входы и ранние выходы",
             NotificationManager.IMPORTANCE_HIGH
         ).apply {
-            description = "Отдельный громкий звонок Gemini‑эксперимента с ранним входом и рыночным выходом"
+            description = "Отдельный громкий звонок DeepSeek‑эксперимента с ранним входом и рыночным выходом"
             enableVibration(true)
             vibrationPattern = longArrayOf(0, 500, 180, 500, 180, 500, 180, 1100)
+            setSound(sound, attrs)
+        }
+        val positionSupervisor = NotificationChannel(
+            positionSupervisorChannelId,
+            "Серж: сопровождение открытой позиции",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "Выход, ухудшение, улучшение и отмена выхода по открытой позиции Сержа"
+            enableVibration(true)
+            vibrationPattern = longArrayOf(0, 900, 180, 900, 180, 1300)
             setSound(sound, attrs)
         }
         manager.createNotificationChannel(monitor)
@@ -115,6 +127,7 @@ object PumpAlert {
         manager.createNotificationChannel(appTrades)
         manager.createNotificationChannel(geminiTrades)
         manager.createNotificationChannel(geminiExitExperiment)
+        manager.createNotificationChannel(positionSupervisor)
     }
 
     fun monitorNotification(context: Context, text: String) =
@@ -301,7 +314,7 @@ object PumpAlert {
         val text = if (buy) {
             String.format(
                 java.util.Locale.GERMANY,
-                "Gemini вложила виртуальные €%.2f по цене €%.8f. Комиссия €%.2f. " +
+                "DeepSeek вложил виртуальные €%.2f по цене €%.8f. Комиссия €%.2f. " +
                     "Оценка %+d/100, уверенность %d/100. %s",
                 trade.amount * trade.price + trade.fee,
                 trade.price,
@@ -313,7 +326,7 @@ object PumpAlert {
         } else {
             String.format(
                 java.util.Locale.GERMANY,
-                "Gemini продала всю виртуальную позицию по цене €%.8f. " +
+                "DeepSeek продал всю виртуальную позицию по цене €%.8f. " +
                     "Результат %+.2f €, комиссия €%.2f. %s",
                 trade.price,
                 trade.pnlEur,
@@ -323,7 +336,7 @@ object PumpAlert {
         }
         SignalAttributionStore.record(
             context,
-            "GEMINI",
+            "DEEPSEEK",
             if (buy) "ВХОД" else "ВЫХОД",
             trade.reason,
             trade.time,
@@ -333,7 +346,7 @@ object PumpAlert {
             context,
             geminiTradeChannelId,
             if (buy) geminiBuyNotificationId else geminiSellNotificationId,
-            if (buy) "GEMINI: ВХОД В PUMP/EUR" else "GEMINI: ВЫХОД ИЗ PUMP/EUR",
+            if (buy) "DEEPSEEK: ВХОД В PUMP/EUR" else "DEEPSEEK: ВЫХОД ИЗ PUMP/EUR",
             text,
             if (buy) 0xFF7C3AED.toInt() else 0xFFDA3633.toInt()
         )
@@ -361,7 +374,7 @@ object PumpAlert {
         }
         SignalAttributionStore.record(
             context,
-            "GEMINI‑ЭКСПЕРИМЕНТ",
+            "DEEPSEEK‑ЭКСПЕРИМЕНТ",
             if (buy) "ВХОД" else "ВЫХОД",
             trade.reason,
             trade.time,
@@ -371,10 +384,41 @@ object PumpAlert {
             context,
             geminiExitExperimentChannelId,
             if (buy) geminiExperimentBuyNotificationId else geminiExperimentSellNotificationId,
-            if (buy) "GEMINI‑ЭКСПЕРИМЕНТ: ВХОД" else "GEMINI‑ЭКСПЕРИМЕНТ: ВЫХОД",
+            if (buy) "DEEPSEEK‑ЭКСПЕРИМЕНТ: ВХОД" else "DEEPSEEK‑ЭКСПЕРИМЕНТ: ВЫХОД",
             text,
             if (buy) 0xFFD29922.toInt() else 0xFFFF7B72.toInt()
         )
+    }
+
+    fun showPositionSupervision(context: Context, state: PositionSupervisionState) {
+        ensureChannels(context)
+        val title = when {
+            state.action == "CANCEL_EXIT" -> "ОТМЕНА ВЫХОДА — ПРОДОЛЖАЕМ"
+            state.exitAdvised && state.dangerLevel >= 9 -> "КРИТИЧЕСКАЯ СИТУАЦИЯ ${state.dangerLevel}/10"
+            state.exitAdvised && state.conditionDelta < 0 ->
+                "СИТУАЦИЯ УХУДШАЕТСЯ ${state.conditionDelta}/−10"
+            state.exitAdvised && state.conditionDelta > 0 ->
+                "СИТУАЦИЯ УЛУЧШАЕТСЯ +${state.conditionDelta}/+10"
+            else -> "DEEPSEEK РЕКОМЕНДУЕТ ВЫХОД"
+        }
+        val text = PositionSupervisorPolicy.statusText(state) +
+            "\nМодель: ${state.model}. Решение о продаже остаётся за вами."
+        val notification = NotificationCompat.Builder(context, positionSupervisorChannelId)
+            .setSmallIcon(R.drawable.ic_launcher)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setContentIntent(openAppIntent(context))
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setColor(if (state.action == "CANCEL_EXIT") 0xFF238636.toInt() else 0xFFDA3633.toInt())
+            .setVibrate(longArrayOf(0, 900, 180, 900, 180, 1300))
+            .setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM))
+            .build()
+        context.getSystemService(NotificationManager::class.java)
+            .notify(positionSupervisorNotificationId, notification)
+        vibrate(context, longArrayOf(0, 900, 180, 900, 180, 1300))
     }
 
     private fun showTradeNotification(

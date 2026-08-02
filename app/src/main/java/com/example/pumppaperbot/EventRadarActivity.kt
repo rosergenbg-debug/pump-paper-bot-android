@@ -7,10 +7,8 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.text.InputType
 import android.view.View
 import android.widget.Button
-import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.ScrollView
@@ -23,8 +21,6 @@ class EventRadarActivity : AppCompatActivity() {
     private val executor = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
     private lateinit var enabledButton: Button
-    private lateinit var aiButton: Button
-    private lateinit var keyInput: EditText
     private lateinit var status: TextView
     private lateinit var events: TextView
     private lateinit var details: TextView
@@ -38,9 +34,9 @@ class EventRadarActivity : AppCompatActivity() {
             setBackgroundColor(Color.parseColor("#0D1117"))
         }
         content.addView(button("← НАЗАД", "#30363D").apply { setOnClickListener { finish() } }, params(dp(50)))
-        content.addView(label("V${BuildConfig.VERSION_NAME} • РАДАР НОВОСТЕЙ + GEMINI", 25, "#F0F6FC", true))
+        content.addView(label("V${BuildConfig.VERSION_NAME} • РАДАР НОВОСТЕЙ", 25, "#F0F6FC", true))
         content.addView(label(
-            "Читает ФРС, ЕЦБ, SEC, BLS и свежие ленты PUMP, Bitcoin и Solana. Новостной Gemini сопоставляет их с текущим рынком. Поправка радара ограничена ±12 и не меняет APP. Отдельные участники Gemini и Gemini‑эксперимент находятся на главном экране.",
+            "Читает ФРС, ЕЦБ, SEC, BLS и свежие ленты PUMP, Bitcoin и Solana. Автоматически новости оцениваются прозрачными правилами; Gemini доступен только вручную как второе мнение. Радар не управляет счетами APP или DeepSeek.",
             15, "#C9D1D9", false
         ))
 
@@ -64,57 +60,6 @@ class EventRadarActivity : AppCompatActivity() {
         content.addView(checkButton, params(dp(58), dp(8)))
         progress = ProgressBar(this).apply { visibility = View.GONE }
         content.addView(progress, LinearLayout.LayoutParams(-1, dp(38)))
-
-        content.addView(label("КЛЮЧ GEMINI", 20, "#F0F6FC", true))
-        content.addView(label(
-            "Готовый ключ в APK не вшивается. Вставьте личный API‑ключ один раз: он сохранится в закрытых данных приложения и используется новостным радаром и отдельным часовым Gemini.",
-            14, "#C9D1D9", false
-        ))
-        keyInput = EditText(this).apply {
-            hint = "Вставьте личный Gemini API‑ключ"
-            setHintTextColor(Color.parseColor("#8B949E"))
-            setTextColor(Color.WHITE)
-            setBackgroundColor(Color.parseColor("#161B22"))
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-            setPadding(dp(10), 0, dp(10), 0)
-            setText("")
-        }
-        content.addView(keyInput, params(dp(58), dp(6)))
-
-        val keyButtons = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        keyButtons.addView(button("СОХРАНИТЬ КЛЮЧ", "#238636").apply {
-            setOnClickListener {
-                EventRadarStore.saveApiKey(this@EventRadarActivity, keyInput.text.toString())
-                EventRadarStore.setUseAi(this@EventRadarActivity, true)
-                keyInput.setText("")
-                updateUi()
-            }
-        }, LinearLayout.LayoutParams(0, dp(56), 1f))
-        keyButtons.addView(button("УДАЛИТЬ КЛЮЧ", "#30363D").apply {
-            setOnClickListener {
-                keyInput.setText("")
-                EventRadarStore.saveApiKey(this@EventRadarActivity, "")
-                EventRadarStore.setUseAi(this@EventRadarActivity, true)
-                updateUi()
-            }
-        }, LinearLayout.LayoutParams(0, dp(56), 1f).apply { leftMargin = dp(8) })
-        content.addView(keyButtons, params(dp(56), dp(8)))
-
-        aiButton = button("", "#30363D").apply {
-            setOnClickListener {
-                if (EventRadarStore.apiKey(this@EventRadarActivity).isNotBlank()) {
-                    EventRadarStore.setUseAi(this@EventRadarActivity, !EventRadarStore.useAi(this@EventRadarActivity))
-                    updateUi()
-                } else {
-                    status.text = "Сначала вставьте и сохраните бесплатный ключ Gemini. Без него радар продолжает работать по прозрачным правилам."
-                }
-            }
-        }
-        content.addView(aiButton, params(dp(58), dp(8)))
-
-        content.addView(button("ПРОВЕРИТЬ GEMINI — ПОЛУЧИТЬ ЖИВОЙ ОТВЕТ", "#7C3AED").apply {
-            setOnClickListener { testGeminiNow() }
-        }, params(dp(58), dp(8)))
 
         details = label("", 14, "#C9D1D9", false).apply {
             setBackgroundColor(Color.parseColor("#0B1320"))
@@ -166,32 +111,10 @@ class EventRadarActivity : AppCompatActivity() {
         }
     }
 
-    private fun testGeminiNow() {
-        progress.visibility = View.VISIBLE
-        status.text = "Отправляю реальный запрос в Gemini и жду JSON-ответ…"
-        executor.execute {
-            val state = EventRadarClient().testGemini(this)
-            main.post {
-                progress.visibility = View.GONE
-                updateUi(state)
-                details.visibility = View.VISIBLE
-                updateDetails(state)
-            }
-        }
-    }
-
     private fun updateUi(state: EventRadarState = EventRadarStore.state(this)) {
         enabledButton.text = if (state.enabled) "РАДАР ВКЛЮЧЁН" else "РАДАР ВЫКЛЮЧЕН"
         enabledButton.backgroundTintList = ColorStateList.valueOf(
             Color.parseColor(if (state.enabled) "#238636" else "#30363D")
-        )
-        aiButton.text = when {
-            !state.aiConfigured -> "GEMINI: КЛЮЧ НЕ НАЙДЕН"
-            state.aiEnabled -> "GEMINI ВКЛЮЧЁН"
-            else -> "GEMINI СОХРАНЁН, НО ВЫКЛЮЧЕН"
-        }
-        aiButton.backgroundTintList = ColorStateList.valueOf(
-            Color.parseColor(if (state.aiEnabled && state.aiConfigured) "#7C3AED" else "#30363D")
         )
         val latest = state.latest
         status.text = when {
@@ -202,18 +125,10 @@ class EventRadarActivity : AppCompatActivity() {
                 val direction = signed(latest.directionScore)
                 "Интернет: ${state.sourceCount}/${EventRadarClient.totalSources} • ${formatBytes(state.fetchBytes)} • разобрано ${state.parsedEntries} • новых ${state.newEvents}\n" +
                     "${latest.source}: важность ${latest.importance}/100 • влияние $direction/100\n" +
-                    "${if (latest.aiAnalyzed) "оценено Gemini + правилами" else "оценено прозрачными правилами"}"
+                    "${if (latest.aiAnalyzed) "сохранена прежняя/ручная оценка Gemini" else "оценено прозрачными правилами"}"
             }
         }
         if (state.error.isNotBlank()) status.append("\nНе все источники ответили: ${state.error}")
-        val gemini = state.gemini
-        status.append("\nGEMINI: ${gemini.status}")
-        if (gemini.lastSuccess > 0L) {
-            status.append(" • HTTP ${gemini.httpCode} • ${gemini.totalTokensToday} токенов сегодня")
-            status.append("\nПоправка Gemini: ${signed(state.informationAdjustment())} пунктов из ±12 (режим наблюдения)")
-        }
-        if (gemini.error.isNotBlank()) status.append("\nОшибка Gemini: ${gemini.error}")
-        if (gemini.lastAutoNote.isNotBlank()) status.append("\n${gemini.lastAutoNote}")
         status.append("\nТрафик V3 сегодня: ${EventRadarStore.trafficText(this)}")
 
         events.text = if (state.recent.isEmpty()) {
@@ -244,7 +159,6 @@ class EventRadarActivity : AppCompatActivity() {
             "${check.source}: $result"
         }
         val gemini = state.gemini
-        val budget = GeminiRequestBudget.state(this)
         val web = if (gemini.webReferenceTitles.isEmpty()) "дополнительных ссылок Google Search не вернул" else {
             gemini.webReferenceTitles.joinToString("\n") { "• $it" }
         }
@@ -254,14 +168,12 @@ class EventRadarActivity : AppCompatActivity() {
         details.text = buildString {
             append("ФАКТИЧЕСКАЯ ПРОВЕРКА ИНТЕРНЕТА\n$sourceLines")
             append("\n\nПОСЛЕДНИЕ ЗАГРУЖЕННЫЕ ЗАГОЛОВКИ\n$latestTitles")
-            append("\n\nФАКТИЧЕСКИЙ ОТВЕТ GEMINI\n")
+            append("\n\nПОСЛЕДНЕЕ РУЧНОЕ ВТОРОЕ МНЕНИЕ GEMINI\n")
             append("Статус: ${gemini.status} • HTTP ${gemini.httpCode} • модель ${gemini.model.ifBlank { "—" }}")
             append("\nОтправлено: ${gemini.inputTitle.ifBlank { "—" }}")
             append("\nПолучено: ${gemini.outputSummary.ifBlank { "—" }}")
             append("\nОценка: ${signed(gemini.directionScore)}/100 • важность ${gemini.importance}/100 • уверенность ${gemini.confidence}/100")
             append("\nПоправка к шкале: ${signed(state.informationAdjustment())} из ±12 • горизон ${gemini.horizonHours} ч")
-            append("\nНовостной контур: ${gemini.requestsToday} запросов • ${gemini.promptTokensToday} входных + ${gemini.outputTokensToday} выходных = ${gemini.totalTokensToday} токенов")
-            append("\nОбщий бюджет Gemini: ${budget.usedToday}/${GeminiRequestBudget.MAX_REQUESTS_PER_DAY} • осталось ${budget.remainingToday}")
             append("\nВнешние ссылки Gemini: ${gemini.webReferences}\n$web")
             if (gemini.detailedAnalysis.isNotBlank()) {
                 append("\n\nПОДРОБНЫЙ АНАЛИЗ\n${gemini.detailedAnalysis}")

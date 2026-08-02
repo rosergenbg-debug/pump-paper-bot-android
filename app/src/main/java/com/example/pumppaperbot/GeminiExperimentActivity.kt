@@ -64,14 +64,14 @@ class GeminiExperimentActivity : AppCompatActivity() {
         root.addView(button("← НАЗАД", "#30363D").apply {
             setOnClickListener { finish() }
         }, LinearLayout.LayoutParams(-1, dp(48)))
-        root.addView(label("V${BuildConfig.VERSION_NAME} • GEMINI", 24, "#F0F6FC", true))
+        root.addView(label("V${BuildConfig.VERSION_NAME} • DEEPSEEK", 24, "#F0F6FC", true))
         root.addView(label(
             "Виртуальные €1 000 • отдельные решения • без реальных денег.",
             14, "#C9D1D9", false, 8
         ))
 
         val buttons = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        toggle = button("ВКЛЮЧИТЬ", "#7C3AED")
+        toggle = button("DEEPSEEK ОСНОВНОЙ", "#7C3AED").apply { visibility = View.GONE }
         runNow = button("ПРОВЕРИТЬ СЕЙЧАС", "#1F6FEB")
         buttons.addView(toggle, LinearLayout.LayoutParams(0, dp(56), 1f))
         buttons.addView(runNow, LinearLayout.LayoutParams(0, dp(56), 1f).apply {
@@ -79,7 +79,7 @@ class GeminiExperimentActivity : AppCompatActivity() {
         })
         root.addView(buttons, LinearLayout.LayoutParams(-1, dp(56)).apply { topMargin = dp(12) })
 
-        root.addView(button("КЛЮЧ GEMINI И РАДАР НОВОСТЕЙ", "#30363D").apply {
+        root.addView(button("РАДАР НОВОСТЕЙ", "#30363D").apply {
             setOnClickListener {
                 startActivity(Intent(this@GeminiExperimentActivity, EventRadarActivity::class.java))
             }
@@ -123,7 +123,7 @@ class GeminiExperimentActivity : AppCompatActivity() {
         history = card("#161B22")
         trades = card("#161B22")
 
-        root.addView(label("ВИРТУАЛЬНЫЕ ДЕНЬГИ GEMINI", 17, "#D2A8FF", true, 16))
+        root.addView(label("ВИРТУАЛЬНЫЕ ДЕНЬГИ DEEPSEEK", 17, "#D2A8FF", true, 16))
         root.addView(portfolioPanel, cardParams(6))
         root.addView(lastOperation, cardParams())
         root.addView(label("ГРАФИК ОТКРЫТОЙ СДЕЛКИ", 17, "#D2A8FF", true, 16))
@@ -153,11 +153,11 @@ class GeminiExperimentActivity : AppCompatActivity() {
             render()
         }
 
-        root.addView(button("СБРОСИТЬ GEMINI И ЕГО ЭКСПЕРИМЕНТ", "#8E1519").apply {
+        root.addView(button("СБРОСИТЬ DEEPSEEK И ЕГО ЭКСПЕРИМЕНТ", "#8E1519").apply {
             setOnClickListener {
                 AlertDialog.Builder(this@GeminiExperimentActivity)
-                    .setTitle("Сбросить виртуальный счёт Gemini?")
-                    .setMessage("Удалятся решения, виртуальные сделки и статистика Gemini и Gemini‑эксперимента. APP и Серж не изменятся.")
+                    .setTitle("Сбросить виртуальный счёт DeepSeek?")
+                    .setMessage("Удалятся решения, виртуальные сделки и статистика DeepSeek и DeepSeek‑эксперимента. APP и Серж не изменятся.")
                     .setNegativeButton("ОТМЕНА", null)
                     .setPositiveButton("СБРОСИТЬ") { _, _ ->
                         GeminiPaperStore.reset(this@GeminiExperimentActivity)
@@ -168,11 +168,6 @@ class GeminiExperimentActivity : AppCompatActivity() {
             }
         }, LinearLayout.LayoutParams(-1, dp(54)).apply { topMargin = dp(18) })
 
-        toggle.setOnClickListener {
-            val enabled = GeminiPaperStore.state(this).enabled
-            GeminiPaperStore.setEnabled(this, !enabled)
-            render()
-        }
         runNow.setOnClickListener { runCheck() }
         render()
     }
@@ -191,9 +186,9 @@ class GeminiExperimentActivity : AppCompatActivity() {
     private fun runCheck() {
         runNow.isEnabled = false
         runNow.text = "ПРОВЕРЯЮ…"
-        status.text = "Обновляю рынок и новости, затем проверяю новый закрытый час…"
+        status.text = "Обновляю рынок, запускаю основной DeepSeek и проверяю виртуальные счета…"
         Thread cycle@{
-            val source = "РУЧНАЯ ПРОВЕРКА ИЗ ОКНА GEMINI"
+            val source = "РУЧНАЯ ПРОВЕРКА ИЗ ОКНА DEEPSEEK"
             if (!GeminiCycleGuard.tryEnter()) {
                 GeminiPaperStore.recordActivity(
                     this,
@@ -219,8 +214,10 @@ class GeminiExperimentActivity : AppCompatActivity() {
                 val result = runCatching {
                     MarketSyncClient().sync(this)
                     EventRadarClient().sync(this, force = true)
+                    DeepSeekTradeOwnership.activate(this, DeepSeekPrimaryStore.state(this).lastSuccess)
+                    val deepSeek = DeepSeekPrimaryAnalyst().sync(this, force = true)
                     GeminiPaperStore.markDataReady(this, source, startedAt)
-                    GeminiExperimentClient().sync(this, force = true, source = source)
+                    DeepSeekPaperCoordinator().sync(this, deepSeek, source)
                 }
                 val finishedAt = System.currentTimeMillis()
                 result.fold(
@@ -230,7 +227,7 @@ class GeminiExperimentActivity : AppCompatActivity() {
                             source,
                             startedAt,
                             finishedAt + interval,
-                            "ручная проверка завершена; Gemini: ${it.status}",
+                            "ручная проверка завершена; DeepSeek: ${it.status}",
                             finishedAt
                         )
                     },
@@ -264,44 +261,27 @@ class GeminiExperimentActivity : AppCompatActivity() {
     private fun render() {
         val state = GeminiPaperStore.state(this, includeActivity = true)
         val now = System.currentTimeMillis()
-        val visibleStatus = GeminiHourlyRetryPolicy.visibleStatus(state, now)
-        val budget = GeminiRequestBudget.state(this, now)
+        val deepSeek = DeepSeekPrimaryStore.state(this, now)
+        val visibleStatus = when {
+            DeepSeekSecureKeyStore.read(this).isBlank() -> "НЕТ КЛЮЧА DEEPSEEK"
+            deepSeek.error.isNotBlank() -> "ОШИБКА"
+            DeepSeekPrimaryPolicy.isFreshSignal(deepSeek, now) -> "РАБОТАЕТ"
+            deepSeek.lastSuccess > 0L -> "РЕЗУЛЬТАТ УСТАРЕЛ"
+            else -> "ОЖИДАЕТ ПЕРВЫЙ АНАЛИЗ"
+        }
         val snapshot = PumpBotEngine.snapshot(this)
         val p = state.portfolio
         val displayPrice = if (snapshot.lastPrice > 0.0) snapshot.lastPrice else p.entryPrice
         val value = p.value(displayPrice)
-        toggle.text = if (state.enabled) "ВЫКЛЮЧИТЬ" else "ВКЛЮЧИТЬ"
-        toggle.setBackgroundColor(Color.parseColor(if (state.enabled) "#7C3AED" else "#6E7681"))
-        val keySource = when {
-            EventRadarStore.hasCustomApiKey(this) -> "сохранённый личный ключ"
-            EmbeddedGeminiKey.value.isNotBlank() -> "встроенный ключ"
-            else -> "ключ не настроен"
-        }
         status.text = buildString {
             append("СТАТУС: $visibleStatus")
-            append("\n${state.phase} • $keySource")
-            val activeModel = state.activeModel.ifBlank { state.model }
-            if (activeModel.isNotBlank()) append(" • $activeModel")
-            val nextAt = maxOf(
-                GeminiHourlyRetryPolicy.nextVisibleActionAt(state, now),
-                budget.nextAllowedAt
-            )
-            when {
-                !state.enabled -> append("\nСледующий запрос: выключен")
-                visibleStatus == "НЕТ КЛЮЧА GEMINI" ->
-                    append("\nСледующий запрос: сначала сохраните ключ Gemini")
-                nextAt <= 0L -> append("\nСейчас выполняется сетевой запрос • предел 85 секунд")
-                state.lastFailure >= state.lastSuccess &&
-                    state.attemptsThisHour in 1 until GeminiHourlyRetryPolicy.MAX_AUTOMATIC_ATTEMPTS_PER_HOUR ->
-                    append("\nПовтор разрешён после ${PumpBotEngine.formatTime(nextAt)}")
-                else -> append("\nНовый прогноз после ${PumpBotEngine.formatTime(nextAt)}")
-            }
+            append("\n${deepSeek.model.ifBlank { "модель ещё не вызывалась" }}")
+            append(" • решение ${deepSeek.action} ${deepSeek.direction}/100")
+            append("\nАвтоматический анализ каждые 2 минуты; существенное изменение может запустить его раньше")
             append("\nСистема: ${cycleHealth(state, snapshot.running, now)}")
-            append(
-                "\nGemini сегодня: ${budget.usedToday}/${GeminiRequestBudget.MAX_REQUESTS_PER_DAY}" +
-                    " запросов • ${state.totalTokensToday} токенов"
-            )
-            if (state.error.isNotBlank()) append("\nОшибка: ${state.error}")
+            append("\nDeepSeek сегодня: ${deepSeek.successfulToday} успешно • ${deepSeek.failedToday} ошибок")
+            append(" • ${deepSeek.promptTokensToday + deepSeek.completionTokensToday} токенов")
+            if (deepSeek.error.isNotBlank()) append("\nОшибка: ${deepSeek.error}")
         }
         status.setTextColor(Color.parseColor(
             when {
@@ -404,7 +384,7 @@ class GeminiExperimentActivity : AppCompatActivity() {
                 latestTrade.amount * latestTrade.price - latestTrade.fee,
                 latestTrade.pnlEur
             )
-            else -> "● СЕЙЧАС: ОЖИДАНИЕ\nПокупок и продаж Gemini пока не было. Все €1 000,00 находятся в EUR."
+            else -> "● СЕЙЧАС: ОЖИДАНИЕ\nПокупок и продаж DeepSeek пока не было. Все €1 000,00 находятся в EUR."
         }
         lastOperation.setTextColor(Color.parseColor(
             when (latestTrade?.action) {
@@ -517,7 +497,7 @@ class GeminiExperimentActivity : AppCompatActivity() {
 
         val last = p.decisions.lastOrNull()
         lastDecision.text = if (last == null) {
-            "ПОСЛЕДНЕЕ РЕШЕНИЕ\nПока нет. Нужны рыночные данные, ключ Gemini и новый полностью закрытый час."
+            "ПОСЛЕДНЕЕ РЕШЕНИЕ\nПока нет. Нужны рыночные данные, ключ DeepSeek и первый успешный анализ."
         } else {
             buildString {
                 append("ПОСЛЕДНЕЕ РЕШЕНИЕ: ${actionRu(last.requestedAction)}")
@@ -571,7 +551,6 @@ class GeminiExperimentActivity : AppCompatActivity() {
         monitorRunning: Boolean,
         now: Long
     ): String = when {
-        !state.enabled -> "Gemini выключен"
         state.lastCycleStarted <= 0L -> "цикл ещё ни разу не запускался"
         state.lastCycleStarted > state.lastCycleFinished &&
             now - state.lastCycleStarted > TimeUnit.MINUTES.toMillis(3) ->

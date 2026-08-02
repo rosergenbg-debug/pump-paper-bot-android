@@ -42,7 +42,7 @@ data class GeminiPaperTrade(
             fee = value.optDouble("fee"),
             score = value.optInt("score"),
             confidence = value.optInt("confidence"),
-            reason = value.optString("reason"),
+            reason = RussianOutputPolicy.visible(value.optString("reason")),
             pnlEur = value.optDouble("pnlEur"),
             methodVersion = value.optInt("methodVersion", 1)
         )
@@ -120,9 +120,9 @@ data class GeminiHourlyDecision(
                 directionScore = value.optInt("directionScore"),
                 confidence = value.optInt("confidence"),
                 horizonHours = value.optInt("horizonHours", 1),
-                reason = value.optString("reason"),
+                reason = RussianOutputPolicy.visible(value.optString("reason")),
                 risks = (0 until risksJson.length()).mapNotNull {
-                    risksJson.optString(it).trim().takeIf(String::isNotBlank)
+                    RussianOutputPolicy.visible(risksJson.optString(it)).trim().takeIf(String::isNotBlank)
                 },
                 model = value.optString("model"),
                 positionAfter = value.optBoolean("positionAfter"),
@@ -263,9 +263,9 @@ data class GeminiPendingDecision(
                     directionScore = recommendation.optInt("directionScore").coerceIn(-100, 100),
                     confidence = recommendation.optInt("confidence").coerceIn(0, 100),
                     horizonHours = recommendation.optInt("horizonHours", 1).coerceIn(1, 6),
-                    reason = recommendation.optString("reason").take(1000),
+                    reason = RussianOutputPolicy.visible(recommendation.optString("reason")).take(1000),
                     risks = (0 until risks.length()).mapNotNull {
-                        risks.optString(it).trim().takeIf(String::isNotBlank)
+                        RussianOutputPolicy.visible(risks.optString(it)).trim().takeIf(String::isNotBlank)
                     }.take(5),
                     model = recommendation.optString("model").take(80)
                 ),
@@ -707,7 +707,7 @@ data class GeminiActivityEvent(
             at = value.optLong("at"),
             stage = value.optString("stage"),
             result = value.optString("result", "INFO"),
-            detail = value.optString("detail"),
+            detail = RussianOutputPolicy.visible(value.optString("detail")),
             durationMillis = value.optLong("durationMillis"),
             model = value.optString("model"),
             hourId = value.optLong("hourId"),
@@ -1030,6 +1030,16 @@ object GeminiPaperStore {
             .putString(KEY_PORTFOLIO, raw)
             .putString(KEY_PORTFOLIO_BACKUP, raw)
             .remove(KEY_STORAGE_ERROR)
+            .commit()
+    }
+
+    /** V4.7 no longer lets a pre-migration Gemini response execute after the ownership transfer. */
+    fun retireLegacyPendingDecision(context: Context) {
+        prefs(context).edit()
+            .remove(KEY_PENDING_DECISION)
+            .putBoolean(KEY_ENABLED, false)
+            .putString(KEY_STATUS, "GEMINI ТОЛЬКО ВРУЧНУЮ")
+            .putString(KEY_PHASE, "ТОРГОВЫЙ СЧЁТ ПЕРЕДАН DEEPSEEK")
             .commit()
     }
 

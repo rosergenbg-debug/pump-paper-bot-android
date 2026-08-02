@@ -36,8 +36,6 @@ class MainActivity : AppCompatActivity() {
 
     private var tvStatus: TextView? = null
     private var tvLatestSignal: TextView? = null
-    private var tvBuySignal: TextView? = null
-    private var tvSellSignal: TextView? = null
     private var tvMode: TextView? = null
     private var tvReadiness: TextView? = null
     private var tvRapidDrop: TextView? = null
@@ -51,6 +49,8 @@ class MainActivity : AppCompatActivity() {
     private var tvReason: TextView? = null
     private var tvPosition: TextView? = null
     private var tvManualPnl: TextView? = null
+    private var tvPositionSupervisor: TextView? = null
+    private var tvDeepSeekPrimary: TextView? = null
     private var tvAlertStatus: TextView? = null
     private var chart: StrategyChartView? = null
     private var manualPositionChart: ManualPositionChartView? = null
@@ -70,6 +70,8 @@ class MainActivity : AppCompatActivity() {
     private var btnGeminiExitExperiment: Button? = null
     private var btnUserPaper: Button? = null
     private var btnCompetition: Button? = null
+    private var btnDeepSeekApi: Button? = null
+    private var btnGeminiApi: Button? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -78,8 +80,6 @@ class MainActivity : AppCompatActivity() {
 
         tvStatus = findViewById(R.id.tvStatus)
         tvLatestSignal = findViewById(R.id.tvLatestSignal)
-        tvBuySignal = findViewById(R.id.tvBuySignal)
-        tvSellSignal = findViewById(R.id.tvSellSignal)
         tvMode = findViewById(R.id.tvMode)
         tvReadiness = findViewById(R.id.tvReadiness)
         tvRapidDrop = findViewById(R.id.tvRapidDrop)
@@ -93,6 +93,8 @@ class MainActivity : AppCompatActivity() {
         tvReason = findViewById(R.id.tvReason)
         tvPosition = findViewById(R.id.tvPosition)
         tvManualPnl = findViewById(R.id.tvManualPnl)
+        tvPositionSupervisor = findViewById(R.id.tvPositionSupervisor)
+        tvDeepSeekPrimary = findViewById(R.id.tvDeepSeekPrimary)
         tvAlertStatus = findViewById(R.id.tvAlertStatus)
         chart = findViewById(R.id.chart)
         manualPositionChart = findViewById(R.id.manualPositionChart)
@@ -112,6 +114,8 @@ class MainActivity : AppCompatActivity() {
         btnGeminiExitExperiment = findViewById(R.id.btnGeminiExitExperiment)
         btnUserPaper = findViewById(R.id.btnUserPaper)
         btnCompetition = findViewById(R.id.btnCompetition)
+        btnDeepSeekApi = findViewById(R.id.btnDeepSeekApi)
+        btnGeminiApi = findViewById(R.id.btnGeminiApi)
 
         PumpBotEngine.ensureInitialized(this)
         requestNotificationPermission()
@@ -161,6 +165,16 @@ class MainActivity : AppCompatActivity() {
         }
         btnCompetition?.setOnClickListener {
             startActivity(Intent(this, CompetitionActivity::class.java))
+        }
+        btnDeepSeekApi?.setOnClickListener {
+            startActivity(Intent(this, ApiCenterActivity::class.java).putExtra(
+                ApiCenterActivity.EXTRA_PROVIDER, ApiCenterActivity.DEEPSEEK
+            ))
+        }
+        btnGeminiApi?.setOnClickListener {
+            startActivity(Intent(this, ApiCenterActivity::class.java).putExtra(
+                ApiCenterActivity.EXTRA_PROVIDER, ApiCenterActivity.GEMINI
+            ))
         }
         chart?.setOnClickListener { startActivity(Intent(this, ChartDetailActivity::class.java)) }
 
@@ -215,6 +229,7 @@ class MainActivity : AppCompatActivity() {
         PumpBotEngine.reset(this)
         UserPaperStore.discardOpenPosition(this)
         ManualPositionStore.discardOpenPosition(this)
+        PositionSupervisorStore.clearPosition(this)
         updateUi()
         checkNow()
     }
@@ -229,7 +244,8 @@ class MainActivity : AppCompatActivity() {
             .setConstraints(networkConstraints())
             .setInputData(workDataOf(
                 PumpBotWorker.INPUT_CYCLE_SOURCE to "РУЧНАЯ ПРОВЕРКА",
-                PumpBotWorker.INPUT_CYCLE_INTERVAL to interval
+                PumpBotWorker.INPUT_CYCLE_INTERVAL to interval,
+                PumpBotWorker.INPUT_FORCE_PRIMARY_DEEPSEEK to true
             ))
             .build()
         WorkManager.getInstance(this).enqueue(request)
@@ -255,6 +271,7 @@ class MainActivity : AppCompatActivity() {
                 opened.entryTime.takeIf { it > 0L } ?: System.currentTimeMillis()
             )
             if (!opened.running) startMonitor()
+            schedulePositionCheck(forceCritical = true)
             updateUi()
         }
     }
@@ -270,6 +287,7 @@ class MainActivity : AppCompatActivity() {
             ManualPositionStore.recordSell(this, sellPrice, soldAt)
             UserPaperStore.recordSell(this, sellPrice, soldAt)
             PumpBotEngine.confirmSold(this)
+            PositionSupervisorStore.clearPosition(this)
             updateUi()
         }
     }
@@ -330,12 +348,12 @@ class MainActivity : AppCompatActivity() {
             appAccount.profitPercent(accountPrice)
         )
         btnGeminiExperiment?.text = accountButtonText(
-            "GEMINI",
+            "DEEPSEEK",
             geminiAccount.value(accountPrice),
             geminiAccount.profitPercent(accountPrice)
         )
         btnGeminiExitExperiment?.text = accountButtonText(
-            "GEMINI‑ЭКСП.",
+            "DEEPSEEK‑ЭКСП.",
             geminiExitExperiment.value(accountPrice),
             geminiExitExperiment.profitPercent(accountPrice)
         )
@@ -349,6 +367,14 @@ class MainActivity : AppCompatActivity() {
         } else {
             "Монитор остановлен • последнее обновление ${PumpBotEngine.formatTime(snapshot.lastSync)}"
         }
+        val deepSeekPrimary = DeepSeekPrimaryStore.state(this)
+        tvDeepSeekPrimary?.text = DeepSeekPrimaryPolicy.compactStatus(
+            deepSeekPrimary,
+            DeepSeekSecureKeyStore.read(this).isNotBlank()
+        )
+        tvDeepSeekPrimary?.setTextColor(Color.parseColor(
+            if (deepSeekPrimary.error.isBlank()) "#7EE787" else "#FF7B72"
+        ))
         renderLatestSignal()
         tvMode?.text = if (snapshot.rapidDrop.active) {
             String.format(Locale.GERMANY, "АВАРИЙНОЕ ПАДЕНИЕ −%.1f%% — ПРОВЕРЬТЕ РЫНОК", snapshot.rapidDrop.dropPercent)
@@ -371,8 +397,7 @@ class MainActivity : AppCompatActivity() {
         renderBreathing(snapshot)
 
         renderStrategyButtons(snapshot.aggressive)
-        renderSignalBox(tvBuySignal, "BUY", snapshot.buySignal, snapshot.waitMode == "BUY")
-        renderSignalBox(tvSellSignal, "SELL", snapshot.sellSignal, snapshot.waitMode == "SELL")
+        renderApiButtons()
 
         tvPrice?.text = String.format(
             Locale.US,
@@ -411,6 +436,7 @@ class MainActivity : AppCompatActivity() {
             "Сделка: не открыта"
         }
         renderManualPosition(snapshot)
+        renderPositionSupervisor(snapshot)
         tvAlertStatus?.text = AlertSchedule.statusText(this)
 
         btnStart?.isEnabled = !snapshot.running
@@ -425,17 +451,21 @@ class MainActivity : AppCompatActivity() {
         val now = System.currentTimeMillis()
         val radar = EventRadarStore.state(this)
         val appCombinedDirection = radar.combinedDirection(snapshot.directionScore, now)
-        val geminiState = GeminiPaperStore.state(this)
-        val currentGeminiDecision = GeminiGaugePolicy.currentDecision(geminiState, now)
+        val deepSeekSignal = DeepSeekPrimaryStore.state(this)
+        val deepSeekFresh = DeepSeekPrimaryPolicy.isFreshSignal(deepSeekSignal, now)
         chart?.setData(
             "PUMP/EUR • ДЫХАНИЕ РЫНКА",
             snapshot.chart.copy(
                 directionScore = appCombinedDirection,
                 showGeminiGauge = true,
-                geminiDirectionScore = currentGeminiDecision?.directionScore,
-                geminiConfidenceScore = currentGeminiDecision?.confidence ?: 0,
-                geminiAction = currentGeminiDecision?.requestedAction.orEmpty(),
-                geminiStatus = GeminiHourlyRetryPolicy.visibleStatus(geminiState, now)
+                geminiDirectionScore = deepSeekSignal.direction.takeIf { deepSeekFresh },
+                geminiConfidenceScore = if (deepSeekFresh) deepSeekSignal.confidence else 0,
+                geminiAction = if (deepSeekFresh) deepSeekSignal.action else "STALE",
+                geminiStatus = when {
+                    deepSeekSignal.error.isNotBlank() -> "ОШИБКА: ${deepSeekSignal.error}"
+                    !deepSeekFresh -> "ПОСЛЕДНИЙ СИГНАЛ УСТАРЕЛ"
+                    else -> "DEEPSEEK РАБОТАЕТ"
+                }
             )
         )
     }
@@ -475,6 +505,35 @@ class MainActivity : AppCompatActivity() {
             buyPrice = entry,
             currentPrice = snapshot.lastPrice
         )
+    }
+
+    private fun renderPositionSupervisor(snapshot: LiveSnapshot) {
+        if (snapshot.waitMode != "SELL") {
+            tvPositionSupervisor?.text = "DEEPSEEK • ожидает нажатия «Я купил»"
+            tvPositionSupervisor?.setTextColor(Color.parseColor("#8B949E"))
+            return
+        }
+        val state = PositionSupervisorStore.state(this)
+        tvPositionSupervisor?.text = PositionSupervisorPolicy.statusText(state) +
+            "\n${state.model.ifBlank { "DeepSeek ещё не вызывался" }}"
+        val color = when {
+            state.action == "CANCEL_EXIT" -> "#7EE787"
+            state.exitAdvised -> "#FF7B72"
+            else -> "#D2A8FF"
+        }
+        tvPositionSupervisor?.setTextColor(Color.parseColor(color))
+    }
+
+    private fun schedulePositionCheck(forceCritical: Boolean) {
+        val request = OneTimeWorkRequestBuilder<PumpBotWorker>()
+            .setConstraints(networkConstraints())
+            .setInputData(workDataOf(
+                PumpBotWorker.INPUT_CYCLE_SOURCE to "СЕРЖ КУПИЛ • DEEPSEEK PRO",
+                PumpBotWorker.INPUT_CYCLE_INTERVAL to TimeUnit.MINUTES.toMillis(2),
+                PumpBotWorker.INPUT_FORCE_POSITION_PRO to forceCritical
+            ))
+            .build()
+        WorkManager.getInstance(this).enqueue(request)
     }
 
     private fun networkConstraints(): Constraints = Constraints.Builder()
@@ -635,17 +694,20 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun renderSignalBox(view: TextView?, label: String, signal: Boolean, selectedMode: Boolean) {
-        val color = when {
-            signal && label == "BUY" -> "#238636"
-            signal && label == "SELL" -> "#DA3633"
-            selectedMode -> "#30363D"
-            else -> "#161B22"
+    private fun renderApiButtons() {
+        val deep = DeepSeekPrimaryStore.state(this)
+        btnDeepSeekApi?.text = if (DeepSeekSecureKeyStore.read(this).isBlank()) {
+            "DEEPSEEK API\nКЛЮЧ НЕ ВВЕДЁН\nоткрыть центр"
+        } else {
+            val fresh = DeepSeekPrimaryPolicy.isFreshSignal(deep)
+            "DEEPSEEK • ОСНОВНОЙ\n${if (fresh) deep.action else "УСТАРЕЛ"} ${if (fresh) signed(deep.direction) + "/100" else ""}\n${deep.successfulToday} OK • ${deep.failedToday} ERR"
         }
-        view?.setBackgroundColor(Color.parseColor(color))
-        val display = if (label == "BUY") "Покупка" else "Продажа"
-        view?.text = if (signal) "$display: СИГНАЛ" else "$display: нет"
-        view?.setTextColor(if (signal) Color.WHITE else Color.parseColor("#8B949E"))
+        val budget = GeminiRequestBudget.state(this)
+        btnGeminiApi?.text = if (EventRadarStore.apiKey(this).isBlank()) {
+            "GEMINI API\nКЛЮЧ НЕ ВВЕДЁН\nоткрыть центр"
+        } else {
+            "GEMINI • РУЧНОЕ МНЕНИЕ\nавтоматические запросы выключены\nосталось ${budget.remainingToday}"
+        }
     }
 
     private fun requestNotificationPermission() {
