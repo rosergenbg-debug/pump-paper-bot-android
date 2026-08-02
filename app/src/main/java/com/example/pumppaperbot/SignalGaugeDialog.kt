@@ -75,7 +75,7 @@ object SignalGaugeDialog {
                 if (deepSeek.evidence.isNotEmpty()) append("\nФакты: ${deepSeek.evidence.joinToString("; ")}")
                 if (deepSeek.risks.isNotEmpty()) append("\nРиски: ${deepSeek.risks.joinToString("; ")}")
             }
-            append("\n\nКто считает: DeepSeek Flash по полному рыночному кадру каждые 5 минут и при существенном изменении сигнала.")
+            append("\n\nКто считает: DeepSeek Flash по полному рыночному кадру каждые 2 минуты и при существенном изменении сигнала; BUY/EXIT проходит отдельную усиленную проверку.")
             append("\nОн даёт независимый аналитический сигнал и не меняет сделки APP автоматически.")
         }))
 

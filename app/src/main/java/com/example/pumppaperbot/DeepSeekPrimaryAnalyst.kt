@@ -24,6 +24,7 @@ data class DeepSeekPrimaryState(
     val failedToday: Int = 0,
     val promptTokensToday: Int = 0,
     val completionTokensToday: Int = 0,
+    val estimatedCostUsdToday: Double = 0.0,
     val lastInputReadiness: Int = 0,
     val lastLocalBuySignal: Boolean = false,
     val lastLocalSellSignal: Boolean = false,
@@ -45,6 +46,7 @@ data class DeepSeekPrimaryState(
         .put("failedToday", failedToday)
         .put("promptTokensToday", promptTokensToday)
         .put("completionTokensToday", completionTokensToday)
+        .put("estimatedCostUsdToday", estimatedCostUsdToday)
         .put("lastInputReadiness", lastInputReadiness)
         .put("lastLocalBuySignal", lastLocalBuySignal)
         .put("lastLocalSellSignal", lastLocalSellSignal)
@@ -67,6 +69,8 @@ data class DeepSeekPrimaryState(
             failedToday = json.optInt("failedToday").coerceAtLeast(0),
             promptTokensToday = json.optInt("promptTokensToday").coerceAtLeast(0),
             completionTokensToday = json.optInt("completionTokensToday").coerceAtLeast(0),
+            estimatedCostUsdToday = json.optDouble("estimatedCostUsdToday")
+                .takeIf { it.isFinite() }?.coerceAtLeast(0.0) ?: 0.0,
             lastInputReadiness = json.optInt("lastInputReadiness").coerceIn(-100, 100),
             lastLocalBuySignal = json.optBoolean("lastLocalBuySignal"),
             lastLocalSellSignal = json.optBoolean("lastLocalSellSignal"),
@@ -103,7 +107,8 @@ object DeepSeekPrimaryStore {
             successfulToday = 0,
             failedToday = 0,
             promptTokensToday = 0,
-            completionTokensToday = 0
+            completionTokensToday = 0,
+            estimatedCostUsdToday = 0.0
         ).also { save(context, it) }
     }
 
@@ -114,8 +119,12 @@ object DeepSeekPrimaryStore {
 }
 
 object DeepSeekPrimaryPolicy {
-    const val INTERVAL = 5L * 60L * 1000L
+    const val INTERVAL = 2L * 60L * 1000L
     const val SIGNAL_MAX_AGE = 12L * 60L * 1000L
+    const val DAILY_COST_LIMIT_USD = 0.50
+
+    fun withinDailyBudget(estimatedCostUsd: Double): Boolean =
+        estimatedCostUsd < DAILY_COST_LIMIT_USD
 
     fun isFreshSignal(state: DeepSeekPrimaryState, now: Long = System.currentTimeMillis()): Boolean =
         state.lastSuccess > 0L && now >= state.lastSuccess && now - state.lastSuccess <= SIGNAL_MAX_AGE
@@ -168,6 +177,20 @@ object DeepSeekPrimaryPolicy {
     }
 }
 
+internal object DeepSeekTradeVerificationPolicy {
+    fun finalAction(proposedAction: String, approved: Boolean?, positionOpen: Boolean): String = when {
+        approved == null || approved -> proposedAction
+        positionOpen -> "HOLD"
+        else -> "WATCH"
+    }
+
+    fun acceptedDirection(proposedAction: String, approved: Boolean?, direction: Int): Int =
+        if (proposedAction == "BUY" && approved == false) 0 else direction.coerceIn(-100, 100)
+
+    fun acceptedConfidence(proposedAction: String, approved: Boolean?, confidence: Int): Int =
+        if (proposedAction == "BUY" && approved == false) 0 else confidence.coerceIn(0, 100)
+}
+
 private data class DeepSeekPrimaryResult(
     val action: String,
     val direction: Int,
@@ -178,6 +201,9 @@ private data class DeepSeekPrimaryResult(
     val risks: List<String>,
     val promptTokens: Int,
     val completionTokens: Int,
+    val verificationPromptTokens: Int = 0,
+    val verificationCompletionTokens: Int = 0,
+    val verificationSummary: String = "не требовалась",
     val repaired: Boolean,
     val finishReason: String
 )
@@ -204,6 +230,11 @@ class DeepSeekPrimaryAnalyst {
         if (!DeepSeekPrimaryPolicy.shouldRun(
                 previous, snapshot.lastPrice > 0.0, force, now, materialChange
             )) return previous
+        if (!DeepSeekPrimaryPolicy.withinDailyBudget(
+                DeepSeekDailyBudgetStore.costUsd(context, now)
+            )) return previous.copy(
+            error = "Достигнут защитный лимит DeepSeek \$0,50 за сутки; новые запросы возобновятся после смены UTC-дня"
+        ).also { DeepSeekPrimaryStore.save(context, it) }
         val key = DeepSeekSecureKeyStore.read(context)
         if (key.isBlank()) return previous.copy(
             lastAttempt = now,
@@ -248,8 +279,18 @@ class DeepSeekPrimaryAnalyst {
                         append(result.summary)
                         if (result.evidence.isNotEmpty()) append(" • факты: ${result.evidence.joinToString("; ")}")
                         if (result.risks.isNotEmpty()) append(" • риски: ${result.risks.joinToString("; ")}")
+                        if (result.verificationSummary != "не требовалась") {
+                            append(" • усиленная проверка: ${result.verificationSummary}")
+                        }
                     }.take(500)
                 ))
+                val requestCost = DeepSeekCostPolicy.estimateUsd(
+                    requestedModel, result.promptTokens, result.completionTokens
+                ) + DeepSeekCostPolicy.estimateUsd(
+                    PositionSupervisorPolicy.FLASH_MODEL,
+                    result.verificationPromptTokens,
+                    result.verificationCompletionTokens
+                )
                 previous.copy(
                     lastAttempt = now,
                     lastSuccess = completedAt,
@@ -260,8 +301,11 @@ class DeepSeekPrimaryAnalyst {
                     confidence = result.confidence,
                     summary = result.summary,
                     successfulToday = previous.successfulToday + 1,
-                    promptTokensToday = previous.promptTokensToday + result.promptTokens,
-                    completionTokensToday = previous.completionTokensToday + result.completionTokens,
+                    promptTokensToday = previous.promptTokensToday + result.promptTokens +
+                        result.verificationPromptTokens,
+                    completionTokensToday = previous.completionTokensToday + result.completionTokens +
+                        result.verificationCompletionTokens,
+                    estimatedCostUsdToday = previous.estimatedCostUsdToday + requestCost,
                     lastInputReadiness = snapshot.readinessScore,
                     lastLocalBuySignal = snapshot.buySignal,
                     lastLocalSellSignal = snapshot.sellSignal,
@@ -283,6 +327,11 @@ class DeepSeekPrimaryAnalyst {
                         structured?.finishReason?.takeIf { it.isNotBlank() }?.let { append(" • finish_reason=$it") }
                     }
                 ))
+                val failedCost = DeepSeekCostPolicy.estimateUsd(
+                    requestedModel,
+                    structured?.promptTokens ?: 0,
+                    structured?.completionTokens ?: 0
+                )
                 previous.copy(
                     lastAttempt = now,
                     model = requestedModel,
@@ -290,6 +339,9 @@ class DeepSeekPrimaryAnalyst {
                     lastLocalBuySignal = snapshot.buySignal,
                     lastLocalSellSignal = snapshot.sellSignal,
                     failedToday = previous.failedToday + 1,
+                    promptTokensToday = previous.promptTokensToday + (structured?.promptTokens ?: 0),
+                    completionTokensToday = previous.completionTokensToday + (structured?.completionTokens ?: 0),
+                    estimatedCostUsdToday = previous.estimatedCostUsdToday + failedCost,
                     error = error.message.orEmpty().take(240)
                 ).also { DeepSeekPrimaryStore.save(context, it) }
             }
@@ -365,6 +417,9 @@ class DeepSeekPrimaryAnalyst {
             прокси по taker-volume закрытых свечей, а funding_rate — последняя рассчитанная ставка, не прогноз.
             Всегда учитывай age_seconds и fresh. Просроченные или null-поля не используй как текущий факт.
             Краткий real-time всплеск используй как подтверждение либо предупреждение, но не как самостоятельный BUY.
+            Внутри незакрытой 30-минутной свечи ранний BUY разрешён, если real_time_spot_flow уже находится
+            в CONFIRMATION, это независимо подтверждено свежим five_minute_flow или устойчивой старшей структурой,
+            BTC/SOL не показывают совместного падения, а цена ещё не стала поздней или перегретой.
             Не считай один индикатор или один заголовок достаточным основанием. Не догоняй уже перегретую цену.
             BUY допустим только при подтверждении минимум двумя независимыми группами данных и отсутствии
             late-entry/rapid-drop запрета. EXIT допустим только при открытой позиции и согласованном ухудшении.
@@ -414,14 +469,29 @@ class DeepSeekPrimaryAnalyst {
             }
         )
         val json = response.json
-        val action = json.optString("action", "WATCH").uppercase(Locale.ROOT)
+        val proposedAction = json.optString("action", "WATCH").uppercase(Locale.ROOT)
             .takeIf { it in allowedActions } ?: "WATCH"
+        val verification = if (proposedAction == "BUY" || proposedAction == "EXIT") {
+            verifyTradeDecision(context, apiKey, frame, json, proposedAction, aiPaperPositionOpen)
+        } else null
+        val action = DeepSeekTradeVerificationPolicy.finalAction(
+            proposedAction, verification?.approved, aiPaperPositionOpen
+        )
+        val summary = if (verification != null && !verification.approved) {
+            "Сделка отклонена усиленной проверкой: ${verification.summary}"
+        } else {
+            json.optString("summary", "DeepSeek не дал пояснение")
+        }
         return DeepSeekPrimaryResult(
             action = action,
-            direction = json.optInt("direction").coerceIn(-100, 100),
+            direction = DeepSeekTradeVerificationPolicy.acceptedDirection(
+                proposedAction, verification?.approved, json.optInt("direction")
+            ),
             danger = json.optInt("danger").coerceIn(0, 10),
-            confidence = json.optInt("confidence").coerceIn(0, 100),
-            summary = json.optString("summary", "DeepSeek не дал пояснение").take(400),
+            confidence = DeepSeekTradeVerificationPolicy.acceptedConfidence(
+                proposedAction, verification?.approved, json.optInt("confidence")
+            ),
+            summary = summary.take(400),
             evidence = json.optJSONArray("evidence")?.let { array ->
                 List(array.length().coerceAtMost(4)) { array.optString(it).take(240) }
                     .filter { it.isNotBlank() }
@@ -432,8 +502,114 @@ class DeepSeekPrimaryAnalyst {
             }.orEmpty(),
             promptTokens = response.promptTokens,
             completionTokens = response.completionTokens,
+            verificationPromptTokens = verification?.promptTokens ?: 0,
+            verificationCompletionTokens = verification?.completionTokens ?: 0,
+            verificationSummary = verification?.summary ?: "не требовалась",
             repaired = response.repaired,
             finishReason = response.finishReason
         )
+    }
+
+    private data class TradeVerification(
+        val approved: Boolean,
+        val summary: String,
+        val promptTokens: Int,
+        val completionTokens: Int
+    )
+
+    private fun verifyTradeDecision(
+        context: Context,
+        apiKey: String,
+        frame: JSONObject,
+        proposal: JSONObject,
+        proposedAction: String,
+        positionOpen: Boolean
+    ): TradeVerification {
+        val model = PositionSupervisorPolicy.FLASH_MODEL
+        val started = System.currentTimeMillis()
+        ApiUsageLogStore.record(context, ApiUsageEvent(
+            provider = "DEEPSEEK", circuit = "ПРОВЕРКА СДЕЛКИ",
+            model = model, status = "START", at = started,
+            detail = "независимая проверка $proposedAction перед исполнением"
+        ))
+        val verificationFrame = JSONObject(frame.toString())
+            .put("proposed_decision", JSONObject(proposal.toString()))
+            .put("position_open", positionOpen)
+        val system = """
+            Ты второй строгий контролёр сделки PumpSignal. Независимо перепроверь предложенный $proposedAction
+            по тому же свежему рыночному кадру. Ищи погоню за уже ушедшей ценой, одиночный шум, противоречие
+            spot/futures потоков, слабость BTC/SOL, перегрев, rapid drop и устаревшие данные.
+            Одобряй BUY только при двух независимых подтверждающих группах; внутрисвечный вход допустим при
+            устойчивой CONFIRMATION микропотока плюс свежем 5-минутном или старшем подтверждении.
+            Одобряй EXIT только при согласованном ухудшении открытой позиции. Сомнение означает отказ.
+            Верни только JSON: approved boolean; summary короткая причина; evidence массив до 3 фактов;
+            risks массив до 3 рисков. Все текстовые поля пиши только по-русски, без китайских иероглифов.
+        """.trimIndent()
+        return runCatching {
+            val response = DeepSeekStructuredClient(http).request(
+                apiKey = apiKey,
+                model = model,
+                system = system,
+                frame = verificationFrame,
+                reasoningEffort = "high",
+                maxTokens = 1200,
+                validate = { result ->
+                    when {
+                        !result.has("approved") -> "нет approved"
+                        result.optString("summary").isBlank() -> "нет summary"
+                        RussianOutputPolicy.validate(
+                            result.optString("summary"),
+                            result.optJSONArray("evidence")?.toString().orEmpty(),
+                            result.optJSONArray("risks")?.toString().orEmpty()
+                        ) != null -> RussianOutputPolicy.validate(
+                            result.optString("summary"),
+                            result.optJSONArray("evidence")?.toString().orEmpty(),
+                            result.optJSONArray("risks")?.toString().orEmpty()
+                        )
+                        else -> null
+                    }
+                },
+                onRepairStart = { reason ->
+                    ApiUsageLogStore.record(context, ApiUsageEvent(
+                        provider = "DEEPSEEK", circuit = "ВОССТАНОВЛЕНИЕ ПРОВЕРКИ СДЕЛКИ",
+                        model = model, status = "RETRY", at = System.currentTimeMillis(),
+                        detail = reason.take(260)
+                    ))
+                }
+            )
+            val result = TradeVerification(
+                approved = response.json.optBoolean("approved"),
+                summary = response.json.optString("summary", "решение не подтверждено").take(300),
+                promptTokens = response.promptTokens,
+                completionTokens = response.completionTokens
+            )
+            val completed = System.currentTimeMillis()
+            ApiUsageLogStore.record(context, ApiUsageEvent(
+                provider = "DEEPSEEK", circuit = "ПРОВЕРКА СДЕЛКИ",
+                model = model, status = "OK", at = completed,
+                durationMillis = completed - started,
+                promptTokens = result.promptTokens,
+                outputTokens = result.completionTokens,
+                detail = "${if (result.approved) "ОДОБРЕНО" else "ОТКЛОНЕНО"}: ${result.summary}"
+            ))
+            result
+        }.getOrElse { error ->
+            val structured = error as? DeepSeekStructuredException
+            val failed = System.currentTimeMillis()
+            ApiUsageLogStore.record(context, ApiUsageEvent(
+                provider = "DEEPSEEK", circuit = "ПРОВЕРКА СДЕЛКИ",
+                model = model, status = "ERROR", at = failed,
+                durationMillis = failed - started,
+                promptTokens = structured?.promptTokens ?: 0,
+                outputTokens = structured?.completionTokens ?: 0,
+                detail = "сделка безопасно отклонена: ${error.message.orEmpty().take(240)}"
+            ))
+            TradeVerification(
+                approved = false,
+                summary = "усиленная проверка не завершилась; сделка безопасно отклонена",
+                promptTokens = structured?.promptTokens ?: 0,
+                completionTokens = structured?.completionTokens ?: 0
+            )
+        }
     }
 }

@@ -11,7 +11,7 @@ class DeepSeekPrimaryPolicyTest {
         ))
     }
 
-    @Test fun `primary DeepSeek waits five minutes between paid calls`() {
+    @Test fun `primary DeepSeek waits two minutes between paid calls`() {
         val state = DeepSeekPrimaryState(lastAttempt = 1_000L)
         assertFalse(DeepSeekPrimaryPolicy.shouldRun(
             state, hasMarketData = true, force = false,
@@ -21,6 +21,22 @@ class DeepSeekPrimaryPolicyTest {
             state, hasMarketData = true, force = false,
             now = 1_000L + DeepSeekPrimaryPolicy.INTERVAL
         ))
+    }
+
+    @Test fun `primary DeepSeek stops automatic spending at fifty cents`() {
+        assertTrue(DeepSeekPrimaryPolicy.withinDailyBudget(0.499))
+        assertFalse(DeepSeekPrimaryPolicy.withinDailyBudget(0.50))
+    }
+
+    @Test fun `rejected buy cannot execute or anchor the experiment`() {
+        assertTrue(DeepSeekTradeVerificationPolicy.finalAction("BUY", false, false) == "WATCH")
+        assertTrue(DeepSeekTradeVerificationPolicy.acceptedDirection("BUY", false, 82) == 0)
+        assertTrue(DeepSeekTradeVerificationPolicy.acceptedConfidence("BUY", false, 91) == 0)
+    }
+
+    @Test fun `rejected exit holds the open position but preserves warning direction`() {
+        assertTrue(DeepSeekTradeVerificationPolicy.finalAction("EXIT", false, true) == "HOLD")
+        assertTrue(DeepSeekTradeVerificationPolicy.acceptedDirection("EXIT", false, -74) == -74)
     }
 
     @Test fun `material signal change starts primary DeepSeek before interval`() {

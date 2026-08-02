@@ -114,7 +114,7 @@ object ProviderSelfDiagnostics {
                 add(ProviderDiagnosticCheck(
                     "Основной контур и расписание",
                     if (primary.lastAttempt > 0L) "PASS" else "WARN",
-                    "последняя попытка ${stamp(primary.lastAttempt)}; интервал 5 минут"
+                    "последняя попытка ${stamp(primary.lastAttempt)}; интервал 2 минуты; лимит \$0,50/UTC-сутки"
                 ))
                 add(ProviderDiagnosticCheck(
                     "Микропоток",

@@ -271,9 +271,11 @@ class ApiCenterActivity : AppCompatActivity() {
             append(" • восстановлений: ${summary.retriesToday}")
             append("\nТокены ответов журнала: ${summary.promptTokensToday} вход + ${summary.outputTokensToday} выход")
             if (provider == DEEPSEEK) {
-                val projected = summary.estimatedCostUsdToday * 30.0
-                append("\nОценка без скидки кэша: $${summary.estimatedCostUsdToday.format(4)} сегодня")
+                val budgetCost = DeepSeekDailyBudgetStore.costUsd(this@ApiCenterActivity)
+                val projected = budgetCost * 30.0
+                append("\nОценка без скидки кэша: $${budgetCost.format(4)} сегодня")
                 append(" • $${projected.format(2)} за 30 таких дней")
+                append(" • лимит $${DeepSeekPrimaryPolicy.DAILY_COST_LIMIT_USD.format(2)}/сутки")
             }
             if (olderRequests > 0 || olderErrors > 0) {
                 append("\nСтарые версии сегодня: $olderRequests запросов • $olderErrors ошибок")
@@ -315,7 +317,7 @@ class ApiCenterActivity : AppCompatActivity() {
     }
 
     private fun roleText(): String = if (provider == DEEPSEEK) {
-        "Flash проверяет весь рынок каждые 5 минут и при существенном изменении сигнала. Pro подключается сразу после «Я купил» и при опасности."
+        "Flash проверяет весь рынок каждые 2 минуты и при существенном изменении сигнала. Перед BUY/EXIT отдельная усиленная проверка подтверждает или отклоняет сделку. Pro подключается сразу после «Я купил» и при опасности."
     } else {
         "Gemini даёт независимое второе мнение. 12 из 25 обращений доступны обычно, ещё 13 остаются в резерве до открытия позиции."
     }

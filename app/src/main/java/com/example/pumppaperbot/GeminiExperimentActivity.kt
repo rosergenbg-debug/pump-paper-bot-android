@@ -277,7 +277,7 @@ class GeminiExperimentActivity : AppCompatActivity() {
             append("СТАТУС: $visibleStatus")
             append("\n${deepSeek.model.ifBlank { "модель ещё не вызывалась" }}")
             append(" • решение ${deepSeek.action} ${deepSeek.direction}/100")
-            append("\nАвтоматический анализ каждые 5 минут; существенное изменение может запустить его раньше")
+            append("\nАвтоматический анализ каждые 2 минуты; существенное изменение может запустить его раньше")
             append("\nСистема: ${cycleHealth(state, snapshot.running, now)}")
             append("\nDeepSeek сегодня: ${deepSeek.successfulToday} успешно • ${deepSeek.failedToday} ошибок")
             append(" • ${deepSeek.promptTokensToday + deepSeek.completionTokensToday} токенов")

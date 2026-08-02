@@ -176,6 +176,15 @@ class PositionSupervisorClient {
         }
         val model = PositionSupervisorPolicy.chooseModel(previous, snapshot, forceCritical, now)
             ?: return previous
+        if (!DeepSeekPrimaryPolicy.withinDailyBudget(
+                DeepSeekDailyBudgetStore.costUsd(context, now)
+            )) {
+            return previous.copy(
+                positionEntryTime = snapshot.entryTime,
+                error = "Достигнут защитный лимит DeepSeek \$0,50 за сутки",
+                summary = "Локальная стратегия продолжает следить за позицией без новых платных запросов"
+            ).also { PositionSupervisorStore.save(context, it) }
+        }
         val key = DeepSeekSecureKeyStore.read(context)
         if (key.isBlank()) {
             return previous.copy(

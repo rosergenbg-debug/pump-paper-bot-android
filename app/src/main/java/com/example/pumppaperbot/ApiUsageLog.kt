@@ -6,6 +6,7 @@ import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
 
 data class ApiUsageEvent(
     val provider: String,
@@ -73,6 +74,7 @@ object ApiUsageLogStore {
         updated.forEach { json.put(it.toJson()) }
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putString(KEY_EVENTS, json.toString()).apply()
+        DeepSeekDailyBudgetStore.record(context, event)
     }
 
     fun list(context: Context, provider: String? = null): List<ApiUsageEvent> = synchronized(lock) {
@@ -112,6 +114,45 @@ object ApiUsageLogStore {
     }
 }
 
+object DeepSeekDailyBudgetStore {
+    private const val PREFS = "deepseek_daily_budget_v48"
+    private val utc = TimeZone.getTimeZone("UTC")
+
+    fun costUsd(context: Context, now: Long = System.currentTimeMillis()): Double {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val today = dayKey(now)
+        if (prefs.getString("day", "") != today) {
+            prefs.edit().putString("day", today).putLong("cost_bits", 0L).commit()
+            return 0.0
+        }
+        return Double.fromBits(prefs.getLong("cost_bits", 0L))
+            .takeIf { it.isFinite() }?.coerceAtLeast(0.0) ?: 0.0
+    }
+
+    fun record(context: Context, event: ApiUsageEvent) {
+        if (!event.provider.equals("DEEPSEEK", true) ||
+            (event.status != "OK" && event.status != "ERROR")) return
+        val added = DeepSeekCostPolicy.estimateUsd(event)
+        if (added <= 0.0) return
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val today = dayKey(event.at)
+        synchronized(this) {
+            val current = if (prefs.getString("day", "") == today) {
+                Double.fromBits(prefs.getLong("cost_bits", 0L))
+                    .takeIf { it.isFinite() }?.coerceAtLeast(0.0) ?: 0.0
+            } else 0.0
+            prefs.edit()
+                .putString("day", today)
+                .putLong("cost_bits", (current + added).toBits())
+                .commit()
+        }
+    }
+
+    private fun dayKey(now: Long): String = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+        timeZone = utc
+    }.format(Date(now))
+}
+
 object DeepSeekCostPolicy {
     private const val FLASH_INPUT_PER_MILLION = 0.14
     private const val FLASH_OUTPUT_PER_MILLION = 0.28
@@ -120,11 +161,15 @@ object DeepSeekCostPolicy {
 
     fun estimateUsd(event: ApiUsageEvent): Double {
         if (!event.provider.equals("DEEPSEEK", true)) return 0.0
-        val pro = event.model.contains("pro", true)
+        return estimateUsd(event.model, event.promptTokens, event.outputTokens)
+    }
+
+    fun estimateUsd(model: String, promptTokens: Int, outputTokens: Int): Double {
+        val pro = model.contains("pro", true)
         val inputRate = if (pro) PRO_INPUT_PER_MILLION else FLASH_INPUT_PER_MILLION
         val outputRate = if (pro) PRO_OUTPUT_PER_MILLION else FLASH_OUTPUT_PER_MILLION
-        return event.promptTokens * inputRate / 1_000_000.0 +
-            event.outputTokens * outputRate / 1_000_000.0
+        return promptTokens.coerceAtLeast(0) * inputRate / 1_000_000.0 +
+            outputTokens.coerceAtLeast(0) * outputRate / 1_000_000.0
     }
 }
 
@@ -138,6 +183,7 @@ object DeepSeekDiagnostics {
         val usage = ApiUsageLogStore.summary(context, "DEEPSEEK", now)
         val currentUsage = ApiUsageLogStore.summary(context, "DEEPSEEK", now, BuildConfig.VERSION_NAME)
         val events = ApiUsageLogStore.list(context, "DEEPSEEK").takeLast(60).asReversed()
+        val budgetCost = DeepSeekDailyBudgetStore.costUsd(context, now)
         return buildString {
             appendLine("PumpSignal V${BuildConfig.VERSION_NAME} • Диагностика DeepSeek")
             appendLine("Создано: ${stamp(now)}")
@@ -163,6 +209,7 @@ object DeepSeekDiagnostics {
             appendLine("ИСПОЛЬЗОВАНИЕ СЕГОДНЯ")
             appendLine("запросы=${usage.requestsToday} успешно=${usage.successesToday} ошибки=${usage.errorsToday} восстановления=${usage.retriesToday}")
             appendLine("токены=${usage.promptTokensToday} вход + ${usage.outputTokensToday} выход оценкаСтоимостиUSD=${"%.5f".format(Locale.US, usage.estimatedCostUsdToday)}")
+            appendLine("защитныйСчётчикUSD=${"%.5f".format(Locale.US, budgetCost)} лимитUSD=${"%.2f".format(Locale.US, DeepSeekPrimaryPolicy.DAILY_COST_LIMIT_USD)}")
             appendLine("текущаяВерсия=${BuildConfig.VERSION_NAME} запросы=${currentUsage.requestsToday} успешно=${currentUsage.successesToday} ошибки=${currentUsage.errorsToday} восстановления=${currentUsage.retriesToday}")
             appendLine()
             appendLine("ПОСЛЕДНИЕ СОБЫТИЯ API (новые сверху)")

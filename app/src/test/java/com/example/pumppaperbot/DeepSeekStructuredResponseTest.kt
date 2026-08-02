@@ -61,6 +61,7 @@ class DeepSeekStructuredResponseTest {
 
         assertEquals(0.42, DeepSeekCostPolicy.estimateUsd(flash), 0.000001)
         assertEquals(1.305, DeepSeekCostPolicy.estimateUsd(pro), 0.000001)
+        assertEquals(0.42, DeepSeekCostPolicy.estimateUsd("deepseek-v4-flash", 1_000_000, 1_000_000), 0.000001)
     }
 
     @Test fun `usage event keeps producing app version and reads legacy event safely`() {
