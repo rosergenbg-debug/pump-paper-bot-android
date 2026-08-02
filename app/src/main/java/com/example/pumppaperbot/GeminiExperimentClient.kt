@@ -332,19 +332,6 @@ class GeminiExperimentClient {
         if (markedPortfolio != existing.portfolio) {
             GeminiPaperStore.savePortfolio(context, markedPortfolio)
         }
-        val appEvaluation = PumpBotEngine.evaluateAppPaper(
-            context,
-            AppPaperStore.state(context)
-        )
-        GeminiExitExperimentStore.evaluate(
-            context = context,
-            controlPortfolio = markedPortfolio,
-            controlDecision = GeminiGaugePolicy.currentDecision(existing, observedAt),
-            frame = frame,
-            impulse = ImpulseRadarStore.state(context),
-            appEvaluation = appEvaluation,
-            now = observedAt
-        )
         val portfolio = GeminiPaperTrader.gradeCompletedHorizons(
             markedPortfolio,
             GeminiResearchStore.completedOutcomes(context, markedPortfolio.decisions)
@@ -622,9 +609,6 @@ class GeminiExperimentClient {
                 at = quote.receivedAt,
                 executedTrade = false
             )
-        }
-        executedTrade?.let { trade ->
-            GeminiExitExperimentStore.mirrorControlTrade(context, trade)
         }
         GeminiPaperStore.flushPendingTradeAlerts(context)
         GeminiPaperStore.recordActivity(

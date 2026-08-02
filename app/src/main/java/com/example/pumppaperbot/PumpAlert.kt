@@ -92,20 +92,20 @@ object PumpAlert {
         }
         val geminiTrades = NotificationChannel(
             geminiTradeChannelId,
-            "Gemini: исполненные покупки и продажи",
+            "DeepSeek: исполненные покупки и продажи",
             NotificationManager.IMPORTANCE_HIGH
         ).apply {
-            description = "Отдельный громкий звонок после каждой виртуальной сделки Gemini"
+            description = "Отдельный громкий звонок после каждой виртуальной сделки DeepSeek"
             enableVibration(true)
             vibrationPattern = longArrayOf(0, 700, 250, 700, 250, 1100)
             setSound(sound, attrs)
         }
         val geminiExitExperiment = NotificationChannel(
             geminiExitExperimentChannelId,
-            "Gemini‑эксперимент: входы и ранние выходы",
+            "DeepSeek‑эксперимент: входы и ранние выходы",
             NotificationManager.IMPORTANCE_HIGH
         ).apply {
-            description = "Отдельный громкий звонок Gemini‑эксперимента с ранним входом и рыночным выходом"
+            description = "Отдельный громкий звонок DeepSeek‑эксперимента с ранним входом и рыночным выходом"
             enableVibration(true)
             vibrationPattern = longArrayOf(0, 500, 180, 500, 180, 500, 180, 1100)
             setSound(sound, attrs)
@@ -314,7 +314,7 @@ object PumpAlert {
         val text = if (buy) {
             String.format(
                 java.util.Locale.GERMANY,
-                "Gemini вложила виртуальные €%.2f по цене €%.8f. Комиссия €%.2f. " +
+                "DeepSeek вложил виртуальные €%.2f по цене €%.8f. Комиссия €%.2f. " +
                     "Оценка %+d/100, уверенность %d/100. %s",
                 trade.amount * trade.price + trade.fee,
                 trade.price,
@@ -326,7 +326,7 @@ object PumpAlert {
         } else {
             String.format(
                 java.util.Locale.GERMANY,
-                "Gemini продала всю виртуальную позицию по цене €%.8f. " +
+                "DeepSeek продал всю виртуальную позицию по цене €%.8f. " +
                     "Результат %+.2f €, комиссия €%.2f. %s",
                 trade.price,
                 trade.pnlEur,
@@ -336,7 +336,7 @@ object PumpAlert {
         }
         SignalAttributionStore.record(
             context,
-            "GEMINI",
+            "DEEPSEEK",
             if (buy) "ВХОД" else "ВЫХОД",
             trade.reason,
             trade.time,
@@ -346,7 +346,7 @@ object PumpAlert {
             context,
             geminiTradeChannelId,
             if (buy) geminiBuyNotificationId else geminiSellNotificationId,
-            if (buy) "GEMINI: ВХОД В PUMP/EUR" else "GEMINI: ВЫХОД ИЗ PUMP/EUR",
+            if (buy) "DEEPSEEK: ВХОД В PUMP/EUR" else "DEEPSEEK: ВЫХОД ИЗ PUMP/EUR",
             text,
             if (buy) 0xFF7C3AED.toInt() else 0xFFDA3633.toInt()
         )
@@ -374,7 +374,7 @@ object PumpAlert {
         }
         SignalAttributionStore.record(
             context,
-            "GEMINI‑ЭКСПЕРИМЕНТ",
+            "DEEPSEEK‑ЭКСПЕРИМЕНТ",
             if (buy) "ВХОД" else "ВЫХОД",
             trade.reason,
             trade.time,
@@ -384,7 +384,7 @@ object PumpAlert {
             context,
             geminiExitExperimentChannelId,
             if (buy) geminiExperimentBuyNotificationId else geminiExperimentSellNotificationId,
-            if (buy) "GEMINI‑ЭКСПЕРИМЕНТ: ВХОД" else "GEMINI‑ЭКСПЕРИМЕНТ: ВЫХОД",
+            if (buy) "DEEPSEEK‑ЭКСПЕРИМЕНТ: ВХОД" else "DEEPSEEK‑ЭКСПЕРИМЕНТ: ВЫХОД",
             text,
             if (buy) 0xFFD29922.toInt() else 0xFFFF7B72.toInt()
         )

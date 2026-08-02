@@ -78,8 +78,8 @@ class EventRadarClient {
             return EventRadarStore.state(context)
         }
 
-        val enriched = maybeUseAi(context, collected)
-        EventRadarStore.saveSync(context, enriched, checks, errors.joinToString("; "))
+        EventRadarStore.markGeminiSkipped(context, "Gemini переведён в ручное второе мнение; фоновые запросы отключены")
+        EventRadarStore.saveSync(context, collected, checks, errors.joinToString("; "))
         return EventRadarStore.state(context)
     }
 

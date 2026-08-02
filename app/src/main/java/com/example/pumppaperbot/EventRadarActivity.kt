@@ -36,7 +36,7 @@ class EventRadarActivity : AppCompatActivity() {
         content.addView(button("← НАЗАД", "#30363D").apply { setOnClickListener { finish() } }, params(dp(50)))
         content.addView(label("V${BuildConfig.VERSION_NAME} • РАДАР НОВОСТЕЙ", 25, "#F0F6FC", true))
         content.addView(label(
-            "Читает ФРС, ЕЦБ, SEC, BLS и свежие ленты PUMP, Bitcoin и Solana. Новостной Gemini сопоставляет их с текущим рынком. Поправка радара ограничена ±12 и не меняет APP. Отдельные участники Gemini и Gemini‑эксперимент находятся на главном экране.",
+            "Читает ФРС, ЕЦБ, SEC, BLS и свежие ленты PUMP, Bitcoin и Solana. Автоматически новости оцениваются прозрачными правилами; Gemini доступен только вручную как второе мнение. Радар не управляет счетами APP или DeepSeek.",
             15, "#C9D1D9", false
         ))
 
@@ -125,7 +125,7 @@ class EventRadarActivity : AppCompatActivity() {
                 val direction = signed(latest.directionScore)
                 "Интернет: ${state.sourceCount}/${EventRadarClient.totalSources} • ${formatBytes(state.fetchBytes)} • разобрано ${state.parsedEntries} • новых ${state.newEvents}\n" +
                     "${latest.source}: важность ${latest.importance}/100 • влияние $direction/100\n" +
-                    "${if (latest.aiAnalyzed) "оценено Gemini + правилами" else "оценено прозрачными правилами"}"
+                    "${if (latest.aiAnalyzed) "сохранена прежняя/ручная оценка Gemini" else "оценено прозрачными правилами"}"
             }
         }
         if (state.error.isNotBlank()) status.append("\nНе все источники ответили: ${state.error}")
@@ -168,7 +168,7 @@ class EventRadarActivity : AppCompatActivity() {
         details.text = buildString {
             append("ФАКТИЧЕСКАЯ ПРОВЕРКА ИНТЕРНЕТА\n$sourceLines")
             append("\n\nПОСЛЕДНИЕ ЗАГРУЖЕННЫЕ ЗАГОЛОВКИ\n$latestTitles")
-            append("\n\nФАКТИЧЕСКИЙ ОТВЕТ GEMINI\n")
+            append("\n\nПОСЛЕДНЕЕ РУЧНОЕ ВТОРОЕ МНЕНИЕ GEMINI\n")
             append("Статус: ${gemini.status} • HTTP ${gemini.httpCode} • модель ${gemini.model.ifBlank { "—" }}")
             append("\nОтправлено: ${gemini.inputTitle.ifBlank { "—" }}")
             append("\nПолучено: ${gemini.outputSummary.ifBlank { "—" }}")

@@ -348,12 +348,12 @@ class MainActivity : AppCompatActivity() {
             appAccount.profitPercent(accountPrice)
         )
         btnGeminiExperiment?.text = accountButtonText(
-            "GEMINI",
+            "DEEPSEEK",
             geminiAccount.value(accountPrice),
             geminiAccount.profitPercent(accountPrice)
         )
         btnGeminiExitExperiment?.text = accountButtonText(
-            "GEMINI‑ЭКСП.",
+            "DEEPSEEK‑ЭКСП.",
             geminiExitExperiment.value(accountPrice),
             geminiExitExperiment.profitPercent(accountPrice)
         )
@@ -706,7 +706,7 @@ class MainActivity : AppCompatActivity() {
         btnGeminiApi?.text = if (EventRadarStore.apiKey(this).isBlank()) {
             "GEMINI API\nКЛЮЧ НЕ ВВЕДЁН\nоткрыть центр"
         } else {
-            "GEMINI • РЕЗЕРВ\n${budget.usedToday}/${GeminiRequestBudget.MAX_REQUESTS_PER_DAY} сегодня\nосталось ${budget.remainingToday}"
+            "GEMINI • РУЧНОЕ МНЕНИЕ\nавтоматические запросы выключены\nосталось ${budget.remainingToday}"
         }
     }
 

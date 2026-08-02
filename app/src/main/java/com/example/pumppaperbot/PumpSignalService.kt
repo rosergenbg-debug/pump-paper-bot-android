@@ -80,12 +80,13 @@ class PumpSignalService : Service() {
             try {
                 market.sync(this)
                 val eventState = eventRadar.sync(this)
+                DeepSeekTradeOwnership.activate(this, DeepSeekPrimaryStore.state(this).lastSuccess)
                 val deepSeek = DeepSeekPrimaryAnalyst().sync(this)
                 PositionSupervisorClient().sync(this)
                 GeminiPaperStore.markDataReady(this, source, startedAt)
                 val snapshot = PumpBotEngine.snapshot(this)
                 val appTrade = AppPaperStore.syncWithAlerts(this)
-                val gemini = GeminiExperimentClient().sync(this, source = source)
+                val deepSeekPaper = DeepSeekPaperCoordinator().sync(this, deepSeek, source)
                 val rapidDropAlerted = if (PumpBotEngine.shouldAlertRapidDrop(this, snapshot)) {
                     PumpAlert.showRapidDrop(this, snapshot)
                     PumpBotEngine.markRapidDropAlerted(this, snapshot)
@@ -108,7 +109,7 @@ class PumpSignalService : Service() {
                     source,
                     startedAt,
                     finishedAt + cycleIntervalMillis,
-                    "проверка завершена; DeepSeek основной: ${deepSeek.action}; Gemini: ${gemini.status}",
+                    "проверка завершена; DeepSeek: ${deepSeek.action}; виртуальный счёт: ${deepSeekPaper.status}; Gemini только вручную",
                     finishedAt
                 )
             } catch (error: Exception) {

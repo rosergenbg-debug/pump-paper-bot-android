@@ -44,7 +44,7 @@ class AppPaperActivity : AppCompatActivity() {
         root.addView(button("← НАЗАД", "#30363D").apply {
             setOnClickListener { finish() }
         }, LinearLayout.LayoutParams(-1, dp(48)))
-        root.addView(label("APP • GEMINI • ЭКСПЕРИМЕНТ • СЕРЖ", 22, "#F0F6FC", true, 12))
+        root.addView(label("APP • DEEPSEEK • ЭКСПЕРИМЕНТ • СЕРЖ", 22, "#F0F6FC", true, 12))
         root.addView(label(
             "Четыре независимых виртуальных счёта по €1 000. Реальные деньги не используются.",
             14, "#C9D1D9", false, 6
@@ -71,7 +71,7 @@ class AppPaperActivity : AppCompatActivity() {
 
         comparison = card("#172033")
         root.addView(comparison, cardParams(10))
-        root.addView(button("ОТКРЫТЬ ПОДРОБНОСТИ GEMINI", "#7C3AED").apply {
+        root.addView(button("ОТКРЫТЬ ПОДРОБНОСТИ DEEPSEEK", "#7C3AED").apply {
             setOnClickListener {
                 startActivity(android.content.Intent(this@AppPaperActivity, GeminiExperimentActivity::class.java))
             }
@@ -88,7 +88,7 @@ class AppPaperActivity : AppCompatActivity() {
             setOnClickListener {
                 AlertDialog.Builder(this@AppPaperActivity)
                     .setTitle("Начать счёт App заново с €1 000?")
-                    .setMessage("Удалятся сделки и решения только виртуального APP. Gemini, Gemini‑эксперимент и счёт Сержа не изменятся.")
+                    .setMessage("Удалятся сделки и решения только виртуального APP. DeepSeek, DeepSeek‑эксперимент и счёт Сержа не изменятся.")
                     .setNegativeButton("ОТМЕНА", null)
                     .setPositiveButton("СБРОСИТЬ") { _, _ ->
                         AppPaperStore.reset(this@AppPaperActivity)
@@ -133,7 +133,7 @@ class AppPaperActivity : AppCompatActivity() {
             app.trades.lastOrNull()?.time
         )
         geminiCard.text = accountText(
-            "GEMINI",
+            "DEEPSEEK",
             geminiValue,
             gemini.profitPercent(price),
             gemini.inPosition,
@@ -142,7 +142,7 @@ class AppPaperActivity : AppCompatActivity() {
             gemini.trades.lastOrNull()?.time
         )
         experimentCard.text = accountText(
-            "GEMINI‑ЭКСП.",
+            "DEEPSEEK‑ЭКСП.",
             experimentValue,
             experiment.profitPercent(price),
             experiment.inPosition,
@@ -166,8 +166,8 @@ class AppPaperActivity : AppCompatActivity() {
 
         val ranking = listOf(
             "APP" to appValue,
-            "GEMINI" to geminiValue,
-            "GEMINI‑ЭКСП." to experimentValue,
+            "DEEPSEEK" to geminiValue,
+            "DEEPSEEK‑ЭКСП." to experimentValue,
             "СЕРЖ" to userValue
         )
             .sortedByDescending { it.second }
@@ -175,7 +175,7 @@ class AppPaperActivity : AppCompatActivity() {
         comparison.text = buildString {
             append("СРАВНЕНИЕ В МОМЕНТЕ\n$leader")
             append("\nAPP: ${positionWord(app.inPosition)}")
-            append("  •  Gemini: ${positionWord(gemini.inPosition)}")
+            append("  •  DeepSeek: ${positionWord(gemini.inPosition)}")
             append("  •  Эксп.: ${positionWord(experiment.inPosition)}")
             append("  •  Серж: ${positionWord(user.inPosition)}")
             val appLast = app.trades.lastOrNull()
@@ -183,10 +183,10 @@ class AppPaperActivity : AppCompatActivity() {
             val experimentLast = experiment.trades.lastOrNull()
             val userLast = user.trades.lastOrNull()
             append("\nПоследнее действие APP: ${tradeWord(appLast?.action)} ${time(appLast?.time)}")
-            append("\nПоследнее действие Gemini: ${tradeWord(geminiLast?.action)} ${time(geminiLast?.time)}")
-            append("\nПоследнее действие Gemini‑эксп.: ${tradeWord(experimentLast?.action)} ${time(experimentLast?.time)}")
+            append("\nПоследнее действие DeepSeek: ${tradeWord(geminiLast?.action)} ${time(geminiLast?.time)}")
+            append("\nПоследнее действие DeepSeek‑эксп.: ${tradeWord(experimentLast?.action)} ${time(experimentLast?.time)}")
             append("\nПоследнее действие Сержа: ${tradeWord(userLast?.action)} ${time(userLast?.time)}")
-            append("\n\nAPP работает по закрытым 30‑минутным свечам. Gemini принимает часовое решение. Gemini‑эксперимент проверяет ранний вход и рыночный выход. Серж действует вручную.")
+            append("\n\nAPP работает по закрытым 30‑минутным свечам. DeepSeek принимает решение примерно раз в 5 минут. DeepSeek‑эксперимент проверяет ранний вход и рыночный выход. Gemini доступен только вручную как второе мнение. Серж действует вручную.")
         }
 
         appTrades.text = app.trades.takeLast(40).asReversed().joinToString("\n\n") { trade ->

@@ -28,7 +28,7 @@ jobs:
         with:
           gradle-version: '8.5'
 
-      - name: Test and build V4.6 intermediate debug APK
+      - name: Test and build V4.7 intermediate debug APK
         run: gradle testDebugUnitTest assembleDebug
 
       - name: Verify intermediate debug APK
@@ -38,7 +38,7 @@ jobs:
           grep -F "Verified using v2 scheme (APK Signature Scheme v2): true" "$RUNNER_TEMP/signature.txt"
           "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging \
             app/build/outputs/apk/debug/app-debug.apk | tee "$RUNNER_TEMP/badging.txt"
-          grep -F "package: name='com.example.pumppaperbot.v8' versionCode='61' versionName='4.6'" \
+          grep -F "package: name='com.example.pumppaperbot.v8' versionCode='62' versionName='4.7'" \
             "$RUNNER_TEMP/badging.txt"
           grep -F "launchable-activity: name='com.example.pumppaperbot.MainActivity'" \
             "$RUNNER_TEMP/badging.txt"
@@ -47,11 +47,11 @@ jobs:
           test "$(stat -c%s app/build/outputs/apk/debug/app-debug.apk)" -gt 6000000
 
       - name: Prepare named APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk PumpSignal-V4.6-Intermediate.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk PumpSignal-V4.7-Intermediate.apk
 
       - name: Upload intermediate APK
         uses: actions/upload-artifact@v4
         with:
-          name: PumpSignal-V4.6-Intermediate-APK
-          path: PumpSignal-V4.6-Intermediate.apk
+          name: PumpSignal-V4.7-Intermediate-APK
+          path: PumpSignal-V4.7-Intermediate.apk
           retention-days: 30

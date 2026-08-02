@@ -124,9 +124,9 @@ object ProviderSelfDiagnostics {
             } else {
                 val budget = GeminiRequestBudget.state(context)
                 add(ProviderDiagnosticCheck(
-                    "Контуры и квота Gemini",
-                    if (EventRadarStore.useAi(context) && budget.remainingToday > 0) "PASS" else "WARN",
-                    "ИИ включён=${EventRadarStore.useAi(context)}; доступно сегодня=${budget.remainingToday}; обычный интервал 2 часа"
+                    "Ручной режим и квота Gemini",
+                    if (budget.remainingToday > 0) "PASS" else "WARN",
+                    "автоматические запросы отключены; торговых прав нет; доступно сегодня=${budget.remainingToday}"
                 ))
             }
             add(check(
@@ -194,15 +194,15 @@ object ProviderDiagnostics {
             appendLine("Пакет: ${BuildConfig.APPLICATION_ID}")
             appendLine()
             appendLine("СОСТОЯНИЕ GEMINI")
-            appendLine("включён=${EventRadarStore.useAi(context)} статус=${radar.gemini.status} модель=${paper.model}")
+            appendLine("режим=только вручную торговыеПрава=false статус=${radar.gemini.status} модель=${radar.gemini.model}")
             appendLine("последняяПопытка=${stamp(radar.gemini.lastAttempt)} последнийУспех=${stamp(radar.gemini.lastSuccess)}")
-            appendLine("часовойЭксперт=${GeminiHourlyRetryPolicy.visibleStatus(paper, now)}")
+            appendLine("автоматическиеЗапросы=отключены")
             appendLine("ошибка=${RussianOutputPolicy.visible(radar.gemini.error.ifBlank { "нет" }).take(500)}")
             appendLine("квотаОсталось=${budget.remainingToday} сброс=${stamp(budget.dayResetsAt)}")
             val lastDecision = paper.portfolio.decisions.lastOrNull()
-            appendLine("\nПОСЛЕДНЕЕ РЕШЕНИЕ ЧАСОВОГО ЭКСПЕРТА")
+            appendLine("\nИСТОРИЧЕСКОЕ РЕШЕНИЕ GEMINI ДО V4.7")
             if (lastDecision == null) {
-                appendLine("решений ещё нет")
+                appendLine("исторических решений нет")
             } else {
                 appendLine("модель=${lastDecision.model} запрос=${lastDecision.requestedAction} исполнение=${lastDecision.execution} направление=${lastDecision.directionScore} уверенность=${lastDecision.confidence}")
                 appendLine("отправлен=${stamp(lastDecision.requestSentAt)} получен=${stamp(lastDecision.responseReceivedAt)} котировка=${stamp(lastDecision.executionQuoteAt)}")

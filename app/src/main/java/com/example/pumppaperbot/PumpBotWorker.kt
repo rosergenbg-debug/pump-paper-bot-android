@@ -34,6 +34,10 @@ class PumpBotWorker(
         return try {
             market.sync(applicationContext)
             val eventState = eventRadar.sync(applicationContext)
+            DeepSeekTradeOwnership.activate(
+                applicationContext,
+                DeepSeekPrimaryStore.state(applicationContext).lastSuccess
+            )
             val deepSeek = DeepSeekPrimaryAnalyst().sync(
                 applicationContext,
                 force = forcePositionPro || forcePrimaryDeepSeek
@@ -49,9 +53,8 @@ class PumpBotWorker(
             )
             val snapshot = PumpBotEngine.snapshot(applicationContext)
             val appTrade = AppPaperStore.syncWithAlerts(applicationContext)
-            val gemini = GeminiExperimentClient().sync(
-                applicationContext,
-                source = source
+            val deepSeekPaper = DeepSeekPaperCoordinator().sync(
+                applicationContext, deepSeek, source
             )
             val rapidDropAlerted = if (PumpBotEngine.shouldAlertRapidDrop(applicationContext, snapshot)) {
                 PumpAlert.showRapidDrop(applicationContext, snapshot)
@@ -75,7 +78,7 @@ class PumpBotWorker(
                 source,
                 startedAt,
                 finishedAt + interval,
-                "проверка завершена; DeepSeek основной: ${deepSeek.action}; Gemini: ${gemini.status}",
+                "проверка завершена; DeepSeek: ${deepSeek.action}; виртуальный счёт: ${deepSeekPaper.status}; Gemini только вручную",
                 finishedAt
             )
             Result.success()

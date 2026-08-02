@@ -62,12 +62,7 @@ class ApiCenterActivity : AppCompatActivity() {
         createKeyControls(content)
 
         providerToggle = button("", if (provider == GEMINI) "#7C3AED" else "#238636").apply {
-            visibility = if (provider == GEMINI) View.VISIBLE else View.GONE
-            setOnClickListener {
-                EventRadarStore.setUseAi(this@ApiCenterActivity, !EventRadarStore.useAi(this@ApiCenterActivity))
-                GeminiPaperStore.setEnabled(this@ApiCenterActivity, EventRadarStore.useAi(this@ApiCenterActivity))
-                updateUi()
-            }
+            visibility = View.GONE
         }
         content.addView(providerToggle, params(dp(54), dp(8)))
 
@@ -165,8 +160,8 @@ class ApiCenterActivity : AppCompatActivity() {
             }
         } else {
             EventRadarStore.saveApiKey(this, clean)
-            EventRadarStore.setUseAi(this, true)
-            GeminiPaperStore.setEnabled(this, true)
+            EventRadarStore.setUseAi(this, false)
+            GeminiPaperStore.retireLegacyPendingDecision(this)
         }
         input.setText("")
         updateUi()
@@ -184,7 +179,7 @@ class ApiCenterActivity : AppCompatActivity() {
                 } else {
                     EventRadarStore.saveApiKey(this, "")
                     EventRadarStore.setUseAi(this, false)
-                    GeminiPaperStore.setEnabled(this, false)
+                    GeminiPaperStore.retireLegacyPendingDecision(this)
                 }
                 input.setText("")
                 updateUi()
@@ -225,12 +220,6 @@ class ApiCenterActivity : AppCompatActivity() {
         addKey.visibility = if (configured) View.GONE else View.VISIBLE
         keyActions.visibility = if (configured) View.VISIBLE else View.GONE
         keyStatus.text = if (configured) "$provider • API-ключ защищён и сохранён" else "$provider • API-ключ не введён"
-        if (provider == GEMINI) {
-            providerToggle.text = if (EventRadarStore.useAi(this)) "GEMINI ВКЛЮЧЁН" else "GEMINI ВЫКЛЮЧЕН"
-            providerToggle.backgroundTintList = ColorStateList.valueOf(
-                Color.parseColor(if (EventRadarStore.useAi(this)) "#7C3AED" else "#30363D")
-            )
-        }
         renderStatus()
         renderUsage()
         renderLog()
@@ -256,19 +245,15 @@ class ApiCenterActivity : AppCompatActivity() {
             }
         } else {
             val radar = EventRadarStore.state(this)
-            val gemini = GeminiPaperStore.state(this)
             val budget = GeminiRequestBudget.state(this)
-            val positionOpen = PumpBotEngine.snapshot(this).let { it.waitMode == "SELL" && it.entryPrice > 0.0 }
             liveStatus.text = buildString {
-                append("РОЛЬ: НЕЗАВИСИМЫЙ РЕЗЕРВНЫЙ ЭКСПЕРТ\n")
-                append("Статус: ${GeminiHourlyRetryPolicy.visibleStatus(gemini, System.currentTimeMillis())}")
-                append("\nНовостной контур: ${radar.gemini.status}")
-                append("\nОбычный обзор: не чаще раза в 2 часа")
-                append("\nДоступно сейчас: ${budget.remainingToday} из ${GeminiRequestBudget.activeLimit(positionOpen)}")
-                append(" • резерв позиции ${GeminiRequestBudget.MAX_REQUESTS_PER_DAY - GeminiRequestBudget.NORMAL_REQUESTS_PER_DAY}")
+                append("РОЛЬ: РУЧНОЕ ВТОРОЕ МНЕНИЕ БЕЗ ТОРГОВЫХ ПРАВ\n")
+                append("Автоматические запросы Gemini отключены")
+                append("\nПоследняя ручная проверка: ${radar.gemini.status}")
+                append("\nДоступно по наблюдаемой квоте: ${budget.remainingToday}")
                 append("\nСброс квоты: ${time(budget.dayResetsAt)}")
                 if (radar.gemini.error.isNotBlank()) append("\nПоследняя ошибка: ${radar.gemini.error}")
-                append("\nОдин простой и один сложный вопрос считаются по одному запросу, но сложный расходует больше токенов.")
+                append("\nЗапрос выполняется только кнопкой «Проверить API сейчас» и не меняет ни один виртуальный счёт.")
             }
         }
     }

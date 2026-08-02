@@ -1033,6 +1033,16 @@ object GeminiPaperStore {
             .commit()
     }
 
+    /** V4.7 no longer lets a pre-migration Gemini response execute after the ownership transfer. */
+    fun retireLegacyPendingDecision(context: Context) {
+        prefs(context).edit()
+            .remove(KEY_PENDING_DECISION)
+            .putBoolean(KEY_ENABLED, false)
+            .putString(KEY_STATUS, "GEMINI ТОЛЬКО ВРУЧНУЮ")
+            .putString(KEY_PHASE, "ТОРГОВЫЙ СЧЁТ ПЕРЕДАН DEEPSEEK")
+            .commit()
+    }
+
     fun requireHealthyPortfolio(context: Context) {
         check(prefs(context).getString(KEY_STORAGE_ERROR, "").isNullOrBlank()) {
             prefs(context).getString(KEY_STORAGE_ERROR, "Ошибка хранилища Gemini").orEmpty()

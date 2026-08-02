@@ -313,6 +313,7 @@ class DeepSeekPrimaryAnalyst {
                 .put("published_at", event.publishedAt)
         }
         val hourly = GeminiMarketFrame.from(context)
+        val aiPaperPositionOpen = GeminiPaperStore.state(context).portfolio.inPosition
         val frame = JSONObject()
             .put("symbol", "PUMP/EUR")
             .put("closed_30m_price_eur", snapshot.lastPrice)
@@ -332,6 +333,7 @@ class DeepSeekPrimaryAnalyst {
             .put("local_sell_signal", snapshot.sellSignal)
             .put("local_reason", snapshot.signalReason.take(600))
             .put("user_position_open", snapshot.waitMode == "SELL" && snapshot.entryPrice > 0.0)
+            .put("deepseek_paper_position_open", aiPaperPositionOpen)
             .put("hourly_context_age_seconds", hourly?.let {
                 DeepSeekFreshMarketContext.ageSeconds(it.candleTime, now)
             } ?: JSONObject.NULL)
@@ -349,8 +351,11 @@ class DeepSeekPrimaryAnalyst {
             .put("premium_last_full_hour_pct", hourly?.premiumPercent ?: JSONObject.NULL)
             .put("news", JSONArray(latestNews))
         DeepSeekFreshMarketContext.append(context, frame, snapshot, now)
-        val positionOpen = snapshot.waitMode == "SELL" && snapshot.entryPrice > 0.0
-        val allowedActions = if (positionOpen) setOf("BUY", "HOLD", "WATCH", "EXIT") else setOf("BUY", "HOLD", "WATCH")
+        val allowedActions = if (aiPaperPositionOpen) {
+            setOf("HOLD", "WATCH", "EXIT")
+        } else {
+            setOf("BUY", "HOLD", "WATCH")
+        }
         val system = """
             Ты основной независимый аналитик PumpSignal для PUMP/EUR. Оцени цену на горизонте 1–6 часов.
             Сначала сопоставь PUMP 1ч/3ч/6ч, BTC и SOL, spot/futures taker flow, CVD, funding,
@@ -363,13 +368,16 @@ class DeepSeekPrimaryAnalyst {
             Не считай один индикатор или один заголовок достаточным основанием. Не догоняй уже перегретую цену.
             BUY допустим только при подтверждении минимум двумя независимыми группами данных и отсутствии
             late-entry/rapid-drop запрета. EXIT допустим только при открытой позиции и согласованном ухудшении.
+            Ты управляешь отдельным виртуальным счётом DeepSeek: BUY открывает его позицию, EXIT полностью закрывает.
+            Поле deepseek_paper_position_open показывает состояние именно этого счёта. Не меняй счёт APP или Сержа.
             Отделяй факты из кадра от предположений. Не подменяй StrategyV2 и не обещай прибыль.
             Верни только JSON:
             action BUY, HOLD, WATCH или EXIT; direction целое -100..100; danger целое 0..10;
             confidence целое 0..100; summary одно короткое конкретное предложение по-русски;
             evidence массив из 2–4 коротких фактов; risks массив из 1–3 условий, которые опровергнут вывод.
             Все текстовые значения без исключения пиши только на русском языке. Китайские иероглифы запрещены.
-            Если пользователь не в позиции, EXIT не используй. Если данных недостаточно, выбери WATCH.
+            Если виртуальный счёт DeepSeek не в позиции, EXIT не используй; если он уже в позиции, BUY не используй.
+            Если данных недостаточно, выбери WATCH.
         """.trimIndent()
         val response = DeepSeekStructuredClient(http).request(
             apiKey = apiKey,

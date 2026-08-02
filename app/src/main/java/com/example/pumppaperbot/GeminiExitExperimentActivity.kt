@@ -33,13 +33,13 @@ class GeminiExitExperimentActivity : AppCompatActivity() {
             setBackgroundColor(Color.parseColor("#0D1117"))
         }
         root.addView(Button(this).apply {
-            text = "←  GEMINI‑ЭКСПЕРИМЕНТ"
+            text = "←  DEEPSEEK‑ЭКСПЕРИМЕНТ"
             setTextColor(Color.WHITE)
             setBackgroundColor(Color.parseColor("#9A6700"))
             setOnClickListener { finish() }
         }, LinearLayout.LayoutParams(-1, dp(48)))
         root.addView(label(
-            "Вход: копия Gemini или ранний подтверждённый сигнал. Выход: по подтверждённому ослаблению рынка.",
+            "Вход: копия основного DeepSeek или ранний подтверждённый сигнал DeepSeek/APP. Выход: по подтверждённому ослаблению рынка.",
             14,
             "#C9D1D9",
             false

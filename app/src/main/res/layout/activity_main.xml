@@ -135,7 +135,7 @@
                     android:insetBottom="0dp"
                     android:maxLines="3"
                     android:padding="2dp"
-                    android:text="GEMINI&#10;€1 000,00&#10;+0,00%"
+                    android:text="DEEPSEEK&#10;€1 000,00&#10;+0,00%"
                     android:textColor="#FFFFFF"
                     android:textSize="11sp"
                     android:textStyle="bold" />
@@ -158,7 +158,7 @@
                     android:insetBottom="0dp"
                     android:maxLines="3"
                     android:padding="2dp"
-                    android:text="GEMINI‑ЭКСП.&#10;€1 000,00&#10;+0,00%"
+                    android:text="DEEPSEEK‑ЭКСП.&#10;€1 000,00&#10;+0,00%"
                     android:textColor="#FFFFFF"
                     android:textSize="11sp"
                     android:textStyle="bold" />
@@ -188,7 +188,7 @@
             android:layout_height="50dp"
             android:layout_marginTop="7dp"
             android:backgroundTint="#1F6FEB"
-            android:text="СРАВНИТЬ 4  •  APP | GEMINI | ЭКСП. | СЕРЖ"
+            android:text="СРАВНИТЬ 4  •  APP | DEEPSEEK | ЭКСП. | СЕРЖ"
             android:textColor="#FFFFFF"
             android:textSize="13sp"
             android:textStyle="bold" />
@@ -465,7 +465,7 @@
                 android:gravity="center"
                 android:maxLines="4"
                 android:padding="3dp"
-                android:text="GEMINI API&#10;РЕЗЕРВ&#10;открыть центр"
+                android:text="GEMINI API&#10;РУЧНОЕ МНЕНИЕ&#10;открыть центр"
                 android:textColor="#FFFFFF"
                 android:textSize="12sp"
                 android:textStyle="bold" />
