@@ -134,6 +134,7 @@ data class GeminiExitEvidence(
     val bookWeak: Boolean,
     val directionWeak: Boolean,
     val priceWeak: Boolean,
+    val microWeak: Boolean = false,
     val reason: String
 ) {
     companion object {
@@ -141,7 +142,8 @@ data class GeminiExitEvidence(
             portfolio: GeminiPaperPortfolio,
             price: Double,
             frame: GeminiMarketFrame,
-            impulse: ImpulseSnapshot
+            impulse: ImpulseSnapshot,
+            micro: MicroImpulseSnapshot = MicroImpulseSnapshot()
         ): GeminiExitEvidence {
             val peak = max(max(portfolio.positionPeakPrice, portfolio.entryPrice), price)
             val pullback = if (peak > 0.0) (1.0 - price / peak) * 100.0 else 0.0
@@ -182,6 +184,16 @@ data class GeminiExitEvidence(
             val bookWeak = frame.snapshot.bookImbalance?.let { it < -0.08 } == true
             val directionWeak = frame.snapshot.directionScore <= -20
             val priceWeak = pullback >= adaptivePullback
+            val microFresh = micro.connected && DeepSeekFreshMarketContext.isFresh(
+                micro.updatedAt,
+                frame.snapshot.lastSync,
+                DeepSeekFreshMarketContext.MICRO_MAX_AGE
+            )
+            val microWeak = microFresh && (
+                micro.aggressiveBuyPercent15s < 48.0 ||
+                    micro.priceChange60sPercent <= -0.20 ||
+                    (micro.topBookImbalance ?: 0.0) <= -0.10
+                )
 
             val weighted =
                 (if (priceWeak) 2 else 0) +
@@ -191,7 +203,8 @@ data class GeminiExitEvidence(
                     (if (marketWeak) 1 else 0) +
                     (if (derivativesWeak) 1 else 0) +
                     (if (bookWeak) 1 else 0) +
-                    (if (directionWeak) 2 else 0)
+                    (if (directionWeak) 2 else 0) +
+                    (if (microWeak) 2 else 0)
             val groupCount = listOf(
                 priceWeak,
                 spotFlowWeak || futuresFlowWeak,
@@ -199,7 +212,8 @@ data class GeminiExitEvidence(
                 marketWeak,
                 derivativesWeak,
                 bookWeak,
-                directionWeak
+                directionWeak,
+                microWeak
             ).count { it }
             val facts = buildList {
                 if (priceWeak) add(String.format(Locale.GERMANY, "откат %.2f%% при норме шума %.2f%%", pullback, adaptivePullback))
@@ -211,6 +225,7 @@ data class GeminiExitEvidence(
                 if (derivativesWeak) add("open interest сокращается вместе со слабостью цены/фьючерсов")
                 if (bookWeak) add("в стакане перевес продавцов")
                 if (directionWeak) add("рыночное направление отрицательное")
+                if (microWeak) add("живой 15-секундный поток покупателей ослаб")
             }
             return GeminiExitEvidence(
                 score = weighted,
@@ -226,6 +241,7 @@ data class GeminiExitEvidence(
                 bookWeak = bookWeak,
                 directionWeak = directionWeak,
                 priceWeak = priceWeak,
+                microWeak = microWeak,
                 reason = if (facts.isEmpty()) "подтверждённых признаков разворота нет" else facts.joinToString("; ")
             )
         }
@@ -324,7 +340,8 @@ internal object GeminiExitExperimentEngine {
         evidence: GeminiEntryEvidence,
         price: Double,
         decisionId: Long,
-        now: Long
+        now: Long,
+        executionPrice: Double = price
     ): GeminiExitEvaluationResult {
         val marked = GeminiPaperTrader.markToMarket(state.portfolio, price)
         if (marked.inPosition) return GeminiExitEvaluationResult(state.copy(portfolio = marked))
@@ -351,7 +368,7 @@ internal object GeminiExitExperimentEngine {
         }
         val bought = GeminiPaperTrader.applyExperimentalEntry(
             current = marked,
-            price = price,
+            price = executionPrice,
             decisionId = decisionId,
             score = evidence.score,
             reason = statusReason,
@@ -387,7 +404,8 @@ internal object GeminiExitExperimentEngine {
         evidence: GeminiExitEvidence,
         price: Double,
         decisionId: Long,
-        now: Long
+        now: Long,
+        executionPrice: Double = price
     ): GeminiExitEvaluationResult {
         val marked = GeminiPaperTrader.markToMarket(state.portfolio, price)
         if (!marked.inPosition) {
@@ -408,15 +426,23 @@ internal object GeminiExitExperimentEngine {
             return GeminiExitEvaluationResult(state.copy(portfolio = marked))
         }
         val structuralWeakness = evidence.priceWeak ||
-            (evidence.spotFlowWeak && evidence.futuresFlowWeak) || evidence.cvdWeak
-        val dangerous = evidence.score >= 4 && evidence.groups >= 3 && structuralWeakness
+            (evidence.spotFlowWeak && evidence.futuresFlowWeak) || evidence.cvdWeak || evidence.microWeak
+        val profitProtection = evidence.currentReturnPercent >= 4.0 &&
+            evidence.pullbackPercent >= maxOf(1.0, evidence.adaptivePullbackPercent) &&
+            evidence.microWeak && evidence.groups >= 3
+        val dangerous = (evidence.score >= 4 && evidence.groups >= 3 && structuralWeakness) || profitProtection
         val streak = if (dangerous) state.dangerStreak + 1 else 0
         val emergency = evidence.currentReturnPercent <= -EMERGENCY_LOSS_PERCENT
+        val topProtection = evidence.currentReturnPercent >= 8.0 &&
+            evidence.pullbackPercent >= 0.8 && evidence.microWeak &&
+            (evidence.spotFlowWeak || evidence.futuresFlowWeak || evidence.cvdWeak ||
+                evidence.bookWeak || evidence.directionWeak)
         val immediateReversal = evidence.score >= 7 && evidence.groups >= 4 && structuralWeakness
         val confirmedReversal = streak >= 2
-        val shouldExit = emergency || immediateReversal || confirmedReversal
+        val shouldExit = emergency || topProtection || immediateReversal || confirmedReversal
         val prefix = when {
             emergency -> "АВАРИЙНАЯ СТРАХОВКА −5%"
+            topProtection -> "ЗАЩИТА ВЗЯТОГО ВЕРХА"
             immediateReversal -> "СИЛЬНЫЙ РАЗВОРОТ РЫНКА"
             confirmedReversal -> "РАЗВОРОТ ПОДТВЕРЖДЁН ДВУМЯ ПРОВЕРКАМИ"
             dangerous -> "ОПАСНОСТЬ 1/2"
@@ -440,7 +466,7 @@ internal object GeminiExitExperimentEngine {
         }
         val sold = GeminiPaperTrader.applyProtectiveExit(
             current = marked,
-            price = price,
+            price = executionPrice,
             decisionId = decisionId,
             reason = reason,
             now = now
@@ -556,16 +582,24 @@ object GeminiExitExperimentStore {
                 entryEvidence,
                 frame.preRequestPrice,
                 frame.hourId,
-                now
+                now,
+                PaperExecutionPolicy.executionPrice(frame.preRequestPrice, "BUY")
             )
         } else {
-            val exitEvidence = GeminiExitEvidence.from(marked, frame.preRequestPrice, frame, impulse)
+            val exitEvidence = GeminiExitEvidence.from(
+                marked,
+                frame.preRequestPrice,
+                frame,
+                impulse,
+                MicroImpulseStore.state(context)
+            )
             GeminiExitExperimentEngine.evaluate(
                 initial.copy(portfolio = marked),
                 exitEvidence,
                 frame.preRequestPrice,
                 frame.hourId,
-                now
+                now,
+                PaperExecutionPolicy.executionPrice(frame.preRequestPrice, "SELL")
             )
         }
         save(context, result.state, result.executedTrade)

@@ -123,10 +123,11 @@ object ProviderSelfDiagnostics {
                 ))
             } else {
                 val budget = GeminiRequestBudget.state(context)
+                val position = GeminiPositionAdvisorStore.state(context)
                 add(ProviderDiagnosticCheck(
-                    "Ручной режим и квота Gemini",
+                    "Режим и квота Gemini",
                     if (budget.remainingToday > 0) "PASS" else "WARN",
-                    "автоматические запросы отключены; торговых прав нет; доступно сегодня=${budget.remainingToday}"
+                    "рынок/новости вручную; позиция автоматически; торговых прав нет; доступно сегодня=${budget.remainingToday}; позиция=${position.action}"
                 ))
             }
             add(check(
@@ -185,6 +186,7 @@ object ProviderDiagnostics {
         val radar = EventRadarStore.state(context)
         val paper = GeminiPaperStore.state(context)
         val budget = GeminiRequestBudget.state(context)
+        val position = GeminiPositionAdvisorStore.state(context)
         val usage = ApiUsageLogStore.summary(context, "GEMINI", now)
         val current = ApiUsageLogStore.summary(context, "GEMINI", now, BuildConfig.VERSION_NAME)
         val events = ApiUsageLogStore.list(context, "GEMINI").takeLast(60).asReversed()
@@ -194,11 +196,15 @@ object ProviderDiagnostics {
             appendLine("Пакет: ${BuildConfig.APPLICATION_ID}")
             appendLine()
             appendLine("СОСТОЯНИЕ GEMINI")
-            appendLine("режим=только вручную торговыеПрава=false статус=${radar.gemini.status} модель=${radar.gemini.model}")
+            appendLine("режим=ручной рынок/новости + автоматическая позиция торговыеПрава=false статус=${radar.gemini.status} модель=${radar.gemini.model}")
             appendLine("последняяПопытка=${stamp(radar.gemini.lastAttempt)} последнийУспех=${stamp(radar.gemini.lastSuccess)}")
-            appendLine("автоматическиеЗапросы=отключены")
+            appendLine("автоматическиеЗапросы=только при открытой позиции Сержа")
             appendLine("ошибка=${RussianOutputPolicy.visible(radar.gemini.error.ifBlank { "нет" }).take(500)}")
             appendLine("квотаОсталось=${budget.remainingToday} сброс=${stamp(budget.dayResetsAt)}")
+            appendLine("позицияСержа=${position.action} опасность=${position.dangerLevel}/10 модель=${position.model.ifBlank { "нет" }} успех=${stamp(position.lastSuccess)}")
+            appendLine("позицияВывод=${RussianOutputPolicy.visible(position.summary).take(1000)}")
+            appendLine("позицияФакты=${position.evidence.joinToString(" | ").ifBlank { "нет" }.take(1000)}")
+            appendLine("позицияРиски=${position.risks.joinToString(" | ").ifBlank { "нет" }.take(1000)}")
             val lastDecision = paper.portfolio.decisions.lastOrNull()
             appendLine("\nИСТОРИЧЕСКОЕ РЕШЕНИЕ GEMINI ДО V4.7")
             if (lastDecision == null) {

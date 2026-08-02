@@ -66,7 +66,7 @@ data class GeminiMarketFrame(
                 hourId = (candle.closeTime + 1L) / HOUR_MILLIS,
                 candleTime = candle.closeTime,
                 analysisPrice = candle.close,
-                preRequestPrice = snapshot.lastPrice.takeIf { it > 0.0 } ?: candle.close,
+                preRequestPrice = PaperExecutionPolicy.displayPrice(snapshot).takeIf { it > 0.0 } ?: candle.close,
                 pump1hPercent = returnAt(pumpEur, index, 2),
                 pump3hPercent = returnAt(pumpEur, index, 6),
                 pump6hPercent = returnAt(pumpEur, index, 12),

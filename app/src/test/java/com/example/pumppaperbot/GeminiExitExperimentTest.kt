@@ -47,8 +47,27 @@ class GeminiExitExperimentTest {
         bookWeak = false,
         directionWeak = score >= 7,
         priceWeak = priceWeak,
+        microWeak = false,
         reason = "тестовые независимые признаки"
     )
+
+    @Test fun `experiment protects a strong profit peak when live flow confirms pullback`() {
+        val state = GeminiExitExperimentState(portfolio = bought().copy(positionPeakPrice = 1.10))
+        val evidence = evidence(
+            score = 6,
+            groups = 3,
+            spotWeak = true,
+            futuresWeak = false,
+            cvdWeak = false,
+            priceWeak = true,
+            currentReturn = 9.0
+        ).copy(pullbackPercent = 0.9, microWeak = true)
+
+        val result = GeminiExitExperimentEngine.evaluate(state, evidence, 1.09, 20L, 1_000_000L)
+
+        assertEquals("SELL", result.executedTrade?.action)
+        assertTrue(result.state.lastReason.contains("ЗАЩИТА ВЗЯТОГО ВЕРХА"))
+    }
 
     private fun entryEvidence(
         active: Boolean = true,

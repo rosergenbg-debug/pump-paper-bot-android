@@ -80,9 +80,11 @@ class PumpSignalService : Service() {
             try {
                 market.sync(this)
                 val eventState = eventRadar.sync(this)
+                val personalGuard = PersonalPositionGuardStore.sync(this)
                 DeepSeekTradeOwnership.activate(this, DeepSeekPrimaryStore.state(this).lastSuccess)
                 val deepSeek = DeepSeekPrimaryAnalyst().sync(this)
-                PositionSupervisorClient().sync(this)
+                PositionSupervisorClient().sync(this, forceCritical = personalGuard.forceCriticalAi)
+                GeminiPositionAdvisorClient().sync(this, forceCritical = personalGuard.forceCriticalAi)
                 GeminiPaperStore.markDataReady(this, source, startedAt)
                 val snapshot = PumpBotEngine.snapshot(this)
                 val appTrade = AppPaperStore.syncWithAlerts(this)
@@ -103,13 +105,14 @@ class PumpSignalService : Service() {
                     PumpAlert.showEventRadar(this, eventState, snapshot)
                     EventRadarStore.markAlerted(this, eventState)
                 }
+                EntryAlertReminderStore.flush(this)
                 val finishedAt = System.currentTimeMillis()
                 GeminiPaperStore.finishCycle(
                     this,
                     source,
                     startedAt,
                     finishedAt + cycleIntervalMillis,
-                    "проверка завершена; DeepSeek: ${deepSeek.action}; виртуальный счёт: ${deepSeekPaper.status}; Gemini только вручную",
+                    "проверка завершена; DeepSeek: ${deepSeek.action}; виртуальный счёт: ${deepSeekPaper.status}; Gemini контролирует только открытую позицию Сержа",
                     finishedAt
                 )
             } catch (error: Exception) {

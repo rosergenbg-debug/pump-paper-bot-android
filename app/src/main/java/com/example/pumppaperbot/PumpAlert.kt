@@ -17,13 +17,13 @@ import androidx.core.content.ContextCompat
 
 object PumpAlert {
     private const val monitorChannelId = "pump_rsi_risk_monitor"
-    private const val signalChannelId = "pump_rsi_risk_signals"
+    private const val signalChannelId = "pump_rsi_risk_signals_v49"
     private const val rapidDropChannelId = "pump_rapid_drop_v26"
     private const val eventRadarChannelId = "pump_event_radar_v3"
-    private const val appTradeChannelId = "pump_app_trades_v319"
-    private const val geminiTradeChannelId = "pump_gemini_trades_v319"
-    private const val geminiExitExperimentChannelId = "pump_gemini_exit_experiment_v319"
-    private const val positionSupervisorChannelId = "pump_position_supervisor_v4"
+    private const val appTradeChannelId = "pump_app_trades_v49"
+    private const val geminiTradeChannelId = "pump_deepseek_trades_v49"
+    private const val geminiExitExperimentChannelId = "pump_deepseek_experiment_v49"
+    private const val positionSupervisorChannelId = "pump_position_supervisor_v49"
     private const val monitorNotificationId = 3501
     private const val signalNotificationId = 3502
     private const val rapidDropNotificationId = 3503
@@ -35,6 +35,11 @@ object PumpAlert {
     private const val geminiExperimentBuyNotificationId = 3509
     private const val geminiExperimentSellNotificationId = 3510
     private const val positionSupervisorNotificationId = 3511
+    private const val personalGuardNotificationId = 3512
+    private const val entryReminderAppId = 3514
+    private const val entryReminderDeepSeekId = 3515
+    private const val entryReminderExperimentId = 3516
+    private const val geminiPositionAdvisorNotificationId = 3517
     private val rapidDropVibration = longArrayOf(0, 1000, 180, 1000, 180, 1600)
 
     fun ensureChannels(context: Context) {
@@ -142,6 +147,7 @@ object PumpAlert {
 
     fun showSignal(context: Context, snapshot: LiveSnapshot) {
         ensureChannels(context)
+        requireTradeNotificationsAvailable(context)
         val score = snapshot.readinessScore
         val delayed = AlertSchedule.hasDelayedPossible(context)
         val title = when {
@@ -161,7 +167,7 @@ object PumpAlert {
         } else ""
         val text = "$preparation${snapshot.signalReason}. Дыхание: ${snapshot.breathingState}; " +
             "поток ${if (snapshot.directionScore >= 0) "+" else ""}${snapshot.directionScore}/100; " +
-            "поздний вход ${snapshot.lateEntryRisk}/100. Цена €${formatPrice(snapshot.lastPrice)}"
+            "поздний вход ${snapshot.lateEntryRisk}/100. Цена €${formatPrice(PaperExecutionPolicy.displayPrice(snapshot))}"
         SignalAttributionStore.record(
             context = context,
             source = "APP",
@@ -189,6 +195,15 @@ object PumpAlert {
         val manager = context.getSystemService(NotificationManager::class.java)
         manager.notify(signalNotificationId, notification)
         vibrate(context)
+        if (snapshot.waitMode == "BUY" && snapshot.readinessScore >= 100) {
+            EntryAlertReminderStore.arm(
+                context,
+                source = "APP",
+                signalId = "APP:${snapshot.lastCandle}:${snapshot.strategyMode}",
+                signalAt = snapshot.lastSync,
+                initialPrice = PaperExecutionPolicy.displayPrice(snapshot)
+            )
+        }
     }
 
     fun showRapidDrop(context: Context, snapshot: LiveSnapshot) {
@@ -298,6 +313,7 @@ object PumpAlert {
             trade.time,
             executedTrade = true
         )
+        if (buy && PumpBotEngine.snapshot(context).waitMode == "SELL") return
         showTradeNotification(
             context,
             appTradeChannelId,
@@ -306,6 +322,12 @@ object PumpAlert {
             text,
             if (buy) 0xFF238636.toInt() else 0xFFDA3633.toInt()
         )
+        if (buy) {
+            EntryAlertReminderStore.arm(
+                context, "APP", "APP_TRADE:${trade.time}:${trade.candleTime}",
+                trade.time, trade.price
+            )
+        }
     }
 
     fun showGeminiTrade(context: Context, trade: GeminiPaperTrade) {
@@ -342,6 +364,7 @@ object PumpAlert {
             trade.time,
             executedTrade = true
         )
+        if (buy && PumpBotEngine.snapshot(context).waitMode == "SELL") return
         showTradeNotification(
             context,
             geminiTradeChannelId,
@@ -350,6 +373,12 @@ object PumpAlert {
             text,
             if (buy) 0xFF7C3AED.toInt() else 0xFFDA3633.toInt()
         )
+        if (buy) {
+            EntryAlertReminderStore.arm(
+                context, "DEEPSEEK", "DEEPSEEK_TRADE:${trade.decisionId}",
+                trade.time, trade.price
+            )
+        }
     }
 
     fun showGeminiExitExperimentTrade(context: Context, trade: GeminiPaperTrade) {
@@ -380,6 +409,7 @@ object PumpAlert {
             trade.time,
             executedTrade = true
         )
+        if (buy && PumpBotEngine.snapshot(context).waitMode == "SELL") return
         showTradeNotification(
             context,
             geminiExitExperimentChannelId,
@@ -388,10 +418,60 @@ object PumpAlert {
             text,
             if (buy) 0xFFD29922.toInt() else 0xFFFF7B72.toInt()
         )
+        if (buy) {
+            EntryAlertReminderStore.arm(
+                context, "DEEPSEEK‑ЭКСПЕРИМЕНТ", "EXPERIMENT_TRADE:${trade.decisionId}",
+                trade.time, trade.price
+            )
+        }
+    }
+
+    fun showEntryReminder(
+        context: Context,
+        reminder: EntryAlertReminder,
+        currentPrice: Double
+    ) {
+        ensureChannels(context)
+        val (channel, id) = when (reminder.source) {
+            "APP" -> appTradeChannelId to entryReminderAppId
+            "DEEPSEEK" -> geminiTradeChannelId to entryReminderDeepSeekId
+            else -> geminiExitExperimentChannelId to entryReminderExperimentId
+        }
+        val change = if (reminder.initialPrice > 0.0 && currentPrice > 0.0) {
+            (currentPrice / reminder.initialPrice - 1.0) * 100.0
+        } else 0.0
+        val text = String.format(
+            java.util.Locale.GERMANY,
+            "Вы ещё не подтвердили покупку. Сильный вход %s остаётся свежим; цена €%.8f (%+.2f%% от первого звонка). Не догоняйте цену выше защитного допуска.",
+            reminder.source,
+            currentPrice,
+            change
+        )
+        showTradeNotification(
+            context,
+            channel,
+            id,
+            "ПОВТОР ВХОДА • ${reminder.source}",
+            text,
+            0xFFFFC107.toInt()
+        )
+    }
+
+    fun showPersonalPositionGuard(context: Context, reason: String) {
+        ensureChannels(context)
+        showTradeNotification(
+            context,
+            positionSupervisorChannelId,
+            personalGuardNotificationId,
+            "СЕРЖ: ЖИВАЯ ПРОВЕРКА ВЫХОДА",
+            "$reason. DeepSeek и Gemini получают усиленную проверку. Решение о продаже остаётся за вами.",
+            0xFFDA3633.toInt()
+        )
     }
 
     fun showPositionSupervision(context: Context, state: PositionSupervisionState) {
         ensureChannels(context)
+        requireTradeNotificationsAvailable(context)
         val title = when {
             state.action == "CANCEL_EXIT" -> "ОТМЕНА ВЫХОДА — ПРОДОЛЖАЕМ"
             state.exitAdvised && state.dangerLevel >= 9 -> "КРИТИЧЕСКАЯ СИТУАЦИЯ ${state.dangerLevel}/10"
@@ -419,6 +499,24 @@ object PumpAlert {
         context.getSystemService(NotificationManager::class.java)
             .notify(positionSupervisorNotificationId, notification)
         vibrate(context, longArrayOf(0, 900, 180, 900, 180, 1300))
+    }
+
+    fun showGeminiPositionAdvisor(context: Context, state: GeminiPositionAdvisorState) {
+        ensureChannels(context)
+        val sources = state.sources.take(2).joinToString("; ")
+        val text = buildString {
+            append(GeminiPositionAdvisorPolicy.statusText(state))
+            if (sources.isNotBlank()) append("\nПроверенный фон: $sources")
+            append("\nGemini ничего не продаёт автоматически; решение остаётся за вами.")
+        }
+        showTradeNotification(
+            context,
+            positionSupervisorChannelId,
+            geminiPositionAdvisorNotificationId,
+            if (state.dangerLevel >= 9) "GEMINI: КРИТИЧЕСКАЯ ПРОВЕРКА ВЫХОДА" else "GEMINI: ПРОВЕРЬТЕ ВЫХОД",
+            text,
+            0xFFFF7B72.toInt()
+        )
     }
 
     private fun showTradeNotification(

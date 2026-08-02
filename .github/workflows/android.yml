@@ -23,13 +23,10 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: '8.5'
-
-      - name: Test and build V4.8 intermediate debug APK
-        run: gradle testDebugUnitTest assembleDebug
+      - name: Validate and build V4.9 intermediate debug APK
+        run: |
+          chmod +x gradlew
+          ./gradlew testDebugUnitTest lintDebug assembleDebug
 
       - name: Verify intermediate debug APK
         run: |
@@ -38,7 +35,7 @@ jobs:
           grep -F "Verified using v2 scheme (APK Signature Scheme v2): true" "$RUNNER_TEMP/signature.txt"
           "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging \
             app/build/outputs/apk/debug/app-debug.apk | tee "$RUNNER_TEMP/badging.txt"
-          grep -F "package: name='com.example.pumppaperbot.v8' versionCode='63' versionName='4.8'" \
+          grep -F "package: name='com.example.pumppaperbot.v8' versionCode='64' versionName='4.9'" \
             "$RUNNER_TEMP/badging.txt"
           grep -F "launchable-activity: name='com.example.pumppaperbot.MainActivity'" \
             "$RUNNER_TEMP/badging.txt"
@@ -47,11 +44,11 @@ jobs:
           test "$(stat -c%s app/build/outputs/apk/debug/app-debug.apk)" -gt 6000000
 
       - name: Prepare named APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk PumpSignal-V4.8-Intermediate.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk PumpSignal-V4.9-Intermediate.apk
 
       - name: Upload intermediate APK
         uses: actions/upload-artifact@v4
         with:
-          name: PumpSignal-V4.8-Intermediate-APK
-          path: PumpSignal-V4.8-Intermediate.apk
+          name: PumpSignal-V4.9-Intermediate-APK
+          path: PumpSignal-V4.9-Intermediate.apk
           retention-days: 30
