@@ -79,20 +79,26 @@ class CompetitionActivity : AppCompatActivity() {
     }
 
     private fun render() {
+        val now = System.currentTimeMillis()
         val snapshot = PumpBotEngine.snapshot(this)
-        val price = snapshot.lastPrice
+        val price = PaperExecutionPolicy.displayPrice(snapshot, now)
         val app = AppPaperStore.state(this)
         val gemini = GeminiPaperStore.state(this).portfolio
         val geminiExitExperiment = GeminiExitExperimentStore.state(this)?.portfolio
             ?: gemini
         val user = UserPaperStore.markToMarket(this, price)
-        val candles = if (historicalCandles.isNotEmpty()) {
+        val closedCandles = if (historicalCandles.isNotEmpty()) {
             (historicalCandles + snapshot.chart.candles)
                 .distinctBy { it.closeTime }
                 .sortedBy { it.closeTime }
         } else {
             snapshot.chart.candles
         }
+        val candles = CompetitionChartPresentation.withLiveEdge(
+            closedCandles,
+            price,
+            now
+        )
 
         charts[0].setData(
             "DEEPSEEK",
