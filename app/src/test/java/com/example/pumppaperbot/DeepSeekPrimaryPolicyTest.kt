@@ -57,9 +57,13 @@ class DeepSeekPrimaryPolicyTest {
         ))
     }
 
-    @Test fun `Gemini keeps half of daily capacity for an open position`() {
+    @Test fun `Gemini keeps half for routine work and releases all capacity to position advice`() {
         assertTrue(GeminiRequestBudget.activeLimit(false) == GeminiRequestBudget.NORMAL_REQUESTS_PER_DAY)
-        assertTrue(GeminiRequestBudget.activeLimit(true) == GeminiRequestBudget.MAX_REQUESTS_PER_DAY)
+        assertTrue(GeminiRequestBudget.activeLimit(true) == GeminiRequestBudget.NORMAL_REQUESTS_PER_DAY)
+        assertTrue(
+            GeminiRequestBudget.activeLimit(positionOpen = true, positionPriority = true) ==
+                GeminiRequestBudget.MAX_REQUESTS_PER_DAY
+        )
         assertTrue(GeminiRequestBudget.NORMAL_REQUESTS_PER_DAY == 12)
         assertTrue(GeminiRequestBudget.MAX_REQUESTS_PER_DAY - GeminiRequestBudget.NORMAL_REQUESTS_PER_DAY == 13)
     }

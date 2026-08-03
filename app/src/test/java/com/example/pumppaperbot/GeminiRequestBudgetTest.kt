@@ -8,6 +8,12 @@ import java.util.Locale
 import java.util.TimeZone
 
 class GeminiRequestBudgetTest {
+    @Test fun `only position advisor receives the full remaining daily quota`() {
+        assertEquals(12, GeminiRequestBudget.activeLimit(positionOpen = false))
+        assertEquals(12, GeminiRequestBudget.activeLimit(positionOpen = true, positionPriority = false))
+        assertEquals(25, GeminiRequestBudget.activeLimit(positionOpen = true, positionPriority = true))
+    }
+
     @Test fun `quota day follows Pacific midnight`() {
         val parser = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).apply {
             timeZone = TimeZone.getTimeZone("UTC")

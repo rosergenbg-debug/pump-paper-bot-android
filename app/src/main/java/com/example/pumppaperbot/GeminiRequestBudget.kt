@@ -52,22 +52,23 @@ object GeminiRequestBudget {
 
     internal fun tryAcquire(
         context: Context,
-        now: Long = System.currentTimeMillis()
+        now: Long = System.currentTimeMillis(),
+        positionPriority: Boolean = false
     ): GeminiBudgetPermit = synchronized(lock) {
         resetDayIfNeeded(context, now)
         val current = stateLocked(context, now)
         val positionOpen = PumpBotEngine.snapshot(context).let {
             it.waitMode == "SELL" && it.entryPrice > 0.0
         }
-        val activeLimit = activeLimit(positionOpen)
+        val activeLimit = activeLimit(positionOpen, positionPriority)
         if (current.usedToday >= activeLimit) {
             return@synchronized GeminiBudgetPermit(
                 false,
                 current,
-                if (positionOpen) {
+                if (positionOpen && positionPriority) {
                     "Достигнут общий предел $MAX_REQUESTS_PER_DAY Gemini API-запросов за сутки"
                 } else {
-                    "Обычные 50% квоты Gemini использованы; ${MAX_REQUESTS_PER_DAY - NORMAL_REQUESTS_PER_DAY} запросов сохранены для открытой позиции"
+                    "Обычные 50% квоты Gemini использованы; оставшиеся запросы сохранены для сопровождения открытой позиции"
                 }
             )
         }
@@ -85,9 +86,10 @@ object GeminiRequestBudget {
 
     internal fun requirePermit(
         context: Context,
-        now: Long = System.currentTimeMillis()
+        now: Long = System.currentTimeMillis(),
+        positionPriority: Boolean = false
     ): GeminiBudgetState {
-        val permit = tryAcquire(context, now)
+        val permit = tryAcquire(context, now, positionPriority)
         if (!permit.allowed) {
             throw GeminiRequestBlockedException(
                 permit.state.nextAllowedAt.takeIf { it > now } ?: permit.state.dayResetsAt,
@@ -147,8 +149,8 @@ object GeminiRequestBudget {
         return calendar.timeInMillis
     }
 
-    internal fun activeLimit(positionOpen: Boolean): Int =
-        if (positionOpen) MAX_REQUESTS_PER_DAY else NORMAL_REQUESTS_PER_DAY
+    internal fun activeLimit(positionOpen: Boolean, positionPriority: Boolean = false): Int =
+        if (positionOpen && positionPriority) MAX_REQUESTS_PER_DAY else NORMAL_REQUESTS_PER_DAY
 
     internal fun isDailyQuotaMessage(message: String): Boolean {
         val lower = message.lowercase(Locale.ROOT)
@@ -164,7 +166,7 @@ object GeminiRequestBudget {
         }
         return GeminiBudgetState(
             usedToday = used,
-            remainingToday = (activeLimit(positionOpen) - used).coerceAtLeast(0),
+            remainingToday = (activeLimit(positionOpen, positionPriority = positionOpen) - used).coerceAtLeast(0),
             nextAllowedAt = prefs.getLong(KEY_BACKOFF_UNTIL, 0L),
             dayResetsAt = nextPacificReset(now),
             rateLimitStrikes = prefs.getInt(KEY_RATE_LIMIT_STRIKES, 0)

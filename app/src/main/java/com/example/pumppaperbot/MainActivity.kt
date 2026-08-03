@@ -24,14 +24,24 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
 import java.util.Locale
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 class MainActivity : AppCompatActivity() {
     private val handler = Handler(Looper.getMainLooper())
+    private val chartExecutor = Executors.newSingleThreadExecutor()
+    private val chartSyncRunning = AtomicBoolean(false)
     private val refreshUi = object : Runnable {
         override fun run() {
             updateUi()
             handler.postDelayed(this, 5000)
+        }
+    }
+    private val refreshChart = object : Runnable {
+        override fun run() {
+            requestChartSync()
+            handler.postDelayed(this, ChartSpeedStore.selected(this@MainActivity).refreshMillis)
         }
     }
 
@@ -64,6 +74,7 @@ class MainActivity : AppCompatActivity() {
     private var btnManualBuy: Button? = null
     private var btnManualSell: Button? = null
     private var btnManualHistory: Button? = null
+    private var btnChartSpeed: Button? = null
     private var btnBacktest: Button? = null
     private var btnAlertSettings: Button? = null
     private var btnAppPaper: Button? = null
@@ -108,6 +119,7 @@ class MainActivity : AppCompatActivity() {
         btnManualBuy = findViewById(R.id.btnManualBuy)
         btnManualSell = findViewById(R.id.btnManualSell)
         btnManualHistory = findViewById(R.id.btnManualHistory)
+        btnChartSpeed = findViewById(R.id.btnChartSpeed)
         btnBacktest = findViewById(R.id.btnBacktest)
         btnAlertSettings = findViewById(R.id.btnAlertSettings)
         btnAppPaper = findViewById(R.id.btnAppPaper)
@@ -150,6 +162,7 @@ class MainActivity : AppCompatActivity() {
         btnManualBuy?.setOnClickListener { confirmManualBuy() }
         btnManualSell?.setOnClickListener { confirmManualSell() }
         btnManualHistory?.setOnClickListener { showManualHistory() }
+        btnChartSpeed?.setOnClickListener { showChartSpeedDialog() }
         btnBacktest?.setOnClickListener { startActivity(Intent(this, BacktestActivity::class.java)) }
         btnAlertSettings?.setOnClickListener { startActivity(Intent(this, AlertSettingsActivity::class.java)) }
         btnAppPaper?.setOnClickListener {
@@ -187,11 +200,18 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         updateUi()
         handler.post(refreshUi)
+        handler.post(refreshChart)
     }
 
     override fun onPause() {
         handler.removeCallbacks(refreshUi)
+        handler.removeCallbacks(refreshChart)
         super.onPause()
+    }
+
+    override fun onDestroy() {
+        chartExecutor.shutdownNow()
+        super.onDestroy()
     }
 
     private fun startMonitor() {
@@ -280,6 +300,7 @@ class MainActivity : AppCompatActivity() {
             EntryAlertReminderStore.clear(this)
             PersonalPositionGuardStore.open(this, executionPrice, confirmedAt)
             val opened = PumpBotEngine.snapshot(this)
+            ChartSpeedStore.selectFastForNewPosition(this, opened.entryTime)
             ManualPositionStore.recordBuy(
                 this,
                 opened.entryPrice,
@@ -292,7 +313,49 @@ class MainActivity : AppCompatActivity() {
             )
             if (!opened.running) startMonitor()
             schedulePositionCheck(forceCritical = true)
+            requestChartSync()
             updateUi()
+        }
+    }
+
+    private fun showChartSpeedDialog() {
+        val intervals = ChartInterval.entries.toTypedArray()
+        val labels = arrayOf(
+            "1 МИНУТА — максимально быстро",
+            "5 МИНУТ — быстрый обзор",
+            "15 МИНУТ — средняя скорость",
+            "30 МИНУТ — основной режим стратегии",
+            "1 ЧАС — общий тренд"
+        )
+        val selected = intervals.indexOf(ChartSpeedStore.selected(this)).coerceAtLeast(0)
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("СКОРОСТЬ ГРАФИКА")
+            .setSingleChoiceItems(labels, selected, null)
+            .setNegativeButton("Отмена", null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.listView.setOnItemClickListener { _, _, position, _ ->
+                ChartSpeedStore.select(this, intervals[position])
+                dialog.dismiss()
+                updateUi()
+                handler.removeCallbacks(refreshChart)
+                handler.post(refreshChart)
+            }
+        }
+        dialog.show()
+    }
+
+    private fun requestChartSync() {
+        if (ChartSpeedStore.selected(this) == ChartInterval.THIRTY_MINUTES) return
+        if (!chartSyncRunning.compareAndSet(false, true)) return
+        val appContext = applicationContext
+        chartExecutor.execute {
+            try {
+                ChartMarketClient().syncSelected(appContext)
+            } finally {
+                chartSyncRunning.set(false)
+                runOnUiThread { updateUi() }
+            }
         }
     }
 
@@ -360,7 +423,18 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateUi() {
         val snapshot = PumpBotEngine.snapshot(this)
+        if (snapshot.waitMode == "SELL" && snapshot.entryTime > 0L &&
+            ChartSpeedStore.selectFastForNewPosition(this, snapshot.entryTime)
+        ) {
+            requestChartSync()
+        }
         val now = System.currentTimeMillis()
+        val chartInterval = ChartSpeedStore.selected(this)
+        val displayChart = ChartSpeedStore.chartBundle(this, snapshot, now)
+        btnChartSpeed?.text = buildString {
+            append("СКОРОСТЬ ГРАФИКА • ${chartInterval.buttonLabel}\n")
+            append(if (chartInterval == ChartInterval.ONE_MINUTE) "ЖИВОЙ КРАЙ ≈15 СЕК." else "НАЖМИТЕ, ЧТОБЫ ИЗМЕНИТЬ")
+        }
         val accountPrice = PaperExecutionPolicy.displayPrice(snapshot, now)
         val appAccount = AppPaperStore.state(this)
         val geminiAccount = GeminiPaperStore.state(this).portfolio
@@ -482,8 +556,8 @@ class MainActivity : AppCompatActivity() {
         val deepSeekSignal = DeepSeekPrimaryStore.state(this)
         val deepSeekFresh = DeepSeekPrimaryPolicy.isFreshSignal(deepSeekSignal, now)
         chart?.setData(
-            "PUMP/EUR • ДЫХАНИЕ РЫНКА",
-            snapshot.chart.copy(
+            "PUMP/EUR • ${chartInterval.buttonLabel}",
+            displayChart.copy(
                 directionScore = appCombinedDirection,
                 showGeminiGauge = true,
                 geminiDirectionScore = deepSeekSignal.direction.takeIf { deepSeekFresh },

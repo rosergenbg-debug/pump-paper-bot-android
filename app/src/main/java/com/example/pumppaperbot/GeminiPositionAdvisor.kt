@@ -319,7 +319,7 @@ class GeminiPositionAdvisorClient {
                 .put("thinkingConfig", JSONObject().put("thinkingLevel", "LOW")))
         if (useSearch) bodyJson.put("tools", JSONArray().put(JSONObject().put("google_search", JSONObject())))
 
-        GeminiRequestBudget.requirePermit(context, now)
+        GeminiRequestBudget.requirePermit(context, now, positionPriority = true)
         val request = Request.Builder()
             .url("https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent")
             .header("x-goog-api-key", apiKey)

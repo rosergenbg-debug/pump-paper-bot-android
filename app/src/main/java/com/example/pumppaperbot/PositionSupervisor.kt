@@ -76,6 +76,10 @@ object PositionSupervisorPolicy {
     const val FLASH_INTERVAL = 5L * 60L * 1000L
     const val PRO_RECHECK_INTERVAL = 2L * 60L * 1000L
 
+    /** Serge's open position is exempt from the lower-priority $0.50 research ceiling. */
+    fun paidCheckAllowed(positionOpen: Boolean, estimatedDailyCostUsd: Double): Boolean =
+        positionOpen || DeepSeekPrimaryPolicy.withinDailyBudget(estimatedDailyCostUsd)
+
     fun chooseModel(
         state: PositionSupervisionState,
         snapshot: LiveSnapshot,
@@ -189,8 +193,9 @@ class PositionSupervisorClient {
         }
         val model = PositionSupervisorPolicy.chooseModel(previous, snapshot, forceCritical, now)
             ?: return previous
-        if (!DeepSeekPrimaryPolicy.withinDailyBudget(
-                DeepSeekDailyBudgetStore.costUsd(context, now)
+        if (!PositionSupervisorPolicy.paidCheckAllowed(
+                positionOpen = snapshot.waitMode == "SELL" && snapshot.entryPrice > 0.0,
+                estimatedDailyCostUsd = DeepSeekDailyBudgetStore.costUsd(context, now)
             )) {
             return previous.copy(
                 positionEntryTime = snapshot.entryTime,
