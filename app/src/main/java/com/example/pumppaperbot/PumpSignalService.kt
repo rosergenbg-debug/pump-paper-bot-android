@@ -15,24 +15,26 @@ class PumpSignalService : Service() {
     private val executor: ExecutorService = Executors.newSingleThreadExecutor()
     private val market = MarketSyncClient()
     private val eventRadar = EventRadarClient()
-    private val cycleIntervalMillis = TimeUnit.MINUTES.toMillis(2)
+    private val normalCycleIntervalMillis = TimeUnit.MINUTES.toMillis(2)
     private val cycleQueuedOrRunning = AtomicBoolean(false)
     private lateinit var microImpulse: MicroImpulseStream
+    @Volatile private var destroyed = false
 
     private val loop = object : Runnable {
         override fun run() {
             checkNow()
-            handler.postDelayed(this, cycleIntervalMillis)
+            handler.postDelayed(this, nextCycleIntervalMillis())
         }
     }
 
     override fun onCreate() {
         super.onCreate()
+        destroyed = false
         PumpAlert.ensureChannels(this)
         microImpulse = MicroImpulseStream(this)
         startForeground(
             PumpAlert.monitorId(),
-            PumpAlert.monitorNotification(this, "Проверяет PUMP примерно каждые 2 минуты.")
+            PumpAlert.monitorNotification(this, "Проверяет PUMP каждые 1–2 минуты; прибыль от +2% — усиленно.")
         )
     }
 
@@ -45,6 +47,7 @@ class PumpSignalService : Service() {
     }
 
     override fun onDestroy() {
+        destroyed = true
         handler.removeCallbacks(loop)
         microImpulse.stop()
         executor.shutdownNow()
@@ -64,7 +67,12 @@ class PumpSignalService : Service() {
             return
         }
         executor.execute {
-            val source = "МОНИТОР 2 МИН"
+            val cycleIntervalMillis = nextCycleIntervalMillis()
+            val source = if (cycleIntervalMillis <= PositionSupervisorPolicy.PRO_RECHECK_INTERVAL) {
+                "МОНИТОР 1 МИН • УСИЛЕННАЯ ПОЗИЦИЯ"
+            } else {
+                "МОНИТОР 2 МИН"
+            }
             if (!GeminiCycleGuard.tryEnter()) {
                 GeminiPaperStore.recordActivity(
                     this,
@@ -128,7 +136,27 @@ class PumpSignalService : Service() {
             } finally {
                 GeminiCycleGuard.exit()
                 cycleQueuedOrRunning.set(false)
+                if (!destroyed) {
+                    handler.removeCallbacks(loop)
+                    handler.postDelayed(loop, nextCycleIntervalMillis())
+                }
             }
         }
+    }
+
+    private fun nextCycleIntervalMillis(): Long {
+        val snapshot = PumpBotEngine.snapshot(this)
+        if (snapshot.waitMode != "SELL" || snapshot.entryPrice <= 0.0) {
+            return normalCycleIntervalMillis
+        }
+        val plan = PositionSupervisorPolicy.supportPlan(
+            snapshot = snapshot,
+            state = PositionSupervisorStore.state(this),
+            guard = PersonalPositionGuardStore.state(this),
+            micro = MicroImpulseStore.state(this),
+            forceCritical = false,
+            now = System.currentTimeMillis()
+        )
+        return PositionSupervisorPolicy.foregroundCycleInterval(plan)
     }
 }

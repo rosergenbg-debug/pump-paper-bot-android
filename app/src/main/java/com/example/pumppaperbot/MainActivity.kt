@@ -618,10 +618,22 @@ class MainActivity : AppCompatActivity() {
         }
         val state = PositionSupervisorStore.state(this)
         val gemini = GeminiPositionAdvisorStore.state(this)
-        tvPositionSupervisor?.text = PositionSupervisorPolicy.statusText(state) +
-            "\n${state.model.ifBlank { "DeepSeek ещё не вызывался" }}" +
-            "\n\n${GeminiPositionAdvisorPolicy.statusText(gemini)}" +
-            "\n${gemini.model.ifBlank { "Gemini ещё не вызывался" }}"
+        val supportPlan = PositionSupervisorPolicy.supportPlan(
+            snapshot = snapshot,
+            state = state,
+            guard = PersonalPositionGuardStore.state(this),
+            micro = MicroImpulseStore.state(this),
+            forceCritical = false,
+            now = System.currentTimeMillis()
+        )
+        val intervalMinutes = supportPlan.intervalMillis / TimeUnit.MINUTES.toMillis(1)
+        tvPositionSupervisor?.text = buildString {
+            append(PositionSupervisorPolicy.statusText(state))
+            append("\n${state.model.ifBlank { "DeepSeek ещё не вызывался" }} • контроль до ${intervalMinutes} мин")
+            if (state.lastSuccess > 0L) append(" • ответ ${PumpBotEngine.formatTime(state.lastSuccess)}")
+            append("\n\n${GeminiPositionAdvisorPolicy.statusText(gemini)}")
+            append("\n${gemini.model.ifBlank { "Gemini ещё не вызывался" }}")
+        }
         val color = when {
             gemini.action == "EXIT" -> "#FF7B72"
             state.action == "CANCEL_EXIT" -> "#7EE787"
@@ -738,7 +750,20 @@ class MainActivity : AppCompatActivity() {
         } else {
             "5m SHADOW: ждём первую синхронизацию"
         }
-        tvMicrostructure?.text = "$book • $spread • $oi\n$impulseValues\n${impulse.status}"
+        val micro = MicroImpulseStore.state(this)
+        val liveFlow = if (micro.connected && micro.updatedAt > 0L) {
+            String.format(
+                Locale.GERMAN,
+                "LIVE PUMP: покупки 60с %.0f%% / 5м %.0f%% • BTC 60с %+.2f%%, покупки %.0f%%",
+                micro.aggressiveBuyPercent60s,
+                micro.aggressiveBuyPercent5m,
+                micro.bitcoinPriceChange60sPercent,
+                micro.bitcoinAggressiveBuyPercent60s
+            )
+        } else {
+            "LIVE PUMP/BTC: поток подключается"
+        }
+        tvMicrostructure?.text = "$book • $spread • $oi\n$liveFlow\n$impulseValues\n${impulse.status}"
     }
 
     private fun signed(value: Int): String = if (value >= 0) "+$value" else "−${kotlin.math.abs(value)}"

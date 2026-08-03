@@ -156,6 +156,8 @@ data class LiveSnapshot(
     val breathingExplanation: String = "",
     val bookImbalance: Double? = null,
     val spreadPercent: Double? = null,
+    val bookBidNotional: Double? = null,
+    val bookAskNotional: Double? = null,
     val openInterest: Double? = null,
     val openInterestChangePercent: Double? = null,
     val rapidDrop: RapidDropState = RapidDropState.none(),
@@ -236,6 +238,8 @@ object PumpBotEngine {
     private const val keyBreathingExplanation = "breathing_explanation"
     private const val keyBookImbalance = "book_imbalance"
     private const val keySpreadPercent = "spread_percent"
+    private const val keyBookBidNotional = "book_bid_notional"
+    private const val keyBookAskNotional = "book_ask_notional"
     private const val keyOpenInterest = "open_interest"
     private const val keyOpenInterestChange = "open_interest_change"
     private const val keyRapidDropActive = "rapid_drop_active"
@@ -671,6 +675,8 @@ object PumpBotEngine {
             .putString(keyBreathingExplanation, evaluation.breathing.explanation)
             .putDouble(keyBookImbalance, evaluation.breathing.bookImbalance ?: Double.NaN)
             .putDouble(keySpreadPercent, evaluation.breathing.spreadPercent ?: Double.NaN)
+            .putDouble(keyBookBidNotional, orderBook?.bidNotional ?: Double.NaN)
+            .putDouble(keyBookAskNotional, orderBook?.askNotional ?: Double.NaN)
             .putDouble(keyOpenInterest, evaluation.breathing.openInterest ?: Double.NaN)
             .putDouble(keyOpenInterestChange, evaluation.breathing.openInterestChangePercent ?: Double.NaN)
             .putBoolean(keyRapidDropActive, rapidDrop.active)
@@ -778,6 +784,8 @@ object PumpBotEngine {
             breathingExplanation = p.getString(keyBreathingExplanation, "").orEmpty(),
             bookImbalance = p.nullableDouble(keyBookImbalance),
             spreadPercent = p.nullableDouble(keySpreadPercent),
+            bookBidNotional = p.nullableDouble(keyBookBidNotional),
+            bookAskNotional = p.nullableDouble(keyBookAskNotional),
             openInterest = p.nullableDouble(keyOpenInterest),
             openInterestChangePercent = p.nullableDouble(keyOpenInterestChange),
             rapidDrop = RapidDropState(

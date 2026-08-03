@@ -29,6 +29,14 @@ class PositionSupervisorTest {
             conditionDelta = -7,
             dangerLevel = 9,
             summary = "Давление продавцов усиливается",
+            supportTier = "ЗАЩИТА ПРИБЫЛИ • PRO MAX",
+            pnlPercent = 4.5,
+            peakPnlPercent = 5.2,
+            pullbackPercent = 0.7,
+            bookStatus = "продавцы усилились",
+            flowStatus = "покупки ослабевают",
+            bitcoinStatus = "Bitcoin снижается",
+            watchFor = "ускорение продаж",
             promptTokens = 123,
             completionTokens = 45
         )
