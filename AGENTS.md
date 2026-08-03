@@ -46,6 +46,7 @@ Serge values timely, unmistakable phone alerts. APP, DeepSeek and DeepSeek exper
 
 ## Mandatory collaboration and repository order
 
+- Serge has granted standing authorization to publish future PumpSignal version branches and source changes to the public `rosergenbg-debug/pump-paper-bot-android` repository, open/update pull requests, and run GitHub Actions without asking for a new per-version confirmation. This authorization is limited to this repository and the agreed PumpSignal work; release signing, destructive cleanup, credential handling and unrelated external actions remain subject to their existing safeguards.
 - Every project must keep exactly these two coordination records at the repository root: `AGENTS.md` for durable rules/current truth and `DEVELOPMENT_LOG.md` for chronological work history. If either is missing, create it before material work. Every agent must read both files completely before planning or editing.
 - `main` is the only canonical development line. Inspect existing branches and pull requests before creating anything. Reuse an already active branch for the same release/task; never create a parallel version branch merely because another agent or chat started the work.
 - A temporary branch is allowed only for an active, bounded change. Merge it into `main` after verification, then delete the temporary branch. Do not leave finished draft PRs or abandoned agent branches behind. Never force-push or delete unmerged work unless Serge explicitly authorizes repository cleanup and the retained commit/tag has first been verified.
@@ -76,6 +77,7 @@ Serge values timely, unmistakable phone alerts. APP, DeepSeek and DeepSeek exper
 - V4.9: fresh/slipped paper execution, bounded independent entry reminders, post-buy alert suppression with uninterrupted virtual competition, local peak protection, faster DeepSeek position supervision and quota-aware Gemini position/news supervision, code 64, current work.
 - V4.10: selectable 1m/5m/15m/30m/1h display chart, 15-second live edge, one-time automatic 1m selection after `Я купил`, and maximum provider-resource priority for Serge's open position, code 65, current work. StrategyV2 remains on closed 30-minute candles.
 - V4.11: profit-adaptive 3m Flash / 1m Pro position supervision, max reasoning from +4% or danger, richer PUMP/BTC micro-flow and 20-level book evidence, and a detailed position-support card, code 66, current work.
+- V4.12: the four-account comparison adds a display-only live 30-minute edge and uses the fresh visible price so a Serge BUY/SELL marker and account state appear without waiting for the next closed strategy candle, code 67, current work.
 
 ## Accumulated next-release backlog
 
