@@ -33,6 +33,7 @@ Serge values timely, unmistakable phone alerts. APP, DeepSeek and DeepSeek exper
 - Fees are 0.15% on entry and 0.15% on exit.
 - DeepSeek, DeepSeek experiment, APP and Serge remain separate. Gemini is a manual second-opinion provider only: it has no automatic cadence and no trading authority. Experimental exit rules may manage only the DeepSeek experiment portfolio.
 - Pressing `Я купил` activates the highest-priority personal-position protection mode for the entire time Serge's position remains open. Protecting Serge's real position outranks routine market analysis, virtual-portfolio research and conserving AI quota or cost for a later trade/day. DeepSeek position supervision must not be blocked by the ordinary daily cost ceiling, and Gemini position supervision may use the entire remaining provider quota for that day. Lower-priority automatic calls should yield first when a provider limit is shared. Use the available budget intelligently across the life of the position, with immediate checks after entry and escalation on fresh danger, but do not weaken, delay or stop useful supervision merely to save resources: Serge normally opens no more than one real position per day and accepts exhausting that day's remaining AI resources for it. Hard provider rate/quota limits, credential/network availability and local safety fallbacks still apply; exhausting a provider must never disable the free local guard or urgent alarms.
+- V4.11 adds profit-adaptive supervision: below +2% DeepSeek Flash checks every three minutes; from +2% the foreground market cycle and DeepSeek Pro position analysis run every minute; from +4%, on a protected-peak pullback or fresh seller takeover, Pro uses maximum reasoning. Position output must separately explain the decision, 20-level book, executed PUMP flow, live BTC flow and the concrete invalidation/watch condition. A single book wall is never sufficient evidence because it may be spoofed.
 
 ## Release invariants
 
@@ -74,6 +75,7 @@ Serge values timely, unmistakable phone alerts. APP, DeepSeek and DeepSeek exper
 - V4.8: two-minute primary DeepSeek cadence, independent high-reasoning trade verification, confirmed intrabar entry and a $0.50 daily safety ceiling, code 63, current work.
 - V4.9: fresh/slipped paper execution, bounded independent entry reminders, post-buy alert suppression with uninterrupted virtual competition, local peak protection, faster DeepSeek position supervision and quota-aware Gemini position/news supervision, code 64, current work.
 - V4.10: selectable 1m/5m/15m/30m/1h display chart, 15-second live edge, one-time automatic 1m selection after `Я купил`, and maximum provider-resource priority for Serge's open position, code 65, current work. StrategyV2 remains on closed 30-minute candles.
+- V4.11: profit-adaptive 3m Flash / 1m Pro position supervision, max reasoning from +4% or danger, richer PUMP/BTC micro-flow and 20-level book evidence, and a detailed position-support card, code 66, current work.
 
 ## Accumulated next-release backlog
 

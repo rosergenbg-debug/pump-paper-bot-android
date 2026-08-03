@@ -25,6 +25,7 @@ class MicroImpulseStream(context: Context) : WebSocketListener() {
         .readTimeout(0, TimeUnit.MILLISECONDS)
         .build()
     private val trades = ArrayDeque<MicroTrade>()
+    private val bitcoinTrades = ArrayDeque<MicroTrade>()
     private var socket: WebSocket? = null
     private var stopped = true
     private var bestBid = 0.0
@@ -35,6 +36,7 @@ class MicroImpulseStream(context: Context) : WebSocketListener() {
     private var connectedAt = 0L
     private var ignitionAt = 0L
     private var ignitionPrice = 0.0
+    private var bitcoinPrice = 0.0
 
     @Synchronized
     fun start() {
@@ -73,9 +75,13 @@ class MicroImpulseStream(context: Context) : WebSocketListener() {
         runCatching {
             val root = JSONObject(text)
             val data = root.optJSONObject("data") ?: root
-            when (data.optString("e")) {
-                "aggTrade" -> recordTrade(data)
-                "bookTicker" -> recordBook(data)
+            val stream = root.optString("stream").lowercase()
+            when {
+                stream.startsWith("pumpusdt@aggtrade") -> recordTrade(data)
+                stream.startsWith("pumpusdt@bookticker") -> recordBook(data)
+                stream.startsWith("btcusdt@aggtrade") -> recordBitcoinTrade(data)
+                stream.isBlank() && data.optString("e") == "aggTrade" -> recordTrade(data)
+                stream.isBlank() && data.optString("e") == "bookTicker" -> recordBook(data)
             }
         }.onFailure {
             MicroImpulseStore.markError(appContext, it.message ?: "ошибка разбора WebSocket")
@@ -125,9 +131,26 @@ class MicroImpulseStream(context: Context) : WebSocketListener() {
         if (price > 0.0) evaluate(System.currentTimeMillis(), price)
     }
 
+    @Synchronized
+    private fun recordBitcoinTrade(data: JSONObject) {
+        val price = data.optString("p").toDoubleOrNull() ?: return
+        val quantity = data.optString("q").toDoubleOrNull() ?: return
+        val at = data.optLong("T", System.currentTimeMillis())
+        if (price <= 0.0 || quantity <= 0.0) return
+        bitcoinPrice = price
+        bitcoinTrades.addLast(
+            MicroTrade(at, price, price * quantity, aggressiveBuy = !data.optBoolean("m", true))
+        )
+        val cutoff = at - HISTORY_MILLIS
+        while (bitcoinTrades.isNotEmpty() && bitcoinTrades.peekFirst().at < cutoff) {
+            bitcoinTrades.removeFirst()
+        }
+    }
+
     private fun evaluate(now: Long, currentPrice: Double) {
         val cutoff = now - HISTORY_MILLIS
         while (trades.isNotEmpty() && trades.peekFirst().at < cutoff) trades.removeFirst()
+        while (bitcoinTrades.isNotEmpty() && bitcoinTrades.peekFirst().at < cutoff) bitcoinTrades.removeFirst()
         if (now - lastSavedAt < SAVE_INTERVAL_MILLIS) return
         lastSavedAt = now
 
@@ -139,8 +162,14 @@ class MicroImpulseStream(context: Context) : WebSocketListener() {
         val sell5 = five.filterNot { it.aggressiveBuy }.sumOf { it.notional }
         val buy15 = fifteen.filter { it.aggressiveBuy }.sumOf { it.notional }
         val sell15 = fifteen.filterNot { it.aggressiveBuy }.sumOf { it.notional }
+        val buy60 = sixty.filter { it.aggressiveBuy }.sumOf { it.notional }
+        val sell60 = sixty.filterNot { it.aggressiveBuy }.sumOf { it.notional }
+        val buy5m = fiveMinutes.filter { it.aggressiveBuy }.sumOf { it.notional }
+        val sell5m = fiveMinutes.filterNot { it.aggressiveBuy }.sumOf { it.notional }
         val buyRatio5 = ratio(buy5, sell5)
         val buyRatio15 = ratio(buy15, sell15)
+        val buyRatio60 = ratio(buy60, sell60)
+        val buyRatio5m = ratio(buy5m, sell5m)
         val expectedFiveSecondTrades = max(sixty.size / 12.0, fiveMinutes.size / 60.0).coerceAtLeast(1.0)
         val tradeAcceleration = five.size / expectedFiveSecondTrades
         val oldPrice = sixty.firstOrNull()?.price ?: currentPrice
@@ -152,6 +181,16 @@ class MicroImpulseStream(context: Context) : WebSocketListener() {
         val bookImbalance = if (bookTotal > 0.0) {
             (bestBid * bidQuantity - bestAsk * askQuantity) / bookTotal
         } else null
+        val btc15 = bitcoinTrades.filter { it.at >= now - 15_000L }
+        val btc60 = bitcoinTrades.filter { it.at >= now - 60_000L }
+        val btcBuy15 = btc15.filter { it.aggressiveBuy }.sumOf { it.notional }
+        val btcSell15 = btc15.filterNot { it.aggressiveBuy }.sumOf { it.notional }
+        val btcBuy60 = btc60.filter { it.aggressiveBuy }.sumOf { it.notional }
+        val btcSell60 = btc60.filterNot { it.aggressiveBuy }.sumOf { it.notional }
+        val btcOldPrice = btc60.firstOrNull()?.price ?: bitcoinPrice
+        val btcChange60 = if (btcOldPrice > 0.0 && bitcoinPrice > 0.0) {
+            (bitcoinPrice / btcOldPrice - 1.0) * 100.0
+        } else 0.0
 
         val warmedUp = connectedAt > 0L && now - connectedAt >= WARMUP_MILLIS
         val ignition = warmedUp && five.size >= 8 && tradeAcceleration >= 2.5 &&
@@ -195,9 +234,17 @@ class MicroImpulseStream(context: Context) : WebSocketListener() {
                 tradeAcceleration = tradeAcceleration,
                 aggressiveBuyPercent5s = buyRatio5 * 100.0,
                 aggressiveBuyPercent15s = buyRatio15 * 100.0,
+                aggressiveBuyPercent60s = buyRatio60 * 100.0,
+                aggressiveBuyPercent5m = buyRatio5m * 100.0,
+                buyNotional60s = buy60,
+                sellNotional60s = sell60,
                 priceChange60sPercent = change60,
                 spreadPercent = spread,
                 topBookImbalance = bookImbalance,
+                bitcoinPriceUsdt = bitcoinPrice,
+                bitcoinAggressiveBuyPercent15s = ratio(btcBuy15, btcSell15) * 100.0,
+                bitcoinAggressiveBuyPercent60s = ratio(btcBuy60, btcSell60) * 100.0,
+                bitcoinPriceChange60sPercent = btcChange60,
                 error = ""
             )
         )
@@ -209,7 +256,7 @@ class MicroImpulseStream(context: Context) : WebSocketListener() {
     }
 
     private companion object {
-        const val STREAM_URL = "wss://stream.binance.com:9443/stream?streams=pumpusdt@aggTrade/pumpusdt@bookTicker"
+        const val STREAM_URL = "wss://stream.binance.com:9443/stream?streams=pumpusdt@aggTrade/pumpusdt@bookTicker/btcusdt@aggTrade"
         const val HISTORY_MILLIS = 300_000L
         const val SAVE_INTERVAL_MILLIS = 15_000L
         const val WARMUP_MILLIS = 60_000L
@@ -236,9 +283,17 @@ data class MicroImpulseSnapshot(
     val tradeAcceleration: Double = 0.0,
     val aggressiveBuyPercent5s: Double = 50.0,
     val aggressiveBuyPercent15s: Double = 50.0,
+    val aggressiveBuyPercent60s: Double = 50.0,
+    val aggressiveBuyPercent5m: Double = 50.0,
+    val buyNotional60s: Double = 0.0,
+    val sellNotional60s: Double = 0.0,
     val priceChange60sPercent: Double = 0.0,
     val spreadPercent: Double? = null,
     val topBookImbalance: Double? = null,
+    val bitcoinPriceUsdt: Double = 0.0,
+    val bitcoinAggressiveBuyPercent15s: Double = 50.0,
+    val bitcoinAggressiveBuyPercent60s: Double = 50.0,
+    val bitcoinPriceChange60sPercent: Double = 0.0,
     val error: String = ""
 )
 
@@ -258,9 +313,17 @@ object MicroImpulseStore {
             tradeAcceleration = p.double("acceleration", 0.0),
             aggressiveBuyPercent5s = p.double("buy_5s", 50.0),
             aggressiveBuyPercent15s = p.double("buy_15s", 50.0),
+            aggressiveBuyPercent60s = p.double("buy_60s", 50.0),
+            aggressiveBuyPercent5m = p.double("buy_5m", 50.0),
+            buyNotional60s = p.double("buy_notional_60s", 0.0),
+            sellNotional60s = p.double("sell_notional_60s", 0.0),
             priceChange60sPercent = p.double("change_60s", 0.0),
             spreadPercent = p.nullableDouble("spread"),
             topBookImbalance = p.nullableDouble("book_imbalance"),
+            bitcoinPriceUsdt = p.double("btc_price", 0.0),
+            bitcoinAggressiveBuyPercent15s = p.double("btc_buy_15s", 50.0),
+            bitcoinAggressiveBuyPercent60s = p.double("btc_buy_60s", 50.0),
+            bitcoinPriceChange60sPercent = p.double("btc_change_60s", 0.0),
             error = p.getString("error", "").orEmpty()
         )
     }
@@ -277,9 +340,17 @@ object MicroImpulseStore {
             .putDouble("acceleration", value.tradeAcceleration)
             .putDouble("buy_5s", value.aggressiveBuyPercent5s)
             .putDouble("buy_15s", value.aggressiveBuyPercent15s)
+            .putDouble("buy_60s", value.aggressiveBuyPercent60s)
+            .putDouble("buy_5m", value.aggressiveBuyPercent5m)
+            .putDouble("buy_notional_60s", value.buyNotional60s)
+            .putDouble("sell_notional_60s", value.sellNotional60s)
             .putDouble("change_60s", value.priceChange60sPercent)
             .putNullableDouble("spread", value.spreadPercent)
             .putNullableDouble("book_imbalance", value.topBookImbalance)
+            .putDouble("btc_price", value.bitcoinPriceUsdt)
+            .putDouble("btc_buy_15s", value.bitcoinAggressiveBuyPercent15s)
+            .putDouble("btc_buy_60s", value.bitcoinAggressiveBuyPercent60s)
+            .putDouble("btc_change_60s", value.bitcoinPriceChange60sPercent)
             .putString("error", value.error)
             .apply()
     }

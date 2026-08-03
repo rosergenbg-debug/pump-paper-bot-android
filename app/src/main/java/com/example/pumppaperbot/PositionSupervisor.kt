@@ -5,6 +5,7 @@ import okhttp3.OkHttpClient
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
+import kotlin.math.max
 
 data class PositionSupervisionState(
     val positionEntryTime: Long = 0L,
@@ -21,6 +22,14 @@ data class PositionSupervisionState(
     val conditionDelta: Int = 0,
     val dangerLevel: Int = 0,
     val summary: String = "Ожидает открытия позиции",
+    val supportTier: String = "ОБЫЧНЫЙ КОНТРОЛЬ",
+    val pnlPercent: Double = 0.0,
+    val peakPnlPercent: Double = 0.0,
+    val pullbackPercent: Double = 0.0,
+    val bookStatus: String = "Стакан ещё не оценён",
+    val flowStatus: String = "Поток сделок ещё не оценён",
+    val bitcoinStatus: String = "Bitcoin ещё не оценён",
+    val watchFor: String = "Ждём первый анализ",
     val error: String = "",
     val promptTokens: Int = 0,
     val completionTokens: Int = 0,
@@ -41,6 +50,14 @@ data class PositionSupervisionState(
         .put("conditionDelta", conditionDelta)
         .put("dangerLevel", dangerLevel)
         .put("summary", summary)
+        .put("supportTier", supportTier)
+        .put("pnlPercent", pnlPercent)
+        .put("peakPnlPercent", peakPnlPercent)
+        .put("pullbackPercent", pullbackPercent)
+        .put("bookStatus", bookStatus)
+        .put("flowStatus", flowStatus)
+        .put("bitcoinStatus", bitcoinStatus)
+        .put("watchFor", watchFor)
         .put("error", error)
         .put("promptTokens", promptTokens)
         .put("completionTokens", completionTokens)
@@ -62,6 +79,14 @@ data class PositionSupervisionState(
             conditionDelta = json.optInt("conditionDelta").coerceIn(-10, 10),
             dangerLevel = json.optInt("dangerLevel").coerceIn(0, 10),
             summary = RussianOutputPolicy.visible(json.optString("summary", "Ожидает открытия позиции")),
+            supportTier = RussianOutputPolicy.visible(json.optString("supportTier", "ОБЫЧНЫЙ КОНТРОЛЬ")),
+            pnlPercent = json.optDouble("pnlPercent", 0.0),
+            peakPnlPercent = json.optDouble("peakPnlPercent", 0.0),
+            pullbackPercent = json.optDouble("pullbackPercent", 0.0),
+            bookStatus = RussianOutputPolicy.visible(json.optString("bookStatus", "Стакан ещё не оценён")),
+            flowStatus = RussianOutputPolicy.visible(json.optString("flowStatus", "Поток сделок ещё не оценён")),
+            bitcoinStatus = RussianOutputPolicy.visible(json.optString("bitcoinStatus", "Bitcoin ещё не оценён")),
+            watchFor = RussianOutputPolicy.visible(json.optString("watchFor", "Ждём первый анализ")),
             error = RussianOutputPolicy.visible(json.optString("error")),
             promptTokens = json.optInt("promptTokens"),
             completionTokens = json.optInt("completionTokens"),
@@ -70,11 +95,25 @@ data class PositionSupervisionState(
     }
 }
 
+data class PositionSupportPlan(
+    val tier: String,
+    val intervalMillis: Long,
+    val model: String,
+    val maxReasoning: Boolean,
+    val pnlPercent: Double,
+    val peakPnlPercent: Double,
+    val pullbackPercent: Double,
+    val trigger: String
+)
+
 object PositionSupervisorPolicy {
     const val FLASH_MODEL = "deepseek-v4-flash"
     const val PRO_MODEL = "deepseek-v4-pro"
-    const val FLASH_INTERVAL = 5L * 60L * 1000L
-    const val PRO_RECHECK_INTERVAL = 2L * 60L * 1000L
+    const val FLASH_INTERVAL = 3L * 60L * 1000L
+    const val PRO_RECHECK_INTERVAL = 1L * 60L * 1000L
+    const val FOREGROUND_NORMAL_INTERVAL = 2L * 60L * 1000L
+    const val PROFIT_ESCALATION_PERCENT = 2.0
+    const val MAX_REASONING_PROFIT_PERCENT = 4.0
 
     /** Serge's open position is exempt from the lower-priority $0.50 research ceiling. */
     fun paidCheckAllowed(positionOpen: Boolean, estimatedDailyCostUsd: Double): Boolean =
@@ -84,19 +123,81 @@ object PositionSupervisorPolicy {
         state: PositionSupervisionState,
         snapshot: LiveSnapshot,
         forceCritical: Boolean,
+        guard: PersonalPositionGuardState,
+        micro: MicroImpulseSnapshot,
         now: Long
     ): String? {
         val critical = snapshot.sellSignal || snapshot.rapidDrop.active ||
             snapshot.directionScore <= -65 || state.exitAdvised || state.dangerLevel >= 6
+        val plan = supportPlan(snapshot, state, guard, micro, forceCritical || critical, now)
         return chooseModelForPosition(
             state = state,
             positionOpen = snapshot.waitMode == "SELL" && snapshot.entryPrice > 0.0,
             entryTime = snapshot.entryTime,
-            critical = critical,
+            critical = plan.model == PRO_MODEL,
             forceCritical = forceCritical,
+            intervalMillis = plan.intervalMillis,
+            preferredModel = plan.model,
             now = now
         )
     }
+
+    fun supportPlan(
+        snapshot: LiveSnapshot,
+        state: PositionSupervisionState,
+        guard: PersonalPositionGuardState,
+        micro: MicroImpulseSnapshot,
+        forceCritical: Boolean,
+        now: Long
+    ): PositionSupportPlan {
+        val open = snapshot.waitMode == "SELL" && snapshot.entryPrice > 0.0
+        val currentPrice = if (open) DeepSeekFreshMarketContext.analysisPrice(snapshot, now) else 0.0
+        val pnl = if (open && currentPrice > 0.0) {
+            (currentPrice / snapshot.entryPrice - 1.0) * 100.0
+        } else 0.0
+        val peakPrice = max(
+            max(snapshot.entryPrice, snapshot.highestClose),
+            max(guard.peakPrice, currentPrice)
+        )
+        val peakPnl = if (open && peakPrice > 0.0) {
+            (peakPrice / snapshot.entryPrice - 1.0) * 100.0
+        } else pnl
+        val pullback = if (peakPrice > 0.0 && currentPrice > 0.0) {
+            (1.0 - currentPrice / peakPrice) * 100.0
+        } else 0.0
+        val microFresh = micro.connected && DeepSeekFreshMarketContext.isFresh(
+            micro.updatedAt, now, DeepSeekFreshMarketContext.MICRO_MAX_AGE
+        )
+        val sellersTakingOver = microFresh && (
+            micro.aggressiveBuyPercent60s < 47.0 ||
+                micro.priceChange60sPercent <= -0.18 ||
+                (micro.topBookImbalance ?: 0.0) <= -0.12
+            )
+        val emergency = forceCritical || state.exitAdvised || state.dangerLevel >= 6 ||
+            snapshot.sellSignal || snapshot.rapidDrop.active || snapshot.directionScore <= -65 ||
+            (peakPnl >= PROFIT_ESCALATION_PERCENT && pullback >= 0.6 && sellersTakingOver)
+        return when {
+            emergency -> PositionSupportPlan(
+                "АВАРИЙНЫЙ PRO-КОНТРОЛЬ", PRO_RECHECK_INTERVAL, PRO_MODEL, true,
+                pnl, peakPnl, pullback, "опасность или разворот микропотока"
+            )
+            pnl >= MAX_REASONING_PROFIT_PERCENT || peakPnl >= MAX_REASONING_PROFIT_PERCENT -> PositionSupportPlan(
+                "ЗАЩИТА ПРИБЫЛИ • PRO MAX", PRO_RECHECK_INTERVAL, PRO_MODEL, true,
+                pnl, peakPnl, pullback, "прибыль достигла +4%"
+            )
+            pnl >= PROFIT_ESCALATION_PERCENT || peakPnl >= PROFIT_ESCALATION_PERCENT -> PositionSupportPlan(
+                "УСИЛЕННЫЙ PRO-КОНТРОЛЬ", PRO_RECHECK_INTERVAL, PRO_MODEL, false,
+                pnl, peakPnl, pullback, "прибыль достигла +2%"
+            )
+            else -> PositionSupportPlan(
+                "ОБЫЧНЫЙ КОНТРОЛЬ", FLASH_INTERVAL, FLASH_MODEL, false,
+                pnl, peakPnl, pullback, "позиция ниже порога +2%"
+            )
+        }
+    }
+
+    fun foregroundCycleInterval(plan: PositionSupportPlan): Long =
+        minOf(FOREGROUND_NORMAL_INTERVAL, plan.intervalMillis)
 
     internal fun chooseModelForPosition(
         state: PositionSupervisionState,
@@ -104,25 +205,43 @@ object PositionSupervisorPolicy {
         entryTime: Long,
         critical: Boolean,
         forceCritical: Boolean,
+        intervalMillis: Long = if (critical) PRO_RECHECK_INTERVAL else FLASH_INTERVAL,
+        preferredModel: String = if (critical) PRO_MODEL else FLASH_MODEL,
         now: Long
     ): String? {
         if (!positionOpen) return null
         if (forceCritical || state.positionEntryTime != entryTime) return PRO_MODEL
-        val interval = if (critical) PRO_RECHECK_INTERVAL else FLASH_INTERVAL
-        if (now - state.lastAttempt < interval) return null
-        return if (critical) PRO_MODEL else FLASH_MODEL
+        if (now - state.lastAttempt < intervalMillis) return null
+        return preferredModel
     }
 
-    fun statusText(state: PositionSupervisionState): String = when {
-        state.lastSuccess <= 0L && state.error.isNotBlank() -> "DeepSeek: ${state.error}"
-        state.lastSuccess <= 0L -> state.summary
-        state.action == "CANCEL_EXIT" -> "ОТМЕНА ВЫХОДА • продолжаем наблюдение\n${state.summary}"
-        state.exitAdvised && state.conditionDelta < 0 ->
-            "ВЫХОД РЕКОМЕНДОВАН • ситуация ухудшается ${state.conditionDelta}/−10 • опасность ${state.dangerLevel}/10\n${state.summary}"
-        state.exitAdvised && state.conditionDelta > 0 ->
-            "ВЫХОД РЕКОМЕНДОВАН • ситуация улучшается +${state.conditionDelta}/+10 • опасность ${state.dangerLevel}/10\n${state.summary}"
-        state.exitAdvised -> "ВЫХОД РЕКОМЕНДОВАН • контрольная точка 0 • опасность ${state.dangerLevel}/10\n${state.summary}"
-        else -> "ПОЗИЦИЮ ДЕРЖИМ • опасность ${state.dangerLevel}/10\n${state.summary}"
+    fun statusText(state: PositionSupervisionState): String {
+        val decision = when {
+            state.lastSuccess <= 0L && state.error.isNotBlank() -> "DeepSeek: ${state.error}"
+            state.lastSuccess <= 0L -> state.summary
+            state.action == "CANCEL_EXIT" -> "ОТМЕНА ВЫХОДА • продолжаем наблюдение\n${state.summary}"
+            state.exitAdvised && state.conditionDelta < 0 ->
+                "ВЫХОД РЕКОМЕНДОВАН • ситуация ухудшается ${state.conditionDelta}/−10 • опасность ${state.dangerLevel}/10\n${state.summary}"
+            state.exitAdvised && state.conditionDelta > 0 ->
+                "ВЫХОД РЕКОМЕНДОВАН • ситуация улучшается +${state.conditionDelta}/+10 • опасность ${state.dangerLevel}/10\n${state.summary}"
+            state.exitAdvised -> "ВЫХОД РЕКОМЕНДОВАН • контрольная точка 0 • опасность ${state.dangerLevel}/10\n${state.summary}"
+            else -> "ПОЗИЦИЮ ДЕРЖИМ • опасность ${state.dangerLevel}/10\n${state.summary}"
+        }
+        if (state.lastSuccess <= 0L) return decision
+        return buildString {
+            append(state.supportTier)
+            append(" • результат ")
+            append(String.format(java.util.Locale.GERMANY, "%+.2f%%", state.pnlPercent))
+            append(" • пик ")
+            append(String.format(java.util.Locale.GERMANY, "%+.2f%%", state.peakPnlPercent))
+            append(" • откат ")
+            append(String.format(java.util.Locale.GERMANY, "%.2f%%", state.pullbackPercent))
+            append('\n').append(decision)
+            append("\nСтакан: ").append(state.bookStatus)
+            append("\nСделки: ").append(state.flowStatus)
+            append("\nBitcoin: ").append(state.bitcoinStatus)
+            append("\nСледить: ").append(state.watchFor)
+        }
     }
 }
 
@@ -158,6 +277,10 @@ private data class SupervisorApiResult(
     val conditionDelta: Int,
     val dangerLevel: Int,
     val summary: String,
+    val bookStatus: String,
+    val flowStatus: String,
+    val bitcoinStatus: String,
+    val watchFor: String,
     val promptTokens: Int,
     val completionTokens: Int,
     val repaired: Boolean,
@@ -191,7 +314,14 @@ class PositionSupervisorClient {
                 summary = "Новая позиция открыта • запускается DeepSeek Pro"
             )
         }
-        val model = PositionSupervisorPolicy.chooseModel(previous, snapshot, forceCritical, now)
+        val guard = PersonalPositionGuardStore.state(context)
+        val micro = MicroImpulseStore.state(context)
+        val supportPlan = PositionSupervisorPolicy.supportPlan(
+            snapshot, previous, guard, micro, forceCritical, now
+        )
+        val model = PositionSupervisorPolicy.chooseModel(
+            previous, snapshot, forceCritical, guard, micro, now
+        )
             ?: return previous
         if (!PositionSupervisorPolicy.paidCheckAllowed(
                 positionOpen = snapshot.waitMode == "SELL" && snapshot.entryPrice > 0.0,
@@ -226,18 +356,21 @@ class PositionSupervisorClient {
                 append(if (forceCritical) "немедленная усиленная проверка" else "контроль открытой позиции")
                 append(" • direction=${snapshot.directionScore} rsi=${snapshot.lastRsi}")
                 append(" entry=${snapshot.entryPrice}")
+                append(" • ${supportPlan.tier} pnl=${supportPlan.pnlPercent}")
             }
         ))
         return runCatching {
             var usedModel = model
             val result = try {
-                analyze(context, key, model, snapshot, previous)
+                analyze(context, key, model, snapshot, previous, supportPlan, guard,
+                    criticalReasoning = supportPlan.maxReasoning)
             } catch (error: DeepSeekStructuredException) {
                 if (model != PositionSupervisorPolicy.PRO_MODEL ||
                     error.httpCode !in setOf(400, 404, 422)
                 ) throw error
                 usedModel = PositionSupervisorPolicy.FLASH_MODEL
-                analyze(context, key, usedModel, snapshot, previous, criticalReasoning = true)
+                analyze(context, key, usedModel, snapshot, previous, supportPlan, guard,
+                    criticalReasoning = true)
             }
             usedModel to result
         }.fold(
@@ -299,6 +432,14 @@ class PositionSupervisorClient {
                     conditionDelta = if (firstExit) 0 else result.conditionDelta,
                     dangerLevel = result.dangerLevel,
                     summary = result.summary,
+                    supportTier = supportPlan.tier,
+                    pnlPercent = supportPlan.pnlPercent,
+                    peakPnlPercent = supportPlan.peakPnlPercent,
+                    pullbackPercent = supportPlan.pullbackPercent,
+                    bookStatus = result.bookStatus,
+                    flowStatus = result.flowStatus,
+                    bitcoinStatus = result.bitcoinStatus,
+                    watchFor = result.watchFor,
                     error = "",
                     promptTokens = previous.promptTokens + result.promptTokens,
                     completionTokens = previous.completionTokens + result.completionTokens,
@@ -343,6 +484,8 @@ class PositionSupervisorClient {
         model: String,
         snapshot: LiveSnapshot,
         previous: PositionSupervisionState,
+        supportPlan: PositionSupportPlan,
+        guard: PersonalPositionGuardState,
         criticalReasoning: Boolean = false
     ): SupervisorApiResult {
         val now = System.currentTimeMillis()
@@ -363,7 +506,13 @@ class PositionSupervisorClient {
             .put("entry_price_eur", snapshot.entryPrice)
             .put("closed_30m_price_eur", snapshot.lastPrice)
             .put("highest_price_since_entry_eur", snapshot.highestClose)
-            .put("pnl_percent", (currentPrice / snapshot.entryPrice - 1.0) * 100.0)
+            .put("live_peak_price_since_entry_eur", guard.peakPrice.takeIf { it > 0.0 } ?: snapshot.highestClose)
+            .put("pnl_percent", supportPlan.pnlPercent)
+            .put("peak_pnl_percent", supportPlan.peakPnlPercent)
+            .put("pullback_from_live_peak_percent", supportPlan.pullbackPercent)
+            .put("support_mode", supportPlan.tier)
+            .put("target_recheck_seconds", supportPlan.intervalMillis / 1000L)
+            .put("support_escalation_trigger", supportPlan.trigger)
             .put("rsi", snapshot.lastRsi)
             .put("funding_rate", snapshot.fundingRate)
             .put("direction_score", snapshot.directionScore)
@@ -371,6 +520,8 @@ class PositionSupervisorClient {
             .put("energy_score", snapshot.energyScore)
             .put("book_imbalance", snapshot.bookImbalance ?: JSONObject.NULL)
             .put("spread_percent", snapshot.spreadPercent ?: JSONObject.NULL)
+            .put("book_bid_notional_usdt", snapshot.bookBidNotional ?: JSONObject.NULL)
+            .put("book_ask_notional_usdt", snapshot.bookAskNotional ?: JSONObject.NULL)
             .put("open_interest_contracts", snapshot.openInterest ?: JSONObject.NULL)
             .put("open_interest_change_since_previous_sync_pct", snapshot.openInterestChangePercent ?: JSONObject.NULL)
             .put("hourly_context_age_seconds", hourly?.let {
@@ -416,8 +567,13 @@ class PositionSupervisorClient {
             real_time_spot_flow — анонимный поток исполненных сделок и лучший bid/ask; five_minute_flow —
             закрытые 5-минутные spot/futures данные. Всегда проверяй fresh и age_seconds, не считай
             просроченные/null-поля текущими. Краткий микровсплеск сам по себе не является причиной EXIT.
+            В усиленном режиме отдельно оцени 20 уровней стакана, агрессивные покупки/продажи PUMP за
+            15/60 секунд и 5 минут, а также минутный поток Bitcoin. Не считай стенку в одном срезе
+            гарантией: стакан можно переставить, поэтому подтверждай его исполненными сделками и ценой.
             Верни только JSON: action HOLD, EXIT или CANCEL_EXIT; condition_delta целое от -10 до +10;
-            danger_level целое от 0 до 10; summary кратко по-русски.
+            danger_level целое от 0 до 10; summary кратко по-русски; book_status — что сейчас в стакане;
+            flow_status — кто давит исполненными сделками; bitcoin_status — помогает или мешает Bitcoin;
+            watch_for — конкретное условие, после которого решение надо пересмотреть.
             Все текстовые значения пиши только на русском языке. Китайские иероглифы запрещены.
             condition_delta сравнивает ситуацию с моментом первого EXIT: отрицательное означает ухудшение,
             положительное — улучшение. CANCEL_EXIT допустим только если прежняя причина выхода действительно исчезла.
@@ -438,8 +594,14 @@ class PositionSupervisorClient {
                     !json.has("condition_delta") -> "нет condition_delta"
                     !json.has("danger_level") -> "нет danger_level"
                     json.optString("summary").isBlank() -> "нет summary"
-                    RussianOutputPolicy.validate(json.optString("summary")) != null ->
-                        RussianOutputPolicy.validate(json.optString("summary"))
+                    json.optString("book_status").isBlank() -> "нет book_status"
+                    json.optString("flow_status").isBlank() -> "нет flow_status"
+                    json.optString("bitcoin_status").isBlank() -> "нет bitcoin_status"
+                    json.optString("watch_for").isBlank() -> "нет watch_for"
+                    listOf("summary", "book_status", "flow_status", "bitcoin_status", "watch_for")
+                        .firstNotNullOfOrNull { RussianOutputPolicy.validate(json.optString(it)) } != null ->
+                        listOf("summary", "book_status", "flow_status", "bitcoin_status", "watch_for")
+                            .firstNotNullOfOrNull { RussianOutputPolicy.validate(json.optString(it)) }
                     else -> null
                 }
             },
@@ -458,7 +620,11 @@ class PositionSupervisorClient {
             action = action,
             conditionDelta = json.optInt("condition_delta").coerceIn(-10, 10),
             dangerLevel = json.optInt("danger_level").coerceIn(0, 10),
-            summary = json.optString("summary", "DeepSeek не дал пояснение").take(500),
+            summary = json.optString("summary", "DeepSeek не дал пояснение").take(700),
+            bookStatus = json.optString("book_status", "Стакан не оценён").take(400),
+            flowStatus = json.optString("flow_status", "Поток не оценён").take(400),
+            bitcoinStatus = json.optString("bitcoin_status", "Bitcoin не оценён").take(400),
+            watchFor = json.optString("watch_for", "Ждать следующую проверку").take(400),
             promptTokens = response.promptTokens,
             completionTokens = response.completionTokens,
             repaired = response.repaired,
