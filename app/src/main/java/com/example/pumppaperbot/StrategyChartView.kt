@@ -430,7 +430,13 @@ class StrategyChartView @JvmOverloads constructor(
 
     private fun drawDates(canvas: Canvas, candles: List<PumpCandle>, x: (Int) -> Float, y: Float) {
         if (candles.isEmpty()) return
-        val formatter = SimpleDateFormat("dd.MM", Locale.GERMAN)
+        val span = (candles.last().closeTime - candles.first().openTime).coerceAtLeast(0L)
+        val pattern = when {
+            span <= 6L * 60L * 60L * 1000L -> "HH:mm"
+            span <= 48L * 60L * 60L * 1000L -> "dd.MM HH:mm"
+            else -> "dd.MM"
+        }
+        val formatter = SimpleDateFormat(pattern, Locale.GERMAN)
         val indexes = listOf(0, candles.lastIndex / 3, candles.lastIndex * 2 / 3, candles.lastIndex).distinct()
         indexes.forEach { index ->
             canvas.drawText(formatter.format(Date(candles[index].closeTime)), x(index), y, datePaint)

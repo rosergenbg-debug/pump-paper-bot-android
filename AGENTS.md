@@ -73,6 +73,7 @@ Serge values timely, unmistakable phone alerts. APP, DeepSeek and DeepSeek exper
 - V4.7: DeepSeek owns both former Gemini AI trading roles; Gemini becomes manual-only second opinion, code 62, current work.
 - V4.8: two-minute primary DeepSeek cadence, independent high-reasoning trade verification, confirmed intrabar entry and a $0.50 daily safety ceiling, code 63, current work.
 - V4.9: fresh/slipped paper execution, bounded independent entry reminders, post-buy alert suppression with uninterrupted virtual competition, local peak protection, faster DeepSeek position supervision and quota-aware Gemini position/news supervision, code 64, current work.
+- V4.10: selectable 1m/5m/15m/30m/1h display chart, 15-second live edge, one-time automatic 1m selection after `Я купил`, and maximum provider-resource priority for Serge's open position, code 65, current work. StrategyV2 remains on closed 30-minute candles.
 
 ## Accumulated next-release backlog
 

@@ -280,6 +280,20 @@
                 android:textSize="12sp"
                 android:textStyle="bold" />
 
+            <Button
+                android:id="@+id/btnChartSpeed"
+                android:layout_width="match_parent"
+                android:layout_height="64dp"
+                android:layout_marginTop="7dp"
+                android:backgroundTint="#1F6FEB"
+                android:gravity="center"
+                android:maxLines="2"
+                android:padding="5dp"
+                android:text="СКОРОСТЬ ГРАФИКА • 30 МИНУТ&#10;НАЖМИТЕ, ЧТОБЫ ИЗМЕНИТЬ"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
             <com.example.pumppaperbot.StrategyChartView
                 android:id="@+id/chart"
                 android:layout_width="match_parent"
