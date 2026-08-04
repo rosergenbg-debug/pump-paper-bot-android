@@ -43,7 +43,7 @@ object CriticalOverviewPolicy {
             ((5.5 - e.actionLevel.coerceIn(1, 10)) * 22.2).roundToInt()
         } else {
             ((e.actionLevel.coerceIn(1, 10) - 5.5) * 22.2).roundToInt()
-        }?.coerceIn(-100, 100)
+        }.coerceIn(-100, 100)
         val bookScore = e.bookImbalance?.takeIf(Double::isFinite)
             ?.times(100.0)?.roundToInt()?.coerceIn(-100, 100)
         val pumpScore = combinedFlowScore(
@@ -129,7 +129,7 @@ object CriticalOverviewPolicy {
             buyerScore != null -> buyerScore.roundToInt()
             moveScore != null -> moveScore.roundToInt()
             else -> null
-        }.coerceIn(-100, 100)
+        }?.coerceIn(-100, 100)
     }
 
     private fun takerScore(ratio: Double?): Int? = ratio?.takeIf(Double::isFinite)
