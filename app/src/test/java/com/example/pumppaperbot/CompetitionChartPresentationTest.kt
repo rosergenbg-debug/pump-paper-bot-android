@@ -6,6 +6,29 @@ import org.junit.Test
 
 class CompetitionChartPresentationTest {
     @Test
+    fun `winning connector uses upper lane and losing connector lower lane`() {
+        val winning = competitionConnectorLaneY(
+            positive = true,
+            entryY = 80f,
+            exitY = 55f,
+            top = 10f,
+            bottom = 120f,
+            clearance = 12f
+        )
+        val losing = competitionConnectorLaneY(
+            positive = false,
+            entryY = 55f,
+            exitY = 82f,
+            top = 10f,
+            bottom = 120f,
+            clearance = 12f
+        )
+
+        assertTrue(winning < 55f)
+        assertTrue(losing > 82f)
+    }
+
+    @Test
     fun `fresh manual exit is inside display range before 30 minute candle closes`() {
         val currentOpen = 12L * 30L * 60L * 1_000L
         val exitAt = currentOpen + 10L * 60L * 1_000L

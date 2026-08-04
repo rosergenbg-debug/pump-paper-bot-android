@@ -115,10 +115,6 @@ object PositionSupervisorPolicy {
     const val PROFIT_ESCALATION_PERCENT = 2.0
     const val MAX_REASONING_PROFIT_PERCENT = 4.0
 
-    /** Serge's open position is exempt from the lower-priority $0.50 research ceiling. */
-    fun paidCheckAllowed(positionOpen: Boolean, estimatedDailyCostUsd: Double): Boolean =
-        positionOpen || DeepSeekPrimaryPolicy.withinDailyBudget(estimatedDailyCostUsd)
-
     fun chooseModel(
         state: PositionSupervisionState,
         snapshot: LiveSnapshot,
@@ -323,16 +319,6 @@ class PositionSupervisorClient {
             previous, snapshot, forceCritical, guard, micro, now
         )
             ?: return previous
-        if (!PositionSupervisorPolicy.paidCheckAllowed(
-                positionOpen = snapshot.waitMode == "SELL" && snapshot.entryPrice > 0.0,
-                estimatedDailyCostUsd = DeepSeekDailyBudgetStore.costUsd(context, now)
-            )) {
-            return previous.copy(
-                positionEntryTime = snapshot.entryTime,
-                error = "Достигнут защитный лимит DeepSeek \$0,50 за сутки",
-                summary = "Локальная стратегия продолжает следить за позицией без новых платных запросов"
-            ).also { PositionSupervisorStore.save(context, it) }
-        }
         val key = DeepSeekSecureKeyStore.read(context)
         if (key.isBlank()) {
             return previous.copy(

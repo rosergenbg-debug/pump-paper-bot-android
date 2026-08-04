@@ -23,9 +23,9 @@ class DeepSeekPrimaryPolicyTest {
         ))
     }
 
-    @Test fun `primary DeepSeek stops automatic spending at fifty cents`() {
-        assertTrue(DeepSeekPrimaryPolicy.withinDailyBudget(0.499))
-        assertFalse(DeepSeekPrimaryPolicy.withinDailyBudget(0.50))
+    @Test fun `five euro cost level is informational and detected without blocking`() {
+        assertFalse(DeepSeekCostWarningPolicy.warningReached(4.999))
+        assertTrue(DeepSeekCostWarningPolicy.warningReached(5.0))
     }
 
     @Test fun `rejected buy cannot execute or anchor the experiment`() {

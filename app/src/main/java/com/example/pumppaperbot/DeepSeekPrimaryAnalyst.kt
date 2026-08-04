@@ -127,10 +127,6 @@ object DeepSeekPrimaryStore {
 object DeepSeekPrimaryPolicy {
     const val INTERVAL = 2L * 60L * 1000L
     const val SIGNAL_MAX_AGE = 12L * 60L * 1000L
-    const val DAILY_COST_LIMIT_USD = 0.50
-
-    fun withinDailyBudget(estimatedCostUsd: Double): Boolean =
-        estimatedCostUsd < DAILY_COST_LIMIT_USD
 
     fun isFreshSignal(state: DeepSeekPrimaryState, now: Long = System.currentTimeMillis()): Boolean =
         state.lastSuccess > 0L && now >= state.lastSuccess && now - state.lastSuccess <= SIGNAL_MAX_AGE
@@ -254,11 +250,6 @@ class DeepSeekPrimaryAnalyst {
         if (!DeepSeekPrimaryPolicy.shouldRun(
                 previous, snapshot.lastPrice > 0.0, force, now, materialChange, adaptiveInterval
             )) return previous
-        if (!DeepSeekPrimaryPolicy.withinDailyBudget(
-                DeepSeekDailyBudgetStore.costUsd(context, now)
-            )) return previous.copy(
-            error = "Достигнут защитный лимит DeepSeek \$0,50 за сутки; новые запросы возобновятся после смены UTC-дня"
-        ).also { DeepSeekPrimaryStore.save(context, it) }
         val key = DeepSeekSecureKeyStore.read(context)
         if (key.isBlank()) return previous.copy(
             lastAttempt = now,

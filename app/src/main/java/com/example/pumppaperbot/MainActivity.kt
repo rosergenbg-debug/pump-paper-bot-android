@@ -83,6 +83,7 @@ class MainActivity : AppCompatActivity() {
     private var btnGeminiExitExperiment: Button? = null
     private var btnUserPaper: Button? = null
     private var btnCompetition: Button? = null
+    private var btnCriticalOverview: Button? = null
     private var btnDeepSeekApi: Button? = null
     private var btnGeminiApi: Button? = null
 
@@ -129,6 +130,7 @@ class MainActivity : AppCompatActivity() {
         btnGeminiExitExperiment = findViewById(R.id.btnGeminiExitExperiment)
         btnUserPaper = findViewById(R.id.btnUserPaper)
         btnCompetition = findViewById(R.id.btnCompetition)
+        btnCriticalOverview = findViewById(R.id.btnCriticalOverview)
         btnDeepSeekApi = findViewById(R.id.btnDeepSeekApi)
         btnGeminiApi = findViewById(R.id.btnGeminiApi)
 
@@ -182,6 +184,9 @@ class MainActivity : AppCompatActivity() {
         btnCompetition?.setOnClickListener {
             startActivity(Intent(this, CompetitionActivity::class.java))
         }
+        btnCriticalOverview?.setOnClickListener {
+            startActivity(Intent(this, CriticalOverviewActivity::class.java))
+        }
         btnDeepSeekApi?.setOnClickListener {
             startActivity(Intent(this, ApiCenterActivity::class.java).putExtra(
                 ApiCenterActivity.EXTRA_PROVIDER, ApiCenterActivity.DEEPSEEK
@@ -193,6 +198,7 @@ class MainActivity : AppCompatActivity() {
             ))
         }
         chart?.setOnClickListener { startActivity(Intent(this, ChartDetailActivity::class.java)) }
+        chart?.setVisibleBarLimit(mainChartVisibleBarLimit())
 
         updateUi()
         checkNow()
@@ -472,9 +478,15 @@ class MainActivity : AppCompatActivity() {
         tvDeepSeekPrimary?.text = DeepSeekPrimaryPolicy.compactStatus(
             deepSeekPrimary,
             DeepSeekSecureKeyStore.read(this).isNotBlank()
-        )
+        ) + DeepSeekDailyBudgetStore.costUsd(this, now).takeIf {
+            DeepSeekCostWarningPolicy.warningReached(it)
+        }?.let { String.format(Locale.GERMANY, "\nРАСХОД: $%.2f • предупреждение, анализ продолжается", it) }.orEmpty()
         tvDeepSeekPrimary?.setTextColor(Color.parseColor(
-            if (deepSeekPrimary.error.isBlank()) "#7EE787" else "#FF7B72"
+            when {
+                deepSeekPrimary.error.isNotBlank() -> "#FF7B72"
+                DeepSeekCostWarningPolicy.warningReached(DeepSeekDailyBudgetStore.costUsd(this, now)) -> "#FFD866"
+                else -> "#7EE787"
+            }
         ))
         renderDeepSeekActionLevel(snapshot, deepSeekPrimary, now)
         renderLatestSignal()

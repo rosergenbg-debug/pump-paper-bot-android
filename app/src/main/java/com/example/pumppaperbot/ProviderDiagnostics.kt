@@ -116,7 +116,8 @@ object ProviderSelfDiagnostics {
                     "Основной контур и расписание",
                     if (primary.lastAttempt > 0L) "PASS" else "WARN",
                     "последняя попытка ${stamp(primary.lastAttempt)}; готовность ${actionLevel.level}/10; " +
-                        "интервал ${if (actionLevel.intensive) "1 минута" else "2 минуты"}; лимит \$0,50/UTC-сутки"
+                        "интервал ${if (actionLevel.intensive) "1 минута" else "2 минуты"}; " +
+                        "блокирующего бюджета нет; предупреждение после ≈€5"
                 ))
                 add(ProviderDiagnosticCheck(
                     "Микропоток",

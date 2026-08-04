@@ -56,6 +56,17 @@
             android:textSize="20sp"
             android:textStyle="bold" />
 
+        <Button
+            android:id="@+id/btnCriticalOverview"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:layout_marginTop="7dp"
+            android:backgroundTint="#9A6700"
+            android:text="КРИТИЧЕСКИЙ ОБЗОР • СТАКАН | ПОТОКИ | BTC"
+            android:textColor="#FFFFFF"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
         <TextView
             android:id="@+id/tvLatestSignal"
             android:layout_width="match_parent"

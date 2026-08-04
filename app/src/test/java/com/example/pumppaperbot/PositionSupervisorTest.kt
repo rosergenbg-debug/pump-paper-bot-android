@@ -7,12 +7,6 @@ import org.junit.Test
 
 class PositionSupervisorTest {
     @Test
-    fun openSergePositionBypassesRoutineDeepSeekCostCeiling() {
-        assertTrue(PositionSupervisorPolicy.paidCheckAllowed(true, 99.0))
-        assertFalse(PositionSupervisorPolicy.paidCheckAllowed(false, 0.50))
-    }
-
-    @Test
     fun stateJsonRoundTripPreservesExitBaselineAndScale() {
         val original = PositionSupervisionState(
             positionEntryTime = 100L,

@@ -24,6 +24,7 @@ object PumpAlert {
     private const val geminiTradeChannelId = "pump_deepseek_trades_v49"
     private const val geminiExitExperimentChannelId = "pump_deepseek_experiment_v49"
     private const val positionSupervisorChannelId = "pump_position_supervisor_v49"
+    private const val deepSeekCostChannelId = "pump_deepseek_cost_v414"
     private const val monitorNotificationId = 3501
     private const val signalNotificationId = 3502
     private const val rapidDropNotificationId = 3503
@@ -41,6 +42,7 @@ object PumpAlert {
     private const val entryReminderExperimentId = 3516
     private const val geminiPositionAdvisorNotificationId = 3517
     private const val deepSeekActionLevelNotificationId = 3518
+    private const val deepSeekCostNotificationId = 3519
     private val rapidDropVibration = longArrayOf(0, 1000, 180, 1000, 180, 1600)
 
     fun ensureChannels(context: Context) {
@@ -126,6 +128,14 @@ object PumpAlert {
             vibrationPattern = longArrayOf(0, 900, 180, 900, 180, 1300)
             setSound(sound, attrs)
         }
+        val deepSeekCost = NotificationChannel(
+            deepSeekCostChannelId,
+            "Расходы DeepSeek",
+            NotificationManager.IMPORTANCE_DEFAULT
+        ).apply {
+            description = "Одно информационное предупреждение, когда оценка расходов DeepSeek за UTC-сутки превышает примерно 5 евро"
+            enableVibration(true)
+        }
         manager.createNotificationChannel(monitor)
         manager.createNotificationChannel(signal)
         manager.createNotificationChannel(rapidDrop)
@@ -134,6 +144,7 @@ object PumpAlert {
         manager.createNotificationChannel(geminiTrades)
         manager.createNotificationChannel(geminiExitExperiment)
         manager.createNotificationChannel(positionSupervisor)
+        manager.createNotificationChannel(deepSeekCost)
     }
 
     fun monitorNotification(context: Context, text: String) =
@@ -565,6 +576,33 @@ object PumpAlert {
             text,
             0xFFFF7B72.toInt()
         )
+    }
+
+    fun showDeepSeekCostWarning(context: Context, estimatedCostUsd: Double) {
+        ensureChannels(context)
+        if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) return
+        val text = String.format(
+            java.util.Locale.GERMANY,
+            "Оценка расходов сегодня: $%.2f (примерно порог €5). Это только уведомление: анализ DeepSeek не остановлен.",
+            estimatedCostUsd
+        )
+        val notification = NotificationCompat.Builder(context, deepSeekCostChannelId)
+            .setSmallIcon(R.drawable.ic_launcher)
+            .setContentTitle("DeepSeek: расходы превысили примерно €5")
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setContentIntent(openAppIntent(context))
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setColor(0xFFF0B72F.toInt())
+            .build()
+        context.getSystemService(NotificationManager::class.java)
+            .notify(deepSeekCostNotificationId, notification)
     }
 
     private fun showTradeNotification(
