@@ -230,16 +230,24 @@ class ApiCenterActivity : AppCompatActivity() {
             val state = DeepSeekPrimaryStore.state(this)
             val position = PositionSupervisorStore.state(this)
             val connection = DeepSeekConnectionStore.state(this)
+            val actionLevel = DeepSeekActionLevelPolicy.fromMarket(
+                PumpBotEngine.snapshot(this),
+                state,
+                MicroImpulseStore.state(this)
+            )
             liveStatus.text = buildString {
                 append("РОЛЬ: ОСНОВНОЙ АНАЛИТИК\n")
                 append("Подключение: ")
                 append(if (connection.lastSuccess > 0L && connection.error.isBlank()) "РАБОТАЕТ" else if (connection.error.isNotBlank()) "ОШИБКА: ${connection.error}" else "ожидает проверки")
-                append("\nОсновной рынок: ${state.action} • направление ${signed(state.direction)}/100 • уверенность ${state.confidence}% • опасность ${state.danger}/10")
+                append("\nОсновной рынок: ${state.action} • направление ${signed(state.direction)}/100 • уверенность ${state.confidence}% • вход ${actionLevel.level}/10 • опасность ${state.danger}/10")
                 append("\n${state.summary}")
                 append("\nАктуальность сигнала: ${if (DeepSeekPrimaryPolicy.isFreshSignal(state)) "СВЕЖИЙ" else "УСТАРЕЛ — не используется на шкале"}")
                 if (state.evidence.isNotEmpty()) append("\nФакты: ${state.evidence.joinToString("; ")}")
                 if (state.risks.isNotEmpty()) append("\nРиски: ${state.risks.joinToString("; ")}")
-                val next = state.lastAttempt.takeIf { it > 0L }?.plus(DeepSeekPrimaryPolicy.INTERVAL) ?: 0L
+                val interval = if (actionLevel.intensive) {
+                    DeepSeekActionLevelPolicy.INTENSIVE_INTERVAL_MILLIS
+                } else DeepSeekPrimaryPolicy.INTERVAL
+                val next = state.lastAttempt.takeIf { it > 0L }?.plus(interval) ?: 0L
                 append("\nПоследний ответ: ${time(state.lastSuccess)} • следующий плановый: ${time(next)}")
                 append("\nПозиция Сержа: ${PositionSupervisorPolicy.statusText(position)}")
             }

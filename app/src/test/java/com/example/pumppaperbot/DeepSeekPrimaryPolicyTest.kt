@@ -46,6 +46,24 @@ class DeepSeekPrimaryPolicyTest {
         ))
     }
 
+    @Test fun `yellow entry support permits a one minute paid cadence`() {
+        val state = DeepSeekPrimaryState(lastAttempt = 1_000L)
+        assertFalse(DeepSeekPrimaryPolicy.shouldRun(
+            state,
+            hasMarketData = true,
+            force = false,
+            now = 1_000L + DeepSeekActionLevelPolicy.INTENSIVE_INTERVAL_MILLIS - 1L,
+            intervalMillis = DeepSeekActionLevelPolicy.INTENSIVE_INTERVAL_MILLIS
+        ))
+        assertTrue(DeepSeekPrimaryPolicy.shouldRun(
+            state,
+            hasMarketData = true,
+            force = false,
+            now = 1_000L + DeepSeekActionLevelPolicy.INTENSIVE_INTERVAL_MILLIS,
+            intervalMillis = DeepSeekActionLevelPolicy.INTENSIVE_INTERVAL_MILLIS
+        ))
+    }
+
     @Test fun `Gemini routine waits two hours unless position is open`() {
         val lastSuccess = 1_000L
         assertFalse(GeminiRoutinePolicy.allowed(

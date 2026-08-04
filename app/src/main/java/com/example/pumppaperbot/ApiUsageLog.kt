@@ -190,7 +190,7 @@ object DeepSeekDiagnostics {
             appendLine("Пакет: ${BuildConfig.APPLICATION_ID}")
             appendLine()
             appendLine("ОСНОВНОЙ КОНТУР")
-            appendLine("модель=${primary.model} действие=${primary.action} направление=${primary.direction} уверенность=${primary.confidence} опасность=${primary.danger}")
+            appendLine("модель=${primary.model} действие=${primary.action} направление=${primary.direction} уверенность=${primary.confidence} готовностьВхода=${primary.entryReadiness}/10 опасность=${primary.danger}")
             appendLine("последняяПопытка=${stamp(primary.lastAttempt)} последнийУспех=${stamp(primary.lastSuccess)} свежий=${DeepSeekPrimaryPolicy.isFreshSignal(primary, now)}")
             appendLine("вывод=${primary.summary.take(500)}")
             appendLine("факты=${primary.evidence.joinToString(" | ").ifBlank { "нет" }.take(1000)}")

@@ -40,6 +40,7 @@ object PumpAlert {
     private const val entryReminderDeepSeekId = 3515
     private const val entryReminderExperimentId = 3516
     private const val geminiPositionAdvisorNotificationId = 3517
+    private const val deepSeekActionLevelNotificationId = 3518
     private val rapidDropVibration = longArrayOf(0, 1000, 180, 1000, 180, 1600)
 
     fun ensureChannels(context: Context) {
@@ -313,7 +314,10 @@ object PumpAlert {
             trade.time,
             executedTrade = true
         )
-        if (buy && PumpBotEngine.snapshot(context).waitMode == "SELL") return
+        if (!VirtualTradeAlertPolicy.shouldNotify(
+                trade.action,
+                PumpBotEngine.snapshot(context).waitMode == "SELL"
+            )) return
         showTradeNotification(
             context,
             appTradeChannelId,
@@ -364,7 +368,10 @@ object PumpAlert {
             trade.time,
             executedTrade = true
         )
-        if (buy && PumpBotEngine.snapshot(context).waitMode == "SELL") return
+        if (!VirtualTradeAlertPolicy.shouldNotify(
+                trade.action,
+                PumpBotEngine.snapshot(context).waitMode == "SELL"
+            )) return
         showTradeNotification(
             context,
             geminiTradeChannelId,
@@ -409,7 +416,10 @@ object PumpAlert {
             trade.time,
             executedTrade = true
         )
-        if (buy && PumpBotEngine.snapshot(context).waitMode == "SELL") return
+        if (!VirtualTradeAlertPolicy.shouldNotify(
+                trade.action,
+                PumpBotEngine.snapshot(context).waitMode == "SELL"
+            )) return
         showTradeNotification(
             context,
             geminiExitExperimentChannelId,
@@ -454,6 +464,44 @@ object PumpAlert {
             "ПОВТОР ВХОДА • ${reminder.source}",
             text,
             0xFFFFC107.toInt()
+        )
+    }
+
+    fun showDeepSeekActionLevel(
+        context: Context,
+        level: DeepSeekActionLevel,
+        state: DeepSeekPrimaryState
+    ) {
+        ensureChannels(context)
+        val title = if (level.level >= DeepSeekActionLevelPolicy.READY_LEVEL) {
+            "DEEPSEEK: ПРОВЕРЬТЕ ВХОД • ${level.level}/10"
+        } else {
+            "DEEPSEEK: ПОДГОТОВЬТЕСЬ • ${level.level}/10"
+        }
+        val text = "${level.detail} ${state.summary} Решение о покупке остаётся за вами."
+        SignalAttributionStore.record(
+            context,
+            "DEEPSEEK",
+            if (level.level >= DeepSeekActionLevelPolicy.READY_LEVEL) {
+                "СИЛЬНАЯ ГОТОВНОСТЬ ВХОДА ${level.level}/10"
+            } else {
+                "ПОДГОТОВКА К ВХОДУ ${level.level}/10"
+            },
+            text,
+            state.lastSuccess,
+            executedTrade = false
+        )
+        showTradeNotification(
+            context,
+            signalChannelId,
+            deepSeekActionLevelNotificationId,
+            title,
+            text,
+            if (level.level >= DeepSeekActionLevelPolicy.READY_LEVEL) {
+                0xFF238636.toInt()
+            } else {
+                0xFFF0B72F.toInt()
+            }
         )
     }
 
