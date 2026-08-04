@@ -52,6 +52,7 @@ object DeepSeekActionLevelPolicy {
     const val INTENSIVE_INTERVAL_MILLIS = 60_000L
     const val PREPARE_LEVEL = 5
     const val READY_LEVEL = 8
+    private const val RECENT_GUARD_ALERT_MILLIS = 10L * 60L * 1000L
 
     fun entry(evidence: DeepSeekEntryLevelEvidence): DeepSeekActionLevel {
         if (evidence.hardVeto) {
@@ -200,7 +201,8 @@ object DeepSeekActionLevelPolicy {
             exitAdvised = state.exitAdvised,
             localSellSignal = snapshot.sellSignal,
             rapidDrop = snapshot.rapidDrop.active,
-            localGuardCritical = guard.forceCriticalAi,
+            localGuardCritical = guard.lastAlertAt > 0L && now >= guard.lastAlertAt &&
+                now - guard.lastAlertAt <= RECENT_GUARD_ALERT_MILLIS,
             directionScore = snapshot.directionScore,
             microFresh = microFresh,
             pumpBuyerPercent60s = micro.aggressiveBuyPercent60s,
