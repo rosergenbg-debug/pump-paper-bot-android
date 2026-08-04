@@ -7,6 +7,8 @@ internal data class ChartTooltipPosition(val left: Float, val top: Float)
 
 internal data class TradeFocusWindow(val visibleBars: Int, val endExclusive: Int)
 
+internal fun mainChartVisibleBarLimit(): Int = 60
+
 internal fun tradeFocusWindow(startIndex: Int, endIndex: Int, totalBars: Int): TradeFocusWindow {
     if (totalBars <= 0) return TradeFocusWindow(0, 0)
     val safeStart = startIndex.coerceIn(0, totalBars - 1)

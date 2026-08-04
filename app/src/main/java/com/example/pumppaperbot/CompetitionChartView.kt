@@ -211,9 +211,18 @@ class CompetitionChartView @JvmOverloads constructor(
                     (1.0 - 0.0015) - 1.0) * 100.0
             val positive = netPercent >= 0.0
             val connector = if (positive) tradeWin else tradeLoss
+            val laneY = competitionConnectorLaneY(
+                positive = positive,
+                entryY = entryY,
+                exitY = exitY,
+                top = top + dp(5f),
+                bottom = bottom - dp(5f),
+                clearance = dp(14f)
+            )
             val tradePath = Path().apply {
                 moveTo(entryX, entryY)
-                lineTo(exitX, entryY)
+                lineTo(entryX, laneY)
+                lineTo(exitX, laneY)
                 lineTo(exitX, exitY)
             }
             canvas.drawPath(tradePath, connector)
@@ -233,11 +242,8 @@ class CompetitionChartView @JvmOverloads constructor(
                 if (exitX > width * 0.68f) Paint.Align.RIGHT else Paint.Align.LEFT
             val labelX =
                 if (resultText.textAlign == Paint.Align.RIGHT) exitX - dp(4f) else exitX + dp(4f)
-            val labelY = if (positive) {
-                (entryY - dp(5f)).coerceAtLeast(top + dp(9f))
-            } else {
-                (entryY + dp(13f)).coerceAtMost(bottom)
-            }
+            val labelY = if (positive) (laneY - dp(4f)).coerceAtLeast(top + dp(9f))
+            else (laneY + dp(11f)).coerceAtMost(bottom)
             canvas.drawText(result, labelX, labelY, resultText)
         }
 

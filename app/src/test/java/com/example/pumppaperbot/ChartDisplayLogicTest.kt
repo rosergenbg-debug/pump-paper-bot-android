@@ -6,6 +6,11 @@ import org.junit.Test
 
 class ChartDisplayLogicTest {
     @Test
+    fun `main chart starts one clear step closer`() {
+        assertEquals(60, mainChartVisibleBarLimit())
+    }
+
+    @Test
     fun `zoom always performs a clear two-times step`() {
         assertEquals(60, nextChartVisibleBarLimit(120))
         assertEquals(30, nextChartVisibleBarLimit(60))

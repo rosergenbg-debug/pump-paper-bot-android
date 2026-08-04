@@ -20,3 +20,16 @@ internal object CompetitionChartPresentation {
         now
     )
 }
+
+internal fun competitionConnectorLaneY(
+    positive: Boolean,
+    entryY: Float,
+    exitY: Float,
+    top: Float,
+    bottom: Float,
+    clearance: Float
+): Float = if (positive) {
+    (minOf(entryY, exitY) - clearance).coerceAtLeast(top)
+} else {
+    (maxOf(entryY, exitY) + clearance).coerceAtMost(bottom)
+}
