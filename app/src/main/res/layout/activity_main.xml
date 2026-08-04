@@ -43,6 +43,20 @@
             android:textStyle="bold" />
 
         <TextView
+            android:id="@+id/tvDeepSeekActionLevel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="7dp"
+            android:background="#3A171A"
+            android:gravity="center"
+            android:minHeight="116dp"
+            android:padding="10dp"
+            android:text="DEEPSEEK • ГОТОВНОСТЬ ВХОДА\n1/10 • НЕ ВХОДИТЬ\nЖдём свежий подтверждённый анализ"
+            android:textColor="#FF7B72"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <TextView
             android:id="@+id/tvLatestSignal"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

@@ -19,6 +19,7 @@ data class DeepSeekPrimaryState(
     val direction: Int = 0,
     val danger: Int = 0,
     val confidence: Int = 0,
+    val entryReadiness: Int = 1,
     val summary: String = "Ожидает первый рыночный кадр",
     val successfulToday: Int = 0,
     val failedToday: Int = 0,
@@ -41,6 +42,7 @@ data class DeepSeekPrimaryState(
         .put("direction", direction)
         .put("danger", danger)
         .put("confidence", confidence)
+        .put("entryReadiness", entryReadiness)
         .put("summary", summary)
         .put("successfulToday", successfulToday)
         .put("failedToday", failedToday)
@@ -64,6 +66,10 @@ data class DeepSeekPrimaryState(
             direction = json.optInt("direction").coerceIn(-100, 100),
             danger = json.optInt("danger").coerceIn(0, 10),
             confidence = json.optInt("confidence").coerceIn(0, 100),
+            entryReadiness = json.optInt(
+                "entryReadiness",
+                (json.optInt("direction").coerceAtLeast(0) / 10).coerceAtLeast(1)
+            ).coerceIn(1, 10),
             summary = RussianOutputPolicy.visible(json.optString("summary", "Ожидает первый рыночный кадр")),
             successfulToday = json.optInt("successfulToday").coerceAtLeast(0),
             failedToday = json.optInt("failedToday").coerceAtLeast(0),
@@ -129,11 +135,22 @@ object DeepSeekPrimaryPolicy {
     fun isFreshSignal(state: DeepSeekPrimaryState, now: Long = System.currentTimeMillis()): Boolean =
         state.lastSuccess > 0L && now >= state.lastSuccess && now - state.lastSuccess <= SIGNAL_MAX_AGE
 
-    fun chooseModel(snapshot: LiveSnapshot, force: Boolean, materialChange: Boolean): String {
+    fun chooseModel(
+        snapshot: LiveSnapshot,
+        force: Boolean,
+        materialChange: Boolean,
+        actionLevel: DeepSeekActionLevel = DeepSeekActionLevel(
+            DeepSeekActionPhase.ENTRY,
+            1,
+            DeepSeekActionBand.RED,
+            "НЕ ВХОДИТЬ",
+            "Ожидается свежая оценка"
+        )
+    ): String {
         val critical = snapshot.buySignal || snapshot.sellSignal || snapshot.rapidDrop.active ||
             kotlin.math.abs(snapshot.readinessScore) >= 95 || kotlin.math.abs(snapshot.directionScore) >= 75 ||
             (snapshot.waitMode == "SELL" && snapshot.entryPrice > 0.0 && snapshot.directionScore <= -55)
-        return if (force || (materialChange && critical)) {
+        return if (force || actionLevel.proPreferred || (materialChange && critical)) {
             PositionSupervisorPolicy.PRO_MODEL
         } else {
             PositionSupervisorPolicy.FLASH_MODEL
@@ -145,9 +162,10 @@ object DeepSeekPrimaryPolicy {
         hasMarketData: Boolean,
         force: Boolean,
         now: Long,
-        materialChange: Boolean = false
+        materialChange: Boolean = false,
+        intervalMillis: Long = INTERVAL
     ): Boolean = hasMarketData && (
-        force || state.lastAttempt <= 0L || materialChange || now - state.lastAttempt >= INTERVAL
+        force || state.lastAttempt <= 0L || materialChange || now - state.lastAttempt >= intervalMillis
     )
 
     fun compactStatus(
@@ -196,6 +214,7 @@ private data class DeepSeekPrimaryResult(
     val direction: Int,
     val danger: Int,
     val confidence: Int,
+    val entryReadiness: Int,
     val summary: String,
     val evidence: List<String>,
     val risks: List<String>,
@@ -222,13 +241,18 @@ class DeepSeekPrimaryAnalyst {
     ): DeepSeekPrimaryState {
         val snapshot = PumpBotEngine.snapshot(context)
         val previous = DeepSeekPrimaryStore.state(context, now)
+        val micro = MicroImpulseStore.state(context)
+        val previousActionLevel = DeepSeekActionLevelPolicy.fromMarket(snapshot, previous, micro, now)
         val materialChange = previous.lastAttempt > 0L && (
             kotlin.math.abs(snapshot.readinessScore - previous.lastInputReadiness) >= 15 ||
                 snapshot.buySignal != previous.lastLocalBuySignal ||
                 snapshot.sellSignal != previous.lastLocalSellSignal
             )
+        val adaptiveInterval = if (snapshot.waitMode == "BUY" && previousActionLevel.intensive) {
+            DeepSeekActionLevelPolicy.INTENSIVE_INTERVAL_MILLIS
+        } else DeepSeekPrimaryPolicy.INTERVAL
         if (!DeepSeekPrimaryPolicy.shouldRun(
-                previous, snapshot.lastPrice > 0.0, force, now, materialChange
+                previous, snapshot.lastPrice > 0.0, force, now, materialChange, adaptiveInterval
             )) return previous
         if (!DeepSeekPrimaryPolicy.withinDailyBudget(
                 DeepSeekDailyBudgetStore.costUsd(context, now)
@@ -241,7 +265,9 @@ class DeepSeekPrimaryAnalyst {
             error = "API-ключ DeepSeek не введён"
         ).also { DeepSeekPrimaryStore.save(context, it) }
 
-        val requestedModel = DeepSeekPrimaryPolicy.chooseModel(snapshot, force, materialChange)
+        val requestedModel = DeepSeekPrimaryPolicy.chooseModel(
+            snapshot, force, materialChange, previousActionLevel
+        )
 
         DeepSeekPrimaryStore.save(context, previous.copy(
             lastAttempt = now,
@@ -299,6 +325,7 @@ class DeepSeekPrimaryAnalyst {
                     direction = result.direction,
                     danger = result.danger,
                     confidence = result.confidence,
+                    entryReadiness = result.entryReadiness,
                     summary = result.summary,
                     successfulToday = previous.successfulToday + 1,
                     promptTokensToday = previous.promptTokensToday + result.promptTokens +
@@ -312,7 +339,16 @@ class DeepSeekPrimaryAnalyst {
                     evidence = result.evidence,
                     risks = result.risks,
                     error = ""
-                ).also { DeepSeekPrimaryStore.save(context, it) }
+                ).also { updated ->
+                    DeepSeekPrimaryStore.save(context, updated)
+                    DeepSeekActionLevelAlertStore.sync(
+                        context,
+                        DeepSeekActionLevelPolicy.fromMarket(
+                            snapshot, updated, MicroImpulseStore.state(context), completedAt
+                        ),
+                        updated
+                    )
+                }
             },
             onFailure = { error ->
                 val structured = error as? DeepSeekStructuredException
@@ -428,7 +464,10 @@ class DeepSeekPrimaryAnalyst {
             Отделяй факты из кадра от предположений. Не подменяй StrategyV2 и не обещай прибыль.
             Верни только JSON:
             action BUY, HOLD, WATCH или EXIT; direction целое -100..100; danger целое 0..10;
-            confidence целое 0..100; summary одно короткое конкретное предложение по-русски;
+            confidence целое 0..100; entry_readiness целое 1..10, где 1 означает «не входить»,
+            5–7 — «подготовиться», а 8–10 допустимы только при согласованном подтверждении минимум
+            двумя независимыми группами данных и отсутствии защитного запрета;
+            summary одно короткое конкретное предложение по-русски;
             evidence массив из 2–4 коротких фактов; risks массив из 1–3 условий, которые опровергнут вывод.
             Все текстовые значения без исключения пиши только на русском языке. Китайские иероглифы запрещены.
             Если виртуальный счёт DeepSeek не в позиции, EXIT не используй; если он уже в позиции, BUY не используй.
@@ -491,6 +530,10 @@ class DeepSeekPrimaryAnalyst {
             confidence = DeepSeekTradeVerificationPolicy.acceptedConfidence(
                 proposedAction, verification?.approved, json.optInt("confidence")
             ),
+            entryReadiness = json.optInt(
+                "entry_readiness",
+                (json.optInt("direction").coerceAtLeast(0) / 10).coerceAtLeast(1)
+            ).coerceIn(1, 10),
             summary = summary.take(400),
             evidence = json.optJSONArray("evidence")?.let { array ->
                 List(array.length().coerceAtMost(4)) { array.optString(it).take(240) }

@@ -34,7 +34,7 @@ class PumpSignalService : Service() {
         microImpulse = MicroImpulseStream(this)
         startForeground(
             PumpAlert.monitorId(),
-            PumpAlert.monitorNotification(this, "Проверяет PUMP каждые 1–2 минуты; прибыль от +2% — усиленно.")
+            PumpAlert.monitorNotification(this, "Проверяет PUMP каждые 1–2 минуты; жёлтая зона входа и прибыль от +2% — усиленно.")
         )
     }
 
@@ -147,7 +147,14 @@ class PumpSignalService : Service() {
     private fun nextCycleIntervalMillis(): Long {
         val snapshot = PumpBotEngine.snapshot(this)
         if (snapshot.waitMode != "SELL" || snapshot.entryPrice <= 0.0) {
-            return normalCycleIntervalMillis
+            val level = DeepSeekActionLevelPolicy.fromMarket(
+                snapshot,
+                DeepSeekPrimaryStore.state(this),
+                MicroImpulseStore.state(this)
+            )
+            return if (level.intensive) {
+                DeepSeekActionLevelPolicy.INTENSIVE_INTERVAL_MILLIS
+            } else normalCycleIntervalMillis
         }
         val plan = PositionSupervisorPolicy.supportPlan(
             snapshot = snapshot,

@@ -62,6 +62,7 @@ class MainActivity : AppCompatActivity() {
     private var tvManualPnl: TextView? = null
     private var tvPositionSupervisor: TextView? = null
     private var tvDeepSeekPrimary: TextView? = null
+    private var tvDeepSeekActionLevel: TextView? = null
     private var tvAlertStatus: TextView? = null
     private var chart: StrategyChartView? = null
     private var manualPositionChart: ManualPositionChartView? = null
@@ -107,6 +108,7 @@ class MainActivity : AppCompatActivity() {
         tvManualPnl = findViewById(R.id.tvManualPnl)
         tvPositionSupervisor = findViewById(R.id.tvPositionSupervisor)
         tvDeepSeekPrimary = findViewById(R.id.tvDeepSeekPrimary)
+        tvDeepSeekActionLevel = findViewById(R.id.tvDeepSeekActionLevel)
         tvAlertStatus = findViewById(R.id.tvAlertStatus)
         chart = findViewById(R.id.chart)
         manualPositionChart = findViewById(R.id.manualPositionChart)
@@ -474,6 +476,7 @@ class MainActivity : AppCompatActivity() {
         tvDeepSeekPrimary?.setTextColor(Color.parseColor(
             if (deepSeekPrimary.error.isBlank()) "#7EE787" else "#FF7B72"
         ))
+        renderDeepSeekActionLevel(snapshot, deepSeekPrimary, now)
         renderLatestSignal()
         tvMode?.text = if (snapshot.rapidDrop.active) {
             String.format(Locale.GERMANY, "АВАРИЙНОЕ ПАДЕНИЕ −%.1f%% — ПРОВЕРЬТЕ РЫНОК", snapshot.rapidDrop.dropPercent)
@@ -641,6 +644,38 @@ class MainActivity : AppCompatActivity() {
             else -> "#D2A8FF"
         }
         tvPositionSupervisor?.setTextColor(Color.parseColor(color))
+    }
+
+    private fun renderDeepSeekActionLevel(
+        snapshot: LiveSnapshot,
+        primary: DeepSeekPrimaryState,
+        now: Long
+    ) {
+        val micro = MicroImpulseStore.state(this)
+        val level = if (snapshot.waitMode == "SELL" && snapshot.entryPrice > 0.0) {
+            DeepSeekActionLevelPolicy.fromPosition(
+                snapshot,
+                PositionSupervisorStore.state(this),
+                PersonalPositionGuardStore.state(this),
+                micro,
+                now
+            )
+        } else {
+            DeepSeekActionLevelPolicy.fromMarket(snapshot, primary, micro, now)
+        }
+        val phase = if (level.phase == DeepSeekActionPhase.ENTRY) {
+            "ГОТОВНОСТЬ ВХОДА"
+        } else {
+            "ОПАСНОСТЬ ВЫХОДА"
+        }
+        tvDeepSeekActionLevel?.text = "DEEPSEEK • $phase\n${level.level}/10 • ${level.label}\n${level.detail}"
+        val colors = when (level.band) {
+            DeepSeekActionBand.RED -> "#FF7B72" to "#3A171A"
+            DeepSeekActionBand.YELLOW -> "#FFD866" to "#3A300F"
+            DeepSeekActionBand.GREEN -> "#7EE787" to "#15351F"
+        }
+        tvDeepSeekActionLevel?.setTextColor(Color.parseColor(colors.first))
+        tvDeepSeekActionLevel?.setBackgroundColor(Color.parseColor(colors.second))
     }
 
     private fun schedulePositionCheck(forceCritical: Boolean) {
