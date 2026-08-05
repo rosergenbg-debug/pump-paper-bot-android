@@ -6,7 +6,6 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
-import android.media.RingtoneManager
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
@@ -17,13 +16,14 @@ import androidx.core.content.ContextCompat
 
 object PumpAlert {
     private const val monitorChannelId = "pump_rsi_risk_monitor"
-    private const val signalChannelId = "pump_rsi_risk_signals_v49"
-    private const val rapidDropChannelId = "pump_rapid_drop_v26"
-    private const val eventRadarChannelId = "pump_event_radar_v3"
-    private const val appTradeChannelId = "pump_app_trades_v49"
-    private const val geminiTradeChannelId = "pump_deepseek_trades_v49"
-    private const val geminiExitExperimentChannelId = "pump_deepseek_experiment_v49"
-    private const val positionSupervisorChannelId = "pump_position_supervisor_v49"
+    private const val signalChannelId = "pump_rsi_risk_signals_v417"
+    private const val rapidDropChannelId = "pump_rapid_drop_v417"
+    private const val eventRadarChannelId = "pump_event_radar_v417"
+    private const val appTradeChannelId = "pump_app_trades_v417"
+    private const val geminiTradeChannelId = "pump_deepseek_trades_v417"
+    private const val geminiExitExperimentChannelId = "pump_deepseek_experiment_v417"
+    private const val positionSupervisorChannelId = "pump_position_supervisor_v417"
+    private const val silentAlertChannelId = "pump_silent_updates_v417"
     private const val deepSeekCostChannelId = "pump_deepseek_cost_v414"
     private const val monitorNotificationId = 3501
     private const val signalNotificationId = 3502
@@ -48,8 +48,7 @@ object PumpAlert {
     fun ensureChannels(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = context.getSystemService(NotificationManager::class.java)
-        val sound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+        val sound = AlertSoundPreferences.uri(context)
         val attrs = AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_ALARM)
             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
@@ -136,6 +135,15 @@ object PumpAlert {
             description = "Одно информационное предупреждение, когда оценка расходов DeepSeek за UTC-сутки превышает примерно 5 евро"
             enableVibration(true)
         }
+        val silentAlerts = NotificationChannel(
+            silentAlertChannelId,
+            "PUMP сообщения без звонка",
+            NotificationManager.IMPORTANCE_DEFAULT
+        ).apply {
+            description = "Входы и виртуальные сделки вне рабочих дней или разрешённого времени"
+            enableVibration(false)
+            setSound(null, null)
+        }
         manager.createNotificationChannel(monitor)
         manager.createNotificationChannel(signal)
         manager.createNotificationChannel(rapidDrop)
@@ -145,6 +153,17 @@ object PumpAlert {
         manager.createNotificationChannel(geminiExitExperiment)
         manager.createNotificationChannel(positionSupervisor)
         manager.createNotificationChannel(deepSeekCost)
+        manager.createNotificationChannel(silentAlerts)
+    }
+
+    fun recreateSelectableChannels(context: Context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val manager = context.getSystemService(NotificationManager::class.java)
+        listOf(
+            signalChannelId, rapidDropChannelId, eventRadarChannelId, appTradeChannelId, geminiTradeChannelId,
+            geminiExitExperimentChannelId, positionSupervisorChannelId
+        ).forEach(manager::deleteNotificationChannel)
+        ensureChannels(context)
     }
 
     fun monitorNotification(context: Context, text: String) =
@@ -202,7 +221,7 @@ object PumpAlert {
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setVibrate(longArrayOf(0, 700, 250, 700, 250, 1100))
-            .setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM))
+            .setSound(AlertSoundPreferences.uri(context))
             .build()
         val manager = context.getSystemService(NotificationManager::class.java)
         manager.notify(signalNotificationId, notification)
@@ -244,7 +263,12 @@ object PumpAlert {
             drop.currentPrice,
             drop.windowMinutes
         )
-        val notification = NotificationCompat.Builder(context, rapidDropChannelId)
+        val urgentPersonalExit = snapshot.waitMode == "SELL"
+        val loud = AlertDeliveryPolicy.shouldRing(AlertSchedule.isAllowedNow(context), urgentPersonalExit)
+        val notification = NotificationCompat.Builder(
+            context,
+            if (loud) rapidDropChannelId else silentAlertChannelId
+        )
             .setSmallIcon(R.drawable.ic_launcher)
             .setContentTitle(title)
             .setContentText(text)
@@ -252,14 +276,14 @@ object PumpAlert {
             .setContentIntent(openAppIntent(context))
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_MAX)
-            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setCategory(if (loud) NotificationCompat.CATEGORY_ALARM else NotificationCompat.CATEGORY_STATUS)
             .setColor(0xFFDA3633.toInt())
-            .setVibrate(rapidDropVibration)
-            .setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM))
+            .setVibrate(if (loud) rapidDropVibration else longArrayOf(0))
+            .setSound(if (loud) AlertSoundPreferences.uri(context) else null)
             .build()
         context.getSystemService(NotificationManager::class.java)
             .notify(rapidDropNotificationId, notification)
-        vibrate(context, rapidDropVibration)
+        if (loud) vibrate(context, rapidDropVibration)
     }
 
     fun showEventRadar(context: Context, state: EventRadarState, snapshot: LiveSnapshot) {
@@ -294,14 +318,14 @@ object PumpAlert {
         ensureChannels(context)
         val buy = trade.action == "BUY"
         val title = when (trade.action) {
-            "BUY" -> "APP: ВХОД В PUMP/EUR"
-            StrategyV2.ACTION_SELL_HALF -> "APP: ЧАСТИЧНЫЙ ВЫХОД ИЗ PUMP/EUR"
-            else -> "APP: ВЫХОД ИЗ PUMP/EUR"
+            "BUY" -> "APP ВОШЁЛ В PUMP/EUR"
+            StrategyV2.ACTION_SELL_HALF -> "APP ЧАСТИЧНО ВЫШЕЛ ИЗ PUMP/EUR"
+            else -> "APP ВЫШЕЛ ИЗ PUMP/EUR"
         }
         val text = if (buy) {
             String.format(
                 java.util.Locale.GERMANY,
-                "APP вложил виртуальные €%.2f по цене €%.8f. Комиссия €%.2f. %s",
+                "APP вложил виртуальные €%.2f по цене €%.8f. Комиссия €%.2f. Причина входа: %s",
                 trade.amount * trade.price + trade.fee,
                 trade.price,
                 trade.fee,
@@ -310,7 +334,7 @@ object PumpAlert {
         } else {
             String.format(
                 java.util.Locale.GERMANY,
-                "APP продал по цене €%.8f. Результат сделки %+.2f €. Комиссия €%.2f. %s",
+                "APP продал по цене €%.8f. Результат сделки %+.2f €. Комиссия €%.2f. Причина выхода: %s",
                 trade.price,
                 trade.pnlEur,
                 trade.fee,
@@ -352,7 +376,7 @@ object PumpAlert {
             String.format(
                 java.util.Locale.GERMANY,
                 "DeepSeek вложил виртуальные €%.2f по цене €%.8f. Комиссия €%.2f. " +
-                    "Оценка %+d/100, уверенность %d/100. %s",
+                    "Оценка %+d/100, уверенность %d/100. Причина входа: %s",
                 trade.amount * trade.price + trade.fee,
                 trade.price,
                 trade.fee,
@@ -364,7 +388,7 @@ object PumpAlert {
             String.format(
                 java.util.Locale.GERMANY,
                 "DeepSeek продал всю виртуальную позицию по цене €%.8f. " +
-                    "Результат %+.2f €, комиссия €%.2f. %s",
+                    "Результат %+.2f €, комиссия €%.2f. Причина выхода: %s",
                 trade.price,
                 trade.pnlEur,
                 trade.fee,
@@ -387,7 +411,7 @@ object PumpAlert {
             context,
             geminiTradeChannelId,
             if (buy) geminiBuyNotificationId else geminiSellNotificationId,
-            if (buy) "DEEPSEEK: ВХОД В PUMP/EUR" else "DEEPSEEK: ВЫХОД ИЗ PUMP/EUR",
+            if (buy) "DEEPSEEK ВОШЁЛ В PUMP/EUR" else "DEEPSEEK ВЫШЕЛ ИЗ PUMP/EUR",
             text,
             if (buy) 0xFF7C3AED.toInt() else 0xFFDA3633.toInt()
         )
@@ -405,7 +429,7 @@ object PumpAlert {
         val text = if (buy) {
             String.format(
                 java.util.Locale.GERMANY,
-                "Эксперимент вошёл по цене €%.8f и вложил виртуальные €%.2f. %s",
+                "Эксперимент вошёл по цене €%.8f и вложил виртуальные €%.2f. Причина входа: %s",
                 trade.price,
                 trade.amount * trade.price + trade.fee,
                 trade.reason
@@ -435,7 +459,7 @@ object PumpAlert {
             context,
             geminiExitExperimentChannelId,
             if (buy) geminiExperimentBuyNotificationId else geminiExperimentSellNotificationId,
-            if (buy) "DEEPSEEK‑ЭКСПЕРИМЕНТ: ВХОД" else "DEEPSEEK‑ЭКСПЕРИМЕНТ: ВЫХОД",
+            if (buy) "DEEPSEEK‑ЭКСПЕРИМЕНТ ВОШЁЛ" else "DEEPSEEK‑ЭКСПЕРИМЕНТ ВЫШЕЛ",
             text,
             if (buy) 0xFFD29922.toInt() else 0xFFFF7B72.toInt()
         )
@@ -485,18 +509,24 @@ object PumpAlert {
     ) {
         ensureChannels(context)
         val title = if (level.level >= DeepSeekActionLevelPolicy.READY_LEVEL) {
-            "DEEPSEEK: ПРОВЕРЬТЕ ВХОД • ${level.level}/10"
+            "DEEPSEEK: ВХОД ПОДТВЕРЖДАЕТСЯ • ${level.level}/10"
         } else {
-            "DEEPSEEK: ПОДГОТОВЬТЕСЬ • ${level.level}/10"
+            "DEEPSEEK: ЖЁЛТЫЙ СИГНАЛ ВХОДА • ${level.level}/10"
         }
-        val text = "${level.detail} ${state.summary} Решение о покупке остаётся за вами."
+        val evidence = state.evidence.take(2).joinToString("; ")
+        val text = buildString {
+            append(level.detail)
+            append(" Причина: ")
+            append(if (evidence.isNotBlank()) evidence else state.summary)
+            append(". Решение о покупке остаётся за вами.")
+        }
         SignalAttributionStore.record(
             context,
             "DEEPSEEK",
             if (level.level >= DeepSeekActionLevelPolicy.READY_LEVEL) {
-                "СИЛЬНАЯ ГОТОВНОСТЬ ВХОДА ${level.level}/10"
+                "ПОДТВЕРЖДЕНИЕ ВХОДА ${level.level}/10"
             } else {
-                "ПОДГОТОВКА К ВХОДУ ${level.level}/10"
+                "ЖЁЛТЫЙ СИГНАЛ ВХОДА ${level.level}/10"
             },
             text,
             state.lastSuccess,
@@ -524,7 +554,8 @@ object PumpAlert {
             personalGuardNotificationId,
             "СЕРЖ: ЖИВАЯ ПРОВЕРКА ВЫХОДА",
             "$reason. DeepSeek и Gemini получают усиленную проверку. Решение о продаже остаётся за вами.",
-            0xFFDA3633.toInt()
+            0xFFDA3633.toInt(),
+            alwaysLoud = true
         )
     }
 
@@ -542,7 +573,12 @@ object PumpAlert {
         }
         val text = PositionSupervisorPolicy.statusText(state) +
             "\nМодель: ${state.model}. Решение о продаже остаётся за вами."
-        val notification = NotificationCompat.Builder(context, positionSupervisorChannelId)
+        val urgentExit = state.exitAdvised || state.dangerLevel >= 8
+        val loud = urgentExit
+        val notification = NotificationCompat.Builder(
+            context,
+            if (loud) positionSupervisorChannelId else silentAlertChannelId
+        )
             .setSmallIcon(R.drawable.ic_launcher)
             .setContentTitle(title)
             .setContentText(text)
@@ -550,14 +586,14 @@ object PumpAlert {
             .setContentIntent(openAppIntent(context))
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_MAX)
-            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setCategory(if (loud) NotificationCompat.CATEGORY_ALARM else NotificationCompat.CATEGORY_STATUS)
             .setColor(if (state.action == "CANCEL_EXIT") 0xFF238636.toInt() else 0xFFDA3633.toInt())
-            .setVibrate(longArrayOf(0, 900, 180, 900, 180, 1300))
-            .setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM))
+            .setVibrate(if (loud) longArrayOf(0, 900, 180, 900, 180, 1300) else longArrayOf(0))
+            .setSound(if (loud) AlertSoundPreferences.uri(context) else null)
             .build()
         context.getSystemService(NotificationManager::class.java)
             .notify(positionSupervisorNotificationId, notification)
-        vibrate(context, longArrayOf(0, 900, 180, 900, 180, 1300))
+        if (loud) vibrate(context, longArrayOf(0, 900, 180, 900, 180, 1300))
     }
 
     fun showGeminiPositionAdvisor(context: Context, state: GeminiPositionAdvisorState) {
@@ -572,9 +608,17 @@ object PumpAlert {
             context,
             positionSupervisorChannelId,
             geminiPositionAdvisorNotificationId,
-            if (state.dangerLevel >= 9) "GEMINI: КРИТИЧЕСКАЯ ПРОВЕРКА ВЫХОДА" else "GEMINI: ПРОВЕРЬТЕ ВЫХОД",
+            if (state.action == "EXIT" && state.dangerLevel >= 9) {
+                "GEMINI: КРИТИЧЕСКИЙ ВЫХОД"
+            } else if (state.action == "EXIT") {
+                "GEMINI РЕКОМЕНДУЕТ ВЫХОД"
+            } else {
+                "GEMINI: УСИЛЕННОЕ НАБЛЮДЕНИЕ"
+            },
             text,
-            0xFFFF7B72.toInt()
+            0xFFFF7B72.toInt(),
+            alwaysLoud = state.action == "EXIT",
+            scheduledSound = false
         )
     }
 
@@ -611,10 +655,16 @@ object PumpAlert {
         notificationId: Int,
         title: String,
         text: String,
-        color: Int
+        color: Int,
+        alwaysLoud: Boolean = false,
+        scheduledSound: Boolean = true
     ) {
         requireTradeNotificationsAvailable(context)
-        val notification = NotificationCompat.Builder(context, channelId)
+        val loud = AlertDeliveryPolicy.shouldRing(
+            withinSchedule = scheduledSound && AlertSchedule.isAllowedNow(context),
+            urgentPersonalExit = alwaysLoud
+        )
+        val notification = NotificationCompat.Builder(context, if (loud) channelId else silentAlertChannelId)
             .setSmallIcon(R.drawable.ic_launcher)
             .setContentTitle(title)
             .setContentText(text)
@@ -622,14 +672,14 @@ object PumpAlert {
             .setContentIntent(openAppIntent(context))
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_MAX)
-            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setCategory(if (loud) NotificationCompat.CATEGORY_ALARM else NotificationCompat.CATEGORY_STATUS)
             .setColor(color)
-            .setVibrate(longArrayOf(0, 700, 250, 700, 250, 1100))
-            .setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM))
+            .setVibrate(if (loud) longArrayOf(0, 700, 250, 700, 250, 1100) else longArrayOf(0))
+            .setSound(if (loud) AlertSoundPreferences.uri(context) else null)
             .build()
         context.getSystemService(NotificationManager::class.java)
             .notify(notificationId, notification)
-        vibrate(context)
+        if (loud) vibrate(context)
     }
 
     private fun requireTradeNotificationsAvailable(context: Context) {

@@ -38,6 +38,7 @@ Serge values timely, unmistakable phone alerts. APP, DeepSeek and DeepSeek exper
 - V4.14 removes the internal DeepSeek cost stop, retaining only one non-blocking warning near €5/day. Its critical overview graphically separates action level, direction, 20-level book, live PUMP executions, spot/futures flow, Bitcoin and open interest; it is display-only and cannot override hard entry vetoes or execute Serge trades. The main chart starts at 60 visible candles, and four-account trade connectors route wins above and losses below the price line.
 - V4.15 persists public live PUMP/BTC flow and book observations for 24 hours and supplies robust instant/5m/15m/30m/1h/6h breathing scores. Closed 30-minute APP late-entry/overheat flags are context only for the independent DeepSeek circuit and cannot freeze an intrabar DeepSeek BUY. The experiment uses a faster breathing score capped within 15 points of normal DeepSeek. A rejected proposal remains visible but never executes or anchors the experiment. APP trend mode accompanies the winner after first reaching +8% and waits for a later confirmed pullback instead of selling on the same rising candle.
 - V4.16 adds a no-new-screen Pump.fun fundamentals layer and a local 50-MiB verified DeepSeek evidence memory. Predictions are frozen before outcomes and evaluated at 15m/1h/3h/6h/24h. Promotion requires 30 independent cases, >=60% directional precision, positive expectancy after 0.30% round-trip fees, lift over baseline and walk-forward confirmation. Memory/fundamentals are context only and cannot execute a trade or bypass safety rules.
+- V4.17 removes distant preparation calls. DeepSeek entry notifications start at 7/10 (yellow) and repeat only on increases to 8/9/10, with 9–10 green. Ordinary sound is limited to Monday, Tuesday, Thursday and Friday, 06:15–23:00 local time; outside it messages are silent. Only an urgent exit for Serge's already-open position may ring around the clock. The selected Android alarm melody is user-configurable.
 
 ## Release invariants
 
@@ -86,6 +87,7 @@ Serge values timely, unmistakable phone alerts. APP, DeepSeek and DeepSeek exper
 - V4.14: no internal DeepSeek daily cost stop, one informational ≈€5 warning, critical multi-factor overview, closer 60-bar main chart and separated win/loss connector lanes, code 69, current work.
 - V4.15: persistent robust live-market breathing, independent intrabar DeepSeek, visible proposal/verification/execution states, bounded experiment sensitivity and APP winner accompaniment, code 70, current work.
 - V4.16: internal Pump.fun migrations/BOOST, volume, revenue, buyback/burn context; verified 50-MiB DeepSeek outcome memory; clearer short/long Russian scenarios and conflict-aware Pro escalation, code 71, current work.
+- V4.17: 7/8/9/10 DeepSeek entry steps, attributed trade reasons, fixed Mon/Tue/Thu/Fri 06:15–23:00 ordinary ringing, silent off-hours messages, round-the-clock urgent Serge exits and selectable alarm sound, code 72, current work.
 
 ## Accumulated next-release backlog
 

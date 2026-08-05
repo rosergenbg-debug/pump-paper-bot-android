@@ -19,6 +19,7 @@ object AlertSchedule {
     private const val keyPendingDirection = "pending_direction"
     private const val keyMessage = "message"
     private const val keyV322StartMigrated = "v322_start_migrated"
+    private const val keyV417WorkDaysMigrated = "v417_work_days_migrated"
     private const val defaultStart = 6 * 60 + 15
     private const val defaultEnd = 23 * 60
 
@@ -50,17 +51,36 @@ object AlertSchedule {
     }
 
     fun isAllowedNow(context: Context, now: Long = System.currentTimeMillis()): Boolean {
-        if (mode(context) == MODE_ALWAYS) return true
+        migrateToWorkDays(context)
         val calendar = Calendar.getInstance().apply { timeInMillis = now }
         val minutes = calendar.get(Calendar.HOUR_OF_DAY) * 60 + calendar.get(Calendar.MINUTE)
         val start = startMinutes(context)
         val end = endMinutes(context)
-        return isMinuteAllowed(mode(context), start, end, minutes)
+        return isMomentAllowed(start, end, calendar.get(Calendar.DAY_OF_WEEK), minutes)
     }
+
+    fun enforceAgreedSchedule(context: Context) = migrateToWorkDays(context)
 
     internal fun isMinuteAllowed(mode: String, start: Int, end: Int, minutes: Int): Boolean {
         if (mode == MODE_ALWAYS) return true
         return if (start <= end) minutes in start until end else minutes >= start || minutes < end
+    }
+
+    internal fun isMomentAllowed(start: Int, end: Int, dayOfWeek: Int, minutes: Int): Boolean {
+        val workDay = dayOfWeek == Calendar.MONDAY || dayOfWeek == Calendar.TUESDAY ||
+            dayOfWeek == Calendar.THURSDAY || dayOfWeek == Calendar.FRIDAY
+        return workDay && isMinuteAllowed(MODE_WORK, start, end, minutes)
+    }
+
+    private fun migrateToWorkDays(context: Context) {
+        val p = prefs(context)
+        if (p.getBoolean(keyV417WorkDaysMigrated, false)) return
+        p.edit()
+            .putString(keyMode, MODE_WORK)
+            .putInt(keyStart, defaultStart)
+            .putInt(keyEnd, defaultEnd)
+            .putBoolean(keyV417WorkDaysMigrated, true)
+            .commit()
     }
 
     fun rememberBlocked(context: Context, snapshot: LiveSnapshot) {
@@ -147,10 +167,11 @@ object AlertSchedule {
         ?: "Ночных пропущенных сигналов нет."
 
     fun statusText(context: Context): String {
+        migrateToWorkDays(context)
         val schedule = if (mode(context) == MODE_ALWAYS) {
             "Звонок: 24 часа"
         } else {
-            "Звонок: ежедневно ${formatMinutes(startMinutes(context))}–${formatMinutes(endMinutes(context))}"
+            "Звонок: пн, вт, чт, пт ${formatMinutes(startMinutes(context))}–${formatMinutes(endMinutes(context))}"
         }
         return "$schedule\n${message(context)}"
     }

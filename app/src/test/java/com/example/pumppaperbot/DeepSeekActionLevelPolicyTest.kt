@@ -108,19 +108,28 @@ class DeepSeekActionLevelPolicyTest {
         assertTrue(VirtualTradeAlertPolicy.shouldNotify("BUY", userPositionOpen = false))
     }
 
-    @Test fun `DeepSeek preparation and ready alerts only fire on upward crossing`() {
+    @Test fun `DeepSeek entry alerts start at seven and repeat on each ten percent improvement`() {
         assertEquals(
-            DeepSeekActionLevelAlertPolicy.PREPARE,
+            DeepSeekActionLevelAlertPolicy.NONE,
             DeepSeekActionLevelAlertPolicy.next(DeepSeekActionLevelAlertPolicy.NONE, 6)
         )
         assertEquals(
-            DeepSeekActionLevelAlertPolicy.READY,
-            DeepSeekActionLevelAlertPolicy.next(DeepSeekActionLevelAlertPolicy.PREPARE, 9)
+            7,
+            DeepSeekActionLevelAlertPolicy.next(DeepSeekActionLevelAlertPolicy.NONE, 7)
         )
         assertEquals(
-            DeepSeekActionLevelAlertPolicy.NONE,
-            DeepSeekActionLevelAlertPolicy.next(DeepSeekActionLevelAlertPolicy.READY, 9)
+            8,
+            DeepSeekActionLevelAlertPolicy.next(7, 8)
         )
+        assertEquals(9, DeepSeekActionLevelAlertPolicy.next(8, 9))
+        assertEquals(10, DeepSeekActionLevelAlertPolicy.next(9, 10))
+        assertEquals(DeepSeekActionLevelAlertPolicy.NONE, DeepSeekActionLevelAlertPolicy.next(9, 9))
+    }
+
+    @Test fun `only urgent personal exit bypasses the ringing schedule`() {
+        assertFalse(AlertDeliveryPolicy.shouldRing(withinSchedule = false, urgentPersonalExit = false))
+        assertTrue(AlertDeliveryPolicy.shouldRing(withinSchedule = true, urgentPersonalExit = false))
+        assertTrue(AlertDeliveryPolicy.shouldRing(withinSchedule = false, urgentPersonalExit = true))
     }
 
     private fun entryEvidence(

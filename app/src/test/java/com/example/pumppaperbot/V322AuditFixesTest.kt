@@ -3,14 +3,19 @@ package com.example.pumppaperbot
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.Calendar
 
 class V322AuditFixesTest {
     @Test
-    fun `ordinary alerts start at 0615 every day`() {
-        assertFalse(AlertSchedule.isMinuteAllowed(AlertSchedule.MODE_WORK, 375, 1380, 374))
-        assertTrue(AlertSchedule.isMinuteAllowed(AlertSchedule.MODE_WORK, 375, 1380, 375))
-        assertFalse(AlertSchedule.isMinuteAllowed(AlertSchedule.MODE_WORK, 375, 1380, 1380))
-        assertTrue(AlertSchedule.isMinuteAllowed(AlertSchedule.MODE_ALWAYS, 375, 1380, 120))
+    fun `ordinary alerts ring only on configured work days from 0615 to 2300`() {
+        assertFalse(AlertSchedule.isMomentAllowed(375, 1380, Calendar.MONDAY, 374))
+        assertTrue(AlertSchedule.isMomentAllowed(375, 1380, Calendar.MONDAY, 375))
+        assertFalse(AlertSchedule.isMomentAllowed(375, 1380, Calendar.MONDAY, 1380))
+        assertTrue(AlertSchedule.isMomentAllowed(375, 1380, Calendar.TUESDAY, 900))
+        assertFalse(AlertSchedule.isMomentAllowed(375, 1380, Calendar.WEDNESDAY, 900))
+        assertTrue(AlertSchedule.isMomentAllowed(375, 1380, Calendar.THURSDAY, 900))
+        assertTrue(AlertSchedule.isMomentAllowed(375, 1380, Calendar.FRIDAY, 900))
+        assertFalse(AlertSchedule.isMomentAllowed(375, 1380, Calendar.SATURDAY, 900))
     }
 
     @Test
