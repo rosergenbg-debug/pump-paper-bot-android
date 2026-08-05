@@ -111,12 +111,15 @@ object ProviderSelfDiagnostics {
             if (normalized == "DEEPSEEK") {
                 val primary = DeepSeekPrimaryStore.state(context, now)
                 val micro = MicroImpulseStore.state(context)
+                val breathing = LiveMarketBreathingStore.snapshot(context, now)
                 val actionLevel = DeepSeekActionLevelPolicy.fromMarket(snapshot, primary, micro, now)
                 add(ProviderDiagnosticCheck(
                     "Основной контур и расписание",
                     if (primary.lastAttempt > 0L) "PASS" else "WARN",
                     "последняя попытка ${stamp(primary.lastAttempt)}; готовность ${actionLevel.level}/10; " +
                         "интервал ${if (actionLevel.intensive) "1 минута" else "2 минуты"}; " +
+                        "предложение=${primary.proposedAction}; итог=${primary.action}; " +
+                        "исполнение=${primary.executionStatus}; дыхание=${breathing.normalScore ?: 0}/100; " +
                         "блокирующего бюджета нет; предупреждение после ≈€5"
                 ))
                 add(ProviderDiagnosticCheck(

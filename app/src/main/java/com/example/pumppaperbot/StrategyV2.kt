@@ -279,10 +279,22 @@ object StrategyV2 {
             }
         }
 
+        val winnerMode = highestBefore >= entryPrice * (1.0 + TREND_TARGET)
+        val winnerStop = max(entryPrice * 1.02, highestBefore * (1.0 - RUNNER_TRAIL))
         return when {
             candle.low <= hardStopPrice -> V2ExitSignal(ACTION_SELL, "СТОП −4,4%", highestAfter)
-            candle.high >= entryPrice * (1.0 + TREND_TARGET) -> V2ExitSignal(ACTION_SELL, "ТРЕНД: цель +8% достигнута", highestAfter)
+            winnerMode && candle.close <= winnerStop -> V2ExitSignal(
+                ACTION_SELL,
+                String.format(Locale.US, "ТРЕНД-ПОБЕДИТЕЛЬ: подтверждён откат к %.8f", winnerStop),
+                highestAfter
+            )
             timedOut -> V2ExitSignal(ACTION_SELL, "ТРЕНД: прошло 24 часа — закрыть", highestAfter)
+            candle.high >= entryPrice * (1.0 + TREND_TARGET) -> V2ExitSignal(
+                ACTION_WAIT,
+                "ТРЕНД-ПОБЕДИТЕЛЬ: +8% достигнуты, движение сопровождается без выхода на этой свече",
+                highestAfter,
+                70
+            )
             else -> {
                 val target = ((candle.close / entryPrice - 1.0) / TREND_TARGET * 100.0).roundToInt().coerceIn(0, 99)
                 V2ExitSignal(ACTION_WAIT, "ТРЕНД: ждем +8% или защитный стоп", highestAfter, max(max(target, stopReadiness), timeReadiness))

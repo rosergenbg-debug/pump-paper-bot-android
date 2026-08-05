@@ -7,6 +7,59 @@ import org.junit.Test
 
 class AppPaperTraderTest {
     @Test
+    fun `trend winner is not sold inside the candle that first reaches eight percent`() {
+        val candle = PumpCandle(
+            openTime = 2_000L,
+            open = 1.01,
+            high = 1.12,
+            low = 1.00,
+            close = 1.10,
+            volume = 1_000.0,
+            closeTime = 3_000L
+        )
+
+        val result = StrategyV2.evaluateExit(
+            candle = candle,
+            positionMode = StrategyV2.MODE_TREND,
+            entryPrice = 1.0,
+            entryTime = 1_000L,
+            partialTaken = false,
+            storedHighestHigh = 1.0,
+            evaluationTime = 3_000L
+        )
+
+        assertEquals(StrategyV2.ACTION_WAIT, result.action)
+        assertTrue(result.reason.contains("ПОБЕДИТЕЛЬ"))
+        assertEquals(1.12, result.highestHigh, 0.000001)
+    }
+
+    @Test
+    fun `trend winner exits only on a later confirmed pullback`() {
+        val candle = PumpCandle(
+            openTime = 3_000L,
+            open = 1.10,
+            high = 1.11,
+            low = 1.06,
+            close = 1.065,
+            volume = 1_000.0,
+            closeTime = 4_000L
+        )
+
+        val result = StrategyV2.evaluateExit(
+            candle = candle,
+            positionMode = StrategyV2.MODE_TREND,
+            entryPrice = 1.0,
+            entryTime = 1_000L,
+            partialTaken = false,
+            storedHighestHigh = 1.12,
+            evaluationTime = 4_000L
+        )
+
+        assertEquals(StrategyV2.ACTION_SELL, result.action)
+        assertTrue(result.reason.contains("подтверждён откат"))
+    }
+
+    @Test
     fun `app buys once and ignores same candle`() {
         val buy = AppPaperEvaluation(
             candleTime = 1_000L,

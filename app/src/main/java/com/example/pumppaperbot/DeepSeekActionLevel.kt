@@ -58,7 +58,7 @@ object DeepSeekActionLevelPolicy {
         if (evidence.hardVeto) {
             return DeepSeekActionLevel(
                 DeepSeekActionPhase.ENTRY, 1, DeepSeekActionBand.RED,
-                "НЕ ВХОДИТЬ", "Защитный запрет: поздний вход, перегрев или падение ещё не подтверждено."
+                "НЕ ВХОДИТЬ", "Защитный запрет: резкое падение ещё не подтвердило восстановление."
             )
         }
 
@@ -175,8 +175,9 @@ object DeepSeekActionLevelPolicy {
             aiConfidence = state.confidence,
             aiEntryReadiness = state.entryReadiness,
             appReadiness = snapshot.readinessScore.coerceAtLeast(0),
-            hardVeto = snapshot.lateEntryBlocked || snapshot.marketGateActive ||
-                (snapshot.rapidDrop.active && !snapshot.rapidDrop.recoveryConfirmed),
+            // The 30-minute late/overheat flags belong to APP. They remain visible context,
+            // but must not freeze the independent intrabar DeepSeek circuit.
+            hardVeto = snapshot.rapidDrop.active && !snapshot.rapidDrop.recoveryConfirmed,
             microFresh = microFresh,
             microPhase = micro.phase,
             pumpBuyerPercent60s = micro.aggressiveBuyPercent60s,

@@ -221,9 +221,7 @@ class MicroImpulseStream(context: Context) : WebSocketListener() {
                 ((bookImbalance ?: 0.0).coerceIn(0.0, 0.5) / 0.5 * 10.0)
             ).toInt().coerceIn(0, 100)
 
-        MicroImpulseStore.save(
-            appContext,
-            MicroImpulseSnapshot(
+        val snapshot = MicroImpulseSnapshot(
                 connected = true,
                 phase = phase,
                 score = score,
@@ -247,7 +245,8 @@ class MicroImpulseStream(context: Context) : WebSocketListener() {
                 bitcoinPriceChange60sPercent = btcChange60,
                 error = ""
             )
-        )
+        MicroImpulseStore.save(appContext, snapshot)
+        LiveMarketBreathingStore.append(appContext, snapshot)
     }
 
     private fun ratio(buy: Double, sell: Double): Double {
