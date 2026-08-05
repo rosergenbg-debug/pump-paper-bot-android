@@ -36,6 +36,7 @@ Serge values timely, unmistakable phone alerts. APP, DeepSeek and DeepSeek exper
 - V4.11 adds profit-adaptive supervision: below +2% DeepSeek Flash checks every three minutes; from +2% the foreground market cycle and DeepSeek Pro position analysis run every minute; from +4%, on a protected-peak pullback or fresh seller takeover, Pro uses maximum reasoning. Position output must separately explain the decision, 20-level book, executed PUMP flow, live BTC flow and the concrete invalidation/watch condition. A single book wall is never sufficient evidence because it may be spoofed.
 - V4.13 adds one user-action scale. Before Serge buys, DeepSeek readiness 1–10 is red/yellow/green and can intensify the primary circuit to one minute or Pro; after Serge buys, exit danger 1–10 reverses to green/yellow/red. This is a conservative display/scheduling fusion layer only, never an automatic Serge trade. Virtual exits always notify even during Serge's open position; virtual BUY alerts remain muted then.
 - V4.14 removes the internal DeepSeek cost stop, retaining only one non-blocking warning near €5/day. Its critical overview graphically separates action level, direction, 20-level book, live PUMP executions, spot/futures flow, Bitcoin and open interest; it is display-only and cannot override hard entry vetoes or execute Serge trades. The main chart starts at 60 visible candles, and four-account trade connectors route wins above and losses below the price line.
+- V4.15 persists public live PUMP/BTC flow and book observations for 24 hours and supplies robust instant/5m/15m/30m/1h/6h breathing scores. Closed 30-minute APP late-entry/overheat flags are context only for the independent DeepSeek circuit and cannot freeze an intrabar DeepSeek BUY. The experiment uses a faster breathing score capped within 15 points of normal DeepSeek. A rejected proposal remains visible but never executes or anchors the experiment. APP trend mode accompanies the winner after first reaching +8% and waits for a later confirmed pullback instead of selling on the same rising candle.
 
 ## Release invariants
 
@@ -82,6 +83,7 @@ Serge values timely, unmistakable phone alerts. APP, DeepSeek and DeepSeek exper
 - V4.12: the four-account comparison adds a display-only live 30-minute edge and uses the fresh visible price so a Serge BUY/SELL marker and account state appear without waiting for the next closed strategy candle, code 67, current work.
 - V4.13: large adaptive DeepSeek entry/exit scale, one-minute yellow-zone monitoring, Pro preference for confirmed green entry, separate DeepSeek preparation alerts and explicit always-on virtual exit alerts, code 68, current work.
 - V4.14: no internal DeepSeek daily cost stop, one informational ≈€5 warning, critical multi-factor overview, closer 60-bar main chart and separated win/loss connector lanes, code 69, current work.
+- V4.15: persistent robust live-market breathing, independent intrabar DeepSeek, visible proposal/verification/execution states, bounded experiment sensitivity and APP winner accompaniment, code 70, current work.
 
 ## Accumulated next-release backlog
 

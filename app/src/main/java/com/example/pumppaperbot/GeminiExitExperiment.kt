@@ -21,7 +21,8 @@ data class GeminiEntryEvidence(
             frame: GeminiMarketFrame,
             impulse: ImpulseSnapshot,
             deepSeekDecision: DeepSeekPrimaryState,
-            appEvaluation: AppPaperEvaluation
+            appEvaluation: AppPaperEvaluation,
+            breathing: LiveMarketBreathingSnapshot = LiveMarketBreathingSnapshot()
         ): GeminiEntryEvidence {
             val snapshot = frame.snapshot
             val impulseFresh = impulse.candleTime > 0L &&
@@ -30,9 +31,12 @@ data class GeminiEntryEvidence(
             val deepSeekPositive = DeepSeekPrimaryPolicy.isFreshSignal(
                 deepSeekDecision,
                 System.currentTimeMillis()
-            ) && deepSeekDecision.action !in setOf("EXIT", "SELL") &&
+            ) && deepSeekDecision.executionStatus != "ОТКЛОНЕНО ПРОВЕРКОЙ" &&
+                deepSeekDecision.action !in setOf("EXIT", "SELL") &&
                 deepSeekDecision.direction >= 20 && deepSeekDecision.confidence >= 55
-            val signalActive = appReady || deepSeekPositive
+            val breathingPositive = (breathing.experimentScore ?: 0) >= 25 &&
+                (breathing.normalScore ?: 0) >= 10
+            val signalActive = appReady || deepSeekPositive || breathingPositive
 
             val spotStrong = listOfNotNull(
                 frame.spotTakerBuyPercent?.let { it >= 51.0 },
@@ -45,12 +49,18 @@ data class GeminiEntryEvidence(
             val flowStrong = spotStrong && futuresStrong
             val cvdStrong = frame.spotCvdPercent?.let { it > 0.0 } == true &&
                 frame.futuresCvdPercent?.let { it > 0.0 } == true
-            val momentumStrong = frame.pump1hPercent?.let { it >= 0.15 } == true &&
-                frame.pump3hPercent?.let { it >= -0.50 } != false
             val bookStrong = snapshot.bookImbalance?.let { it >= 0.05 } == true
             val broadMarketWeak = frame.btc1hPercent?.let { it < 0.0 } == true &&
                 frame.sol1hPercent?.let { it < 0.0 } == true
             val broadMarketSupport = !broadMarketWeak
+            val sustainedContinuation = (breathing.experimentScore ?: 0) >= 35 &&
+                (breathing.normalScore ?: 0) >= 20 &&
+                breathing.horizons.filter { it.minutes in setOf(5, 15) }
+                    .count { (it.score ?: 0) >= 15 } >= 2
+            val momentumStrong = sustainedContinuation || (
+                frame.pump1hPercent?.let { it >= 0.15 } == true &&
+                    frame.pump3hPercent?.let { it >= -0.50 } != false
+                )
 
             val score =
                 (if (signalActive) 2 else 0) +
@@ -68,8 +78,10 @@ data class GeminiEntryEvidence(
                 broadMarketSupport
             ).count { it }
             val blocked = when {
-                snapshot.lateEntryBlocked -> "цена уже высоко — поздний вход запрещён"
-                snapshot.marketGateActive -> "PUMP, BTC и SOL перегреты — цену не догоняем"
+                snapshot.lateEntryBlocked && !sustainedContinuation ->
+                    "цена уже высоко, а устойчивое 5/15-минутное продолжение не подтверждено"
+                snapshot.marketGateActive && !sustainedContinuation ->
+                    "рынок перегрет без устойчивого подтверждения продолжения"
                 snapshot.rapidDrop.active && !snapshot.rapidDrop.recoveryConfirmed ->
                     "резкое падение ещё не подтвердило разворот"
                 broadMarketWeak -> "BTC и SOL одновременно снижаются"
@@ -83,6 +95,7 @@ data class GeminiEntryEvidence(
                 if (deepSeekPositive) add(
                     "DeepSeek ${deepSeekDecision.direction}/100, уверенность ${deepSeekDecision.confidence}/100"
                 )
+                if (breathingPositive) add("дыхание ${breathing.experimentScore}/100")
             }.joinToString(" + ").ifBlank { "сигнала входа нет" }
             val facts = buildList {
                 if (flowStrong) add("покупатели сильнее одновременно в spot и futures")
@@ -92,11 +105,13 @@ data class GeminiEntryEvidence(
                 if (momentumStrong) add("PUMP подтвердил движение вверх")
                 if (bookStrong) add("в стакане перевес покупателей")
                 if (broadMarketSupport) add("BTC/SOL не дают совместного медвежьего запрета")
+                if (sustainedContinuation) add("5/15-минутное дыхание подтверждает продолжение")
             }
             val evidenceText = facts.joinToString("; ").ifBlank { "рыночных подтверждений пока нет" }
-            val anchorId = max(
+            val anchorId = maxOf(
                 if (appReady) appEvaluation.candleTime else 0L,
-                if (deepSeekPositive) deepSeekDecision.lastSuccess else 0L
+                if (deepSeekPositive) deepSeekDecision.lastSuccess else 0L,
+                if (breathingPositive) breathing.updatedAt else 0L
             )
             return GeminiEntryEvidence(
                 signalActive = signalActive,
@@ -143,7 +158,8 @@ data class GeminiExitEvidence(
             price: Double,
             frame: GeminiMarketFrame,
             impulse: ImpulseSnapshot,
-            micro: MicroImpulseSnapshot = MicroImpulseSnapshot()
+            micro: MicroImpulseSnapshot = MicroImpulseSnapshot(),
+            breathing: LiveMarketBreathingSnapshot = LiveMarketBreathingSnapshot()
         ): GeminiExitEvidence {
             val peak = max(max(portfolio.positionPeakPrice, portfolio.entryPrice), price)
             val pullback = if (peak > 0.0) (1.0 - price / peak) * 100.0 else 0.0
@@ -189,11 +205,15 @@ data class GeminiExitEvidence(
                 frame.snapshot.lastSync,
                 DeepSeekFreshMarketContext.MICRO_MAX_AGE
             )
-            val microWeak = microFresh && (
-                micro.aggressiveBuyPercent15s < 48.0 ||
-                    micro.priceChange60sPercent <= -0.20 ||
-                    (micro.topBookImbalance ?: 0.0) <= -0.10
-                )
+            val rawWeakCount = if (microFresh) listOf(
+                micro.aggressiveBuyPercent15s < 48.0,
+                micro.priceChange60sPercent <= -0.20,
+                (micro.topBookImbalance ?: 0.0) <= -0.10
+            ).count { it } else 0
+            val smoothedWeak = (breathing.experimentScore ?: 0) <= -10 ||
+                breathing.horizons.filter { it.minutes in setOf(5, 15) }
+                    .count { (it.score ?: 0) <= -10 } >= 2
+            val microWeak = microFresh && rawWeakCount >= 2 && smoothedWeak
 
             val weighted =
                 (if (priceWeak) 2 else 0) +
@@ -574,7 +594,8 @@ object GeminiExitExperimentStore {
             frame,
             impulse,
             deepSeekDecision,
-            appEvaluation
+            appEvaluation,
+            LiveMarketBreathingStore.snapshot(context, now)
         )
         val result = if (!marked.inPosition) {
             GeminiExitExperimentEngine.considerEntry(
@@ -591,7 +612,8 @@ object GeminiExitExperimentStore {
                 frame.preRequestPrice,
                 frame,
                 impulse,
-                MicroImpulseStore.state(context)
+                MicroImpulseStore.state(context),
+                LiveMarketBreathingStore.snapshot(context, now)
             )
             GeminiExitExperimentEngine.evaluate(
                 initial.copy(portfolio = marked),

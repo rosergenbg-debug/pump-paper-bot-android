@@ -28,6 +28,7 @@ class CriticalOverviewActivity : AppCompatActivity() {
     private val history = ArrayDeque<CriticalOverviewHistoryPoint>()
     private lateinit var status: TextView
     private lateinit var chart: CriticalOverviewChartView
+    private lateinit var breathingChart: MarketBreathingChartView
     private lateinit var facts: TextView
     private lateinit var deepSeek: TextView
     private lateinit var cost: TextView
@@ -57,6 +58,14 @@ class CriticalOverviewActivity : AppCompatActivity() {
         content.addView(status, params(-2, dp(9)))
         chart = CriticalOverviewChartView(this)
         content.addView(chart, params(dp(610), dp(6)))
+        content.addView(label(
+            "ДЫХАНИЕ РЫНКА • ИСТОРИЯ ДО 24 ЧАСОВ",
+            18,
+            "#F0F6FC",
+            true
+        ), params(-2, dp(10)))
+        breathingChart = MarketBreathingChartView(this)
+        content.addView(breathingChart, params(dp(330), dp(6)))
         facts = panel(14, false)
         content.addView(facts, params(-2, dp(8)))
         deepSeek = panel(14, false)
@@ -82,6 +91,7 @@ class CriticalOverviewActivity : AppCompatActivity() {
         val micro = MicroImpulseStore.state(this)
         val impulse = ImpulseRadarStore.state(this)
         val primary = DeepSeekPrimaryStore.state(this, now)
+        val breathing = LiveMarketBreathingStore.snapshot(this, now)
         val positionOpen = snapshot.waitMode == "SELL" && snapshot.entryPrice > 0.0
         val level = if (positionOpen) {
             DeepSeekActionLevelPolicy.fromPosition(
@@ -108,8 +118,7 @@ class CriticalOverviewActivity : AppCompatActivity() {
             positionOpen = positionOpen,
             actionLevel = level.level,
             directionScore = snapshot.directionScore,
-            hardEntryVeto = snapshot.marketGateActive || snapshot.lateEntryBlocked ||
-                (snapshot.rapidDrop.active && !snapshot.rapidDrop.recoveryConfirmed),
+            hardEntryVeto = snapshot.rapidDrop.active && !snapshot.rapidDrop.recoveryConfirmed,
             rapidDrop = snapshot.rapidDrop.active,
             bookImbalance = if (microFresh) micro.topBookImbalance ?: snapshot.bookImbalance else snapshot.bookImbalance,
             pumpBuyerPercent60s = micro.aggressiveBuyPercent60s.takeIf { microFresh },
@@ -139,6 +148,7 @@ class CriticalOverviewActivity : AppCompatActivity() {
         ))
         while (history.size > 120) history.removeFirst()
         chart.setData(model, history.toList())
+        breathingChart.setData(breathing)
 
         facts.text = buildString {
             append("ЧТО ПРОИСХОДИТ СЕЙЧАС\n")
@@ -159,11 +169,20 @@ class CriticalOverviewActivity : AppCompatActivity() {
                     micro.trades60s
                 ))
             }
+            append("\n\nДЫХАНИЕ: ${breathing.regime}")
+            append("\nОбычный DeepSeek: ${breathing.normalScore?.let(::signed) ?: "—"}/100")
+            append(" • эксперимент: ${breathing.experimentScore?.let(::signed) ?: "—"}/100")
+            append(" • мгновенно: ${breathing.instantScore?.let(::signed) ?: "—"}/100")
+            append("\nНакоплено ${breathing.historyMinutes} мин.; данные старше 24 часов удаляются.")
+            if (!breathing.fresh) append("\nВнимание: сглаженное дыхание устарело и не используется DeepSeek.")
             append("\n\nСвежесть: микросделки ${age(micro.updatedAt, now)} сек • 5‑мин данные ${age(impulse.candleTime, now)} сек")
             if (!microFresh) append("\nВнимание: живой поток сейчас устарел или переподключается.")
         }
         deepSeek.text = buildString {
             append("DEEPSEEK • ${level.level}/10 • ${level.label}\n${level.detail}")
+            append("\n\nПредложение: ${primary.proposedAction} • итог: ${primary.action}")
+            append("\nИсполнение: ${primary.executionStatus}")
+            append("\nПроверка: ${primary.verificationSummary}")
             append("\n\n${primary.summary}")
             if (primary.evidence.isNotEmpty()) append("\nФакты: ${primary.evidence.joinToString("; ")}")
             if (primary.risks.isNotEmpty()) append("\nРиски: ${primary.risks.joinToString("; ")}")
@@ -272,7 +291,7 @@ class CriticalOverviewChartView(context: android.content.Context) : View(context
 
         val plotTop = y + dp(6f)
         val plotBottom = height - dp(24f)
-        canvas.drawText("ЖИВОЙ ТРЕНД ЭТОГО ЭКРАНА", left, plotTop - dp(7f), text)
+        canvas.drawText("СЫРОЙ МГНОВЕННЫЙ ПОТОК ЭТОГО ЭКРАНА", left, plotTop - dp(7f), text)
         repeat(3) { index ->
             val gy = plotTop + (plotBottom - plotTop) * index / 2f
             canvas.drawLine(left, gy, right, gy, grid)
@@ -324,6 +343,78 @@ class CriticalOverviewChartView(context: android.content.Context) : View(context
         isFakeBoldText = true
         textSize = sp(9f)
     }
+    private fun dp(value: Float) = value * resources.displayMetrics.density
+    private fun sp(value: Float) = value * resources.displayMetrics.scaledDensity
+}
+
+class MarketBreathingChartView(context: android.content.Context) : View(context) {
+    private val grid = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#30363D") }
+    private val positive = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#238636") }
+    private val negative = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#B62324") }
+    private val label = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#C9D1D9")
+        textSize = sp(11f)
+        isFakeBoldText = true
+    }
+    private val detail = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#8B949E")
+        textSize = sp(9f)
+    }
+    private var snapshot = LiveMarketBreathingSnapshot()
+
+    fun setData(snapshot: LiveMarketBreathingSnapshot) {
+        this.snapshot = snapshot
+        invalidate()
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        super.onDraw(canvas)
+        canvas.drawColor(Color.parseColor("#101820"))
+        val left = dp(12f)
+        val right = width - dp(12f)
+        val center = (left + right) / 2f
+        val rows = listOf(
+            Triple("СЕЙЧАС", snapshot.instantScore, null),
+            *snapshot.horizons.map { horizon ->
+                Triple(
+                    when (horizon.minutes) {
+                        60 -> "1 ЧАС"
+                        360 -> "6 ЧАСОВ"
+                        else -> "${horizon.minutes} МИН."
+                    },
+                    horizon.score,
+                    horizon
+                )
+            }.toTypedArray()
+        )
+        var y = dp(31f)
+        rows.forEach { (title, score, horizon) ->
+            canvas.drawText(title, left, y, label)
+            label.textAlign = Paint.Align.RIGHT
+            canvas.drawText(score?.let { if (it >= 0) "+$it" else "$it" } ?: "—", right, y, label)
+            label.textAlign = Paint.Align.LEFT
+            val top = y + dp(7f)
+            val bottom = top + dp(12f)
+            canvas.drawRect(left, top, right, bottom, grid)
+            canvas.drawLine(center, top - dp(2f), center, bottom + dp(2f), detail)
+            score?.let {
+                val end = center + (right - left) / 2f * it.coerceIn(-100, 100) / 100f
+                canvas.drawRect(minOf(center, end), top, maxOf(center, end), bottom, if (it >= 0) positive else negative)
+            }
+            horizon?.let {
+                detail.textAlign = Paint.Align.RIGHT
+                canvas.drawText(
+                    "устойчивость ${it.persistencePercent}% • ${it.samples} точек",
+                    right,
+                    bottom + dp(11f),
+                    detail
+                )
+                detail.textAlign = Paint.Align.LEFT
+            }
+            y += dp(50f)
+        }
+    }
+
     private fun dp(value: Float) = value * resources.displayMetrics.density
     private fun sp(value: Float) = value * resources.displayMetrics.scaledDensity
 }

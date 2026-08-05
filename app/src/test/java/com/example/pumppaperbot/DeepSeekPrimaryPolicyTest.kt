@@ -28,10 +28,10 @@ class DeepSeekPrimaryPolicyTest {
         assertTrue(DeepSeekCostWarningPolicy.warningReached(5.0))
     }
 
-    @Test fun `rejected buy cannot execute or anchor the experiment`() {
+    @Test fun `rejected buy cannot execute but remains visible for diagnosis`() {
         assertTrue(DeepSeekTradeVerificationPolicy.finalAction("BUY", false, false) == "WATCH")
-        assertTrue(DeepSeekTradeVerificationPolicy.acceptedDirection("BUY", false, 82) == 0)
-        assertTrue(DeepSeekTradeVerificationPolicy.acceptedConfidence("BUY", false, 91) == 0)
+        assertTrue(DeepSeekTradeVerificationPolicy.acceptedDirection("BUY", false, 82) == 82)
+        assertTrue(DeepSeekTradeVerificationPolicy.acceptedConfidence("BUY", false, 91) == 91)
     }
 
     @Test fun `rejected exit holds the open position but preserves warning direction`() {

@@ -32,6 +32,7 @@ object DeepSeekFreshMarketContext {
         val micro = MicroImpulseStore.state(context)
         val microFresh = micro.connected && micro.updatedAt > 0L &&
             isFresh(micro.updatedAt, now, MICRO_MAX_AGE)
+        val breathing = LiveMarketBreathingStore.snapshot(context, now)
 
         frame
             .put("current_price_eur", analysisPrice(snapshot, now))
@@ -45,6 +46,7 @@ object DeepSeekFreshMarketContext {
             .put("spot_order_book_ask_notional_usdt", snapshot.bookAskNotional ?: JSONObject.NULL)
             .put("funding_source", "latest_settled_funding_rate")
             .put("hourly_flow_source", "closed_30m_klines_aligned_to_last_full_hour")
+            .put("live_market_breathing", breathing.toJson())
             .put("five_minute_flow", JSONObject()
                 .put("fresh", impulseFresh)
                 .put("candle_close_at", impulse.candleTime)
