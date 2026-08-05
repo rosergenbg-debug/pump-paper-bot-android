@@ -15,6 +15,7 @@ class PumpSignalService : Service() {
     private val executor: ExecutorService = Executors.newSingleThreadExecutor()
     private val market = MarketSyncClient()
     private val eventRadar = EventRadarClient()
+    private val pumpEcosystem = PumpEcosystemClient()
     private val normalCycleIntervalMillis = TimeUnit.MINUTES.toMillis(2)
     private val cycleQueuedOrRunning = AtomicBoolean(false)
     private lateinit var microImpulse: MicroImpulseStream
@@ -87,6 +88,12 @@ class PumpSignalService : Service() {
             GeminiPaperStore.beginCycle(this, source, cycleIntervalMillis, startedAt)
             try {
                 market.sync(this)
+                val marketSnapshot = PumpBotEngine.snapshot(this)
+                val evidenceNow = System.currentTimeMillis()
+                PaperExecutionPolicy.freshLivePrice(marketSnapshot, evidenceNow)?.let { freshPrice ->
+                    DeepSeekEvidenceMemory.updateOutcomes(this, freshPrice, evidenceNow)
+                }
+                runCatching { pumpEcosystem.sync(this) }
                 val eventState = eventRadar.sync(this)
                 val personalGuard = PersonalPositionGuardStore.sync(this)
                 DeepSeekTradeOwnership.activate(this, DeepSeekPrimaryStore.state(this).lastSuccess)

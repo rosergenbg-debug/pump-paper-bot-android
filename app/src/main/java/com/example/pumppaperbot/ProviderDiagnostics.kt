@@ -113,6 +113,8 @@ object ProviderSelfDiagnostics {
                 val micro = MicroImpulseStore.state(context)
                 val breathing = LiveMarketBreathingStore.snapshot(context, now)
                 val actionLevel = DeepSeekActionLevelPolicy.fromMarket(snapshot, primary, micro, now)
+                val ecosystem = PumpEcosystemStore.state(context)
+                val memory = DeepSeekEvidenceMemory.status(context, now)
                 add(ProviderDiagnosticCheck(
                     "Основной контур и расписание",
                     if (primary.lastAttempt > 0L) "PASS" else "WARN",
@@ -126,6 +128,17 @@ object ProviderSelfDiagnostics {
                     "Микропоток",
                     if (micro.connected && now - micro.updatedAt <= DeepSeekFreshMarketContext.MICRO_MAX_AGE) "PASS" else "WARN",
                     "подключение=${micro.connected}; возраст=${age(micro.updatedAt, now)} сек"
+                ))
+                add(ProviderDiagnosticCheck(
+                    "Экосистема Pump.fun",
+                    if (ecosystem.fresh(now) && ecosystem.dataQuality >= 50) "PASS" else "WARN",
+                    "источники=${ecosystem.sourceStatus}; качество=${ecosystem.dataQuality}/100; " +
+                        "оценка=${ecosystem.score ?: "нет"}/100; ошибка=${ecosystem.error.ifBlank { "нет" }}"
+                ))
+                add(ProviderDiagnosticCheck(
+                    "Проверяемая память",
+                    if (memory.bytesUsed < memory.byteLimit) "PASS" else "WARN",
+                    memory.russianSummary() + "; передано в решения=${memory.suppliedToDecisions}"
                 ))
             } else {
                 val budget = GeminiRequestBudget.state(context)

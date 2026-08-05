@@ -9,6 +9,7 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 import java.util.concurrent.TimeUnit
+import kotlin.math.abs
 
 data class DeepSeekPrimaryState(
     val day: String = "",
@@ -24,6 +25,10 @@ data class DeepSeekPrimaryState(
     val confidence: Int = 0,
     val entryReadiness: Int = 1,
     val summary: String = "Ожидает первый рыночный кадр",
+    val shortScenario: String = "Краткосрочный сценарий ещё не рассчитан",
+    val longScenario: String = "Долгосрочный сценарий ещё не рассчитан",
+    val invalidation: String = "Условие отмены ещё не рассчитано",
+    val uncertainty: String = "Неопределённость ещё не рассчитана",
     val successfulToday: Int = 0,
     val failedToday: Int = 0,
     val promptTokensToday: Int = 0,
@@ -33,6 +38,7 @@ data class DeepSeekPrimaryState(
     val lastLocalBuySignal: Boolean = false,
     val lastLocalSellSignal: Boolean = false,
     val lastBreathingScore: Int = 0,
+    val lastEcosystemScore: Int = 0,
     val evidence: List<String> = emptyList(),
     val risks: List<String> = emptyList(),
     val error: String = ""
@@ -51,6 +57,10 @@ data class DeepSeekPrimaryState(
         .put("confidence", confidence)
         .put("entryReadiness", entryReadiness)
         .put("summary", summary)
+        .put("shortScenario", shortScenario)
+        .put("longScenario", longScenario)
+        .put("invalidation", invalidation)
+        .put("uncertainty", uncertainty)
         .put("successfulToday", successfulToday)
         .put("failedToday", failedToday)
         .put("promptTokensToday", promptTokensToday)
@@ -60,6 +70,7 @@ data class DeepSeekPrimaryState(
         .put("lastLocalBuySignal", lastLocalBuySignal)
         .put("lastLocalSellSignal", lastLocalSellSignal)
         .put("lastBreathingScore", lastBreathingScore)
+        .put("lastEcosystemScore", lastEcosystemScore)
         .put("evidence", JSONArray(evidence))
         .put("risks", JSONArray(risks))
         .put("error", error)
@@ -84,6 +95,10 @@ data class DeepSeekPrimaryState(
                 (json.optInt("direction").coerceAtLeast(0) / 10).coerceAtLeast(1)
             ).coerceIn(1, 10),
             summary = RussianOutputPolicy.visible(json.optString("summary", "Ожидает первый рыночный кадр")),
+            shortScenario = RussianOutputPolicy.visible(json.optString("shortScenario", "Краткосрочный сценарий ещё не рассчитан")),
+            longScenario = RussianOutputPolicy.visible(json.optString("longScenario", "Долгосрочный сценарий ещё не рассчитан")),
+            invalidation = RussianOutputPolicy.visible(json.optString("invalidation", "Условие отмены ещё не рассчитано")),
+            uncertainty = RussianOutputPolicy.visible(json.optString("uncertainty", "Неопределённость ещё не рассчитана")),
             successfulToday = json.optInt("successfulToday").coerceAtLeast(0),
             failedToday = json.optInt("failedToday").coerceAtLeast(0),
             promptTokensToday = json.optInt("promptTokensToday").coerceAtLeast(0),
@@ -94,6 +109,7 @@ data class DeepSeekPrimaryState(
             lastLocalBuySignal = json.optBoolean("lastLocalBuySignal"),
             lastLocalSellSignal = json.optBoolean("lastLocalSellSignal"),
             lastBreathingScore = json.optInt("lastBreathingScore").coerceIn(-100, 100),
+            lastEcosystemScore = json.optInt("lastEcosystemScore").coerceIn(-100, 100),
             evidence = json.optJSONArray("evidence")?.let { array ->
                 List(array.length()) { RussianOutputPolicy.visible(array.optString(it)).take(240) }.filter { it.isNotBlank() }
             }.orEmpty(),
@@ -155,12 +171,13 @@ object DeepSeekPrimaryPolicy {
             DeepSeekActionBand.RED,
             "НЕ ВХОДИТЬ",
             "Ожидается свежая оценка"
-        )
+        ),
+        analyticalConflict: Boolean = false
     ): String {
         val critical = snapshot.buySignal || snapshot.sellSignal || snapshot.rapidDrop.active ||
             kotlin.math.abs(snapshot.readinessScore) >= 95 || kotlin.math.abs(snapshot.directionScore) >= 75 ||
             (snapshot.waitMode == "SELL" && snapshot.entryPrice > 0.0 && snapshot.directionScore <= -55)
-        return if (force || actionLevel.proPreferred || (materialChange && critical)) {
+        return if (force || actionLevel.proPreferred || analyticalConflict || (materialChange && critical)) {
             PositionSupervisorPolicy.PRO_MODEL
         } else {
             PositionSupervisorPolicy.FLASH_MODEL
@@ -193,6 +210,10 @@ object DeepSeekPrimaryPolicy {
             append("\n${state.summary}")
             append("\nПредложение ${state.proposedAction} • итог ${state.action} • ${state.executionStatus}")
             if (state.verificationSummary.isNotBlank()) append("\nПроверка: ${state.verificationSummary}")
+            append("\nСейчас: ${state.shortScenario}")
+            append("\nДальше: ${state.longScenario}")
+            append("\nОтмена сценария: ${state.invalidation}")
+            append("\nНеопределённость: ${state.uncertainty}")
             append("\nСегодня: ${state.successfulToday} успешно • ${state.failedToday} ошибок")
             append(" • последний ${PumpBotEngine.formatTime(state.lastSuccess)}")
             if (state.error.isNotBlank()) append("\nПоследняя ошибка: ${state.error}")
@@ -230,6 +251,10 @@ private data class DeepSeekPrimaryResult(
     val confidence: Int,
     val entryReadiness: Int,
     val summary: String,
+    val shortScenario: String,
+    val longScenario: String,
+    val invalidation: String,
+    val uncertainty: String,
     val evidence: List<String>,
     val risks: List<String>,
     val promptTokens: Int,
@@ -257,10 +282,21 @@ class DeepSeekPrimaryAnalyst {
         val previous = DeepSeekPrimaryStore.state(context, now)
         val micro = MicroImpulseStore.state(context)
         val breathing = LiveMarketBreathingStore.snapshot(context, now)
+        val ecosystem = PumpEcosystemStore.state(context)
+        val featureKey = EvidenceFeatureKey.from(snapshot, breathing.normalScore, ecosystem)
+        val memoryPrompt = DeepSeekEvidenceMemory.promptSummary(context, featureKey, now)
+        val memorySupplied = listOf("promoted_patterns", "background_patterns").any { key ->
+            (memoryPrompt.optJSONArray(key)?.length() ?: 0) > 0
+        }
+        val ecosystemScore = ecosystem.score ?: 0
+        val analyticalConflict = ecosystem.fresh(now) && ecosystem.dataQuality >= 50 &&
+            breathing.normalScore != null && abs(ecosystemScore) >= 20 && abs(breathing.normalScore) >= 20 &&
+            ecosystemScore * breathing.normalScore < 0
         val previousActionLevel = DeepSeekActionLevelPolicy.fromMarket(snapshot, previous, micro, now)
         val materialChange = previous.lastAttempt > 0L && (
             kotlin.math.abs(snapshot.readinessScore - previous.lastInputReadiness) >= 15 ||
                 kotlin.math.abs((breathing.normalScore ?: 0) - previous.lastBreathingScore) >= 12 ||
+                kotlin.math.abs(ecosystemScore - previous.lastEcosystemScore) >= 20 ||
                 snapshot.buySignal != previous.lastLocalBuySignal ||
                 snapshot.sellSignal != previous.lastLocalSellSignal
             )
@@ -280,7 +316,7 @@ class DeepSeekPrimaryAnalyst {
         ).also { DeepSeekPrimaryStore.save(context, it) }
 
         val requestedModel = DeepSeekPrimaryPolicy.chooseModel(
-            snapshot, force, materialChange, previousActionLevel
+            snapshot, force, materialChange, previousActionLevel, analyticalConflict = analyticalConflict
         )
 
         DeepSeekPrimaryStore.save(context, previous.copy(
@@ -290,6 +326,7 @@ class DeepSeekPrimaryAnalyst {
             lastLocalBuySignal = snapshot.buySignal,
             lastLocalSellSignal = snapshot.sellSignal,
             lastBreathingScore = breathing.normalScore ?: 0,
+            lastEcosystemScore = ecosystemScore,
             error = ""
         ))
         val started = System.currentTimeMillis()
@@ -304,10 +341,13 @@ class DeepSeekPrimaryAnalyst {
                 })
                 append(" • readiness=${snapshot.readinessScore} direction=${snapshot.directionScore}")
                 append(" breathing=${breathing.normalScore ?: 0}")
+                append(" ecosystem=$ecosystemScore quality=${ecosystem.dataQuality}")
                 append(" price=${snapshot.livePrice?.takeIf { it > 0.0 } ?: snapshot.lastPrice}")
             }
         ))
-        return runCatching { analyze(context, key, requestedModel, snapshot, EventRadarStore.state(context)) }.fold(
+        return runCatching {
+            analyze(context, key, requestedModel, snapshot, EventRadarStore.state(context), ecosystem, memoryPrompt)
+        }.fold(
             onSuccess = { result ->
                 val completedAt = System.currentTimeMillis()
                 ApiUsageLogStore.record(context, ApiUsageEvent(
@@ -346,6 +386,10 @@ class DeepSeekPrimaryAnalyst {
                     confidence = result.confidence,
                     entryReadiness = result.entryReadiness,
                     summary = result.summary,
+                    shortScenario = result.shortScenario,
+                    longScenario = result.longScenario,
+                    invalidation = result.invalidation,
+                    uncertainty = result.uncertainty,
                     successfulToday = previous.successfulToday + 1,
                     promptTokensToday = previous.promptTokensToday + result.promptTokens +
                         result.verificationPromptTokens,
@@ -356,6 +400,7 @@ class DeepSeekPrimaryAnalyst {
                     lastLocalBuySignal = snapshot.buySignal,
                     lastLocalSellSignal = snapshot.sellSignal,
                     lastBreathingScore = breathing.normalScore ?: 0,
+                    lastEcosystemScore = ecosystemScore,
                     evidence = result.evidence,
                     risks = result.risks,
                     error = ""
@@ -367,6 +412,20 @@ class DeepSeekPrimaryAnalyst {
                             snapshot, updated, MicroImpulseStore.state(context), completedAt
                         ),
                         updated
+                    )
+                    DeepSeekEvidenceMemory.recordPrediction(
+                        context = context,
+                        observedAt = completedAt,
+                        price = DeepSeekFreshMarketContext.analysisPrice(snapshot, completedAt),
+                        directionScore = result.direction,
+                        baselineDirectionScore = snapshot.directionScore,
+                        confidence = result.confidence,
+                        action = result.action,
+                        featureKey = featureKey,
+                        breathingScore = breathing.normalScore,
+                        ecosystem = ecosystem,
+                        summary = result.summary,
+                        memorySupplied = memorySupplied
                     )
                 }
             },
@@ -395,6 +454,7 @@ class DeepSeekPrimaryAnalyst {
                     lastLocalBuySignal = snapshot.buySignal,
                     lastLocalSellSignal = snapshot.sellSignal,
                     lastBreathingScore = breathing.normalScore ?: 0,
+                    lastEcosystemScore = ecosystemScore,
                     failedToday = previous.failedToday + 1,
                     promptTokensToday = previous.promptTokensToday + (structured?.promptTokens ?: 0),
                     completionTokensToday = previous.completionTokensToday + (structured?.completionTokens ?: 0),
@@ -410,7 +470,9 @@ class DeepSeekPrimaryAnalyst {
         apiKey: String,
         model: String,
         snapshot: LiveSnapshot,
-        radar: EventRadarState
+        radar: EventRadarState,
+        ecosystem: PumpEcosystemSnapshot,
+        memoryPrompt: JSONObject
     ): DeepSeekPrimaryResult {
         val now = System.currentTimeMillis()
         val latestNews = radar.recent.take(5).map { event ->
@@ -461,6 +523,8 @@ class DeepSeekPrimaryAnalyst {
             .put("hourly_futures_cvd_proxy_pct", hourly?.futuresCvdPercent ?: JSONObject.NULL)
             .put("premium_last_full_hour_pct", hourly?.premiumPercent ?: JSONObject.NULL)
             .put("news", JSONArray(latestNews))
+            .put("pump_fun_ecosystem", ecosystem.toPromptJson(now))
+            .put("verified_evidence_memory", memoryPrompt)
         DeepSeekFreshMarketContext.append(context, frame, snapshot, now)
         val allowedActions = if (aiPaperPositionOpen) {
             setOf("HOLD", "WATCH", "EXIT")
@@ -483,6 +547,11 @@ class DeepSeekPrimaryAnalyst {
             Внутри незакрытой 30-минутной свечи BUY разрешён при устойчивом 5/15-минутном дыхании, подтверждении
             исполненными покупками/5-минутным потоком и отсутствии реального разворота или rapid drop.
             Не считай один индикатор или один заголовок достаточным основанием. Не догоняй уже перегретую цену.
+            pump_fun_ecosystem — внутренний фундаментальный фон Pump.fun: миграции, объём, доход, выкуп и сжигание.
+            Учитывай качество и возраст; null не превращай в ноль. Этот слой не имеет самостоятельной торговой власти.
+            verified_evidence_memory содержит только замороженные до результата закономерности. Повышай вес только
+            записей promoted_patterns; background_patterns используй как слабый фон. Память не отменяет свежесть,
+            rapid drop, риск-контроль и обязательную независимую проверку сделки.
             BUY допустим только при подтверждении минимум двумя независимыми группами данных. Не запрещай BUY
             механически из-за уже растущей 30-минутной свечи: отличай устойчивое продолжение от выдохшегося рывка
             по 5/15-минутному дыханию. Rapid drop без восстановления остаётся запретом.
@@ -495,7 +564,11 @@ class DeepSeekPrimaryAnalyst {
             confidence целое 0..100; entry_readiness целое 1..10, где 1 означает «не входить»,
             5–7 — «подготовиться», а 8–10 допустимы только при согласованном подтверждении минимум
             двумя независимыми группами данных и отсутствии защитного запрета;
-            summary одно короткое конкретное предложение по-русски;
+            summary одно короткое конкретное предложение о происходящем сейчас;
+            short_scenario один короткий наиболее вероятный сценарий на 15–60 минут;
+            long_scenario один короткий наиболее вероятный сценарий на 3–24 часа;
+            invalidation одно конкретное наблюдаемое условие отмены сценария;
+            uncertainty одно короткое пояснение главной неопределённости и уверенности;
             evidence массив из 2–4 коротких фактов; risks массив из 1–3 условий, которые опровергнут вывод.
             Все текстовые значения без исключения пиши только на русском языке. Китайские иероглифы запрещены.
             Если виртуальный счёт DeepSeek не в позиции, EXIT не используй; если он уже в позиции, BUY не используй.
@@ -515,12 +588,24 @@ class DeepSeekPrimaryAnalyst {
                     !json.has("danger") -> "нет danger"
                     !json.has("confidence") -> "нет confidence"
                     json.optString("summary").isBlank() -> "нет summary"
+                    json.optString("short_scenario").isBlank() -> "нет short_scenario"
+                    json.optString("long_scenario").isBlank() -> "нет long_scenario"
+                    json.optString("invalidation").isBlank() -> "нет invalidation"
+                    json.optString("uncertainty").isBlank() -> "нет uncertainty"
                     RussianOutputPolicy.validate(
                         json.optString("summary"),
+                        json.optString("short_scenario"),
+                        json.optString("long_scenario"),
+                        json.optString("invalidation"),
+                        json.optString("uncertainty"),
                         json.optJSONArray("evidence")?.toString().orEmpty(),
                         json.optJSONArray("risks")?.toString().orEmpty()
                     ) != null -> RussianOutputPolicy.validate(
                         json.optString("summary"),
+                        json.optString("short_scenario"),
+                        json.optString("long_scenario"),
+                        json.optString("invalidation"),
+                        json.optString("uncertainty"),
                         json.optJSONArray("evidence")?.toString().orEmpty(),
                         json.optJSONArray("risks")?.toString().orEmpty()
                     )
@@ -570,6 +655,10 @@ class DeepSeekPrimaryAnalyst {
                 (json.optInt("direction").coerceAtLeast(0) / 10).coerceAtLeast(1)
             ).coerceIn(1, 10),
             summary = summary.take(400),
+            shortScenario = json.optString("short_scenario", "Краткосрочно требуется наблюдение").take(300),
+            longScenario = json.optString("long_scenario", "Долгосрочно данных пока недостаточно").take(300),
+            invalidation = json.optString("invalidation", "Свежие данные опровергнут текущий сценарий").take(300),
+            uncertainty = json.optString("uncertainty", "Сохраняется рыночная неопределённость").take(300),
             evidence = json.optJSONArray("evidence")?.let { array ->
                 List(array.length().coerceAtMost(4)) { array.optString(it).take(240) }
                     .filter { it.isNotBlank() }

@@ -86,6 +86,7 @@ class MainActivity : AppCompatActivity() {
     private var btnCriticalOverview: Button? = null
     private var btnDeepSeekApi: Button? = null
     private var btnGeminiApi: Button? = null
+    private var evidenceMemoryDialogVisible = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -512,6 +513,7 @@ class MainActivity : AppCompatActivity() {
 
         renderStrategyButtons(snapshot.aggressive)
         renderApiButtons()
+        maybeShowEvidenceMemoryPrompt()
 
         val livePrice = PaperExecutionPolicy.freshLivePrice(snapshot, now)
         val priceAge = if (livePrice != null) ((now - snapshot.livePriceAt) / 1000L).coerceAtLeast(0L) else -1L
@@ -585,6 +587,40 @@ class MainActivity : AppCompatActivity() {
                 }
             )
         )
+    }
+
+    private fun maybeShowEvidenceMemoryPrompt() {
+        if (evidenceMemoryDialogVisible || !DeepSeekEvidenceMemory.shouldPrompt(this)) return
+        evidenceMemoryDialogVisible = true
+        val status = DeepSeekEvidenceMemory.status(this)
+        AlertDialog.Builder(this)
+            .setTitle("ПАМЯТЬ DEEPSEEK ПОЧТИ ЗАПОЛНЕНА")
+            .setMessage(status.russianSummary() +
+                "\n\nДобавить ещё 50 МБ или удалить старые слабые данные? Доказанные закономерности при очистке сохраняются.")
+            .setPositiveButton("Добавить 50 МБ") { _, _ ->
+                DeepSeekEvidenceMemory.allocateAnotherBlock(this)
+                evidenceMemoryDialogVisible = false
+                Toast.makeText(this, "Добавлено ещё 50 МБ памяти анализа", Toast.LENGTH_LONG).show()
+            }
+            .setNeutralButton("Очистить слабые") { _, _ ->
+                val appContext = applicationContext
+                chartExecutor.execute {
+                    val deleted = DeepSeekEvidenceMemory.pruneLowValue(appContext)
+                    runOnUiThread {
+                        evidenceMemoryDialogVisible = false
+                        Toast.makeText(this, "Удалено слабых записей: $deleted", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+            .setNegativeButton("Решить позже") { _, _ ->
+                DeepSeekEvidenceMemory.dismissPrompt(this)
+                evidenceMemoryDialogVisible = false
+            }
+            .setOnCancelListener {
+                DeepSeekEvidenceMemory.dismissPrompt(this)
+                evidenceMemoryDialogVisible = false
+            }
+            .show()
     }
 
     private fun renderManualPosition(snapshot: LiveSnapshot) {
