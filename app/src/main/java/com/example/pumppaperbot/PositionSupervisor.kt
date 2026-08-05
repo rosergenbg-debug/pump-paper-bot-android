@@ -477,6 +477,9 @@ class PositionSupervisorClient {
         val now = System.currentTimeMillis()
         val currentPrice = DeepSeekFreshMarketContext.analysisPrice(snapshot, now)
         val hourly = GeminiMarketFrame.from(context)
+        val ecosystem = PumpEcosystemStore.state(context)
+        val breathing = LiveMarketBreathingStore.snapshot(context, now)
+        val evidenceKey = EvidenceFeatureKey.from(snapshot, breathing.normalScore, ecosystem)
         val recentNews = JSONArray().apply {
             EventRadarStore.state(context).recent.sortedByDescending { it.publishedAt }.take(8).forEach { event ->
                 put(JSONObject()
@@ -529,6 +532,8 @@ class PositionSupervisorClient {
             .put("local_exit_signal", snapshot.sellSignal)
             .put("local_reason", snapshot.signalReason.take(600))
             .put("recent_untrusted_news", recentNews)
+            .put("pump_fun_ecosystem", ecosystem.toPromptJson(now))
+            .put("verified_evidence_memory", DeepSeekEvidenceMemory.promptSummary(context, evidenceKey, now))
             .put("previous_exit_advised", previous.exitAdvised)
             .put("previous_condition_delta", previous.conditionDelta)
             .put("previous_danger_level", previous.dangerLevel)
@@ -556,6 +561,9 @@ class PositionSupervisorClient {
             В усиленном режиме отдельно оцени 20 уровней стакана, агрессивные покупки/продажи PUMP за
             15/60 секунд и 5 минут, а также минутный поток Bitcoin. Не считай стенку в одном срезе
             гарантией: стакан можно переставить, поэтому подтверждай его исполненными сделками и ценой.
+            pump_fun_ecosystem и verified_evidence_memory — дополнительный фундаментальный и проверенный
+            исторический фон. Учитывай возраст/качество, усиливай только promoted_patterns и не позволяй памяти
+            либо экосистемному фону самостоятельно вызвать EXIT или отменить свежую опасность позиции.
             Верни только JSON: action HOLD, EXIT или CANCEL_EXIT; condition_delta целое от -10 до +10;
             danger_level целое от 0 до 10; summary кратко по-русски; book_status — что сейчас в стакане;
             flow_status — кто давит исполненными сделками; bitcoin_status — помогает или мешает Bitcoin;

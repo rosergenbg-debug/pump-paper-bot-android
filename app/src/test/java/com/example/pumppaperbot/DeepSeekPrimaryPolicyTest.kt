@@ -46,6 +46,43 @@ class DeepSeekPrimaryPolicyTest {
         ))
     }
 
+    @Test fun `conflicting ecosystem and market evidence escalates analysis to pro`() {
+        val snapshot = LiveSnapshot(
+            running = true,
+            waitMode = "BUY",
+            buyRsi = 30.0,
+            lastSync = 1_000L,
+            lastCandle = 1_000L,
+            lastPrice = 0.01,
+            lastRsi = 50.0,
+            lastEma200 = 0.01,
+            fundingRate = 0.0,
+            strategyMode = "STANDARD",
+            aggressive = false,
+            readinessScore = 0,
+            trendReadiness = 0,
+            shockReadiness = 0,
+            partialTaken = false,
+            buySignal = false,
+            sellSignal = false,
+            signalAction = "WATCH",
+            signalReason = "test",
+            entryPrice = 0.0,
+            entryTime = 0L,
+            highestClose = 0.0,
+            chart = ChartBundle(emptyList(), emptyList(), emptyList(), emptyList(), "test")
+        )
+
+        assertTrue(
+            DeepSeekPrimaryPolicy.chooseModel(
+                snapshot = snapshot,
+                force = false,
+                materialChange = false,
+                analyticalConflict = true
+            ) == PositionSupervisorPolicy.PRO_MODEL
+        )
+    }
+
     @Test fun `yellow entry support permits a one minute paid cadence`() {
         val state = DeepSeekPrimaryState(lastAttempt = 1_000L)
         assertFalse(DeepSeekPrimaryPolicy.shouldRun(

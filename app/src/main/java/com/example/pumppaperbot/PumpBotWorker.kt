@@ -11,6 +11,7 @@ class PumpBotWorker(
 ) : Worker(context, params) {
     private val market = MarketSyncClient()
     private val eventRadar = EventRadarClient()
+    private val pumpEcosystem = PumpEcosystemClient()
 
     override fun doWork(): Result {
         val source = inputData.getString(INPUT_CYCLE_SOURCE) ?: "ANDROID РЕЗЕРВ 15 МИН"
@@ -33,6 +34,12 @@ class PumpBotWorker(
         GeminiPaperStore.beginCycle(applicationContext, source, interval, startedAt)
         return try {
             market.sync(applicationContext)
+            val marketSnapshot = PumpBotEngine.snapshot(applicationContext)
+            val evidenceNow = System.currentTimeMillis()
+            PaperExecutionPolicy.freshLivePrice(marketSnapshot, evidenceNow)?.let { freshPrice ->
+                DeepSeekEvidenceMemory.updateOutcomes(applicationContext, freshPrice, evidenceNow)
+            }
+            runCatching { pumpEcosystem.sync(applicationContext) }
             val eventState = eventRadar.sync(applicationContext)
             val personalGuard = PersonalPositionGuardStore.sync(applicationContext)
             DeepSeekTradeOwnership.activate(
