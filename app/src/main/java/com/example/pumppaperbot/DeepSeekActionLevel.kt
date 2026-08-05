@@ -50,8 +50,8 @@ data class DeepSeekExitLevelEvidence(
  */
 object DeepSeekActionLevelPolicy {
     const val INTENSIVE_INTERVAL_MILLIS = 60_000L
-    const val PREPARE_LEVEL = 5
-    const val READY_LEVEL = 8
+    const val APPROACHING_LEVEL = 7
+    const val READY_LEVEL = 9
     private const val RECENT_GUARD_ALERT_MILLIS = 10L * 60L * 1000L
 
     fun entry(evidence: DeepSeekEntryLevelEvidence): DeepSeekActionLevel {
@@ -117,14 +117,14 @@ object DeepSeekActionLevelPolicy {
                 "DeepSeek и независимые рыночные данные подтвердили вход; проверьте цену перед решением."
             level >= READY_LEVEL ->
                 "Вход близко: DeepSeek, локальный алгоритм и поток покупателей согласуются."
-            level >= PREPARE_LEVEL ->
-                "Подготовьтесь: условия улучшаются, но полного подтверждения входа ещё нет."
+            level >= APPROACHING_LEVEL ->
+                "Вход приближается: рынок стабилизируется, покупатели усиливаются, но подтверждение ещё не полное."
             else -> "DeepSeek пока не видит достаточно согласованных оснований для входа."
         }
         return entryResult(
             level,
             detail,
-            intensive = level >= PREPARE_LEVEL || microPressure || appStrong,
+            intensive = level >= APPROACHING_LEVEL || microPressure || appStrong,
             proPreferred = level >= READY_LEVEL
         )
     }
@@ -219,13 +219,13 @@ object DeepSeekActionLevelPolicy {
     ): DeepSeekActionLevel {
         val safe = level.coerceIn(1, 10)
         val band = when (safe) {
-            in 1..4 -> DeepSeekActionBand.RED
-            in 5..7 -> DeepSeekActionBand.YELLOW
+            in 1..6 -> DeepSeekActionBand.RED
+            in 7..8 -> DeepSeekActionBand.YELLOW
             else -> DeepSeekActionBand.GREEN
         }
         val label = when (band) {
             DeepSeekActionBand.RED -> "НЕ ВХОДИТЬ"
-            DeepSeekActionBand.YELLOW -> "ПОДГОТОВИТЬСЯ"
+            DeepSeekActionBand.YELLOW -> "ВХОД ПРИБЛИЖАЕТСЯ"
             DeepSeekActionBand.GREEN -> "ПРОВЕРИТЬ ВХОД"
         }
         return DeepSeekActionLevel(
@@ -236,23 +236,18 @@ object DeepSeekActionLevelPolicy {
 
 internal object DeepSeekActionLevelAlertPolicy {
     const val NONE = 0
-    const val PREPARE = 1
-    const val READY = 2
+    const val FIRST_ENTRY_ALERT_LEVEL = 7
 
-    fun band(level: Int): Int = when {
-        level >= DeepSeekActionLevelPolicy.READY_LEVEL -> READY
-        level >= DeepSeekActionLevelPolicy.PREPARE_LEVEL -> PREPARE
-        else -> NONE
-    }
+    fun band(level: Int): Int = if (level >= FIRST_ENTRY_ALERT_LEVEL) level.coerceAtMost(10) else NONE
 
     fun next(previousBand: Int, level: Int): Int {
         val current = band(level)
-        return if (current > previousBand) current else NONE
+        return if (current >= FIRST_ENTRY_ALERT_LEVEL && current > previousBand) current else NONE
     }
 }
 
 object DeepSeekActionLevelAlertStore {
-    private const val PREFS = "deepseek_action_level_alerts_v413"
+    private const val PREFS = "deepseek_action_level_alerts_v417"
     private const val KEY_BAND = "entry_band"
 
     @Synchronized
@@ -268,7 +263,7 @@ object DeepSeekActionLevelAlertStore {
             return
         }
         val next = DeepSeekActionLevelAlertPolicy.next(previousBand, level.level)
-        if (next == DeepSeekActionLevelAlertPolicy.NONE || !AlertSchedule.isAllowedNow(context)) return
+        if (next == DeepSeekActionLevelAlertPolicy.NONE) return
         val delivered = runCatching {
             PumpAlert.showDeepSeekActionLevel(context, level, state)
         }.isSuccess
@@ -279,4 +274,9 @@ object DeepSeekActionLevelAlertStore {
 internal object VirtualTradeAlertPolicy {
     fun shouldNotify(action: String, userPositionOpen: Boolean): Boolean =
         action != "BUY" || !userPositionOpen
+}
+
+internal object AlertDeliveryPolicy {
+    fun shouldRing(withinSchedule: Boolean, urgentPersonalExit: Boolean): Boolean =
+        withinSchedule || urgentPersonalExit
 }
