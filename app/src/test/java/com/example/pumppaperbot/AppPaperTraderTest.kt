@@ -7,7 +7,7 @@ import org.junit.Test
 
 class AppPaperTraderTest {
     @Test
-    fun `trend winner is not sold inside the candle that first reaches eight percent`() {
+    fun `trend runner has no fixed profit target and holds the activation candle`() {
         val candle = PumpCandle(
             openTime = 2_000L,
             open = 1.01,
@@ -30,6 +30,7 @@ class AppPaperTraderTest {
 
         assertEquals(StrategyV2.ACTION_WAIT, result.action)
         assertTrue(result.reason.contains("ПОБЕДИТЕЛЬ"))
+        assertTrue(result.reason.contains("без фиксированной цели"))
         assertEquals(1.12, result.highestHigh, 0.000001)
     }
 

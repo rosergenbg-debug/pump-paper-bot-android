@@ -33,7 +33,11 @@ data class PositionSupervisionState(
     val error: String = "",
     val promptTokens: Int = 0,
     val completionTokens: Int = 0,
-    val alertPending: Boolean = false
+    val alertPending: Boolean = false,
+    val lastAlertAt: Long = 0L,
+    val lastAlertDanger: Int = 0,
+    val lastAlertConditionDelta: Int = 0,
+    val exitRecoveryStreak: Int = 0
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("positionEntryTime", positionEntryTime)
@@ -62,6 +66,10 @@ data class PositionSupervisionState(
         .put("promptTokens", promptTokens)
         .put("completionTokens", completionTokens)
         .put("alertPending", alertPending)
+        .put("lastAlertAt", lastAlertAt)
+        .put("lastAlertDanger", lastAlertDanger)
+        .put("lastAlertConditionDelta", lastAlertConditionDelta)
+        .put("exitRecoveryStreak", exitRecoveryStreak)
 
     companion object {
         fun fromJson(json: JSONObject) = PositionSupervisionState(
@@ -90,8 +98,37 @@ data class PositionSupervisionState(
             error = RussianOutputPolicy.visible(json.optString("error")),
             promptTokens = json.optInt("promptTokens"),
             completionTokens = json.optInt("completionTokens"),
-            alertPending = json.optBoolean("alertPending")
+            alertPending = json.optBoolean("alertPending"),
+            lastAlertAt = json.optLong("lastAlertAt"),
+            lastAlertDanger = json.optInt("lastAlertDanger").coerceIn(0, 10),
+            lastAlertConditionDelta = json.optInt("lastAlertConditionDelta").coerceIn(-10, 10),
+            exitRecoveryStreak = json.optInt("exitRecoveryStreak").coerceIn(0, 2)
         )
+    }
+}
+
+internal object PositionAlertPolicy {
+    const val MIN_REPEAT_INTERVAL_MILLIS = 10L * 60L * 1000L
+
+    fun shouldAlert(
+        previous: PositionSupervisionState,
+        firstExit: Boolean,
+        stillExit: Boolean,
+        dangerLevel: Int,
+        conditionDelta: Int,
+        now: Long
+    ): Boolean {
+        if (firstExit) return true
+        if (!stillExit) return false
+        val notifiedDanger = previous.lastAlertDanger.takeIf { previous.lastAlertAt > 0L }
+            ?: previous.dangerLevel
+        val notifiedDelta = previous.lastAlertConditionDelta.takeIf { previous.lastAlertAt > 0L }
+            ?: previous.conditionDelta
+        val materiallyWorse = dangerLevel > notifiedDanger || conditionDelta <= notifiedDelta - 2
+        if (!materiallyWorse) return false
+        if (dangerLevel >= 10 && notifiedDanger < 10) return true
+        return previous.lastAlertAt <= 0L || now < previous.lastAlertAt ||
+            now - previous.lastAlertAt >= MIN_REPEAT_INTERVAL_MILLIS
     }
 }
 
@@ -268,7 +305,7 @@ object PositionSupervisorStore {
     fun clearPosition(context: Context) = save(context, PositionSupervisionState())
 }
 
-private data class SupervisorApiResult(
+internal data class SupervisorApiResult(
     val action: String,
     val conditionDelta: Int,
     val dangerLevel: Int,
@@ -282,6 +319,114 @@ private data class SupervisorApiResult(
     val repaired: Boolean,
     val finishReason: String
 )
+
+internal object PositionExitConfirmationPolicy {
+    private const val HARD_STOP_PERCENT = -4.4
+    private const val RECOVERY_CONFIRMATIONS_REQUIRED = 2
+
+    fun normalize(
+        result: SupervisorApiResult,
+        previous: PositionSupervisionState,
+        snapshot: LiveSnapshot,
+        micro: MicroImpulseSnapshot,
+        impulse: ImpulseSnapshot,
+        pnlPercent: Double,
+        now: Long
+    ): SupervisorApiResult {
+        val microFresh = micro.connected && DeepSeekFreshMarketContext.isFresh(
+            micro.updatedAt, now, DeepSeekFreshMarketContext.MICRO_MAX_AGE
+        )
+        val impulseFresh = impulse.candleTime > 0L && DeepSeekFreshMarketContext.isFresh(
+            impulse.candleTime, now, DeepSeekFreshMarketContext.FIVE_MINUTE_MAX_AGE
+        )
+        val strongRecovery = microFresh &&
+            micro.aggressiveBuyPercent15s >= 60.0 &&
+            micro.aggressiveBuyPercent60s >= 58.0 &&
+            micro.aggressiveBuyPercent5m >= 54.0 &&
+            micro.priceChange60sPercent >= 0.08
+        val moderateRecovery = microFresh &&
+            micro.aggressiveBuyPercent60s >= 52.0 &&
+            micro.aggressiveBuyPercent5m >= 50.0 &&
+            micro.priceChange60sPercent >= 0.03 &&
+            (micro.aggressiveBuyPercent15s >= 55.0 ||
+                (impulseFresh && (impulse.spotTakerRatio ?: 0.5) >= 0.50) ||
+                snapshot.directionScore > -20) &&
+            !(snapshot.rapidDrop.active && !snapshot.rapidDrop.recoveryConfirmed)
+        if (result.action != "EXIT") {
+            if (!strongRecovery && !moderateRecovery) return result
+            return when {
+                previous.exitAdvised && result.action == "HOLD" &&
+                    (strongRecovery || previous.exitRecoveryStreak + 1 >= RECOVERY_CONFIRMATIONS_REQUIRED) -> result.copy(
+                    action = "CANCEL_EXIT",
+                    conditionDelta = maxOf(2, result.conditionDelta),
+                    dangerLevel = minOf(result.dangerLevel, 5),
+                    summary = if (strongRecovery) {
+                        "Выход снят: свежий отскок подтверждён покупателями на 15 секундах, 60 секундах и 5 минутах; продолжаем наблюдение."
+                    } else {
+                        "Выход снят: восстановление цены и покупателей удержалось два контрольных цикла; продолжаем наблюдение."
+                    }
+                )
+                previous.exitAdvised && result.action == "HOLD" -> result.copy(
+                    conditionDelta = maxOf(1, result.conditionDelta),
+                    dangerLevel = minOf(result.dangerLevel, 6),
+                    summary = "Выход перепроверяется: восстановление цены и покупателей подтверждено первым контрольным циклом."
+                )
+                result.action == "HOLD" && result.dangerLevel > 7 -> result.copy(
+                    dangerLevel = 5,
+                    summary = "Высокая опасность не подтверждена: свежий поток и цена показывают устойчивый отскок."
+                )
+                else -> result
+            }
+        }
+        val currentSellerFlow = microFresh && (
+            (micro.aggressiveBuyPercent60s < 48.0 && micro.priceChange60sPercent <= -0.08) ||
+                (micro.aggressiveBuyPercent5m < 47.0 && micro.priceChange60sPercent <= -0.03)
+            )
+        val spotWeak = impulseFresh && (impulse.spotTakerRatio ?: 0.5) < 0.48
+        val futuresWeak = impulseFresh && (impulse.futuresTakerRatio ?: 0.5) < 0.48
+        val bookWeak = (micro.topBookImbalance ?: snapshot.bookImbalance ?: 0.0) <= -0.08
+        val bitcoinWeak = microFresh && micro.bitcoinAggressiveBuyPercent60s < 42.0 &&
+            micro.bitcoinPriceChange60sPercent <= -0.10
+        val broadWeak = snapshot.directionScore <= -35 || bitcoinWeak
+        val localWeak = snapshot.sellSignal ||
+            (snapshot.rapidDrop.active && !snapshot.rapidDrop.recoveryConfirmed)
+        // The independent DeepSeek EXIT itself is one group. At least two fresh/local groups
+        // must corroborate it, and one must describe actual PUMP selling or a local safety event.
+        val bearishGroups = 1 + listOf(
+            currentSellerFlow, spotWeak, futuresWeak, bookWeak, broadWeak, localWeak
+        ).count { it }
+        val hardEmergency = pnlPercent <= HARD_STOP_PERCENT ||
+            (snapshot.rapidDrop.active && !snapshot.rapidDrop.recoveryConfirmed && currentSellerFlow)
+        val confirmed = hardEmergency || (!strongRecovery && bearishGroups >= 3 &&
+            (currentSellerFlow || spotWeak || localWeak))
+        if (confirmed) return result
+
+        val cancellation = previous.exitAdvised
+        val reason = if (strongRecovery) {
+            "Выход снят: свежий отскок подтверждён покупателями на 15 секундах, 60 секундах и 5 минутах; продолжаем наблюдение."
+        } else if (cancellation && moderateRecovery &&
+            previous.exitRecoveryStreak + 1 >= RECOVERY_CONFIRMATIONS_REQUIRED
+        ) {
+            "Выход снят: восстановление цены и покупателей удержалось два контрольных цикла; продолжаем наблюдение."
+        } else if (cancellation && moderateRecovery) {
+            "Выход перепроверяется: восстановление цены и покупателей подтверждено первым контрольным циклом."
+        } else {
+            "Выход пока не подтверждён: нет согласованного давления продавцов в свежем потоке и ещё минимум двух независимых группах."
+        }
+        val cancelNow = cancellation && (strongRecovery ||
+            (moderateRecovery && previous.exitRecoveryStreak + 1 >= RECOVERY_CONFIRMATIONS_REQUIRED))
+        return result.copy(
+            action = if (cancelNow) "CANCEL_EXIT" else "HOLD",
+            conditionDelta = when {
+                cancelNow -> maxOf(2, result.conditionDelta)
+                cancellation && moderateRecovery -> maxOf(1, result.conditionDelta)
+                else -> 0
+            },
+            dangerLevel = minOf(result.dangerLevel, if (strongRecovery) 5 else 6),
+            summary = reason
+        )
+    }
+}
 
 class PositionSupervisorClient {
     private val http = OkHttpClient.Builder()
@@ -360,8 +505,21 @@ class PositionSupervisorClient {
             }
             usedModel to result
         }.fold(
-            onSuccess = { (usedModel, result) ->
+            onSuccess = { (usedModel, rawResult) ->
                 val completedAt = System.currentTimeMillis()
+                val currentSnapshot = PumpBotEngine.snapshot(context)
+                val result = PositionExitConfirmationPolicy.normalize(
+                    result = rawResult,
+                    previous = previous,
+                    snapshot = currentSnapshot,
+                    micro = MicroImpulseStore.state(context),
+                    impulse = ImpulseRadarStore.state(context),
+                    pnlPercent = if (currentSnapshot.entryPrice > 0.0) {
+                        (DeepSeekFreshMarketContext.analysisPrice(currentSnapshot, completedAt) /
+                            currentSnapshot.entryPrice - 1.0) * 100.0
+                    } else supportPlan.pnlPercent,
+                    now = completedAt
+                )
                 ApiUsageLogStore.record(context, ApiUsageEvent(
                     provider = "DEEPSEEK", circuit = "ПОЗИЦИЯ СЕРЖА", model = usedModel,
                     status = "OK", at = completedAt,
@@ -380,9 +538,14 @@ class PositionSupervisorClient {
                     "CANCEL_EXIT" -> false
                     else -> previous.exitAdvised
                 }
-                val shouldAlert = firstExit || cancelExit ||
-                    (stillExit && result.conditionDelta != previous.conditionDelta) ||
-                    (stillExit && result.dangerLevel > previous.dangerLevel)
+                val shouldAlert = PositionAlertPolicy.shouldAlert(
+                    previous = previous,
+                    firstExit = firstExit,
+                    stillExit = stillExit,
+                    dangerLevel = result.dangerLevel,
+                    conditionDelta = if (firstExit) 0 else result.conditionDelta,
+                    now = completedAt
+                )
                 val updated = previous.copy(
                     positionEntryTime = snapshot.entryTime,
                     lastAttempt = now,
@@ -429,7 +592,29 @@ class PositionSupervisorClient {
                     error = "",
                     promptTokens = previous.promptTokens + result.promptTokens,
                     completionTokens = previous.completionTokens + result.completionTokens,
-                    alertPending = shouldAlert
+                    alertPending = shouldAlert,
+                    lastAlertAt = when {
+                        shouldAlert -> completedAt
+                        cancelExit -> 0L
+                        else -> previous.lastAlertAt
+                    },
+                    lastAlertDanger = when {
+                        shouldAlert -> result.dangerLevel
+                        cancelExit -> 0
+                        else -> previous.lastAlertDanger
+                    },
+                    lastAlertConditionDelta = when {
+                        shouldAlert -> if (firstExit) 0 else result.conditionDelta
+                        cancelExit -> 0
+                        else -> previous.lastAlertConditionDelta
+                    },
+                    exitRecoveryStreak = when {
+                        result.action == "CANCEL_EXIT" || result.action == "EXIT" -> 0
+                        previous.exitAdvised && result.action == "HOLD" &&
+                            result.conditionDelta > 0 && result.dangerLevel <= 6 ->
+                            (previous.exitRecoveryStreak + 1).coerceAtMost(2)
+                        else -> 0
+                    }
                 )
                 PositionSupervisorStore.save(context, updated)
                 flushPendingAlert(context, updated)
@@ -529,6 +714,7 @@ class PositionSupervisorClient {
             .put("premium_last_full_hour_pct", hourly?.premiumPercent ?: JSONObject.NULL)
             .put("realized_volatility_24h_pct", hourly?.realizedVolatility24hPercent ?: JSONObject.NULL)
             .put("rapid_drop_active", snapshot.rapidDrop.active)
+            .put("rapid_drop_recovery_confirmed", snapshot.rapidDrop.recoveryConfirmed)
             .put("local_exit_signal", snapshot.sellSignal)
             .put("local_reason", snapshot.signalReason.take(600))
             .put("recent_untrusted_news", recentNews)
@@ -558,6 +744,12 @@ class PositionSupervisorClient {
             real_time_spot_flow — анонимный поток исполненных сделок и лучший bid/ask; five_minute_flow —
             закрытые 5-минутные spot/futures данные. Всегда проверяй fresh и age_seconds, не считай
             просроченные/null-поля текущими. Краткий микровсплеск сам по себе не является причиной EXIT.
+            Проценты aggressive_buy выше 50 означают перевес покупок, а не продаж. Не называй 60s buy 63%
+            усилением продаж. Если одновременно растёт цена и aggressive buy >=60% на 15/60 секундах и
+            >=54% на 5 минутах, это подтверждённый свежий отскок: старый откат от пика сам по себе не даёт EXIT 10/10.
+            Для EXIT нужны минимум три согласованные группы, причём одна из них — текущий поток исполненных
+            продаж, слабый spot-поток или активная локальная защита. Исключение — жёсткий стоп или аварийное
+            падение, которое ещё продолжается и подтверждено текущими продажами.
             В усиленном режиме отдельно оцени 20 уровней стакана, агрессивные покупки/продажи PUMP за
             15/60 секунд и 5 минут, а также минутный поток Bitcoin. Не считай стенку в одном срезе
             гарантией: стакан можно переставить, поэтому подтверждай его исполненными сделками и ценой.

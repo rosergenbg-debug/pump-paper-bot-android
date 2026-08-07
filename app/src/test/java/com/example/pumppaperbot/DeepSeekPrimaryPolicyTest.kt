@@ -1,10 +1,38 @@
 package com.example.pumppaperbot
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class DeepSeekPrimaryPolicyTest {
+    @Test fun `confirmed nine of ten cannot remain a non trading watch`() {
+        assertEquals(
+            "BUY",
+            DeepSeekTradeIntentPolicy.normalize(
+                modelAction = "WATCH",
+                positionOpen = false,
+                entryReadiness = 9,
+                direction = 66,
+                confidence = 72,
+                hardVeto = false,
+                locallyConfirmed = true
+            )
+        )
+        assertEquals(
+            "WATCH",
+            DeepSeekTradeIntentPolicy.normalize(
+                modelAction = "WATCH",
+                positionOpen = false,
+                entryReadiness = 9,
+                direction = 66,
+                confidence = 72,
+                hardVeto = true,
+                locallyConfirmed = true
+            )
+        )
+    }
+
     @Test fun `primary DeepSeek runs without an open position`() {
         assertTrue(DeepSeekPrimaryPolicy.shouldRun(
             DeepSeekPrimaryState(), hasMarketData = true, force = false, now = 1_000L
