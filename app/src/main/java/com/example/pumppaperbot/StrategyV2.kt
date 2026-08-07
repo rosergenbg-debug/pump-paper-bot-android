@@ -59,7 +59,7 @@ object StrategyV2 {
     const val ACTION_SELL_HALF = "SELL_HALF"
 
     const val PRICE_STOP = 0.044
-    const val TREND_TARGET = 0.08
+    const val TREND_RUNNER_ACTIVATION = 0.04
     const val SHOCK_FIRST_TARGET = 0.06
     const val EXHAUSTION_FIRST_TARGET = 0.07
     const val EXHAUSTION_SECOND_TARGET = 0.14
@@ -279,7 +279,7 @@ object StrategyV2 {
             }
         }
 
-        val winnerMode = highestBefore >= entryPrice * (1.0 + TREND_TARGET)
+        val winnerMode = highestBefore >= entryPrice * (1.0 + TREND_RUNNER_ACTIVATION)
         val winnerStop = max(entryPrice * 1.02, highestBefore * (1.0 - RUNNER_TRAIL))
         return when {
             candle.low <= hardStopPrice -> V2ExitSignal(ACTION_SELL, "СТОП −4,4%", highestAfter)
@@ -289,15 +289,16 @@ object StrategyV2 {
                 highestAfter
             )
             timedOut -> V2ExitSignal(ACTION_SELL, "ТРЕНД: прошло 24 часа — закрыть", highestAfter)
-            candle.high >= entryPrice * (1.0 + TREND_TARGET) -> V2ExitSignal(
+            candle.high >= entryPrice * (1.0 + TREND_RUNNER_ACTIVATION) -> V2ExitSignal(
                 ACTION_WAIT,
-                "ТРЕНД-ПОБЕДИТЕЛЬ: +8% достигнуты, движение сопровождается без выхода на этой свече",
+                "ТРЕНД-ПОБЕДИТЕЛЬ: включено сопровождение без фиксированной цели прибыли",
                 highestAfter,
                 70
             )
             else -> {
-                val target = ((candle.close / entryPrice - 1.0) / TREND_TARGET * 100.0).roundToInt().coerceIn(0, 99)
-                V2ExitSignal(ACTION_WAIT, "ТРЕНД: ждем +8% или защитный стоп", highestAfter, max(max(target, stopReadiness), timeReadiness))
+                val runnerReadiness = ((candle.close / entryPrice - 1.0) / TREND_RUNNER_ACTIVATION * 100.0)
+                    .roundToInt().coerceIn(0, 99)
+                V2ExitSignal(ACTION_WAIT, "ТРЕНД: ведём движение без цели +8%; выход только по подтверждённому откату или защите", highestAfter, max(max(runnerReadiness, stopReadiness), timeReadiness))
             }
         }
     }
@@ -366,7 +367,7 @@ object StrategyV2 {
             val firstTarget = when (signal.mode) {
                 MODE_EXHAUSTION -> EXHAUSTION_FIRST_TARGET
                 MODE_SHOCK -> SHOCK_FIRST_TARGET
-                else -> TREND_TARGET
+                else -> TREND_RUNNER_ACTIVATION
             }
             val partialFraction = when (signal.mode) {
                 MODE_EXHAUSTION -> EXHAUSTION_PARTIAL_FRACTION
@@ -408,22 +409,31 @@ object StrategyV2 {
                         equityPath += cash
                         break
                     }
-                    if (future.high >= entryPrice * (1.0 + firstTarget)) {
-                        val sellPrice = executionCandle.open * (1.0 - PumpBotEngine.slippage)
-                        if (partialFraction >= 0.999) {
+                    if (signal.mode == MODE_TREND) {
+                        val runnerActive = highestAfterPartial >=
+                            entryPrice * (1.0 + TREND_RUNNER_ACTIVATION)
+                        val runnerStop = max(entryPrice * 1.02, highestAfterPartial * (1.0 - RUNNER_TRAIL))
+                        if (runnerActive && future.close <= runnerStop) {
+                            val sellPrice = executionCandle.open * (1.0 - PumpBotEngine.slippage)
                             val gross = coins * sellPrice
                             val fee = gross * PumpBotEngine.feeRate
                             cash += gross - fee
                             trades += TradeEvent(
                                 executionCandle.openTime, "SELL", sellPrice, gross, fee,
                                 cash, cash - initialCash, 0.0,
-                                "Цель +8% подтверждена закрытой свечой; продажа на следующем открытии"
+                                "Тренд: подтверждён откат 4% от накопленного максимума; фиксированной цели прибыли нет"
                             )
                             coins = 0.0
                             resumeIndex = executionIndex
                             equityPath += cash
                             break
                         }
+                        highestAfterPartial = max(highestAfterPartial, future.high)
+                        j++
+                        continue
+                    }
+                    if (future.high >= entryPrice * (1.0 + firstTarget)) {
+                        val sellPrice = executionCandle.open * (1.0 - PumpBotEngine.slippage)
                         val soldCoins = coins * partialFraction
                         val gross = soldCoins * sellPrice
                         val fee = gross * PumpBotEngine.feeRate

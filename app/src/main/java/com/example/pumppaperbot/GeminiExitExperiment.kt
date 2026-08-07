@@ -289,7 +289,7 @@ data class GeminiExitEvaluationResult(
 )
 
 internal object GeminiExitExperimentEngine {
-    private const val MIN_EVALUATION_GAP_MILLIS = 60_000L
+    private const val MIN_EVALUATION_GAP_MILLIS = 2L * 60L * 1000L
     private const val EMERGENCY_LOSS_PERCENT = 5.0
 
     fun bootstrap(
@@ -453,16 +453,13 @@ internal object GeminiExitExperimentEngine {
         val dangerous = (evidence.score >= 4 && evidence.groups >= 3 && structuralWeakness) || profitProtection
         val streak = if (dangerous) state.dangerStreak + 1 else 0
         val emergency = evidence.currentReturnPercent <= -EMERGENCY_LOSS_PERCENT
-        val topProtection = evidence.currentReturnPercent >= 8.0 &&
-            evidence.pullbackPercent >= 0.8 && evidence.microWeak &&
-            (evidence.spotFlowWeak || evidence.futuresFlowWeak || evidence.cvdWeak ||
-                evidence.bookWeak || evidence.directionWeak)
-        val immediateReversal = evidence.score >= 7 && evidence.groups >= 4 && structuralWeakness
+        // There is deliberately no +8% ceiling or automatic exit trigger. A profitable
+        // position is managed by the same multi-group reversal evidence at every return.
+        val immediateReversal = evidence.score >= 8 && evidence.groups >= 5 && structuralWeakness
         val confirmedReversal = streak >= 2
-        val shouldExit = emergency || topProtection || immediateReversal || confirmedReversal
+        val shouldExit = emergency || immediateReversal || confirmedReversal
         val prefix = when {
             emergency -> "АВАРИЙНАЯ СТРАХОВКА −5%"
-            topProtection -> "ЗАЩИТА ВЗЯТОГО ВЕРХА"
             immediateReversal -> "СИЛЬНЫЙ РАЗВОРОТ РЫНКА"
             confirmedReversal -> "РАЗВОРОТ ПОДТВЕРЖДЁН ДВУМЯ ПРОВЕРКАМИ"
             dangerous -> "ОПАСНОСТЬ 1/2"

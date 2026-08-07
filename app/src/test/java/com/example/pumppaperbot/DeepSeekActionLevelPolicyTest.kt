@@ -52,7 +52,7 @@ class DeepSeekActionLevelPolicyTest {
         assertTrue(result.proPreferred)
     }
 
-    @Test fun `weak Bitcoin caps entry before green`() {
+    @Test fun `strong sustained PUMP can lead or lag a weak Bitcoin minute`() {
         val result = DeepSeekActionLevelPolicy.entry(entryEvidence(
             aiAction = "BUY",
             aiDirection = 82,
@@ -64,11 +64,32 @@ class DeepSeekActionLevelPolicyTest {
             pumpBuyerPercent60s = 61.0,
             pumpChange60sPercent = 0.22,
             bitcoinBuyerPercent60s = 39.0,
-            bitcoinChange60sPercent = -0.25
+            bitcoinChange60sPercent = -0.25,
+            breathing5m = 38,
+            breathing15m = 31
+        ))
+
+        assertEquals(DeepSeekActionBand.GREEN, result.band)
+    }
+
+    @Test fun `persistent Bitcoin weakness still caps unconfirmed PUMP`() {
+        val result = DeepSeekActionLevelPolicy.entry(entryEvidence(
+            aiAction = "BUY",
+            aiDirection = 80,
+            aiConfidence = 80,
+            aiEntryReadiness = 10,
+            appReadiness = 20,
+            microFresh = true,
+            microPhase = "CALM",
+            pumpBuyerPercent60s = 49.0,
+            pumpChange60sPercent = -0.05,
+            bitcoinBuyerPercent60s = 37.0,
+            bitcoinChange60sPercent = -0.30,
+            breathing5m = -12,
+            breathing15m = -18
         ))
 
         assertTrue(result.level <= 5)
-        assertFalse(result.band == DeepSeekActionBand.GREEN)
     }
 
     @Test fun `exit scale reverses colors from safe green to dangerous red`() {
@@ -99,6 +120,23 @@ class DeepSeekActionLevelPolicyTest {
         assertEquals(2, safe.level)
         assertEquals(DeepSeekActionBand.RED, danger.band)
         assertEquals(9, danger.level)
+    }
+
+    @Test fun `isolated APP sell is warning not false nine of ten emergency`() {
+        val result = DeepSeekActionLevelPolicy.exit(DeepSeekExitLevelEvidence(
+            deepSeekDanger = 3,
+            exitAdvised = false,
+            localSellSignal = true,
+            rapidDrop = false,
+            localGuardCritical = false,
+            directionScore = -10,
+            microFresh = true,
+            pumpBuyerPercent60s = 51.0,
+            pumpChange60sPercent = -0.03
+        ))
+
+        assertEquals(6, result.level)
+        assertEquals(DeepSeekActionBand.YELLOW, result.band)
     }
 
     @Test fun `executed exits always notify while user is in position`() {
@@ -145,7 +183,9 @@ class DeepSeekActionLevelPolicyTest {
         pumpBuyerPercent60s: Double = 50.0,
         pumpChange60sPercent: Double = 0.0,
         bitcoinBuyerPercent60s: Double = 50.0,
-        bitcoinChange60sPercent: Double = 0.0
+        bitcoinChange60sPercent: Double = 0.0,
+        breathing5m: Int? = null,
+        breathing15m: Int? = null
     ) = DeepSeekEntryLevelEvidence(
         freshAi,
         aiAction,
@@ -159,6 +199,8 @@ class DeepSeekActionLevelPolicyTest {
         pumpBuyerPercent60s,
         pumpChange60sPercent,
         bitcoinBuyerPercent60s,
-        bitcoinChange60sPercent
+        bitcoinChange60sPercent,
+        breathing5m,
+        breathing15m
     )
 }

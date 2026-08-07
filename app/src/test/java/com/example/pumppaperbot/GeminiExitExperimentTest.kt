@@ -51,7 +51,7 @@ class GeminiExitExperimentTest {
         reason = "тестовые независимые признаки"
     )
 
-    @Test fun `experiment protects a strong profit peak when live flow confirms pullback`() {
+    @Test fun `eight percent profit is never an automatic experiment exit`() {
         val state = GeminiExitExperimentState(portfolio = bought().copy(positionPeakPrice = 1.10))
         val evidence = evidence(
             score = 6,
@@ -65,8 +65,9 @@ class GeminiExitExperimentTest {
 
         val result = GeminiExitExperimentEngine.evaluate(state, evidence, 1.09, 20L, 1_000_000L)
 
-        assertEquals("SELL", result.executedTrade?.action)
-        assertTrue(result.state.lastReason.contains("ЗАЩИТА ВЗЯТОГО ВЕРХА"))
+        assertEquals(null, result.executedTrade)
+        assertTrue(result.state.portfolio.inPosition)
+        assertEquals(1, result.state.dangerStreak)
     }
 
     private fun entryEvidence(

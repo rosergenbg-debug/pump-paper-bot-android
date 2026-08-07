@@ -208,14 +208,12 @@ object DeepSeekPrimaryPolicy {
             append("DEEPSEEK • ОСНОВНОЙ • ${shortModel(state.model)} • ")
             append(if (isFreshSignal(state, now)) state.action else "РЕЗУЛЬТАТ УСТАРЕЛ")
             append("\n${state.summary}")
-            append("\nПредложение ${state.proposedAction} • итог ${state.action} • ${state.executionStatus}")
-            if (state.verificationSummary.isNotBlank()) append("\nПроверка: ${state.verificationSummary}")
-            append("\nСейчас: ${state.shortScenario}")
-            append("\nДальше: ${state.longScenario}")
-            append("\nОтмена сценария: ${state.invalidation}")
-            append("\nНеопределённость: ${state.uncertainty}")
-            append("\nСегодня: ${state.successfulToday} успешно • ${state.failedToday} ошибок")
-            append(" • последний ${PumpBotEngine.formatTime(state.lastSuccess)}")
+            if (state.proposedAction != state.action) {
+                append("\nПочему без сделки: ${state.verificationSummary}")
+            }
+            append("\nБлижайшее: ${state.shortScenario}")
+            append("\nПересмотр: ${state.invalidation}")
+            append("\nОбновлено ${PumpBotEngine.formatTime(state.lastSuccess)}")
             if (state.error.isNotBlank()) append("\nПоследняя ошибка: ${state.error}")
         }
     }
@@ -240,6 +238,23 @@ internal object DeepSeekTradeVerificationPolicy {
 
     fun acceptedConfidence(proposedAction: String, approved: Boolean?, confidence: Int): Int =
         confidence.coerceIn(0, 100)
+}
+
+internal object DeepSeekTradeIntentPolicy {
+    fun normalize(
+        modelAction: String,
+        positionOpen: Boolean,
+        entryReadiness: Int,
+        direction: Int,
+        confidence: Int,
+        hardVeto: Boolean,
+        locallyConfirmed: Boolean
+    ): String {
+        if (positionOpen || modelAction == "BUY" || hardVeto) return modelAction
+        return if (modelAction in setOf("WATCH", "HOLD") && entryReadiness >= 9 &&
+            direction >= 50 && confidence >= 60 && locallyConfirmed
+        ) "BUY" else modelAction
+    }
 }
 
 private data class DeepSeekPrimaryResult(
@@ -292,7 +307,9 @@ class DeepSeekPrimaryAnalyst {
         val analyticalConflict = ecosystem.fresh(now) && ecosystem.dataQuality >= 50 &&
             breathing.normalScore != null && abs(ecosystemScore) >= 20 && abs(breathing.normalScore) >= 20 &&
             ecosystemScore * breathing.normalScore < 0
-        val previousActionLevel = DeepSeekActionLevelPolicy.fromMarket(snapshot, previous, micro, now)
+        val previousActionLevel = DeepSeekActionLevelPolicy.fromMarket(
+            snapshot, previous, micro, now, breathing
+        )
         val materialChange = previous.lastAttempt > 0L && (
             kotlin.math.abs(snapshot.readinessScore - previous.lastInputReadiness) >= 15 ||
                 kotlin.math.abs((breathing.normalScore ?: 0) - previous.lastBreathingScore) >= 12 ||
@@ -409,7 +426,8 @@ class DeepSeekPrimaryAnalyst {
                     DeepSeekActionLevelAlertStore.sync(
                         context,
                         DeepSeekActionLevelPolicy.fromMarket(
-                            snapshot, updated, MicroImpulseStore.state(context), completedAt
+                            snapshot, updated, MicroImpulseStore.state(context), completedAt,
+                            LiveMarketBreathingStore.snapshot(context, completedAt)
                         ),
                         updated
                     )
@@ -515,6 +533,13 @@ class DeepSeekPrimaryAnalyst {
             .put("hourly_pump_change_6h_pct", hourly?.pump6hPercent ?: JSONObject.NULL)
             .put("hourly_btc_change_1h_pct", hourly?.btc1hPercent ?: JSONObject.NULL)
             .put("hourly_btc_change_3h_pct", hourly?.btc3hPercent ?: JSONObject.NULL)
+            .put("pump_minus_btc_1h_pct", hourly?.pump1hPercent?.let { pump ->
+                hourly.btc1hPercent?.let { btc -> pump - btc }
+            } ?: JSONObject.NULL)
+            .put("pump_minus_btc_3h_pct", hourly?.pump3hPercent?.let { pump ->
+                hourly.btc3hPercent?.let { btc -> pump - btc }
+            } ?: JSONObject.NULL)
+            .put("bitcoin_role", "фильтр режима и риска; PUMP может запаздывать, опережать или временно расходиться")
             .put("hourly_sol_change_1h_pct", hourly?.sol1hPercent ?: JSONObject.NULL)
             .put("hourly_sol_change_3h_pct", hourly?.sol3hPercent ?: JSONObject.NULL)
             .put("hourly_spot_taker_buy_pct", hourly?.spotTakerBuyPercent ?: JSONObject.NULL)
@@ -547,6 +572,10 @@ class DeepSeekPrimaryAnalyst {
             Внутри незакрытой 30-минутной свечи BUY разрешён при устойчивом 5/15-минутном дыхании, подтверждении
             исполненными покупками/5-минутным потоком и отсутствии реального разворота или rapid drop.
             Не считай один индикатор или один заголовок достаточным основанием. Не догоняй уже перегретую цену.
+            Bitcoin — фильтр рыночного режима, а не команда PUMP двигаться синхронно каждую минуту. Различай
+            краткое расхождение, запаздывание PUMP и общий разворот. Одиночная минутная слабость BTC не запрещает
+            BUY, если PUMP сохраняет устойчивые 5/15-минутные покупки, CVD и относительную силу. Но совместная
+            слабость BTC и PUMP на нескольких горизонтах остаётся серьёзным риском.
             pump_fun_ecosystem — внутренний фундаментальный фон Pump.fun: миграции, объём, доход, выкуп и сжигание.
             Учитывай качество и возраст; null не превращай в ноль. Этот слой не имеет самостоятельной торговой власти.
             verified_evidence_memory содержит только замороженные до результата закономерности. Повышай вес только
@@ -562,8 +591,9 @@ class DeepSeekPrimaryAnalyst {
             Верни только JSON:
             action BUY, HOLD, WATCH или EXIT; direction целое -100..100; danger целое 0..10;
             confidence целое 0..100; entry_readiness целое 1..10, где 1 означает «не входить»,
-            5–7 — «подготовиться», а 8–10 допустимы только при согласованном подтверждении минимум
-            двумя независимыми группами данных и отсутствии защитного запрета;
+            5–6 — наблюдение, 7–8 — близкий жёлтый вход, 9–10 — подтверждённый зелёный вход.
+            Если счёт в евро, entry_readiness 9–10, подтверждены минимум две независимые группы и нет rapid drop,
+            action обязан быть BUY, а не WATCH. Если подтверждения недостаточно, не завышай entry_readiness;
             summary одно короткое конкретное предложение о происходящем сейчас;
             short_scenario один короткий наиболее вероятный сценарий на 15–60 минут;
             long_scenario один короткий наиболее вероятный сценарий на 3–24 часа;
@@ -621,8 +651,32 @@ class DeepSeekPrimaryAnalyst {
             }
         )
         val json = response.json
-        val proposedAction = json.optString("action", "WATCH").uppercase(Locale.ROOT)
+        val modelAction = json.optString("action", "WATCH").uppercase(Locale.ROOT)
             .takeIf { it in allowedActions } ?: "WATCH"
+        val entryReadiness = json.optInt(
+            "entry_readiness",
+            (json.optInt("direction").coerceAtLeast(0) / 10).coerceAtLeast(1)
+        ).coerceIn(1, 10)
+        val breathing = LiveMarketBreathingStore.snapshot(context, now)
+        fun breathingScore(minutes: Int) = breathing.horizons
+            .firstOrNull { it.minutes == minutes }?.score ?: 0
+        val micro = MicroImpulseStore.state(context)
+        val microFresh = micro.connected && DeepSeekFreshMarketContext.isFresh(
+            micro.updatedAt, now, DeepSeekFreshMarketContext.MICRO_MAX_AGE
+        )
+        val locallyConfirmed = snapshot.readinessScore >= 70 ||
+            (breathingScore(5) >= 25 && breathingScore(15) >= 20) ||
+            (microFresh && micro.aggressiveBuyPercent60s >= 55.0 &&
+                micro.priceChange60sPercent >= 0.03)
+        val proposedAction = DeepSeekTradeIntentPolicy.normalize(
+            modelAction = modelAction,
+            positionOpen = aiPaperPositionOpen,
+            entryReadiness = entryReadiness,
+            direction = json.optInt("direction"),
+            confidence = json.optInt("confidence"),
+            hardVeto = snapshot.rapidDrop.active && !snapshot.rapidDrop.recoveryConfirmed,
+            locallyConfirmed = locallyConfirmed
+        )
         val verification = if (proposedAction == "BUY" || proposedAction == "EXIT") {
             verifyTradeDecision(context, apiKey, frame, json, proposedAction, aiPaperPositionOpen)
         } else null
@@ -650,10 +704,7 @@ class DeepSeekPrimaryAnalyst {
             confidence = DeepSeekTradeVerificationPolicy.acceptedConfidence(
                 proposedAction, verification?.approved, json.optInt("confidence")
             ),
-            entryReadiness = json.optInt(
-                "entry_readiness",
-                (json.optInt("direction").coerceAtLeast(0) / 10).coerceAtLeast(1)
-            ).coerceIn(1, 10),
+            entryReadiness = entryReadiness,
             summary = summary.take(400),
             shortScenario = json.optString("short_scenario", "Краткосрочно требуется наблюдение").take(300),
             longScenario = json.optString("long_scenario", "Долгосрочно данных пока недостаточно").take(300),
@@ -709,6 +760,9 @@ class DeepSeekPrimaryAnalyst {
             30-минутная StrategyV2 управляет APP и не является запретом для DeepSeek. Не отклоняй устойчивый
             внутрисвечный BUY только из-за незакрытой свечи, старого APP late-entry флага или уже начавшегося роста.
             Ищи настоящий выдох движения, противоречие spot/futures, слабость BTC/SOL, rapid drop и устаревшие данные.
+            Не отклоняй BUY только из-за одиночной минутной слабости Bitcoin: PUMP может запаздывать или временно
+            расходиться. Считай BTC запретом лишь при устойчивой слабости нескольких горизонтов вместе с потерей
+            покупательского потока/относительной силы самого PUMP.
             Одобряй BUY при двух независимых подтверждающих группах и устойчивом 5/15-минутном направлении.
             Одобряй EXIT только при согласованном ухудшении нескольких горизонтов. Одиночный короткий тик — отказ EXIT.
             Верни только JSON: approved boolean; summary короткая причина; evidence массив до 3 фактов;

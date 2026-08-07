@@ -10,6 +10,7 @@ data class PersonalPositionGuardState(
     val peakPrice: Double = 0.0,
     val lastAlertKey: String = "",
     val lastAlertAt: Long = 0L,
+    val criticalActive: Boolean = false,
     val status: String = "Ожидает ручную позицию"
 ) {
     fun toJson(): JSONObject = JSONObject()
@@ -18,6 +19,7 @@ data class PersonalPositionGuardState(
         .put("peakPrice", peakPrice)
         .put("lastAlertKey", lastAlertKey)
         .put("lastAlertAt", lastAlertAt)
+        .put("criticalActive", criticalActive)
         .put("status", status)
 
     companion object {
@@ -27,6 +29,7 @@ data class PersonalPositionGuardState(
             peakPrice = json.optDouble("peakPrice"),
             lastAlertKey = json.optString("lastAlertKey"),
             lastAlertAt = json.optLong("lastAlertAt"),
+            criticalActive = json.optBoolean("criticalActive", false),
             status = RussianOutputPolicy.visible(json.optString("status", "Ожидает ручную позицию"))
         )
     }
@@ -66,14 +69,18 @@ internal object PersonalPositionGuardPolicy {
         val microWeak = microFresh && (
             micro.aggressiveBuyPercent15s < 48.0 || micro.priceChange60sPercent <= -0.20 ||
                 (micro.topBookImbalance ?: 0.0) <= -0.10
-            )
+        )
         val broadWeak = snapshot.directionScore <= -35
+        val strongLiveRecovery = microFresh &&
+            micro.aggressiveBuyPercent15s >= 60.0 &&
+            micro.aggressiveBuyPercent60s >= 58.0 &&
+            micro.aggressiveBuyPercent5m >= 54.0 &&
+            micro.priceChange60sPercent >= 0.08
         val reason = when {
             pnl <= HARD_STOP_PERCENT -> "ЖИВОЙ СТОП: результат ${format(pnl)}%, достигнут защитный предел −4,4%"
-            snapshot.rapidDrop.active -> "РЕЗКОЕ ПАДЕНИЕ: рынок потерял ${format(-snapshot.rapidDrop.dropPercent)}% от локального пика"
+            snapshot.rapidDrop.active && !snapshot.rapidDrop.recoveryConfirmed && !strongLiveRecovery ->
+                "РЕЗКОЕ ПАДЕНИЕ: рынок потерял ${format(-snapshot.rapidDrop.dropPercent)}% от локального пика"
             snapshot.sellSignal -> "ЛОКАЛЬНЫЙ ВЫХОД APP подтверждён закрытой свечой: ${snapshot.signalReason}"
-            pnl >= 8.0 && pullback >= 0.8 && (microWeak || broadWeak) ->
-                "ЗАЩИТА ВЕРХА: прибыль ${format(pnl)}%, откат от пика ${format(pullback)}%, покупатели ослабевают"
             pnl >= 4.0 && pullback >= 1.2 && microWeak && broadWeak ->
                 "ЗАЩИТА ПРИБЫЛИ: прибыль ${format(pnl)}%, откат ${format(pullback)}% подтверждён потоком и рынком"
             pnl >= 2.0 && pullback >= 1.6 && microWeak && snapshot.directionScore <= -20 ->
@@ -81,16 +88,23 @@ internal object PersonalPositionGuardPolicy {
             else -> ""
         }
         val key = reason.substringBefore(':')
-        val canAlert = reason.isNotBlank() && (
-            key != base.lastAlertKey || now - base.lastAlertAt >= ALERT_COOLDOWN_MILLIS
-            )
+        val rearmedKey = if (reason.isBlank() && base.lastAlertAt > 0L &&
+            now - base.lastAlertAt >= ALERT_COOLDOWN_MILLIS
+        ) "" else base.lastAlertKey
+        // A persistent unchanged condition updates the card but never rings periodically.
+        // It can alert again only after a real recovery interval re-arms the guard.
+        val canAlert = reason.isNotBlank() && key != rearmedKey
         val status = if (reason.isBlank()) {
             "Живой контроль: ${format(pnl)}%, пик €${String.format(java.util.Locale.GERMANY, "%.8f", peak)}, откат ${format(pullback)}%"
         } else reason
         val updated = base.copy(
             peakPrice = peak,
-            lastAlertKey = if (canAlert) key else base.lastAlertKey,
+            lastAlertKey = if (canAlert) key else rearmedKey,
             lastAlertAt = if (canAlert) now else base.lastAlertAt,
+            criticalActive = reason.startsWith("ЖИВОЙ СТОП") ||
+                reason.startsWith("РЕЗКОЕ ПАДЕНИЕ") ||
+                reason.startsWith("ЗАЩИТА ПРИБЫЛИ") ||
+                reason.startsWith("ВОЗМОЖНЫЙ ВЕРХ"),
             status = status
         )
         return PersonalPositionGuardOutcome(
