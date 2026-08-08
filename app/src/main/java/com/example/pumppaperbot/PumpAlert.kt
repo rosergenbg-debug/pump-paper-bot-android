@@ -16,14 +16,14 @@ import androidx.core.content.ContextCompat
 
 object PumpAlert {
     private const val monitorChannelId = "pump_rsi_risk_monitor"
-    private const val signalChannelId = "pump_rsi_risk_signals_v417"
-    private const val rapidDropChannelId = "pump_rapid_drop_v417"
-    private const val eventRadarChannelId = "pump_event_radar_v417"
-    private const val appTradeChannelId = "pump_app_trades_v417"
-    private const val geminiTradeChannelId = "pump_deepseek_trades_v417"
-    private const val geminiExitExperimentChannelId = "pump_deepseek_experiment_v417"
-    private const val positionSupervisorChannelId = "pump_position_supervisor_v417"
-    private const val silentAlertChannelId = "pump_silent_updates_v417"
+    private const val signalChannelId = "pump_rsi_risk_signals_v421"
+    private const val rapidDropChannelId = "pump_rapid_drop_v421"
+    private const val eventRadarChannelId = "pump_event_radar_v421"
+    private const val appTradeChannelId = "pump_app_trades_v421"
+    private const val geminiTradeChannelId = "pump_deepseek_trades_v421"
+    private const val geminiExitExperimentChannelId = "pump_deepseek_experiment_v421"
+    private const val positionSupervisorChannelId = "pump_position_supervisor_v421"
+    private const val silentAlertChannelId = "pump_silent_updates_v421"
     private const val deepSeekCostChannelId = "pump_deepseek_cost_v414"
     private const val monitorNotificationId = 3501
     private const val signalNotificationId = 3502
@@ -509,9 +509,9 @@ object PumpAlert {
     ) {
         ensureChannels(context)
         val title = if (level.level >= DeepSeekActionLevelPolicy.READY_LEVEL) {
-            "DEEPSEEK: ВХОД ПОДТВЕРЖДАЕТСЯ • ${level.level}/10"
+            "APP + DEEPSEEK: ВХОД ПОДТВЕРЖДАЕТСЯ • ${level.level}/10"
         } else {
-            "DEEPSEEK: ЖЁЛТЫЙ СИГНАЛ ВХОДА • ${level.level}/10"
+            "APP + DEEPSEEK: ЖЁЛТЫЙ СИГНАЛ • ${level.level}/10"
         }
         val evidence = state.evidence.take(2).joinToString("; ")
         val text = buildString {
@@ -522,7 +522,7 @@ object PumpAlert {
         }
         SignalAttributionStore.record(
             context,
-            "DEEPSEEK",
+            "APP + DEEPSEEK",
             if (level.level >= DeepSeekActionLevelPolicy.READY_LEVEL) {
                 "ПОДТВЕРЖДЕНИЕ ВХОДА ${level.level}/10"
             } else {
@@ -620,6 +620,13 @@ object PumpAlert {
             alwaysLoud = state.action == "EXIT",
             scheduledSound = false
         )
+    }
+
+    fun clearPersonalPositionAlerts(context: Context) {
+        val manager = context.getSystemService(NotificationManager::class.java)
+        manager.cancel(positionSupervisorNotificationId)
+        manager.cancel(personalGuardNotificationId)
+        manager.cancel(geminiPositionAdvisorNotificationId)
     }
 
     fun showDeepSeekCostWarning(context: Context, estimatedCostUsd: Double) {

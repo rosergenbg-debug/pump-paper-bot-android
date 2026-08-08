@@ -260,6 +260,9 @@ class MainActivity : AppCompatActivity() {
         UserPaperStore.discardOpenPosition(this)
         ManualPositionStore.discardOpenPosition(this)
         PositionSupervisorStore.clearPosition(this)
+        GeminiPositionAdvisorStore.clearPosition(this)
+        PersonalPositionGuardStore.clear(this)
+        PumpAlert.clearPersonalPositionAlerts(this)
         updateUi()
         checkNow()
     }
@@ -384,6 +387,7 @@ class MainActivity : AppCompatActivity() {
             PositionSupervisorStore.clearPosition(this)
             GeminiPositionAdvisorStore.clearPosition(this)
             PersonalPositionGuardStore.clear(this)
+            PumpAlert.clearPersonalPositionAlerts(this)
             updateUi()
         }
     }

@@ -98,7 +98,10 @@ class GeminiExitExperimentActivity : AppCompatActivity() {
             } else {
                 append("Опасность ${state.lastScore}/11 • независимых групп ${state.lastGroups}/7")
             }
-            if (state.lastPhase == "EXIT" && state.dangerStreak > 0) append(" • подтверждение ${state.dangerStreak}/2")
+            if (state.lastPhase == "EXIT" && state.dangerStreak > 0) append(" • подтверждение ${state.dangerStreak}/3")
+            if (state.lastPhase == "ENTRY" && state.entryConfirmStreak > 0) {
+                append(" • вход ${state.entryConfirmStreak}/3")
+            }
             if (state.lastPhase == "EXIT" && state.adaptivePullbackPercent > 0.0) {
                 append(String.format(Locale.GERMANY, "\nДопустимый шум сейчас около %.2f%%", state.adaptivePullbackPercent))
             }

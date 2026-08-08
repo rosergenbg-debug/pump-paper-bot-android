@@ -158,6 +158,7 @@ class GeminiPositionAdvisorClient {
         val snapshot = PumpBotEngine.snapshot(context)
         if (snapshot.waitMode != "SELL" || snapshot.entryPrice <= 0.0) {
             GeminiPositionAdvisorStore.clearPosition(context)
+            PumpAlert.clearPersonalPositionAlerts(context)
             return GeminiPositionAdvisorStore.state(context)
         }
         val stored = GeminiPositionAdvisorStore.state(context)
@@ -198,6 +199,14 @@ class GeminiPositionAdvisorClient {
         return runCatching {
             val result = analyzeWithFallback(context, key, snapshot)
             val finished = System.currentTimeMillis()
+            val currentSnapshot = PumpBotEngine.snapshot(context)
+            if (currentSnapshot.waitMode != "SELL" || currentSnapshot.entryPrice <= 0.0 ||
+                currentSnapshot.entryTime != snapshot.entryTime
+            ) {
+                GeminiPositionAdvisorStore.clearPosition(context)
+                PumpAlert.clearPersonalPositionAlerts(context)
+                return@runCatching GeminiPositionAdvisorStore.state(context)
+            }
             val newlyExit = result.action == "EXIT" && previous.action != "EXIT"
             val escalated = result.action == "EXIT" && result.dangerLevel > previous.dangerLevel
             val updated = previous.copy(
@@ -223,7 +232,15 @@ class GeminiPositionAdvisorClient {
             ))
             flushPendingAlert(context, updated)
             GeminiPositionAdvisorStore.state(context)
-        }.getOrElse { error ->
+        }.getOrElse failure@ { error ->
+            val currentSnapshot = PumpBotEngine.snapshot(context)
+            if (currentSnapshot.waitMode != "SELL" || currentSnapshot.entryPrice <= 0.0 ||
+                currentSnapshot.entryTime != snapshot.entryTime
+            ) {
+                GeminiPositionAdvisorStore.clearPosition(context)
+                PumpAlert.clearPersonalPositionAlerts(context)
+                return@failure GeminiPositionAdvisorStore.state(context)
+            }
             val finished = System.currentTimeMillis()
             ApiUsageLogStore.record(context, ApiUsageEvent(
                 provider = "GEMINI", circuit = "ПОЗИЦИЯ СЕРЖА", model = MODELS.first(),

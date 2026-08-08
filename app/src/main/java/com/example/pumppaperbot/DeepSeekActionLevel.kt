@@ -1,7 +1,6 @@
 package com.example.pumppaperbot
 
 import android.content.Context
-import kotlin.math.roundToInt
 
 enum class DeepSeekActionPhase { ENTRY, EXIT }
 
@@ -32,7 +31,11 @@ data class DeepSeekEntryLevelEvidence(
     val bitcoinBuyerPercent60s: Double,
     val bitcoinChange60sPercent: Double,
     val breathing5m: Int? = null,
-    val breathing15m: Int? = null
+    val breathing15m: Int? = null,
+    val breathing30m: Int? = null,
+    val breathing60m: Int? = null,
+    val appBuySignal: Boolean = false,
+    val appSellSignal: Boolean = false
 )
 
 data class DeepSeekExitLevelEvidence(
@@ -56,85 +59,34 @@ object DeepSeekActionLevelPolicy {
     const val READY_LEVEL = 9
 
     fun entry(evidence: DeepSeekEntryLevelEvidence): DeepSeekActionLevel {
-        if (evidence.hardVeto) {
-            return DeepSeekActionLevel(
-                DeepSeekActionPhase.ENTRY, 1, DeepSeekActionBand.RED,
-                "НЕ ВХОДИТЬ", "Защитный запрет: резкое падение ещё не подтвердило восстановление."
-            )
-        }
-
         val microPressure = evidence.microFresh && evidence.microPhase in setOf(
             "PRESSURE", "IGNITION", "CONFIRMATION"
         )
-        val microStrong = microPressure && evidence.pumpBuyerPercent60s >= 55.0 &&
-            evidence.pumpChange60sPercent >= 0.03
-        val appStrong = evidence.appReadiness >= 70
-        val sustainedPump = (evidence.breathing5m ?: 0) >= 15 &&
-            (evidence.breathing15m ?: 0) >= 10
-        val stableStrong = (evidence.breathing5m ?: 0) >= 25 &&
-            (evidence.breathing15m ?: 0) >= 20
-        // Bitcoin is a regime/risk filter, not a requirement that PUMP copy every 60-second move.
-        // A short BTC dip may be a normal lead/lag divergence when PUMP flow stays independently strong.
-        val bitcoinWeak = evidence.microFresh && !sustainedPump && !microStrong && (
-            evidence.bitcoinBuyerPercent60s < 40.0 && evidence.bitcoinChange60sPercent <= -0.20
-        )
-        val aiStrong = evidence.freshAi && evidence.aiDirection >= 35 && evidence.aiConfidence >= 55
-
-        if (!evidence.freshAi) {
-            val localLevel = if (microStrong && appStrong && !bitcoinWeak) 4 else if (microPressure) 3 else 1
-            return entryResult(
-                localLevel,
-                "DeepSeek ещё не дал свежую оценку; локальная движуха используется только как повод усилить наблюдение.",
-                intensive = microPressure || appStrong,
-                proPreferred = false
-            )
-        }
-
-        val aiLevel = evidence.aiEntryReadiness.coerceIn(1, 10)
-        val directionLevel = (evidence.aiDirection.coerceIn(0, 100) / 10.0).roundToInt()
-        val confidenceLevel = (evidence.aiConfidence.coerceIn(0, 100) / 10.0).roundToInt()
-        val appLevel = (evidence.appReadiness.coerceIn(0, 100) / 10.0).roundToInt()
-        val microLevel = if (evidence.microFresh) {
-            (((evidence.pumpBuyerPercent60s - 45.0) / 2.0).coerceIn(0.0, 8.0) +
-                if (microPressure) 2.0 else 0.0).roundToInt().coerceIn(0, 10)
-        } else 0
-        val stableLevel = (((evidence.breathing5m ?: 0) + (evidence.breathing15m ?: 0)) / 20.0)
-            .roundToInt().coerceIn(0, 10)
-        val localWeight = if (evidence.microFresh) 0.10 else 0.0
-        val raw = (
-            aiLevel * 0.35 + directionLevel * 0.15 + confidenceLevel * 0.15 +
-                appLevel * 0.10 + microLevel * localWeight + stableLevel * 0.15
-            ).roundToInt().coerceIn(1, 10)
-
-        val independentlyConfirmed = aiStrong && (appStrong || microStrong || stableStrong) && !bitcoinWeak
-        var level = raw
-        level = when {
-            evidence.aiDirection <= 0 -> minOf(level, 3)
-            evidence.aiConfidence < 55 -> minOf(level, 5)
-            bitcoinWeak -> minOf(level, 5)
-            !independentlyConfirmed -> minOf(level, 7)
-            else -> level
-        }
-        if (evidence.aiAction == "BUY" && independentlyConfirmed) {
-            level = maxOf(level, if (evidence.aiDirection >= 70 && evidence.aiConfidence >= 70) 10 else 9)
-        } else if (independentlyConfirmed) {
-            level = maxOf(level, 6)
-        }
-
-        val detail = when {
-            level >= READY_LEVEL && evidence.aiAction == "BUY" ->
-                "DeepSeek и независимые рыночные данные подтвердили вход; проверьте цену перед решением."
-            level >= READY_LEVEL ->
-                "Вход близко: DeepSeek, локальный алгоритм и поток покупателей согласуются."
-            level >= APPROACHING_LEVEL ->
-                "Вход приближается: устойчивость 5–15 минут улучшается, но подтверждение ещё не полное."
-            else -> "DeepSeek пока не видит достаточно согласованных оснований для входа."
-        }
+        val fused = AppLedHybridPolicy.entry(AppLedEntryEvidence(
+            aiFresh = evidence.freshAi,
+            aiAction = evidence.aiAction,
+            aiDirection = evidence.aiDirection,
+            aiConfidence = evidence.aiConfidence,
+            aiReadiness = evidence.aiEntryReadiness,
+            appReadiness = evidence.appReadiness,
+            appBuySignal = evidence.appBuySignal,
+            appSellSignal = evidence.appSellSignal,
+            hardVeto = evidence.hardVeto,
+            microFresh = evidence.microFresh,
+            pumpBuyerPercent60s = evidence.pumpBuyerPercent60s,
+            pumpChange60sPercent = evidence.pumpChange60sPercent,
+            bitcoinBuyerPercent60s = evidence.bitcoinBuyerPercent60s,
+            bitcoinChange60sPercent = evidence.bitcoinChange60sPercent,
+            breathing5m = evidence.breathing5m,
+            breathing15m = evidence.breathing15m,
+            breathing30m = evidence.breathing30m,
+            breathing60m = evidence.breathing60m
+        ))
         return entryResult(
-            level,
-            detail,
-            intensive = level >= APPROACHING_LEVEL || microPressure || appStrong,
-            proPreferred = level >= READY_LEVEL
+            fused.level,
+            fused.reason,
+            intensive = fused.level >= APPROACHING_LEVEL || microPressure || evidence.appReadiness >= 70,
+            proPreferred = fused.level >= READY_LEVEL
         )
     }
 
@@ -181,14 +133,16 @@ object DeepSeekActionLevelPolicy {
             micro.updatedAt, now, DeepSeekFreshMarketContext.MICRO_MAX_AGE
         )
         fun horizon(minutes: Int) = breathing.horizons.firstOrNull { it.minutes == minutes }?.score
-            ?: state.lastBreathingScore.takeIf { state.lastSuccess > 0L }
+        val shortFallback = state.lastBreathingScore.takeIf { state.lastSuccess > 0L }
         return entry(DeepSeekEntryLevelEvidence(
             freshAi = DeepSeekPrimaryPolicy.isFreshSignal(state, now),
-            aiAction = state.action,
+            aiAction = state.modelIntent,
             aiDirection = state.direction,
             aiConfidence = state.confidence,
             aiEntryReadiness = state.entryReadiness,
             appReadiness = snapshot.readinessScore.coerceAtLeast(0),
+            appBuySignal = snapshot.buySignal,
+            appSellSignal = snapshot.sellSignal,
             // The 30-minute late/overheat flags belong to APP. They remain visible context,
             // but must not freeze the independent intrabar DeepSeek circuit.
             hardVeto = snapshot.rapidDrop.active && !snapshot.rapidDrop.recoveryConfirmed,
@@ -198,8 +152,10 @@ object DeepSeekActionLevelPolicy {
             pumpChange60sPercent = micro.priceChange60sPercent,
             bitcoinBuyerPercent60s = micro.bitcoinAggressiveBuyPercent60s,
             bitcoinChange60sPercent = micro.bitcoinPriceChange60sPercent,
-            breathing5m = horizon(5),
-            breathing15m = horizon(15)
+            breathing5m = horizon(5) ?: shortFallback,
+            breathing15m = horizon(15) ?: shortFallback,
+            breathing30m = horizon(30),
+            breathing60m = horizon(60)
         ))
     }
 
@@ -305,8 +261,8 @@ object DeepSeekActionLevelAlertStore {
 }
 
 internal object VirtualTradeAlertPolicy {
-    fun shouldNotify(action: String, userPositionOpen: Boolean): Boolean =
-        action != "BUY" || !userPositionOpen
+    @Suppress("UNUSED_PARAMETER")
+    fun shouldNotify(action: String, userPositionOpen: Boolean): Boolean = true
 }
 
 internal object AlertDeliveryPolicy {

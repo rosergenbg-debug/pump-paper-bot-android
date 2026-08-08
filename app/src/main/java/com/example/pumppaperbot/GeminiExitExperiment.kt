@@ -17,6 +17,24 @@ data class GeminiEntryEvidence(
     val anchorId: Long = 0L
 ) {
     companion object {
+        private const val ENTRY_CONFIRMATION_WINDOW_MILLIS = 15L * 60L * 1000L
+
+        internal fun stableConfirmationAnchor(
+            observedAt: Long,
+            appReady: Boolean,
+            appCandleTime: Long,
+            deepSeekPositive: Boolean,
+            breathingPositive: Boolean
+        ): Long {
+            val confirmationWindow = (observedAt.coerceAtLeast(0L) /
+                ENTRY_CONFIRMATION_WINDOW_MILLIS) * ENTRY_CONFIRMATION_WINDOW_MILLIS
+            return maxOf(
+                if (appReady) appCandleTime else 0L,
+                if (deepSeekPositive) confirmationWindow else 0L,
+                if (breathingPositive) confirmationWindow else 0L
+            )
+        }
+
         fun from(
             frame: GeminiMarketFrame,
             impulse: ImpulseSnapshot,
@@ -50,13 +68,13 @@ data class GeminiEntryEvidence(
             val cvdStrong = frame.spotCvdPercent?.let { it > 0.0 } == true &&
                 frame.futuresCvdPercent?.let { it > 0.0 } == true
             val bookStrong = snapshot.bookImbalance?.let { it >= 0.05 } == true
-            val broadMarketWeak = frame.btc1hPercent?.let { it < 0.0 } == true &&
-                frame.sol1hPercent?.let { it < 0.0 } == true
-            val broadMarketSupport = !broadMarketWeak
             val sustainedContinuation = (breathing.experimentScore ?: 0) >= 35 &&
                 (breathing.normalScore ?: 0) >= 20 &&
                 breathing.horizons.filter { it.minutes in setOf(5, 15) }
                     .count { (it.score ?: 0) >= 15 } >= 2
+            val broadMarketWeak = frame.btc1hPercent?.let { it <= -0.50 } == true &&
+                frame.sol1hPercent?.let { it <= -0.75 } == true && !sustainedContinuation
+            val broadMarketSupport = !broadMarketWeak
             val momentumStrong = sustainedContinuation || (
                 frame.pump1hPercent?.let { it >= 0.15 } == true &&
                     frame.pump3hPercent?.let { it >= -0.50 } != false
@@ -84,7 +102,7 @@ data class GeminiEntryEvidence(
                     "рынок перегрет без устойчивого подтверждения продолжения"
                 snapshot.rapidDrop.active && !snapshot.rapidDrop.recoveryConfirmed ->
                     "резкое падение ещё не подтвердило разворот"
-                broadMarketWeak -> "BTC и SOL одновременно снижаются"
+                broadMarketWeak -> "BTC и SOL одновременно заметно снижаются без самостоятельной силы PUMP"
                 !momentumStrong -> "рост PUMP ещё не подтверждён закрытым движением"
                 !flowStrong && !cvdStrong -> "нет согласованного подтверждения покупателей или CVD"
                 score < 5 || groups < 3 -> "недостаточно независимых подтверждений входа"
@@ -108,10 +126,12 @@ data class GeminiEntryEvidence(
                 if (sustainedContinuation) add("5/15-минутное дыхание подтверждает продолжение")
             }
             val evidenceText = facts.joinToString("; ").ifBlank { "рыночных подтверждений пока нет" }
-            val anchorId = maxOf(
-                if (appReady) appEvaluation.candleTime else 0L,
-                if (deepSeekPositive) deepSeekDecision.lastSuccess else 0L,
-                if (breathingPositive) breathing.updatedAt else 0L
+            val anchorId = stableConfirmationAnchor(
+                observedAt = snapshot.lastSync,
+                appReady = appReady,
+                appCandleTime = appEvaluation.candleTime,
+                deepSeekPositive = deepSeekPositive,
+                breathingPositive = breathingPositive
             )
             return GeminiEntryEvidence(
                 signalActive = signalActive,
@@ -125,6 +145,7 @@ data class GeminiEntryEvidence(
             )
         }
     }
+
 }
 
 internal object GeminiAppReadinessPolicy {
@@ -150,7 +171,12 @@ data class GeminiExitEvidence(
     val directionWeak: Boolean,
     val priceWeak: Boolean,
     val microWeak: Boolean = false,
-    val reason: String
+    val reason: String,
+    val appExitSignal: Boolean = false,
+    val breathing5m: Int? = null,
+    val breathing15m: Int? = null,
+    val breathing30m: Int? = null,
+    val breathing60m: Int? = null
 ) {
     companion object {
         fun from(
@@ -159,7 +185,8 @@ data class GeminiExitEvidence(
             frame: GeminiMarketFrame,
             impulse: ImpulseSnapshot,
             micro: MicroImpulseSnapshot = MicroImpulseSnapshot(),
-            breathing: LiveMarketBreathingSnapshot = LiveMarketBreathingSnapshot()
+            breathing: LiveMarketBreathingSnapshot = LiveMarketBreathingSnapshot(),
+            appEvaluation: AppPaperEvaluation? = null
         ): GeminiExitEvidence {
             val peak = max(max(portfolio.positionPeakPrice, portfolio.entryPrice), price)
             val pullback = if (peak > 0.0) (1.0 - price / peak) * 100.0 else 0.0
@@ -210,6 +237,7 @@ data class GeminiExitEvidence(
                 micro.priceChange60sPercent <= -0.20,
                 (micro.topBookImbalance ?: 0.0) <= -0.10
             ).count { it } else 0
+            fun horizon(minutes: Int) = breathing.horizons.firstOrNull { it.minutes == minutes }?.score
             val smoothedWeak = (breathing.experimentScore ?: 0) <= -10 ||
                 breathing.horizons.filter { it.minutes in setOf(5, 15) }
                     .count { (it.score ?: 0) <= -10 } >= 2
@@ -262,7 +290,13 @@ data class GeminiExitEvidence(
                 directionWeak = directionWeak,
                 priceWeak = priceWeak,
                 microWeak = microWeak,
-                reason = if (facts.isEmpty()) "подтверждённых признаков разворота нет" else facts.joinToString("; ")
+                reason = if (facts.isEmpty()) "подтверждённых признаков разворота нет" else facts.joinToString("; "),
+                appExitSignal = appEvaluation?.action == StrategyV2.ACTION_SELL ||
+                    appEvaluation?.action == StrategyV2.ACTION_SELL_HALF,
+                breathing5m = horizon(5),
+                breathing15m = horizon(15),
+                breathing30m = horizon(30),
+                breathing60m = horizon(60)
             )
         }
     }
@@ -280,7 +314,9 @@ data class GeminiExitExperimentState(
     val lastSignal: String = "WAIT",
     val adaptivePullbackPercent: Double = 0.0,
     val lastPhase: String = "ENTRY",
-    val lastEntryAnchorId: Long = 0L
+    val lastEntryAnchorId: Long = 0L,
+    val entryConfirmStreak: Int = 0,
+    val pendingEntryAnchorId: Long = 0L
 )
 
 data class GeminiExitEvaluationResult(
@@ -291,6 +327,10 @@ data class GeminiExitEvaluationResult(
 internal object GeminiExitExperimentEngine {
     private const val MIN_EVALUATION_GAP_MILLIS = 2L * 60L * 1000L
     private const val EMERGENCY_LOSS_PERCENT = 5.0
+    private const val ENTRY_CONFIRMATIONS_REQUIRED = 3
+    private const val EXIT_CONFIRMATIONS_REQUIRED = 3
+    private const val MIN_ORDINARY_HOLD_MILLIS = 30L * 60L * 1000L
+    private const val REENTRY_COOLDOWN_MILLIS = 30L * 60L * 1000L
 
     fun bootstrap(
         state: GeminiExitExperimentState?,
@@ -311,6 +351,14 @@ internal object GeminiExitExperimentEngine {
         if (trade.decisionId <= state.lastControlDecisionId) return GeminiExitEvaluationResult(state)
         if (trade.action != "BUY" || state.portfolio.inPosition) {
             return GeminiExitEvaluationResult(state.copy(lastControlDecisionId = trade.decisionId))
+        }
+        val lastExitAt = state.portfolio.trades.lastOrNull { it.action == "SELL" }?.time ?: 0L
+        if (lastExitAt > 0L && trade.time - lastExitAt < REENTRY_COOLDOWN_MILLIS) {
+            return GeminiExitEvaluationResult(state.copy(
+                lastControlDecisionId = trade.decisionId,
+                lastSignal = "ENTRY_BLOCKED",
+                lastReason = "Повторный вход отложен на 30 минут после выхода, чтобы не торговать рыночный шум."
+            ))
         }
         val recommendation = GeminiHourlyRecommendation(
             action = "BUY",
@@ -345,6 +393,8 @@ internal object GeminiExitExperimentEngine {
                 lastSignal = if (executed != null) "BUY" else state.lastSignal,
                 lastReason = if (executed != null) "Вход скопирован у основного DeepSeek" else state.lastReason,
                 lastPhase = "ENTRY",
+                entryConfirmStreak = 0,
+                pendingEntryAnchorId = 0L,
                 lastEntryAnchorId = if (executed != null) {
                     max(state.lastEntryAnchorId, trade.decisionId)
                 } else {
@@ -365,14 +415,22 @@ internal object GeminiExitExperimentEngine {
     ): GeminiExitEvaluationResult {
         val marked = GeminiPaperTrader.markToMarket(state.portfolio, price)
         if (marked.inPosition) return GeminiExitEvaluationResult(state.copy(portfolio = marked))
+        if (state.entryConfirmStreak > 0 && state.lastEvaluationAt > 0L &&
+            now - state.lastEvaluationAt < MIN_EVALUATION_GAP_MILLIS
+        ) {
+            return GeminiExitEvaluationResult(state.copy(portfolio = marked))
+        }
+        val lastExitAt = marked.trades.lastOrNull { it.action == "SELL" }?.time ?: 0L
+        val coolingDown = lastExitAt > 0L && now - lastExitAt < REENTRY_COOLDOWN_MILLIS
         val alreadyUsed = evidence.anchorId > 0L && evidence.anchorId <= state.lastEntryAnchorId
         val statusReason = when {
             !evidence.signalActive -> "В евро; ждём сигнал APP 99/100 или свежий положительный DeepSeek"
             alreadyUsed -> "РАННИЙ ВХОД НЕ ВЫПОЛНЕН: этот же сигнал уже использовался; ждём новую закрытую свечу или новое решение DeepSeek. ${evidence.reason}"
+            coolingDown -> "РАННИЙ ВХОД НЕ ВЫПОЛНЕН: после выхода действует 30-минутная защита от повторной торговли шумом. ${evidence.reason}"
             !evidence.eligible -> "РАННИЙ ВХОД НЕ ВЫПОЛНЕН: ${evidence.blockedReason}. ${evidence.reason}"
             else -> "РАННИЙ ВХОД ПОДТВЕРЖДЁН: ${evidence.reason}. Оценка ${evidence.score}/9, групп ${evidence.groups}/6."
         }
-        if (!evidence.eligible || alreadyUsed) {
+        if (!evidence.eligible || alreadyUsed || coolingDown) {
             return GeminiExitEvaluationResult(
                 state.copy(
                     portfolio = marked,
@@ -382,9 +440,28 @@ internal object GeminiExitExperimentEngine {
                     lastGroups = evidence.groups,
                     lastReason = statusReason,
                     lastSignal = if (evidence.signalActive) "ENTRY_BLOCKED" else "WAIT",
-                    lastPhase = "ENTRY"
+                    lastPhase = "ENTRY",
+                    entryConfirmStreak = 0,
+                    pendingEntryAnchorId = 0L
                 )
             )
+        }
+        val nextEntryStreak = if (state.pendingEntryAnchorId == evidence.anchorId) {
+            state.entryConfirmStreak + 1
+        } else 1
+        if (nextEntryStreak < ENTRY_CONFIRMATIONS_REQUIRED) {
+            return GeminiExitEvaluationResult(state.copy(
+                portfolio = marked,
+                dangerStreak = 0,
+                lastEvaluationAt = now,
+                lastScore = evidence.score,
+                lastGroups = evidence.groups,
+                lastReason = "ВХОД ПОДТВЕРЖДАЕТСЯ $nextEntryStreak/$ENTRY_CONFIRMATIONS_REQUIRED: ${evidence.reason}",
+                lastSignal = "ENTRY_ARMED",
+                lastPhase = "ENTRY",
+                entryConfirmStreak = nextEntryStreak,
+                pendingEntryAnchorId = evidence.anchorId
+            ))
         }
         val bought = GeminiPaperTrader.applyExperimentalEntry(
             current = marked,
@@ -409,6 +486,8 @@ internal object GeminiExitExperimentEngine {
                 lastReason = statusReason,
                 lastSignal = if (trade != null) "BUY" else "ENTRY_BLOCKED",
                 lastPhase = "ENTRY",
+                entryConfirmStreak = 0,
+                pendingEntryAnchorId = 0L,
                 lastEntryAnchorId = if (trade != null) {
                     max(state.lastEntryAnchorId, evidence.anchorId)
                 } else {
@@ -445,24 +524,36 @@ internal object GeminiExitExperimentEngine {
         if (state.lastEvaluationAt > 0L && now - state.lastEvaluationAt < MIN_EVALUATION_GAP_MILLIS) {
             return GeminiExitEvaluationResult(state.copy(portfolio = marked))
         }
+        val openedAt = marked.trades.lastOrNull { it.action == "BUY" }?.time ?: now
+        val positionAge = (now - openedAt).coerceAtLeast(0L)
         val structuralWeakness = evidence.priceWeak ||
             (evidence.spotFlowWeak && evidence.futuresFlowWeak) || evidence.cvdWeak || evidence.microWeak
+        val mediumHorizonWeak = (evidence.breathing15m ?: 0) <= -20 &&
+            (evidence.breathing30m ?: 0) <= -15 &&
+            ((evidence.breathing5m ?: 0) <= -15 || (evidence.breathing60m ?: 0) <= -10)
         val profitProtection = evidence.currentReturnPercent >= 4.0 &&
             evidence.pullbackPercent >= maxOf(1.0, evidence.adaptivePullbackPercent) &&
-            evidence.microWeak && evidence.groups >= 3
-        val dangerous = (evidence.score >= 4 && evidence.groups >= 3 && structuralWeakness) || profitProtection
+            evidence.microWeak && evidence.groups >= 3 && mediumHorizonWeak
+        val dangerous = (evidence.score >= 4 && evidence.groups >= 3 && structuralWeakness &&
+            (mediumHorizonWeak || evidence.appExitSignal)) || profitProtection
         val streak = if (dangerous) state.dangerStreak + 1 else 0
         val emergency = evidence.currentReturnPercent <= -EMERGENCY_LOSS_PERCENT
         // There is deliberately no +8% ceiling or automatic exit trigger. A profitable
         // position is managed by the same multi-group reversal evidence at every return.
-        val immediateReversal = evidence.score >= 8 && evidence.groups >= 5 && structuralWeakness
-        val confirmedReversal = streak >= 2
-        val shouldExit = emergency || immediateReversal || confirmedReversal
+        val ordinaryHoldComplete = positionAge >= MIN_ORDINARY_HOLD_MILLIS
+        val appConfirmedReversal = ordinaryHoldComplete && evidence.appExitSignal &&
+            dangerous && streak >= 2
+        val strongConfirmedReversal = ordinaryHoldComplete && mediumHorizonWeak &&
+            evidence.score >= 8 && evidence.groups >= 5 && streak >= 2
+        val confirmedReversal = ordinaryHoldComplete && streak >= EXIT_CONFIRMATIONS_REQUIRED
+        val shouldExit = emergency || appConfirmedReversal || strongConfirmedReversal || confirmedReversal
         val prefix = when {
             emergency -> "АВАРИЙНАЯ СТРАХОВКА −5%"
-            immediateReversal -> "СИЛЬНЫЙ РАЗВОРОТ РЫНКА"
-            confirmedReversal -> "РАЗВОРОТ ПОДТВЕРЖДЁН ДВУМЯ ПРОВЕРКАМИ"
-            dangerous -> "ОПАСНОСТЬ 1/2"
+            appConfirmedReversal -> "APP И РЫНОК ПОДТВЕРДИЛИ РАЗВОРОТ"
+            strongConfirmedReversal -> "СИЛЬНЫЙ РАЗВОРОТ ПОДТВЕРЖДЁН ДВУМЯ ПРОВЕРКАМИ"
+            confirmedReversal -> "РАЗВОРОТ ПОДТВЕРЖДЁН ТРЕМЯ ПРОВЕРКАМИ"
+            dangerous && !ordinaryHoldComplete -> "РИСК ЕСТЬ, НО ПОЗИЦИЯ СЛИШКОМ НОВАЯ"
+            dangerous -> "ОПАСНОСТЬ ${streak.coerceAtMost(EXIT_CONFIRMATIONS_REQUIRED)}/$EXIT_CONFIRMATIONS_REQUIRED"
             else -> "ПОЗИЦИЯ УДЕРЖИВАЕТСЯ"
         }
         val reason = "$prefix: ${evidence.reason}. Оценка ${evidence.score}, групп ${evidence.groups}."
@@ -477,7 +568,9 @@ internal object GeminiExitExperimentEngine {
                     lastReason = reason,
                     lastSignal = if (dangerous) "DANGER" else "HOLD",
                     adaptivePullbackPercent = evidence.adaptivePullbackPercent,
-                    lastPhase = "EXIT"
+                    lastPhase = "EXIT",
+                    entryConfirmStreak = 0,
+                    pendingEntryAnchorId = 0L
                 )
             )
         }
@@ -503,7 +596,9 @@ internal object GeminiExitExperimentEngine {
                 lastReason = reason,
                 lastSignal = "SELL",
                 adaptivePullbackPercent = evidence.adaptivePullbackPercent,
-                lastPhase = "EXIT"
+                lastPhase = "EXIT",
+                entryConfirmStreak = 0,
+                pendingEntryAnchorId = 0L
             ),
             trade
         )
@@ -556,7 +651,9 @@ object GeminiExitExperimentStore {
                 lastSignal = json.optString("lastSignal", "WAIT"),
                 adaptivePullbackPercent = json.optDouble("adaptivePullbackPercent"),
                 lastPhase = json.optString("lastPhase", "ENTRY"),
-                lastEntryAnchorId = json.optLong("lastEntryAnchorId")
+                lastEntryAnchorId = json.optLong("lastEntryAnchorId"),
+                entryConfirmStreak = json.optInt("entryConfirmStreak").coerceIn(0, 3),
+                pendingEntryAnchorId = json.optLong("pendingEntryAnchorId")
             )
         }.getOrNull()
     }
@@ -610,7 +707,8 @@ object GeminiExitExperimentStore {
                 frame,
                 impulse,
                 MicroImpulseStore.state(context),
-                LiveMarketBreathingStore.snapshot(context, now)
+                LiveMarketBreathingStore.snapshot(context, now),
+                appEvaluation
             )
             GeminiExitExperimentEngine.evaluate(
                 initial.copy(portfolio = marked),
@@ -682,6 +780,8 @@ object GeminiExitExperimentStore {
             .put("adaptivePullbackPercent", state.adaptivePullbackPercent)
             .put("lastPhase", state.lastPhase)
             .put("lastEntryAnchorId", state.lastEntryAnchorId)
+            .put("entryConfirmStreak", state.entryConfirmStreak)
+            .put("pendingEntryAnchorId", state.pendingEntryAnchorId)
 
     private fun pendingAlerts(context: Context): List<GeminiPaperTrade> = runCatching {
         val json = JSONArray(prefs(context).getString(KEY_PENDING_ALERTS, "[]").orEmpty())
