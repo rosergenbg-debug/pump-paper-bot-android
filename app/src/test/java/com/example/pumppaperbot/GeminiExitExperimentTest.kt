@@ -48,7 +48,12 @@ class GeminiExitExperimentTest {
         directionWeak = score >= 7,
         priceWeak = priceWeak,
         microWeak = false,
-        reason = "тестовые независимые признаки"
+        reason = "тестовые независимые признаки",
+        appExitSignal = false,
+        breathing5m = -20,
+        breathing15m = -25,
+        breathing30m = -20,
+        breathing60m = -15
     )
 
     @Test fun `eight percent profit is never an automatic experiment exit`() {
@@ -120,20 +125,59 @@ class GeminiExitExperimentTest {
         assertEquals(3L, ignoredSell.state.lastControlDecisionId)
     }
 
-    @Test fun `experiment can enter earlier on a confirmed independent signal`() {
+    @Test fun `experiment enters only after three confirmed independent cycles`() {
         val initial = GeminiExitExperimentState(initializedAt = 1L)
-        val result = GeminiExitExperimentEngine.considerEntry(
+        val first = GeminiExitExperimentEngine.considerEntry(
             initial,
             entryEvidence(),
             price = 1.0,
             decisionId = 12L,
             now = 120_000L
         )
+        assertFalse(first.state.portfolio.inPosition)
+        assertEquals("ENTRY_ARMED", first.state.lastSignal)
+
+        val second = GeminiExitExperimentEngine.considerEntry(
+            first.state,
+            entryEvidence(),
+            price = 1.0,
+            decisionId = 12L,
+            now = 240_000L
+        )
+        assertFalse(second.state.portfolio.inPosition)
+        assertTrue(second.state.lastReason.contains("2/3"))
+
+        val result = GeminiExitExperimentEngine.considerEntry(
+            second.state,
+            entryEvidence(),
+            price = 1.0,
+            decisionId = 12L,
+            now = 360_000L
+        )
 
         assertTrue(result.state.portfolio.inPosition)
         assertEquals("BUY", result.executedTrade?.action)
         assertEquals("BUY", result.state.lastSignal)
         assertTrue(result.executedTrade?.reason?.contains("РАННИЙ ВХОД") == true)
+    }
+
+    @Test fun `fresh DeepSeek timestamps share one stable confirmation window`() {
+        val first = GeminiEntryEvidence.stableConfirmationAnchor(
+            observedAt = 10L * 60L * 1000L,
+            appReady = false,
+            appCandleTime = 0L,
+            deepSeekPositive = true,
+            breathingPositive = true
+        )
+        val second = GeminiEntryEvidence.stableConfirmationAnchor(
+            observedAt = 12L * 60L * 1000L,
+            appReady = false,
+            appCandleTime = 0L,
+            deepSeekPositive = true,
+            breathingPositive = true
+        )
+
+        assertEquals(first, second)
     }
 
     @Test fun `preparatory signal without market confirmation stays visible but does not buy`() {
@@ -187,14 +231,43 @@ class GeminiExitExperimentTest {
         assertTrue(result.state.lastReason.contains("сигнал уже использовался"))
     }
 
-    @Test fun `moderate reversal must survive two separate checks`() {
+    @Test fun `experiment waits thirty minutes after an exit before reentry`() {
+        val control = bought()
+        val sold = control.copy(
+            pumpAmount = 0.0,
+            entryPrice = 0.0,
+            trades = control.trades + GeminiPaperTrade(
+                time = 1_000_000L,
+                decisionId = 11L,
+                action = "SELL",
+                price = 1.0,
+                amount = 100.0,
+                fee = 0.15,
+                score = 5,
+                confidence = 60,
+                reason = "контрольный выход"
+            )
+        )
+        val result = GeminiExitExperimentEngine.considerEntry(
+            GeminiExitExperimentState(initializedAt = 1L, portfolio = sold),
+            entryEvidence().copy(anchorId = 13L),
+            price = 1.0,
+            decisionId = 13L,
+            now = 2_200_000L
+        )
+
+        assertFalse(result.state.portfolio.inPosition)
+        assertTrue(result.state.lastReason.contains("30-минутная защита"))
+    }
+
+    @Test fun `moderate reversal must survive three separate checks after minimum hold`() {
         val state = GeminiExitExperimentState(initializedAt = 1L, portfolio = bought())
         val first = GeminiExitExperimentEngine.evaluate(
             state,
             evidence(score = 5, groups = 3),
             price = 1.01,
             decisionId = 11L,
-            now = 120_000L
+            now = 2_000_000L
         )
         assertTrue(first.state.portfolio.inPosition)
         assertEquals(1, first.state.dangerStreak)
@@ -205,10 +278,20 @@ class GeminiExitExperimentTest {
             evidence(score = 5, groups = 3),
             price = 1.005,
             decisionId = 11L,
-            now = 240_000L
+            now = 2_120_000L
         )
-        assertFalse(second.state.portfolio.inPosition)
-        assertEquals("SELL", second.executedTrade?.action)
+        assertTrue(second.state.portfolio.inPosition)
+        assertEquals(2, second.state.dangerStreak)
+
+        val third = GeminiExitExperimentEngine.evaluate(
+            second.state,
+            evidence(score = 5, groups = 3),
+            price = 1.002,
+            decisionId = 11L,
+            now = 2_240_000L
+        )
+        assertFalse(third.state.portfolio.inPosition)
+        assertEquals("SELL", third.executedTrade?.action)
     }
 
     @Test fun `one isolated indicator cannot close the experiment`() {

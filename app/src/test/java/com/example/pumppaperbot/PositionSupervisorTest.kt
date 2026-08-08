@@ -243,7 +243,8 @@ class PositionSupervisorTest {
             ),
             impulse = ImpulseSnapshot(candleTime = now, spotTakerRatio = 0.44, futuresTakerRatio = 0.45),
             pnlPercent = -1.0,
-            now = now
+            now = now,
+            breathing = weakBreathing()
         )
 
         assertEquals("EXIT", normalized.action)
@@ -270,7 +271,8 @@ class PositionSupervisorTest {
             ),
             impulse = ImpulseSnapshot(candleTime = now, spotTakerRatio = 0.44, futuresTakerRatio = 0.43),
             pnlPercent = -1.0,
-            now = now
+            now = now,
+            breathing = weakBreathing()
         )
 
         assertEquals(original, normalized)
@@ -289,6 +291,16 @@ class PositionSupervisorTest {
         completionTokens = 1,
         repaired = false,
         finishReason = "stop"
+    )
+
+    private fun weakBreathing() = LiveMarketBreathingSnapshot(
+        fresh = true,
+        horizons = listOf(
+            LiveBreathingHorizon(5, -25, -0.3, 42.0, 80, 20),
+            LiveBreathingHorizon(15, -30, -0.8, 43.0, 80, 60),
+            LiveBreathingHorizon(30, -25, -1.1, 44.0, 75, 120),
+            LiveBreathingHorizon(60, -18, -1.5, 45.0, 70, 240)
+        )
     )
 
     private fun snapshot(direction: Int, book: Double) = LiveSnapshot(

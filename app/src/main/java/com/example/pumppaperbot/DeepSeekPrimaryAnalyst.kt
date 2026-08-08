@@ -17,6 +17,7 @@ data class DeepSeekPrimaryState(
     val lastSuccess: Long = 0L,
     val model: String = "",
     val action: String = "WAIT",
+    val modelIntent: String = "WATCH",
     val proposedAction: String = "WAIT",
     val executionStatus: String = "ОЖИДАНИЕ",
     val verificationSummary: String = "проверка сделки не требовалась",
@@ -39,6 +40,9 @@ data class DeepSeekPrimaryState(
     val lastLocalSellSignal: Boolean = false,
     val lastBreathingScore: Int = 0,
     val lastEcosystemScore: Int = 0,
+    val independentEntryConfirmStreak: Int = 0,
+    val independentExitConfirmStreak: Int = 0,
+    val lastPersistenceEvaluationAt: Long = 0L,
     val evidence: List<String> = emptyList(),
     val risks: List<String> = emptyList(),
     val error: String = ""
@@ -49,6 +53,7 @@ data class DeepSeekPrimaryState(
         .put("lastSuccess", lastSuccess)
         .put("model", model)
         .put("action", action)
+        .put("modelIntent", modelIntent)
         .put("proposedAction", proposedAction)
         .put("executionStatus", executionStatus)
         .put("verificationSummary", verificationSummary)
@@ -71,6 +76,9 @@ data class DeepSeekPrimaryState(
         .put("lastLocalSellSignal", lastLocalSellSignal)
         .put("lastBreathingScore", lastBreathingScore)
         .put("lastEcosystemScore", lastEcosystemScore)
+        .put("independentEntryConfirmStreak", independentEntryConfirmStreak)
+        .put("independentExitConfirmStreak", independentExitConfirmStreak)
+        .put("lastPersistenceEvaluationAt", lastPersistenceEvaluationAt)
         .put("evidence", JSONArray(evidence))
         .put("risks", JSONArray(risks))
         .put("error", error)
@@ -82,6 +90,7 @@ data class DeepSeekPrimaryState(
             lastSuccess = json.optLong("lastSuccess"),
             model = json.optString("model"),
             action = json.optString("action", "WAIT"),
+            modelIntent = json.optString("modelIntent", json.optString("proposedAction", json.optString("action", "WATCH"))),
             proposedAction = json.optString("proposedAction", json.optString("action", "WAIT")),
             executionStatus = RussianOutputPolicy.visible(json.optString("executionStatus", "ОЖИДАНИЕ")),
             verificationSummary = RussianOutputPolicy.visible(
@@ -110,6 +119,9 @@ data class DeepSeekPrimaryState(
             lastLocalSellSignal = json.optBoolean("lastLocalSellSignal"),
             lastBreathingScore = json.optInt("lastBreathingScore").coerceIn(-100, 100),
             lastEcosystemScore = json.optInt("lastEcosystemScore").coerceIn(-100, 100),
+            independentEntryConfirmStreak = json.optInt("independentEntryConfirmStreak").coerceIn(0, 2),
+            independentExitConfirmStreak = json.optInt("independentExitConfirmStreak").coerceIn(0, 2),
+            lastPersistenceEvaluationAt = json.optLong("lastPersistenceEvaluationAt").coerceAtLeast(0L),
             evidence = json.optJSONArray("evidence")?.let { array ->
                 List(array.length()) { RussianOutputPolicy.visible(array.optString(it)).take(240) }.filter { it.isNotBlank() }
             }.orEmpty(),
@@ -200,12 +212,12 @@ object DeepSeekPrimaryPolicy {
         configured: Boolean,
         now: Long = System.currentTimeMillis()
     ): String = when {
-        !configured -> "DEEPSEEK • ОСНОВНОЙ • ключ не введён"
+        !configured -> "APP + DEEPSEEK • СВЯЗКА • ключ DeepSeek не введён"
         state.lastSuccess <= 0L && state.error.isNotBlank() ->
-            "DEEPSEEK • ОСНОВНОЙ • ошибка: ${state.error}\nЗапросы сегодня: 0 успешно • ${state.failedToday} ошибок"
-        state.lastSuccess <= 0L -> "DEEPSEEK • ОСНОВНОЙ • ожидает первый анализ"
+            "APP + DEEPSEEK • СВЯЗКА • ошибка: ${state.error}\nЗапросы сегодня: 0 успешно • ${state.failedToday} ошибок"
+        state.lastSuccess <= 0L -> "APP + DEEPSEEK • СВЯЗКА • ожидает первый анализ"
         else -> buildString {
-            append("DEEPSEEK • ОСНОВНОЙ • ${shortModel(state.model)} • ")
+            append("APP + DEEPSEEK • ${shortModel(state.model)} • ")
             append(if (isFreshSignal(state, now)) state.action else "РЕЗУЛЬТАТ УСТАРЕЛ")
             append("\n${state.summary}")
             if (state.proposedAction != state.action) {
@@ -259,6 +271,7 @@ internal object DeepSeekTradeIntentPolicy {
 
 private data class DeepSeekPrimaryResult(
     val action: String,
+    val modelIntent: String,
     val proposedAction: String,
     val executionStatus: String,
     val direction: Int,
@@ -272,6 +285,9 @@ private data class DeepSeekPrimaryResult(
     val uncertainty: String,
     val evidence: List<String>,
     val risks: List<String>,
+    val independentEntryConfirmStreak: Int,
+    val independentExitConfirmStreak: Int,
+    val lastPersistenceEvaluationAt: Long,
     val promptTokens: Int,
     val completionTokens: Int,
     val verificationPromptTokens: Int = 0,
@@ -363,7 +379,10 @@ class DeepSeekPrimaryAnalyst {
             }
         ))
         return runCatching {
-            analyze(context, key, requestedModel, snapshot, EventRadarStore.state(context), ecosystem, memoryPrompt)
+            analyze(
+                context, key, requestedModel, snapshot, EventRadarStore.state(context), ecosystem,
+                memoryPrompt, previous
+            )
         }.fold(
             onSuccess = { result ->
                 val completedAt = System.currentTimeMillis()
@@ -395,6 +414,7 @@ class DeepSeekPrimaryAnalyst {
                     lastSuccess = completedAt,
                     model = requestedModel,
                     action = result.action,
+                    modelIntent = result.modelIntent,
                     proposedAction = result.proposedAction,
                     executionStatus = result.executionStatus,
                     verificationSummary = result.verificationSummary,
@@ -418,6 +438,9 @@ class DeepSeekPrimaryAnalyst {
                     lastLocalSellSignal = snapshot.sellSignal,
                     lastBreathingScore = breathing.normalScore ?: 0,
                     lastEcosystemScore = ecosystemScore,
+                    independentEntryConfirmStreak = result.independentEntryConfirmStreak,
+                    independentExitConfirmStreak = result.independentExitConfirmStreak,
+                    lastPersistenceEvaluationAt = result.lastPersistenceEvaluationAt,
                     evidence = result.evidence,
                     risks = result.risks,
                     error = ""
@@ -490,7 +513,8 @@ class DeepSeekPrimaryAnalyst {
         snapshot: LiveSnapshot,
         radar: EventRadarState,
         ecosystem: PumpEcosystemSnapshot,
-        memoryPrompt: JSONObject
+        memoryPrompt: JSONObject,
+        previousState: DeepSeekPrimaryState
     ): DeepSeekPrimaryResult {
         val now = System.currentTimeMillis()
         val latestNews = radar.recent.take(5).map { event ->
@@ -502,7 +526,8 @@ class DeepSeekPrimaryAnalyst {
                 .put("published_at", event.publishedAt)
         }
         val hourly = GeminiMarketFrame.from(context)
-        val aiPaperPositionOpen = GeminiPaperStore.state(context).portfolio.inPosition
+        val aiPaperPortfolio = GeminiPaperStore.state(context).portfolio
+        val aiPaperPositionOpen = aiPaperPortfolio.inPosition
         val frame = JSONObject()
             .put("symbol", "PUMP/EUR")
             .put("closed_30m_price_eur", snapshot.lastPrice)
@@ -557,18 +582,28 @@ class DeepSeekPrimaryAnalyst {
             setOf("BUY", "HOLD", "WATCH")
         }
         val system = """
-            Ты основной независимый аналитик PumpSignal для PUMP/EUR. Оцени цену на горизонте 1–6 часов.
+            Ты спокойный второй аналитик связки APP + DeepSeek для PUMP/EUR. Главный рабочий каркас задаёт
+            проверенная StrategyV2/APP, а ты добавляешь самостоятельный контекст на ближайшие 30–90 минут
+            и далее на 3–6 часов. У тебя есть отдельный виртуальный счёт и право предложить собственный вход,
+            даже если APP ещё не достиг 55/100, но только при устойчивом подтверждении 5/15 минут,
+            сильном направлении/уверенности и отсутствии сигнала выхода APP. Не реагируй на минутный шум.
             Сначала сопоставь PUMP 1ч/3ч/6ч, BTC и SOL, spot/futures taker flow, CVD, funding,
             premium, стакан, open interest, RSI, локальную StrategyV2 и свежие новости.
             Поля real_time_spot_flow — анонимные исполненные spot-сделки и лучший bid/ask, а не личности трейдеров.
             Поля five_minute_flow — последние закрытые 5-минутные spot/futures данные. Часовые CVD являются
             прокси по taker-volume закрытых свечей, а funding_rate — последняя рассчитанная ставка, не прогноз.
             Всегда учитывай age_seconds и fresh. Просроченные или null-поля не используй как текущий факт.
-            Краткий real-time всплеск используй как подтверждение либо предупреждение, но не как самостоятельный BUY.
+            Краткий real-time всплеск используй как подтверждение либо предупреждение, но не как самостоятельный BUY
+            или EXIT. После короткой просадки отдельно проверь возврат покупателей на 5/15 минутах и удержание цены.
+            Возможный сбор стопов допускается только как гипотеза при быстром поглощении продаж и возврате потока;
+            не выдавай намерения участников за установленный факт.
             live_market_breathing содержит устойчивое направление на 5/15/30/60/360 минутах и отдельный сырой
             instant_score. Для обычного DeepSeek опирайся прежде всего на normal_deepseek_score и согласованность
-            горизонтов. 30-минутная StrategyV2 относится к APP и является только контекстом: её ожидание закрытия,
-            late-entry флаг или отсутствие APP BUY не имеют права сами по себе запрещать DeepSeek вход.
+            горизонтов. 30-минутная StrategyV2/APP является базовым торговым пилотом. Её готовность и фактические
+            сигналы имеют больший вес, чем одиночная краткосрочная оценка DeepSeek. Ожидание закрытия, late-entry
+            флаг или отсутствие фактического APP BUY не должны скрывать самостоятельный вход DeepSeek, если
+            устойчивый поток 5/15 минут подтверждает разворот. Слабая готовность APP сама по себе не является
+            запретом; настоящий APP SELL, rapid drop и многоуровневая слабость остаются препятствиями.
             Внутри незакрытой 30-минутной свечи BUY разрешён при устойчивом 5/15-минутном дыхании, подтверждении
             исполненными покупками/5-минутным потоком и отсутствии реального разворота или rapid drop.
             Не считай один индикатор или один заголовок достаточным основанием. Не догоняй уже перегретую цену.
@@ -581,10 +616,15 @@ class DeepSeekPrimaryAnalyst {
             verified_evidence_memory содержит только замороженные до результата закономерности. Повышай вес только
             записей promoted_patterns; background_patterns используй как слабый фон. Память не отменяет свежесть,
             rapid drop, риск-контроль и обязательную независимую проверку сделки.
-            BUY допустим только при подтверждении минимум двумя независимыми группами данных. Не запрещай BUY
+            BUY допустим только при подтверждении минимум двумя независимыми группами данных. Самостоятельный
+            BUY DeepSeek будет исполнен приложением лишь после двух отдельных последовательных AI-оценок.
+            Не запрещай BUY
             механически из-за уже растущей 30-минутной свечи: отличай устойчивое продолжение от выдохшегося рывка
             по 5/15-минутному дыханию. Rapid drop без восстановления остаётся запретом.
-            EXIT допустим только при открытой позиции и согласованном ухудшении нескольких горизонтов.
+            EXIT допустим только при открытой позиции и согласованном ухудшении нескольких горизонтов. Обычный
+            EXIT требует подтверждения APP или одновременной устойчивой слабости 15/30/60 минут и свежих продаж.
+            Самостоятельный EXIT DeepSeek без APP будет исполнен лишь после двух отдельных AI-оценок.
+            Одна красная свеча, краткий сброс цены, стенка стакана либо слабая минута Bitcoin не являются EXIT.
             Ты управляешь отдельным виртуальным счётом DeepSeek: BUY открывает его позицию, EXIT полностью закрывает.
             Поле deepseek_paper_position_open показывает состояние именно этого счёта. Не меняй счёт APP или Сержа.
             Отделяй факты из кадра от предположений. Не подменяй StrategyV2 и не обещай прибыль.
@@ -653,7 +693,7 @@ class DeepSeekPrimaryAnalyst {
         val json = response.json
         val modelAction = json.optString("action", "WATCH").uppercase(Locale.ROOT)
             .takeIf { it in allowedActions } ?: "WATCH"
-        val entryReadiness = json.optInt(
+        val modelEntryReadiness = json.optInt(
             "entry_readiness",
             (json.optInt("direction").coerceAtLeast(0) / 10).coerceAtLeast(1)
         ).coerceIn(1, 10)
@@ -664,19 +704,70 @@ class DeepSeekPrimaryAnalyst {
         val microFresh = micro.connected && DeepSeekFreshMarketContext.isFresh(
             micro.updatedAt, now, DeepSeekFreshMarketContext.MICRO_MAX_AGE
         )
-        val locallyConfirmed = snapshot.readinessScore >= 70 ||
-            (breathingScore(5) >= 25 && breathingScore(15) >= 20) ||
-            (microFresh && micro.aggressiveBuyPercent60s >= 55.0 &&
-                micro.priceChange60sPercent >= 0.03)
-        val proposedAction = DeepSeekTradeIntentPolicy.normalize(
-            modelAction = modelAction,
-            positionOpen = aiPaperPositionOpen,
-            entryReadiness = entryReadiness,
-            direction = json.optInt("direction"),
-            confidence = json.optInt("confidence"),
+        val appEvaluation = PumpBotEngine.evaluateAppPaper(context, AppPaperStore.state(context))
+        val entryFusion = AppLedHybridPolicy.entry(AppLedEntryEvidence(
+            aiFresh = true,
+            aiAction = modelAction,
+            aiDirection = json.optInt("direction"),
+            aiConfidence = json.optInt("confidence"),
+            aiReadiness = modelEntryReadiness,
+            appReadiness = appEvaluation.readinessScore.coerceAtLeast(0),
+            appBuySignal = appEvaluation.action == "BUY",
+            appSellSignal = appEvaluation.action == StrategyV2.ACTION_SELL ||
+                appEvaluation.action == StrategyV2.ACTION_SELL_HALF,
             hardVeto = snapshot.rapidDrop.active && !snapshot.rapidDrop.recoveryConfirmed,
-            locallyConfirmed = locallyConfirmed
+            microFresh = microFresh,
+            pumpBuyerPercent60s = micro.aggressiveBuyPercent60s,
+            pumpChange60sPercent = micro.priceChange60sPercent,
+            bitcoinBuyerPercent60s = micro.bitcoinAggressiveBuyPercent60s,
+            bitcoinChange60sPercent = micro.bitcoinPriceChange60sPercent,
+            breathing5m = breathingScore(5),
+            breathing15m = breathingScore(15),
+            breathing30m = breathingScore(30),
+            breathing60m = breathingScore(60)
+        ))
+        val currentPrice = DeepSeekFreshMarketContext.analysisPrice(snapshot, now)
+        val activeBuyAt = aiPaperPortfolio.trades.lastOrNull { it.action == "BUY" }?.time ?: now
+        val aiReturn = if (aiPaperPortfolio.inPosition && aiPaperPortfolio.entryPrice > 0.0 && currentPrice > 0.0) {
+            (currentPrice / aiPaperPortfolio.entryPrice - 1.0) * 100.0
+        } else 0.0
+        val exitFusion = AppLedHybridPolicy.exit(AppLedExitEvidence(
+            modelRequestsExit = modelAction == "EXIT",
+            appExitSignal = appEvaluation.action == StrategyV2.ACTION_SELL ||
+                appEvaluation.action == StrategyV2.ACTION_SELL_HALF,
+            rapidDropUnrecovered = snapshot.rapidDrop.active && !snapshot.rapidDrop.recoveryConfirmed,
+            currentReturnPercent = aiReturn,
+            positionAgeMillis = (now - activeBuyAt).coerceAtLeast(0L),
+            microFresh = microFresh,
+            pumpBuyerPercent15s = micro.aggressiveBuyPercent15s,
+            pumpBuyerPercent60s = micro.aggressiveBuyPercent60s,
+            pumpBuyerPercent5m = micro.aggressiveBuyPercent5m,
+            pumpChange60sPercent = micro.priceChange60sPercent,
+            breathing5m = breathingScore(5),
+            breathing15m = breathingScore(15),
+            breathing30m = breathingScore(30),
+            breathing60m = breathingScore(60)
+        ))
+        val persistence = DeepSeekPersistencePolicy.update(
+            previousEntryStreak = if (aiPaperPositionOpen) 0 else previousState.independentEntryConfirmStreak,
+            previousExitStreak = if (aiPaperPositionOpen) previousState.independentExitConfirmStreak else 0,
+            previousEvaluationAt = previousState.lastPersistenceEvaluationAt,
+            independentEntrySetup = !aiPaperPositionOpen && entryFusion.independentDeepSeekSetup,
+            independentExitSetup = aiPaperPositionOpen && exitFusion.independentDeepSeekSetup,
+            now = now
         )
+        val proposedAction = if (aiPaperPositionOpen) {
+            if (exitFusion.emergency || exitFusion.appConfirmedExit ||
+                persistence.confirmIndependentExit
+            ) "EXIT" else "HOLD"
+        } else {
+            if (entryFusion.appConfirmedEntry || persistence.confirmIndependentBuy) "BUY" else "WATCH"
+        }
+        val entryReadiness = if (aiPaperPositionOpen) modelEntryReadiness else when {
+            persistence.confirmIndependentBuy -> maxOf(9, entryFusion.level)
+            entryFusion.independentDeepSeekSetup -> maxOf(8, entryFusion.level)
+            else -> entryFusion.level
+        }
         val verification = if (proposedAction == "BUY" || proposedAction == "EXIT") {
             verifyTradeDecision(context, apiKey, frame, json, proposedAction, aiPaperPositionOpen)
         } else null
@@ -690,17 +781,32 @@ class DeepSeekPrimaryAnalyst {
         }
         val summary = if (verification != null && !verification.approved) {
             "Сделка отклонена усиленной проверкой: ${verification.summary}"
+        } else if (!aiPaperPositionOpen && entryFusion.independentDeepSeekSetup &&
+            !persistence.confirmIndependentBuy
+        ) {
+            "DeepSeek самостоятельно подтвердил вход 1/2; ждём следующую отдельную оценку: ${entryFusion.reason}"
+        } else if (aiPaperPositionOpen && exitFusion.independentDeepSeekSetup &&
+            !persistence.confirmIndependentExit
+        ) {
+            "DeepSeek самостоятельно подтвердил риск 1/2; позиция пока удерживается: ${exitFusion.reason}"
+        } else if (!aiPaperPositionOpen && proposedAction != modelAction) {
+            "Связка APP + DeepSeek: ${entryFusion.reason}"
+        } else if (aiPaperPositionOpen && modelAction == "EXIT" && !exitFusion.allowExit) {
+            "Связка APP + DeepSeek удерживает позицию: ${exitFusion.reason}"
         } else {
             json.optString("summary", "DeepSeek не дал пояснение")
         }
         return DeepSeekPrimaryResult(
             action = action,
+            modelIntent = modelAction,
             proposedAction = proposedAction,
             executionStatus = executionStatus,
             direction = DeepSeekTradeVerificationPolicy.acceptedDirection(
                 proposedAction, verification?.approved, json.optInt("direction")
             ),
-            danger = json.optInt("danger").coerceIn(0, 10),
+            danger = if (aiPaperPositionOpen && modelAction == "EXIT" && !exitFusion.allowExit) {
+                minOf(json.optInt("danger").coerceIn(0, 10), exitFusion.dangerCap)
+            } else json.optInt("danger").coerceIn(0, 10),
             confidence = DeepSeekTradeVerificationPolicy.acceptedConfidence(
                 proposedAction, verification?.approved, json.optInt("confidence")
             ),
@@ -718,6 +824,9 @@ class DeepSeekPrimaryAnalyst {
                 List(array.length().coerceAtMost(3)) { array.optString(it).take(240) }
                     .filter { it.isNotBlank() }
             }.orEmpty(),
+            independentEntryConfirmStreak = persistence.entryStreak,
+            independentExitConfirmStreak = persistence.exitStreak,
+            lastPersistenceEvaluationAt = persistence.lastEvaluationAt,
             promptTokens = response.promptTokens,
             completionTokens = response.completionTokens,
             verificationPromptTokens = verification?.promptTokens ?: 0,
@@ -757,14 +866,16 @@ class DeepSeekPrimaryAnalyst {
             Ты второй строгий контролёр сделки PumpSignal. Независимо перепроверь предложенный $proposedAction
             по тому же свежему рыночному кадру. Сначала проверь live_market_breathing: обычный DeepSeek использует
             normal_deepseek_score и согласованность 5/15/30/60 минут, а не одиночный instant_score.
-            30-минутная StrategyV2 управляет APP и не является запретом для DeepSeek. Не отклоняй устойчивый
-            внутрисвечный BUY только из-за незакрытой свечи, старого APP late-entry флага или уже начавшегося роста.
+            30-минутная StrategyV2/APP задаёт базовую торговую фазу. Не отклоняй устойчивый внутрисвечный BUY
+            только из-за незакрытой свечи, старого APP late-entry флага или уже начавшегося роста.
             Ищи настоящий выдох движения, противоречие spot/futures, слабость BTC/SOL, rapid drop и устаревшие данные.
             Не отклоняй BUY только из-за одиночной минутной слабости Bitcoin: PUMP может запаздывать или временно
             расходиться. Считай BTC запретом лишь при устойчивой слабости нескольких горизонтов вместе с потерей
             покупательского потока/относительной силы самого PUMP.
-            Одобряй BUY при двух независимых подтверждающих группах и устойчивом 5/15-минутном направлении.
-            Одобряй EXIT только при согласованном ухудшении нескольких горизонтов. Одиночный короткий тик — отказ EXIT.
+            Одобряй BUY, когда APP задаёт готовую или близкую фазу и её подтверждают покупатели и устойчивое
+            5/15-минутное направление. DeepSeek добавляет контекст, но не обнуляет стабильный APP одним ответом.
+            Одобряй EXIT только при подтверждении APP либо согласованном ухудшении 15/30/60 минут вместе со свежими
+            продажами. Одиночный короткий тик, гипотеза о сборе стопов или слабая минута Bitcoin — отказ EXIT.
             Верни только JSON: approved boolean; summary короткая причина; evidence массив до 3 фактов;
             risks массив до 3 рисков. Все текстовые поля пиши только по-русски, без китайских иероглифов.
         """.trimIndent()

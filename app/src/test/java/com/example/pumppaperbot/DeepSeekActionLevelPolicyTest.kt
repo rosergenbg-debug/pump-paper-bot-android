@@ -142,7 +142,7 @@ class DeepSeekActionLevelPolicyTest {
     @Test fun `executed exits always notify while user is in position`() {
         assertTrue(VirtualTradeAlertPolicy.shouldNotify("SELL", userPositionOpen = true))
         assertTrue(VirtualTradeAlertPolicy.shouldNotify(StrategyV2.ACTION_SELL_HALF, userPositionOpen = true))
-        assertFalse(VirtualTradeAlertPolicy.shouldNotify("BUY", userPositionOpen = true))
+        assertTrue(VirtualTradeAlertPolicy.shouldNotify("BUY", userPositionOpen = true))
         assertTrue(VirtualTradeAlertPolicy.shouldNotify("BUY", userPositionOpen = false))
     }
 
