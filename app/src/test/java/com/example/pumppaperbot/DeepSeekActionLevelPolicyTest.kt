@@ -164,10 +164,12 @@ class DeepSeekActionLevelPolicyTest {
         assertEquals(DeepSeekActionLevelAlertPolicy.NONE, DeepSeekActionLevelAlertPolicy.next(9, 9))
     }
 
-    @Test fun `only urgent personal exit bypasses the ringing schedule`() {
-        assertFalse(AlertDeliveryPolicy.shouldRing(withinSchedule = false, urgentPersonalExit = false))
-        assertTrue(AlertDeliveryPolicy.shouldRing(withinSchedule = true, urgentPersonalExit = false))
-        assertTrue(AlertDeliveryPolicy.shouldRing(withinSchedule = false, urgentPersonalExit = true))
+    @Test fun `trade schedule is independent and urgent personal exit always rings`() {
+        assertFalse(AlertDeliveryPolicy.shouldRing(false, false, executedTrade = false, urgentPersonalExit = false))
+        assertTrue(AlertDeliveryPolicy.shouldRing(true, false, executedTrade = false, urgentPersonalExit = false))
+        assertTrue(AlertDeliveryPolicy.shouldRing(false, true, executedTrade = true, urgentPersonalExit = false))
+        assertFalse(AlertDeliveryPolicy.shouldRing(true, false, executedTrade = true, urgentPersonalExit = false))
+        assertTrue(AlertDeliveryPolicy.shouldRing(false, false, executedTrade = false, urgentPersonalExit = true))
     }
 
     private fun entryEvidence(

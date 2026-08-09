@@ -266,6 +266,14 @@ internal object VirtualTradeAlertPolicy {
 }
 
 internal object AlertDeliveryPolicy {
-    fun shouldRing(withinSchedule: Boolean, urgentPersonalExit: Boolean): Boolean =
-        withinSchedule || urgentPersonalExit
+    fun shouldRing(
+        preparatoryAllowed: Boolean,
+        executedTradeAllowed: Boolean,
+        executedTrade: Boolean,
+        urgentPersonalExit: Boolean
+    ): Boolean = when {
+        urgentPersonalExit -> true
+        executedTrade -> executedTradeAllowed
+        else -> preparatoryAllowed
+    }
 }

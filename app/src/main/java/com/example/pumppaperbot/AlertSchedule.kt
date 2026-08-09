@@ -9,6 +9,7 @@ enum class DelayedSignalState { NONE, POSSIBLE, MISSED }
 
 object AlertSchedule {
     const val MODE_WORK = "WORK"
+    const val MODE_DAILY = "DAILY"
     const val MODE_ALWAYS = "ALWAYS"
     private const val prefsName = "PumpAlertScheduleV1"
     private const val keyMode = "mode"
@@ -40,7 +41,12 @@ object AlertSchedule {
     fun endMinutes(context: Context): Int = prefs(context).getInt(keyEnd, defaultEnd)
 
     fun setMode(context: Context, value: String) {
-        prefs(context).edit().putString(keyMode, if (value == MODE_ALWAYS) MODE_ALWAYS else MODE_WORK).apply()
+        val safeMode = when (value) {
+            MODE_DAILY -> MODE_DAILY
+            MODE_ALWAYS -> MODE_ALWAYS
+            else -> MODE_WORK
+        }
+        prefs(context).edit().putString(keyMode, safeMode).apply()
     }
 
     fun setHours(context: Context, start: Int, end: Int) {
@@ -56,7 +62,19 @@ object AlertSchedule {
         val minutes = calendar.get(Calendar.HOUR_OF_DAY) * 60 + calendar.get(Calendar.MINUTE)
         val start = startMinutes(context)
         val end = endMinutes(context)
-        return isMomentAllowed(start, end, calendar.get(Calendar.DAY_OF_WEEK), minutes)
+        return isMomentAllowed(mode(context), start, end, calendar.get(Calendar.DAY_OF_WEEK), minutes)
+    }
+
+    fun isExecutedTradeAllowedNow(context: Context, now: Long = System.currentTimeMillis()): Boolean {
+        migrateToWorkDays(context)
+        val calendar = Calendar.getInstance().apply { timeInMillis = now }
+        val minutes = calendar.get(Calendar.HOUR_OF_DAY) * 60 + calendar.get(Calendar.MINUTE)
+        return isExecutedTradeMomentAllowed(
+            mode(context),
+            startMinutes(context),
+            endMinutes(context),
+            minutes
+        )
     }
 
     fun enforceAgreedSchedule(context: Context) = migrateToWorkDays(context)
@@ -66,10 +84,16 @@ object AlertSchedule {
         return if (start <= end) minutes in start until end else minutes >= start || minutes < end
     }
 
-    internal fun isMomentAllowed(start: Int, end: Int, dayOfWeek: Int, minutes: Int): Boolean {
+    internal fun isMomentAllowed(mode: String, start: Int, end: Int, dayOfWeek: Int, minutes: Int): Boolean {
+        if (mode == MODE_ALWAYS) return true
+        if (mode == MODE_DAILY) return isMinuteAllowed(MODE_WORK, start, end, minutes)
         val workDay = dayOfWeek == Calendar.MONDAY || dayOfWeek == Calendar.TUESDAY ||
             dayOfWeek == Calendar.THURSDAY || dayOfWeek == Calendar.FRIDAY
         return workDay && isMinuteAllowed(MODE_WORK, start, end, minutes)
+    }
+
+    internal fun isExecutedTradeMomentAllowed(mode: String, start: Int, end: Int, minutes: Int): Boolean {
+        return mode == MODE_ALWAYS || isMinuteAllowed(MODE_WORK, start, end, minutes)
     }
 
     private fun migrateToWorkDays(context: Context) {
@@ -170,8 +194,11 @@ object AlertSchedule {
         migrateToWorkDays(context)
         val schedule = if (mode(context) == MODE_ALWAYS) {
             "Звонок: 24 часа"
+        } else if (mode(context) == MODE_DAILY) {
+            "Звонок: ежедневно ${formatMinutes(startMinutes(context))}–${formatMinutes(endMinutes(context))}"
         } else {
-            "Звонок: пн, вт, чт, пт ${formatMinutes(startMinutes(context))}–${formatMinutes(endMinutes(context))}"
+            "Подготовка: пн, вт, чт, пт ${formatMinutes(startMinutes(context))}–${formatMinutes(endMinutes(context))}\n" +
+                "Исполненные сделки: ежедневно ${formatMinutes(startMinutes(context))}–${formatMinutes(endMinutes(context))}"
         }
         return "$schedule\n${message(context)}"
     }

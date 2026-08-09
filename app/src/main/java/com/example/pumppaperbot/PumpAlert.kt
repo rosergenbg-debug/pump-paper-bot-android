@@ -15,15 +15,22 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 
 object PumpAlert {
+    private data class SoundTestConfig(
+        val channelId: String,
+        val notificationId: Int,
+        val title: String,
+        val color: Int
+    )
+
     private const val monitorChannelId = "pump_rsi_risk_monitor"
-    private const val signalChannelId = "pump_rsi_risk_signals_v421"
-    private const val rapidDropChannelId = "pump_rapid_drop_v421"
-    private const val eventRadarChannelId = "pump_event_radar_v421"
-    private const val appTradeChannelId = "pump_app_trades_v421"
-    private const val geminiTradeChannelId = "pump_deepseek_trades_v421"
-    private const val geminiExitExperimentChannelId = "pump_deepseek_experiment_v421"
-    private const val positionSupervisorChannelId = "pump_position_supervisor_v421"
-    private const val silentAlertChannelId = "pump_silent_updates_v421"
+    private const val signalChannelId = "pump_rsi_risk_signals_v422"
+    private const val rapidDropChannelId = "pump_rapid_drop_v422"
+    private const val eventRadarChannelId = "pump_event_radar_v422"
+    private const val appTradeChannelId = "pump_app_trades_v422"
+    private const val geminiTradeChannelId = "pump_deepseek_trades_v422"
+    private const val geminiExitExperimentChannelId = "pump_deepseek_experiment_v422"
+    private const val positionSupervisorChannelId = "pump_position_supervisor_v422"
+    private const val silentAlertChannelId = "pump_silent_updates_v422"
     private const val deepSeekCostChannelId = "pump_deepseek_cost_v414"
     private const val monitorNotificationId = 3501
     private const val signalNotificationId = 3502
@@ -43,6 +50,10 @@ object PumpAlert {
     private const val geminiPositionAdvisorNotificationId = 3517
     private const val deepSeekActionLevelNotificationId = 3518
     private const val deepSeekCostNotificationId = 3519
+    private const val appSoundTestNotificationId = 3520
+    private const val deepSeekSoundTestNotificationId = 3521
+    private const val experimentSoundTestNotificationId = 3522
+    private const val sergeSoundTestNotificationId = 3523
     private val rapidDropVibration = longArrayOf(0, 1000, 180, 1000, 180, 1600)
 
     fun ensureChannels(context: Context) {
@@ -140,7 +151,7 @@ object PumpAlert {
             "PUMP сообщения без звонка",
             NotificationManager.IMPORTANCE_DEFAULT
         ).apply {
-            description = "Входы и виртуальные сделки вне рабочих дней или разрешённого времени"
+            description = "Подготовительные сообщения и виртуальные сделки вне выбранного звукового времени"
             enableVibration(false)
             setSound(null, null)
         }
@@ -264,7 +275,12 @@ object PumpAlert {
             drop.windowMinutes
         )
         val urgentPersonalExit = snapshot.waitMode == "SELL"
-        val loud = AlertDeliveryPolicy.shouldRing(AlertSchedule.isAllowedNow(context), urgentPersonalExit)
+        val loud = AlertDeliveryPolicy.shouldRing(
+            preparatoryAllowed = AlertSchedule.isAllowedNow(context),
+            executedTradeAllowed = AlertSchedule.isExecutedTradeAllowedNow(context),
+            executedTrade = false,
+            urgentPersonalExit = urgentPersonalExit
+        )
         val notification = NotificationCompat.Builder(
             context,
             if (loud) rapidDropChannelId else silentAlertChannelId
@@ -359,7 +375,8 @@ object PumpAlert {
             if (buy) appBuyNotificationId else appSellNotificationId,
             title,
             text,
-            if (buy) 0xFF238636.toInt() else 0xFFDA3633.toInt()
+            if (buy) 0xFF238636.toInt() else 0xFFDA3633.toInt(),
+            executedTrade = true
         )
         if (buy) {
             EntryAlertReminderStore.arm(
@@ -413,7 +430,8 @@ object PumpAlert {
             if (buy) geminiBuyNotificationId else geminiSellNotificationId,
             if (buy) "DEEPSEEK ВОШЁЛ В PUMP/EUR" else "DEEPSEEK ВЫШЕЛ ИЗ PUMP/EUR",
             text,
-            if (buy) 0xFF7C3AED.toInt() else 0xFFDA3633.toInt()
+            if (buy) 0xFF7C3AED.toInt() else 0xFFDA3633.toInt(),
+            executedTrade = true
         )
         if (buy) {
             EntryAlertReminderStore.arm(
@@ -461,7 +479,8 @@ object PumpAlert {
             if (buy) geminiExperimentBuyNotificationId else geminiExperimentSellNotificationId,
             if (buy) "DEEPSEEK‑ЭКСПЕРИМЕНТ ВОШЁЛ" else "DEEPSEEK‑ЭКСПЕРИМЕНТ ВЫШЕЛ",
             text,
-            if (buy) 0xFFD29922.toInt() else 0xFFFF7B72.toInt()
+            if (buy) 0xFFD29922.toInt() else 0xFFFF7B72.toInt(),
+            executedTrade = true
         )
         if (buy) {
             EntryAlertReminderStore.arm(
@@ -629,6 +648,34 @@ object PumpAlert {
         manager.cancel(geminiPositionAdvisorNotificationId)
     }
 
+    enum class SoundTestTarget { APP, DEEPSEEK, EXPERIMENT, SERGE }
+
+    fun showSoundTest(context: Context, target: SoundTestTarget) {
+        ensureChannels(context)
+        requireTradeNotificationsAvailable(context)
+        val config = when (target) {
+            SoundTestTarget.APP -> SoundTestConfig(appTradeChannelId, appSoundTestNotificationId, "ТЕСТ ЗВОНКА • APP", 0xFF238636.toInt())
+            SoundTestTarget.DEEPSEEK -> SoundTestConfig(geminiTradeChannelId, deepSeekSoundTestNotificationId, "ТЕСТ ЗВОНКА • DEEPSEEK", 0xFF7C3AED.toInt())
+            SoundTestTarget.EXPERIMENT -> SoundTestConfig(geminiExitExperimentChannelId, experimentSoundTestNotificationId, "ТЕСТ ЗВОНКА • ЭКСПЕРИМЕНТ", 0xFFD29922.toInt())
+            SoundTestTarget.SERGE -> SoundTestConfig(positionSupervisorChannelId, sergeSoundTestNotificationId, "ТЕСТ ЗВОНКА • СЕРЖ", 0xFFDA3633.toInt())
+        }
+        val notification = NotificationCompat.Builder(context, config.channelId)
+            .setSmallIcon(R.drawable.ic_launcher)
+            .setContentTitle(config.title)
+            .setContentText("Проверка выбранной мелодии и отдельного звукового канала V4.22.")
+            .setContentIntent(openAppIntent(context))
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setColor(config.color)
+            .setVibrate(longArrayOf(0, 700, 250, 700, 250, 1100))
+            .setSound(AlertSoundPreferences.uri(context))
+            .build()
+        context.getSystemService(NotificationManager::class.java)
+            .notify(config.notificationId, notification)
+        vibrate(context)
+    }
+
     fun showDeepSeekCostWarning(context: Context, estimatedCostUsd: Double) {
         ensureChannels(context)
         if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return
@@ -664,11 +711,14 @@ object PumpAlert {
         text: String,
         color: Int,
         alwaysLoud: Boolean = false,
-        scheduledSound: Boolean = true
+        scheduledSound: Boolean = true,
+        executedTrade: Boolean = false
     ) {
         requireTradeNotificationsAvailable(context)
         val loud = AlertDeliveryPolicy.shouldRing(
-            withinSchedule = scheduledSound && AlertSchedule.isAllowedNow(context),
+            preparatoryAllowed = scheduledSound && AlertSchedule.isAllowedNow(context),
+            executedTradeAllowed = scheduledSound && AlertSchedule.isExecutedTradeAllowedNow(context),
+            executedTrade = executedTrade,
             urgentPersonalExit = alwaysLoud
         )
         val notification = NotificationCompat.Builder(context, if (loud) channelId else silentAlertChannelId)
