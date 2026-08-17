@@ -98,8 +98,10 @@ class PumpSignalService : Service() {
                     DeepSeekEvidenceMemory.updateOutcomes(this, freshPrice, evidenceNow)
                 }
                 runCatching { pumpEcosystem.sync(this) }
+                BitpandaFusionClient().sync(this)
                 val eventState = eventRadar.sync(this)
                 val personalGuard = PersonalPositionGuardStore.sync(this)
+                FusionSimStore.activate(this, DeepSeekPrimaryStore.state(this).lastSuccess)
                 DeepSeekTradeOwnership.activate(this, DeepSeekPrimaryStore.state(this).lastSuccess)
                 val deepSeek = DeepSeekPrimaryAnalyst().sync(this)
                 PositionSupervisorClient().sync(this, forceCritical = personalGuard.forceCriticalAi)
@@ -108,6 +110,7 @@ class PumpSignalService : Service() {
                 val snapshot = PumpBotEngine.snapshot(this)
                 val appTrade = AppPaperStore.syncWithAlerts(this)
                 val deepSeekPaper = DeepSeekPaperCoordinator().sync(this, deepSeek, source)
+                FusionSimStore.sync(this, deepSeek)
                 val rapidDropAlerted = if (PumpBotEngine.shouldAlertRapidDrop(this, snapshot)) {
                     PumpAlert.showRapidDrop(this, snapshot)
                     PumpBotEngine.markRapidDropAlerted(this, snapshot)
@@ -126,6 +129,7 @@ class PumpSignalService : Service() {
                 }
                 EntryAlertReminderStore.flush(this)
                 val finishedAt = System.currentTimeMillis()
+                UnifiedResearchLog.captureCycle(this, source, finishedAt)
                 GeminiPaperStore.finishCycle(
                     this,
                     source,

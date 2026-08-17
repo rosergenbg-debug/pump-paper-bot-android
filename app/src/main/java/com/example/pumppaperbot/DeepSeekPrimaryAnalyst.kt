@@ -526,6 +526,7 @@ class DeepSeekPrimaryAnalyst {
                 .put("published_at", event.publishedAt)
         }
         val hourly = GeminiMarketFrame.from(context)
+        val fusion = BitpandaFusionStore.state(context)
         val aiPaperPortfolio = GeminiPaperStore.state(context).portfolio
         val aiPaperPositionOpen = aiPaperPortfolio.inPosition
         val frame = JSONObject()
@@ -550,6 +551,18 @@ class DeepSeekPrimaryAnalyst {
             .put("strategy_30m_late_entry_flag_display_only_for_deepseek", snapshot.lateEntryBlocked)
             .put("user_position_open", snapshot.waitMode == "SELL" && snapshot.entryPrice > 0.0)
             .put("deepseek_paper_position_open", aiPaperPositionOpen)
+            .put("bitpanda_fusion_read_only", JSONObject()
+                .put("configured", fusion.configured)
+                .put("fresh", fusion.fresh(now))
+                .put("age_seconds", fusion.lastSuccess.takeIf { it > 0L }?.let { (now - it).coerceAtLeast(0L) / 1000L } ?: JSONObject.NULL)
+                .put("pair", fusion.pair)
+                .put("best_bid_eur", fusion.bid.takeIf { it > 0.0 } ?: JSONObject.NULL)
+                .put("best_ask_eur", fusion.ask.takeIf { it > 0.0 } ?: JSONObject.NULL)
+                .put("mid_eur", fusion.mid.takeIf { it > 0.0 } ?: JSONObject.NULL)
+                .put("spread_percent", fusion.spreadPercent.takeIf { fusion.connected } ?: JSONObject.NULL)
+                .put("bid_depth_eur", fusion.bidDepthEur.takeIf { fusion.connected } ?: JSONObject.NULL)
+                .put("ask_depth_eur", fusion.askDepthEur.takeIf { fusion.connected } ?: JSONObject.NULL)
+                .put("role", "фактическая площадка исполнения для отдельной paper-симуляции; не приказ и не разрешение сделки"))
             .put("hourly_context_age_seconds", hourly?.let {
                 DeepSeekFreshMarketContext.ageSeconds(it.candleTime, now)
             } ?: JSONObject.NULL)
@@ -619,6 +632,10 @@ class DeepSeekPrimaryAnalyst {
             verified_evidence_memory содержит только замороженные до результата закономерности. Повышай вес только
             записей promoted_patterns; background_patterns используй как слабый фон. Память не отменяет свежесть,
             rapid drop, риск-контроль и обязательную независимую проверку сделки.
+            bitpanda_fusion_read_only — независимый read-only стакан площадки будущего исполнения. Используй только
+            свежие bid/ask, спред и глубину как проверку исполнимости и риска проскальзывания. Широкий спред или
+            сильный ask-перевес снижают качество входа. Сам по себе bid-перевес не создаёт BUY. Просроченный,
+            отсутствующий или ошибочный Fusion-кадр не является положительным подтверждением.
             BUY допустим только при подтверждении минимум двумя независимыми группами данных. Самостоятельный
             BUY DeepSig будет исполнен приложением лишь после двух отдельных последовательных AI-оценок.
             Не запрещай BUY

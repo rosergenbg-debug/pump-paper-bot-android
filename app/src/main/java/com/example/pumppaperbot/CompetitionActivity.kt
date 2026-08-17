@@ -7,6 +7,7 @@ import android.os.Looper
 import android.view.Gravity
 import android.widget.Button
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import androidx.appcompat.app.AppCompatActivity
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -38,17 +39,18 @@ class CompetitionActivity : AppCompatActivity() {
             setPadding(dp(8), dp(6), dp(8), dp(8))
         }
         val back = Button(this).apply {
-            text = "←  СРАВНЕНИЕ ЧЕТЫРЁХ"
+            text = "←  СРАВНЕНИЕ ПЯТИ СЧЕТОВ"
             setTextColor(Color.WHITE)
             setBackgroundColor(Color.parseColor("#30363D"))
             gravity = Gravity.CENTER
             setOnClickListener { finish() }
         }
         root.addView(back, LinearLayout.LayoutParams(-1, dp(44)))
-        repeat(4) {
+        val chartColumn = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        repeat(5) {
             val chart = CompetitionChartView(this)
             charts += chart
-            root.addView(chart, LinearLayout.LayoutParams(-1, 0, 1f).apply {
+            chartColumn.addView(chart, LinearLayout.LayoutParams(-1, dp(220)).apply {
                 topMargin = dp(5)
             })
         }
@@ -57,6 +59,7 @@ class CompetitionActivity : AppCompatActivity() {
                 charts.filterNot { it === source }.forEach { it.setSynchronizedOffset(offset) }
             }
         }
+        root.addView(ScrollView(this).apply { addView(chartColumn) }, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
         render()
         loadSixMonths()
@@ -87,6 +90,9 @@ class CompetitionActivity : AppCompatActivity() {
         val geminiExitExperiment = GeminiExitExperimentStore.state(this)?.portfolio
             ?: GeminiPaperPortfolio()
         val user = UserPaperStore.markToMarket(this, price)
+        val fusionMarket = BitpandaFusionStore.state(this)
+        val fusionPrice = fusionMarket.bid.takeIf { fusionMarket.fresh(now) } ?: price
+        val fusion = FusionSimStore.state(this)
         val closedCandles = if (historicalCandles.isNotEmpty()) {
             (historicalCandles + snapshot.chart.candles)
                 .distinctBy { it.closeTime }
@@ -125,6 +131,16 @@ class CompetitionActivity : AppCompatActivity() {
             app.trades.map { CompetitionMarker(it.candleTime, it.action, it.price, it.pnlEur) }
         )
         charts[3].setData(
+            "DEEPSIG FUSION",
+            summary(
+                fusion.value(fusionPrice),
+                fusion.profit(fusionPrice) / FusionSimPortfolio.START_BALANCE * 100.0,
+                fusion.inPosition
+            ),
+            candles,
+            fusion.trades.map { CompetitionMarker(it.time, it.action, it.price, it.pnlEur) }
+        )
+        charts[4].setData(
             "СЕРЖ",
             summary(user.value(price), user.profitPercent(price), user.inPosition),
             candles,
