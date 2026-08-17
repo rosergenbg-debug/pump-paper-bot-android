@@ -182,6 +182,13 @@ object AlertSchedule {
             .apply()
     }
 
+    fun clearPending(context: Context) {
+        prefs(context).edit()
+            .putLong(keyPendingTime, 0L)
+            .putString(keyMessage, "Очередь отложенных сигналов очищена общей кнопкой звонков.")
+            .apply()
+    }
+
     fun alertKeySuffix(context: Context): String {
         val pending = pendingTime(context)
         return if (pending > 0L && isAllowedNow(context)) ":DELAYED:$pending" else ""

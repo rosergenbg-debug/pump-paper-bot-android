@@ -76,6 +76,8 @@ data class AppPaperPortfolio(
     val entryPrice: Double = 0.0,
     val entryTime: Long = 0L,
     val strategyMode: String = StrategyV2.MODE_NONE,
+    val entryAtr: Double = 0.0,
+    val invalidationPrice: Double = 0.0,
     val highestClose: Double = 0.0,
     val partialTaken: Boolean = false,
     val partialCandle: Long = 0L,
@@ -124,6 +126,8 @@ object AppPaperTrader {
         var entryPrice = current.entryPrice
         var entryTime = current.entryTime
         var strategyMode = current.strategyMode
+        var entryAtr = current.entryAtr
+        var invalidationPrice = current.invalidationPrice
         var highestClose = max(current.highestClose, evaluation.highestClose)
         var partialTaken = current.partialTaken
         var partialCandle = current.partialCandle
@@ -140,6 +144,8 @@ object AppPaperTrader {
                 entryPrice = evaluation.price
                 entryTime = evaluation.candleTime
                 strategyMode = evaluation.strategyMode
+                entryAtr = evaluation.entryAtr
+                invalidationPrice = evaluation.invalidationPrice
                 highestClose = evaluation.price
                 partialTaken = false
                 partialCandle = 0L
@@ -188,6 +194,8 @@ object AppPaperTrader {
                 entryPrice = 0.0
                 entryTime = 0L
                 strategyMode = StrategyV2.MODE_NONE
+                entryAtr = 0.0
+                invalidationPrice = 0.0
                 highestClose = 0.0
                 partialTaken = false
                 partialCandle = 0L
@@ -221,6 +229,8 @@ object AppPaperTrader {
             entryPrice = entryPrice,
             entryTime = entryTime,
             strategyMode = strategyMode,
+            entryAtr = entryAtr,
+            invalidationPrice = invalidationPrice,
             highestClose = highestClose,
             partialTaken = partialTaken,
             partialCandle = partialCandle,
@@ -256,7 +266,8 @@ data class AppPaperSyncResult(
 )
 
 object AppPaperStore {
-    private const val PREFS = "app_paper_v317"
+    // New competition epoch. V4.22 remains untouched in app_paper_v317.
+    private const val PREFS = "app_paper_v5_research"
     private const val KEY_PORTFOLIO = "portfolio"
     private const val KEY_PORTFOLIO_BACKUP = "portfolio_backup_v322"
     private const val KEY_PENDING_ALERTS = "pending_trade_alerts_v322"
@@ -354,6 +365,8 @@ object AppPaperStore {
                 entryPrice = json.optDouble("entryPrice"),
                 entryTime = json.optLong("entryTime"),
                 strategyMode = json.optString("strategyMode", StrategyV2.MODE_NONE),
+                entryAtr = json.optDouble("entryAtr"),
+                invalidationPrice = json.optDouble("invalidationPrice"),
                 highestClose = json.optDouble("highestClose"),
                 partialTaken = json.optBoolean("partialTaken"),
                 partialCandle = json.optLong("partialCandle"),
@@ -408,6 +421,8 @@ object AppPaperStore {
         .put("entryPrice", value.entryPrice)
         .put("entryTime", value.entryTime)
         .put("strategyMode", value.strategyMode)
+        .put("entryAtr", value.entryAtr)
+        .put("invalidationPrice", value.invalidationPrice)
         .put("highestClose", value.highestClose)
         .put("partialTaken", value.partialTaken)
         .put("partialCandle", value.partialCandle)

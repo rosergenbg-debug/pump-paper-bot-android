@@ -82,6 +82,33 @@ class AppPaperTraderTest {
     }
 
     @Test
+    fun `research APP stores entry risk contract and clears it on exit`() {
+        val buy = AppPaperEvaluation(
+            candleTime = 1_000L,
+            price = 2.0,
+            action = "BUY",
+            reason = "research setup",
+            strategyMode = "TREND_PULLBACK",
+            highestClose = 2.0,
+            entryAtr = 0.08,
+            invalidationPrice = 1.84,
+            entryZoneLow = 1.96,
+            entryZoneHigh = 2.02
+        )
+        val opened = AppPaperTrader.apply(AppPaperPortfolio(), buy, now = 1_000L)
+        val closed = AppPaperTrader.apply(
+            opened,
+            buy.copy(candleTime = 2_000L, action = StrategyV2.ACTION_SELL, reason = "invalidation"),
+            now = 2_000L
+        )
+
+        assertEquals(0.08, opened.entryAtr, 0.000001)
+        assertEquals(1.84, opened.invalidationPrice, 0.000001)
+        assertEquals(0.0, closed.entryAtr, 0.0)
+        assertEquals(0.0, closed.invalidationPrice, 0.0)
+    }
+
+    @Test
     fun `app supports half exit followed by full exit`() {
         val opened = AppPaperTrader.apply(
             AppPaperPortfolio(),

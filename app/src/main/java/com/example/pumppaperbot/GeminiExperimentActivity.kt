@@ -64,14 +64,14 @@ class GeminiExperimentActivity : AppCompatActivity() {
         root.addView(button("← НАЗАД", "#30363D").apply {
             setOnClickListener { finish() }
         }, LinearLayout.LayoutParams(-1, dp(48)))
-        root.addView(label("V${BuildConfig.VERSION_NAME} • DEEPSEEK", 24, "#F0F6FC", true))
+        root.addView(label("V${BuildConfig.VERSION_NAME} • DEEPSIG / DEEPSIGX", 24, "#F0F6FC", true))
         root.addView(label(
-            "Виртуальные €1 000 • отдельные решения • без реальных денег.",
+            "Два независимых виртуальных счёта по €1 000 • без автоматических реальных сделок • звонки управляются общей кнопкой.",
             14, "#C9D1D9", false, 8
         ))
 
         val buttons = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        toggle = button("DEEPSEEK ОСНОВНОЙ", "#7C3AED").apply { visibility = View.GONE }
+        toggle = button("DEEPSIG ОСНОВНОЙ", "#7C3AED").apply { visibility = View.GONE }
         runNow = button("ПРОВЕРИТЬ СЕЙЧАС", "#1F6FEB")
         buttons.addView(toggle, LinearLayout.LayoutParams(0, dp(56), 1f))
         buttons.addView(runNow, LinearLayout.LayoutParams(0, dp(56), 1f).apply {
@@ -123,7 +123,7 @@ class GeminiExperimentActivity : AppCompatActivity() {
         history = card("#161B22")
         trades = card("#161B22")
 
-        root.addView(label("ВИРТУАЛЬНЫЕ ДЕНЬГИ DEEPSEEK", 17, "#D2A8FF", true, 16))
+        root.addView(label("ВИРТУАЛЬНЫЕ ДЕНЬГИ DEEPSIG", 17, "#D2A8FF", true, 16))
         root.addView(portfolioPanel, cardParams(6))
         root.addView(lastOperation, cardParams())
         root.addView(label("ГРАФИК ОТКРЫТОЙ СДЕЛКИ", 17, "#D2A8FF", true, 16))
@@ -153,11 +153,11 @@ class GeminiExperimentActivity : AppCompatActivity() {
             render()
         }
 
-        root.addView(button("СБРОСИТЬ DEEPSEEK И ЕГО ЭКСПЕРИМЕНТ", "#8E1519").apply {
+        root.addView(button("СБРОСИТЬ DEEPSIG И DEEPSIGX", "#8E1519").apply {
             setOnClickListener {
                 AlertDialog.Builder(this@GeminiExperimentActivity)
-                    .setTitle("Сбросить виртуальный счёт DeepSeek?")
-                    .setMessage("Удалятся решения, виртуальные сделки и статистика DeepSeek и DeepSeek‑эксперимента. APP и Серж не изменятся.")
+                    .setTitle("Сбросить виртуальные счета DeepSig и DeepSigX?")
+                    .setMessage("Удалятся решения, виртуальные сделки и статистика DeepSig и DeepSigX. APP и Серж не изменятся.")
                     .setNegativeButton("ОТМЕНА", null)
                     .setPositiveButton("СБРОСИТЬ") { _, _ ->
                         GeminiPaperStore.reset(this@GeminiExperimentActivity)
@@ -186,9 +186,9 @@ class GeminiExperimentActivity : AppCompatActivity() {
     private fun runCheck() {
         runNow.isEnabled = false
         runNow.text = "ПРОВЕРЯЮ…"
-        status.text = "Обновляю рынок, запускаю основной DeepSeek и проверяю виртуальные счета…"
+        status.text = "Обновляю рынок, запускаю DeepSig и независимо проверяю оба виртуальных счёта…"
         Thread cycle@{
-            val source = "РУЧНАЯ ПРОВЕРКА ИЗ ОКНА DEEPSEEK"
+            val source = "РУЧНАЯ ПРОВЕРКА ИЗ ОКНА DEEPSIG"
             if (!GeminiCycleGuard.tryEnter()) {
                 GeminiPaperStore.recordActivity(
                     this,
@@ -227,7 +227,7 @@ class GeminiExperimentActivity : AppCompatActivity() {
                             source,
                             startedAt,
                             finishedAt + interval,
-                            "ручная проверка завершена; DeepSeek: ${it.status}",
+                            "ручная проверка завершена; DeepSig: ${it.status}",
                             finishedAt
                         )
                     },
@@ -263,7 +263,7 @@ class GeminiExperimentActivity : AppCompatActivity() {
         val now = System.currentTimeMillis()
         val deepSeek = DeepSeekPrimaryStore.state(this, now)
         val visibleStatus = when {
-            DeepSeekSecureKeyStore.read(this).isBlank() -> "НЕТ КЛЮЧА DEEPSEEK"
+            DeepSeekSecureKeyStore.read(this).isBlank() -> "НЕТ КЛЮЧА DEEPSIG"
             deepSeek.error.isNotBlank() -> "ОШИБКА"
             DeepSeekPrimaryPolicy.isFreshSignal(deepSeek, now) -> "РАБОТАЕТ"
             deepSeek.lastSuccess > 0L -> "РЕЗУЛЬТАТ УСТАРЕЛ"
@@ -279,7 +279,7 @@ class GeminiExperimentActivity : AppCompatActivity() {
             append(" • решение ${deepSeek.action} ${deepSeek.direction}/100")
             append("\nАвтоматический анализ каждые 2 минуты; существенное изменение может запустить его раньше")
             append("\nСистема: ${cycleHealth(state, snapshot.running, now)}")
-            append("\nDeepSeek сегодня: ${deepSeek.successfulToday} успешно • ${deepSeek.failedToday} ошибок")
+            append("\nDeepSig сегодня: ${deepSeek.successfulToday} успешно • ${deepSeek.failedToday} ошибок")
             append(" • ${deepSeek.promptTokensToday + deepSeek.completionTokensToday} токенов")
             if (deepSeek.error.isNotBlank()) append("\nОшибка: ${deepSeek.error}")
         }
@@ -384,7 +384,7 @@ class GeminiExperimentActivity : AppCompatActivity() {
                 latestTrade.amount * latestTrade.price - latestTrade.fee,
                 latestTrade.pnlEur
             )
-            else -> "● СЕЙЧАС: ОЖИДАНИЕ\nПокупок и продаж DeepSeek пока не было. Все €1 000,00 находятся в EUR."
+            else -> "● СЕЙЧАС: ОЖИДАНИЕ\nПокупок и продаж DeepSig пока не было. Все €1 000,00 находятся в EUR."
         }
         lastOperation.setTextColor(Color.parseColor(
             when (latestTrade?.action) {
@@ -497,7 +497,7 @@ class GeminiExperimentActivity : AppCompatActivity() {
 
         val last = p.decisions.lastOrNull()
         lastDecision.text = if (last == null) {
-            "ПОСЛЕДНЕЕ РЕШЕНИЕ\nПока нет. Нужны рыночные данные, ключ DeepSeek и первый успешный анализ."
+            "ПОСЛЕДНЕЕ РЕШЕНИЕ\nПока нет. Нужны рыночные данные, ключ DeepSig и первый успешный анализ."
         } else {
             buildString {
                 append("ПОСЛЕДНЕЕ РЕШЕНИЕ: ${actionRu(last.requestedAction)}")

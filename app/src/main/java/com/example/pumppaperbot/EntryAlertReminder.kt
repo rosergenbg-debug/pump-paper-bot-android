@@ -65,6 +65,10 @@ object EntryAlertReminderStore {
         initialPrice: Double,
         alertedAt: Long = System.currentTimeMillis()
     ) {
+        if (!ResearchModePolicy.userAlertsAllowed(context)) {
+            clear(context)
+            return
+        }
         if (PumpBotEngine.snapshot(context).waitMode == "SELL") return
         val current = read(context).toMutableList()
         val previous = current.indexOfFirst { it.source == source }
@@ -83,6 +87,10 @@ object EntryAlertReminderStore {
 
     @Synchronized
     fun flush(context: Context, now: Long = System.currentTimeMillis()) {
+        if (!ResearchModePolicy.userAlertsAllowed(context)) {
+            clear(context)
+            return
+        }
         val snapshot = PumpBotEngine.snapshot(context)
         if (snapshot.waitMode == "SELL") {
             clear(context)

@@ -37,6 +37,25 @@ class V49SafetyPolicyTest {
         assertEquals("WAIT", stale.action)
     }
 
+    @Test fun `research APP executes only inside its precomputed entry zone`() {
+        val now = 3_000_000L
+        val evaluation = AppPaperEvaluation(
+            candleTime = now - 60_000L,
+            price = 100.0,
+            action = "BUY",
+            reason = "causal candidate",
+            strategyMode = "TREND_PULLBACK",
+            highestClose = 100.0,
+            entryZoneLow = 99.0,
+            entryZoneHigh = 101.0
+        )
+
+        assertEquals("BUY", PaperExecutionPolicy.prepareAppEvaluation(evaluation, 100.0, now).action)
+        val outside = PaperExecutionPolicy.prepareAppEvaluation(evaluation, 101.2, now)
+        assertEquals("WAIT", outside.action)
+        assertTrue(outside.reason.contains("зоны входа"))
+    }
+
     @Test fun `old DeepSeek trade recommendation is neutralized`() {
         val now = 5_000_000L
         val stale = DeepSeekPrimaryState(

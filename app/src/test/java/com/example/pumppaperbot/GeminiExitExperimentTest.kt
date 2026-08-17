@@ -6,6 +6,22 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class GeminiExitExperimentTest {
+    @Test fun `autonomous DeepSigX ignores APP and DeepSig as entry sources`() {
+        val onlyForeign = GeminiEntryEvidence.effectiveSignalSources(
+            observedAppReady = true,
+            observedDeepSeekPositive = true,
+            breathingPositive = false
+        )
+        val ownSignal = GeminiEntryEvidence.effectiveSignalSources(
+            observedAppReady = true,
+            observedDeepSeekPositive = true,
+            breathingPositive = true
+        )
+
+        assertEquals(Triple(false, false, false), onlyForeign)
+        assertEquals(Triple(false, false, true), ownSignal)
+    }
+
     private fun recommendation() = GeminiHourlyRecommendation(
         action = "BUY",
         directionScore = 70,

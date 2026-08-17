@@ -35,7 +35,11 @@ class PumpSignalService : Service() {
         microImpulse = MicroImpulseStream(this)
         startForeground(
             PumpAlert.monitorId(),
-            PumpAlert.monitorNotification(this, "Проверяет PUMP каждые 1–2 минуты; жёлтая зона входа и прибыль от +2% — усиленно.")
+            PumpAlert.monitorNotification(
+                this,
+                "V5: APP, DeepSig и DeepSigX ведут отдельные виртуальные счета; " +
+                    (if (ResearchModePolicy.alertsEnabled(this)) "звонки включены." else "звонки выключены.")
+            )
         )
     }
 
@@ -127,7 +131,7 @@ class PumpSignalService : Service() {
                     source,
                     startedAt,
                     finishedAt + cycleIntervalMillis,
-                    "проверка завершена; DeepSeek: ${deepSeek.action}; виртуальный счёт: ${deepSeekPaper.status}; Gemini контролирует только открытую позицию Сержа",
+                    "проверка завершена; DeepSig: ${deepSeek.action}; виртуальный счёт: ${deepSeekPaper.status}; Gemini контролирует только открытую позицию Сержа",
                     finishedAt
                 )
             } catch (error: Exception) {
