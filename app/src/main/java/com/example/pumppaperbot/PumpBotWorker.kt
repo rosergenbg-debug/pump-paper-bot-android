@@ -14,7 +14,11 @@ class PumpBotWorker(
     private val pumpEcosystem = PumpEcosystemClient()
 
     override fun doWork(): Result {
-        val source = inputData.getString(INPUT_CYCLE_SOURCE) ?: "ANDROID РЕЗЕРВ 15 МИН"
+        val requestedSource = inputData.getString(INPUT_CYCLE_SOURCE) ?: "ANDROID РЕЗЕРВ 15 МИН"
+        val fusionPriorityAtStart = FusionPriorityPolicy.plan(FusionSimStore.state(applicationContext))
+        val source = if (fusionPriorityAtStart.active) {
+            "${fusionPriorityAtStart.label} • $requestedSource"
+        } else requestedSource
         val interval = inputData.getLong(
             INPUT_CYCLE_INTERVAL,
             TimeUnit.MINUTES.toMillis(15)

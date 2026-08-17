@@ -84,6 +84,11 @@ class BitpandaFusionActivity : AppCompatActivity() {
 
     override fun onDestroy() { executor.shutdownNow(); super.onDestroy() }
 
+    override fun onResume() {
+        super.onResume()
+        updateUi()
+    }
+
     private fun saveKey() {
         val value = input.text.toString().trim()
         if (value.isBlank()) return
@@ -137,10 +142,16 @@ class BitpandaFusionActivity : AppCompatActivity() {
         } else "Статус: НЕТ СВЕЖИХ ДАННЫХ\n${s.error.ifBlank { "Нажмите проверку API" }}"
         val p = FusionSimStore.state(this)
         val mark = if (s.fresh()) s.bid else s.mid
+        val priority = FusionPriorityPolicy.plan(p)
+        val metrics = FusionPriorityPolicy.metrics(p, mark, s.feeRate, s.fresh())
         account.text = "Старт: €1 000,00\nEUR: ${eur(p.cashEur)}\nPUMP: ${String.format(Locale.US, "%.4f", p.pumpAmount)}\n" +
-            "Стоимость: ${eur(p.value(mark))}\nРезультат: ${signedEur(p.profit(mark))}\n" +
+            "Режим: ${if (priority.active) priority.label else "обычное автономное наблюдение"}\n" +
+            "Чистая стоимость при виртуальном выходе: ${eur(metrics.netLiquidationValueEur)}\n" +
+            "Чистый результат: ${signedEur(metrics.netPnlEur)}\n" +
+            "Цена результата: ${if (metrics.venueFresh) "свежий Fusion bid" else "справочная, исполнение заблокировано"}\n" +
+            "Откат от пика: ${String.format(Locale.US, "%.2f", metrics.pullbackFromPeakPercent)}%\n" +
             "Комиссии: ${eur(p.totalFeesEur)} • сделок: ${p.trades.size}\n" +
-            "Логика: решения DeepSig, исполнение по Bitpanda bid/ask, только виртуально."
+            "Логика: после BUY DeepSig Pro проверяет позицию раз в минуту; EXIT исполняется по свежему Bitpanda bid, только виртуально. Позиция Сержа отделена."
     }
 
     private fun venueAdvice(spread: Double, imbalance: Double): String = when {

@@ -472,6 +472,7 @@ class MainActivity : AppCompatActivity() {
         val sergeAccount = UserPaperStore.markToMarket(this, accountPrice)
         val fusionMarket = BitpandaFusionStore.state(this)
         val fusionAccount = FusionSimStore.state(this)
+        val fusionPriority = FusionPriorityPolicy.plan(fusionAccount)
         val fusionMark = fusionMarket.bid.takeIf { fusionMarket.fresh(now) } ?: accountPrice
         btnAppPaper?.text = accountButtonText(
             "APP",
@@ -494,12 +495,14 @@ class MainActivity : AppCompatActivity() {
             sergeAccount.profitPercent(accountPrice)
         )
         btnFusionSim?.text = accountButtonText(
-            "DEEPSIG FUSION",
+            if (fusionPriority.active) "DEEPSIG FUSION • MAX CONTROL" else "DEEPSIG FUSION",
             fusionAccount.value(fusionMark),
             fusionAccount.profit(fusionMark) / FusionSimPortfolio.START_BALANCE * 100.0
         )
         tvStatus?.text = if (snapshot.running) {
-            "V${BuildConfig.VERSION_NAME} PAPER‑ТЕСТ • монитор включён • обновлено ${PumpBotEngine.formatTime(snapshot.lastSync)}"
+            "V${BuildConfig.VERSION_NAME} PAPER‑ТЕСТ • монитор включён" +
+                (if (fusionPriority.active) " • FUSION: DEEPSIG PRO КАЖДУЮ МИНУТУ" else "") +
+                " • обновлено ${PumpBotEngine.formatTime(snapshot.lastSync)}"
         } else {
             "V${BuildConfig.VERSION_NAME} PAPER‑ТЕСТ • монитор остановлен • последнее обновление ${PumpBotEngine.formatTime(snapshot.lastSync)}"
         }
@@ -1037,9 +1040,11 @@ class MainActivity : AppCompatActivity() {
             "GEMINI • РУЧНОЕ МНЕНИЕ\nавтоматические запросы выключены\nосталось ${budget.remainingToday}"
         }
         val fusion = BitpandaFusionStore.state(this)
+        val fusionPriority = FusionPriorityPolicy.plan(FusionSimStore.state(this))
         btnBitpandaFusion?.text = when {
             !fusion.configured -> "BITPANDA FUSION\nКЛЮЧ READ НЕ ВВЕДЁН\nоткрыть центр"
-            fusion.fresh() -> "BITPANDA • READ-ONLY\n${fusion.pair} • СПРЕД ${String.format(Locale.US, "%.3f", fusion.spreadPercent)}%\nFUSIONSIM РАБОТАЕТ"
+            fusion.fresh() -> "BITPANDA • READ-ONLY\n${fusion.pair} • СПРЕД ${String.format(Locale.US, "%.3f", fusion.spreadPercent)}%\n" +
+                (if (fusionPriority.active) "MAX CONTROL • PRO • 1 МИН" else "FUSIONSIM РАБОТАЕТ")
             else -> "BITPANDA • READ-ONLY\nНЕТ СВЕЖИХ ДАННЫХ\nпроверить соединение"
         }
     }

@@ -40,10 +40,22 @@ object UnifiedResearchLog {
         val fusionMarket = BitpandaFusionStore.state(context)
         val fusionPrice = fusionMarket.bid.takeIf { fusionMarket.fresh(now) } ?: price
         val fusion = FusionSimStore.state(context)
+        val fusionPriority = FusionPriorityPolicy.plan(fusion)
+        val fusionMetrics = FusionPriorityPolicy.metrics(
+            fusion, fusionPrice, fusionMarket.feeRate, fusionMarket.fresh(now)
+        )
         record(context, "APP", "CYCLE", "$source; value=${app.value(price)}; trades=${app.trades.size}", now)
         record(context, "DEEPSIG", deepSeek.action, "$source; value=${deepSig.value(price)}; ${deepSeek.summary}", now)
         record(context, "DEEPSIGX", "CYCLE", "$source; value=${deepSigX.value(price)}; trades=${deepSigX.trades.size}", now)
-        record(context, "FUSION_SIM", "CYCLE", "$source; value=${fusion.value(fusionPrice)}; trades=${fusion.trades.size}; venueFresh=${fusionMarket.fresh(now)}", now)
+        record(
+            context,
+            "FUSION_SIM",
+            if (fusionPriority.active) "MAX_CONTROL" else "CYCLE",
+            "$source; netValue=${fusionMetrics.netLiquidationValueEur}; netPnl=${fusionMetrics.netPnlEur}; " +
+                "pullback=${fusionMetrics.pullbackFromPeakPercent}; trades=${fusion.trades.size}; " +
+                "venueFresh=${fusionMarket.fresh(now)}; ${fusionPriority.label}",
+            now
+        )
     }
 
     fun export(context: Context, now: Long = System.currentTimeMillis()): File {
@@ -66,7 +78,7 @@ object UnifiedResearchLog {
                 } }
             }
         val report = JSONObject()
-            .put("schema", "pump-signal-unified-log-v51")
+            .put("schema", "pump-signal-unified-log-v52")
             .put("appVersion", BuildConfig.VERSION_NAME)
             .put("generatedAt", now)
             .put("safety", JSONObject()
@@ -75,6 +87,11 @@ object UnifiedResearchLog {
                 .put("containsApiKeys", false))
             .put("market", JSONObject().put("pumpEur", displayPrice).put("lastSync", market.lastSync))
             .put("bitpandaFusion", fusion.toJson().apply { put("error", sanitize(fusion.error)) })
+            .put("fusionPriority", JSONObject()
+                .put("active", FusionPriorityPolicy.plan(fusionSim).active)
+                .put("forceDeepSigPro", FusionPriorityPolicy.plan(fusionSim).forcePro)
+                .put("intervalSeconds", FusionPriorityPolicy.plan(fusionSim).intervalMillis / 1000L)
+                .put("separateFromSerge", true))
             .put("deepSeekAnalysis", deepSeek.toJson())
             .put("accounts", JSONObject()
                 .put("APP", appJson(app))

@@ -311,6 +311,8 @@ class DeepSeekPrimaryAnalyst {
     ): DeepSeekPrimaryState {
         val snapshot = PumpBotEngine.snapshot(context)
         val previous = DeepSeekPrimaryStore.state(context, now)
+        val fusionPriority = FusionPriorityPolicy.plan(FusionSimStore.state(context))
+        val forceProModel = force || fusionPriority.forcePro
         val micro = MicroImpulseStore.state(context)
         val breathing = LiveMarketBreathingStore.snapshot(context, now)
         val ecosystem = PumpEcosystemStore.state(context)
@@ -333,7 +335,9 @@ class DeepSeekPrimaryAnalyst {
                 snapshot.buySignal != previous.lastLocalBuySignal ||
                 snapshot.sellSignal != previous.lastLocalSellSignal
             )
-        val adaptiveInterval = if (snapshot.waitMode == "BUY" && (
+        val adaptiveInterval = if (fusionPriority.active) {
+            fusionPriority.intervalMillis
+        } else if (snapshot.waitMode == "BUY" && (
                 previousActionLevel.intensive || kotlin.math.abs(breathing.normalScore ?: 0) >= 20
             )) {
             DeepSeekActionLevelPolicy.INTENSIVE_INTERVAL_MILLIS
@@ -349,7 +353,8 @@ class DeepSeekPrimaryAnalyst {
         ).also { DeepSeekPrimaryStore.save(context, it) }
 
         val requestedModel = DeepSeekPrimaryPolicy.chooseModel(
-            snapshot, force, materialChange, previousActionLevel, analyticalConflict = analyticalConflict
+            snapshot, forceProModel, materialChange, previousActionLevel,
+            analyticalConflict = analyticalConflict
         )
 
         DeepSeekPrimaryStore.save(context, previous.copy(
@@ -368,6 +373,7 @@ class DeepSeekPrimaryAnalyst {
             model = requestedModel, status = "START", at = started,
             detail = buildString {
                 append(when {
+                fusionPriority.active -> "Fusion-позиция: максимальный контроль раз в минуту"
                 force -> "ручная усиленная проверка"
                 materialChange -> "существенно изменился рыночный сигнал"
                 else -> "плановый анализ"
@@ -527,8 +533,19 @@ class DeepSeekPrimaryAnalyst {
         }
         val hourly = GeminiMarketFrame.from(context)
         val fusion = BitpandaFusionStore.state(context)
+        val fusionSim = FusionSimStore.state(context)
+        val fusionPriority = FusionPriorityPolicy.plan(fusionSim)
         val aiPaperPortfolio = GeminiPaperStore.state(context).portfolio
         val aiPaperPositionOpen = aiPaperPortfolio.inPosition
+        val managedVirtualPositionOpen = aiPaperPositionOpen || fusionSim.inPosition
+        val fusionVenueFresh = fusion.fresh(now)
+        val fusionMark = if (fusionVenueFresh) fusion.bid else {
+            DeepSeekFreshMarketContext.analysisPrice(snapshot, now)
+        }
+        val fusionMetrics = FusionPriorityPolicy.metrics(
+            fusionSim, fusionMark, fusion.feeRate, fusionVenueFresh
+        )
+        val fusionEntryTime = fusionSim.trades.lastOrNull { it.action == "BUY" }?.time ?: 0L
         val frame = JSONObject()
             .put("symbol", "PUMP/EUR")
             .put("closed_30m_price_eur", snapshot.lastPrice)
@@ -551,6 +568,28 @@ class DeepSeekPrimaryAnalyst {
             .put("strategy_30m_late_entry_flag_display_only_for_deepseek", snapshot.lateEntryBlocked)
             .put("user_position_open", snapshot.waitMode == "SELL" && snapshot.entryPrice > 0.0)
             .put("deepseek_paper_position_open", aiPaperPositionOpen)
+            .put("managed_virtual_position_open", managedVirtualPositionOpen)
+            .put("fusion_priority_position", JSONObject()
+                .put("position_open", fusionSim.inPosition)
+                .put("maximum_control_active", fusionPriority.active)
+                .put("control_interval_seconds", fusionPriority.intervalMillis / 1000L)
+                .put("forced_model", if (fusionPriority.active) PositionSupervisorPolicy.PRO_MODEL else JSONObject.NULL)
+                .put("entry_time", fusionEntryTime.takeIf { it > 0L } ?: JSONObject.NULL)
+                .put("entry_ask_eur", fusionSim.entryPrice.takeIf { fusionSim.inPosition } ?: JSONObject.NULL)
+                .put("entry_cost_eur", fusionSim.entryCostEur.takeIf { fusionSim.inPosition } ?: JSONObject.NULL)
+                .put("pump_amount", fusionSim.pumpAmount.takeIf { fusionSim.inPosition } ?: JSONObject.NULL)
+                .put("current_bid_fresh", fusionVenueFresh)
+                .put("current_bid_eur", fusion.bid.takeIf { fusionVenueFresh } ?: JSONObject.NULL)
+                .put("reference_mark_eur", fusionMetrics.markPriceEur.takeIf { it > 0.0 } ?: JSONObject.NULL)
+                .put("mark_source", if (fusionVenueFresh) "FUSION_BID" else "BINANCE_REFERENCE_NOT_EXECUTABLE")
+                .put("estimated_exit_fee_eur", fusionMetrics.estimatedExitFeeEur.takeIf { fusionSim.inPosition } ?: JSONObject.NULL)
+                .put("net_liquidation_value_eur", fusionMetrics.netLiquidationValueEur.takeIf { fusionSim.inPosition } ?: JSONObject.NULL)
+                .put("net_pnl_eur", fusionMetrics.netPnlEur.takeIf { fusionSim.inPosition } ?: JSONObject.NULL)
+                .put("net_pnl_percent", fusionMetrics.netPnlPercent.takeIf { fusionSim.inPosition } ?: JSONObject.NULL)
+                .put("peak_value_eur", fusionSim.peakValueEur.takeIf { fusionSim.inPosition } ?: JSONObject.NULL)
+                .put("pullback_from_peak_percent", fusionMetrics.pullbackFromPeakPercent.takeIf { fusionSim.inPosition } ?: JSONObject.NULL)
+                .put("separate_from_serge", true)
+                .put("real_orders", false))
             .put("bitpanda_fusion_read_only", JSONObject()
                 .put("configured", fusion.configured)
                 .put("fresh", fusion.fresh(now))
@@ -589,7 +628,7 @@ class DeepSeekPrimaryAnalyst {
             .put("pump_fun_ecosystem", ecosystem.toPromptJson(now))
             .put("verified_evidence_memory", memoryPrompt)
         DeepSeekFreshMarketContext.append(context, frame, snapshot, now)
-        val allowedActions = if (aiPaperPositionOpen) {
+        val allowedActions = if (managedVirtualPositionOpen) {
             setOf("HOLD", "WATCH", "EXIT")
         } else {
             setOf("BUY", "HOLD", "WATCH")
@@ -636,6 +675,14 @@ class DeepSeekPrimaryAnalyst {
             свежие bid/ask, спред и глубину как проверку исполнимости и риска проскальзывания. Широкий спред или
             сильный ask-перевес снижают качество входа. Сам по себе bid-перевес не создаёт BUY. Просроченный,
             отсутствующий или ошибочный Fusion-кадр не является положительным подтверждением.
+            fusion_priority_position — отдельная виртуальная позиция исполнения на Bitpanda Fusion. Когда
+            maximum_control_active=true, считай её высшим приоритетом среди виртуальных исследований: контролируй
+            исходную гипотезу, свежие продажи, flow/CVD, 5/15/30/60 минут, BTC/SOL, rapid drop, фактический bid/ask,
+            спред, комиссию, чистый PnL, достигнутый пик и откат от пика. Снижение на 2% само по себе не EXIT.
+            Если открыт только FusionSim, решение EXIT относится только к нему и будет виртуально исполнено по
+            свежему bid. Эта позиция не является позицией Сержа, не меняет его PnL и не нажимает его кнопки.
+            При просроченном Fusion-стакане продолжай оценивать рыночный риск, но не выдумывай цену исполнения:
+            приложение само откажется виртуально закрывать позицию без свежего bid.
             BUY допустим только при подтверждении минимум двумя независимыми группами данных. Самостоятельный
             BUY DeepSig будет исполнен приложением лишь после двух отдельных последовательных AI-оценок.
             Не запрещай BUY
@@ -645,8 +692,10 @@ class DeepSeekPrimaryAnalyst {
             Обычный EXIT требует одновременной устойчивой слабости 15/30/60 минут и свежих продаж и будет
             исполнен лишь после двух отдельных AI-оценок.
             Одна красная свеча, краткий сброс цены, стенка стакана либо слабая минута Bitcoin не являются EXIT.
-            Ты управляешь отдельным виртуальным счётом DeepSig: BUY открывает его позицию, EXIT полностью закрывает.
-            Поле deepseek_paper_position_open показывает состояние именно этого счёта. Не меняй счёт APP или Сержа.
+            Ты управляешь виртуальным счётом DeepSig и приоритетно сопровождаешь связанную FusionSim-позицию.
+            managed_virtual_position_open означает, что хотя бы одна из этих позиций открыта. BUY разрешён лишь
+            когда обе закрыты; EXIT закрывает открытый DeepSig и/или FusionSim по правилам соответствующего
+            виртуального исполнения. Не меняй счёт APP или Сержа.
             Отделяй факты из кадра от предположений. Null и просроченное означают отсутствие доказательства,
             а не нейтральный или положительный факт. Не обещай прибыль и не изображай confidence вероятностью.
             Верни только JSON:
@@ -662,7 +711,7 @@ class DeepSeekPrimaryAnalyst {
             uncertainty одно короткое пояснение главной неопределённости и уверенности;
             evidence массив из 2–4 коротких фактов; risks массив из 1–3 условий, которые опровергнут вывод.
             Все текстовые значения без исключения пиши только на русском языке. Китайские иероглифы запрещены.
-            Если виртуальный счёт DeepSig не в позиции, EXIT не используй; если он уже в позиции, BUY не используй.
+            Если managed_virtual_position_open=false, EXIT не используй; если true, BUY не используй.
             Если данных недостаточно, выбери WATCH.
         """.trimIndent()
         val response = DeepSeekStructuredClient(http).request(
@@ -746,15 +795,19 @@ class DeepSeekPrimaryAnalyst {
             breathing60m = breathingScore(60)
         ))
         val currentPrice = DeepSeekFreshMarketContext.analysisPrice(snapshot, now)
-        val activeBuyAt = aiPaperPortfolio.trades.lastOrNull { it.action == "BUY" }?.time ?: now
-        val aiReturn = if (aiPaperPortfolio.inPosition && aiPaperPortfolio.entryPrice > 0.0 && currentPrice > 0.0) {
+        val activeBuyAt = if (fusionSim.inPosition) {
+            fusionEntryTime.takeIf { it > 0L } ?: now
+        } else aiPaperPortfolio.trades.lastOrNull { it.action == "BUY" }?.time ?: now
+        val managedReturn = if (fusionSim.inPosition) {
+            fusionMetrics.netPnlPercent
+        } else if (aiPaperPortfolio.inPosition && aiPaperPortfolio.entryPrice > 0.0 && currentPrice > 0.0) {
             (currentPrice / aiPaperPortfolio.entryPrice - 1.0) * 100.0
         } else 0.0
         val exitFusion = AppLedHybridPolicy.exit(AppLedExitEvidence(
             modelRequestsExit = modelAction == "EXIT",
             appExitSignal = false,
             rapidDropUnrecovered = snapshot.rapidDrop.active && !snapshot.rapidDrop.recoveryConfirmed,
-            currentReturnPercent = aiReturn,
+            currentReturnPercent = managedReturn,
             positionAgeMillis = (now - activeBuyAt).coerceAtLeast(0L),
             microFresh = microFresh,
             pumpBuyerPercent15s = micro.aggressiveBuyPercent15s,
@@ -767,29 +820,32 @@ class DeepSeekPrimaryAnalyst {
             breathing60m = breathingScore(60)
         ))
         val persistence = DeepSeekPersistencePolicy.update(
-            previousEntryStreak = if (aiPaperPositionOpen) 0 else previousState.independentEntryConfirmStreak,
-            previousExitStreak = if (aiPaperPositionOpen) previousState.independentExitConfirmStreak else 0,
+            previousEntryStreak = if (managedVirtualPositionOpen) 0 else previousState.independentEntryConfirmStreak,
+            previousExitStreak = if (managedVirtualPositionOpen) previousState.independentExitConfirmStreak else 0,
             previousEvaluationAt = previousState.lastPersistenceEvaluationAt,
-            independentEntrySetup = !aiPaperPositionOpen && entryFusion.independentDeepSeekSetup,
-            independentExitSetup = aiPaperPositionOpen && exitFusion.independentDeepSeekSetup,
+            independentEntrySetup = !managedVirtualPositionOpen && entryFusion.independentDeepSeekSetup,
+            independentExitSetup = managedVirtualPositionOpen && exitFusion.independentDeepSeekSetup,
             now = now
         )
-        val proposedAction = if (aiPaperPositionOpen) {
+        val proposedAction = if (managedVirtualPositionOpen) {
             if (exitFusion.emergency || persistence.confirmIndependentExit
             ) "EXIT" else "HOLD"
         } else {
             if (persistence.confirmIndependentBuy) "BUY" else "WATCH"
         }
-        val entryReadiness = if (aiPaperPositionOpen) modelEntryReadiness else when {
+        val entryReadiness = if (managedVirtualPositionOpen) modelEntryReadiness else when {
             persistence.confirmIndependentBuy -> maxOf(9, entryFusion.level)
             entryFusion.independentDeepSeekSetup -> maxOf(8, entryFusion.level)
             else -> entryFusion.level
         }
         val verification = if (proposedAction == "BUY" || proposedAction == "EXIT") {
-            verifyTradeDecision(context, apiKey, frame, json, proposedAction, aiPaperPositionOpen)
+            verifyTradeDecision(
+                context, apiKey, frame, json, proposedAction, managedVirtualPositionOpen,
+                forcePro = fusionPriority.active
+            )
         } else null
         val action = DeepSeekTradeVerificationPolicy.finalAction(
-            proposedAction, verification?.approved, aiPaperPositionOpen
+            proposedAction, verification?.approved, managedVirtualPositionOpen
         )
         val executionStatus = when {
             verification == null -> "СДЕЛКА НЕ ЗАПРАШИВАЛАСЬ"
@@ -798,18 +854,20 @@ class DeepSeekPrimaryAnalyst {
         }
         val summary = if (verification != null && !verification.approved) {
             "Сделка отклонена усиленной проверкой: ${verification.summary}"
-        } else if (!aiPaperPositionOpen && entryFusion.independentDeepSeekSetup &&
+        } else if (!managedVirtualPositionOpen && entryFusion.independentDeepSeekSetup &&
             !persistence.confirmIndependentBuy
         ) {
             "DeepSig самостоятельно подтвердил вход 1/2; ждём следующую отдельную оценку: ${entryFusion.reason}"
-        } else if (aiPaperPositionOpen && exitFusion.independentDeepSeekSetup &&
+        } else if (managedVirtualPositionOpen && exitFusion.independentDeepSeekSetup &&
             !persistence.confirmIndependentExit
         ) {
             "DeepSig самостоятельно подтвердил риск 1/2; позиция пока удерживается: ${exitFusion.reason}"
-        } else if (!aiPaperPositionOpen && proposedAction != modelAction) {
+        } else if (!managedVirtualPositionOpen && proposedAction != modelAction) {
             "DeepSig ещё не получил два независимых подтверждения: ${entryFusion.reason}"
-        } else if (aiPaperPositionOpen && modelAction == "EXIT" && !exitFusion.allowExit) {
+        } else if (managedVirtualPositionOpen && modelAction == "EXIT" && !exitFusion.allowExit) {
             "DeepSig удерживает позицию: ${exitFusion.reason}"
+        } else if (fusionPriority.active) {
+            "Fusion под максимальным контролем: ${json.optString("summary", "позиция удерживается")}"
         } else {
             json.optString("summary", "DeepSig не дал пояснение")
         }
@@ -821,7 +879,7 @@ class DeepSeekPrimaryAnalyst {
             direction = DeepSeekTradeVerificationPolicy.acceptedDirection(
                 proposedAction, verification?.approved, json.optInt("direction")
             ),
-            danger = if (aiPaperPositionOpen && modelAction == "EXIT" && !exitFusion.allowExit) {
+            danger = if (managedVirtualPositionOpen && modelAction == "EXIT" && !exitFusion.allowExit) {
                 minOf(json.optInt("danger").coerceIn(0, 10), exitFusion.dangerCap)
             } else json.optInt("danger").coerceIn(0, 10),
             confidence = DeepSeekTradeVerificationPolicy.acceptedConfidence(
@@ -867,14 +925,17 @@ class DeepSeekPrimaryAnalyst {
         frame: JSONObject,
         proposal: JSONObject,
         proposedAction: String,
-        positionOpen: Boolean
+        positionOpen: Boolean,
+        forcePro: Boolean = false
     ): TradeVerification {
-        val model = PositionSupervisorPolicy.FLASH_MODEL
+        val model = if (forcePro) PositionSupervisorPolicy.PRO_MODEL else PositionSupervisorPolicy.FLASH_MODEL
         val started = System.currentTimeMillis()
         ApiUsageLogStore.record(context, ApiUsageEvent(
             provider = "DEEPSEEK", circuit = "ПРОВЕРКА СДЕЛКИ",
             model = model, status = "START", at = started,
-            detail = "независимая проверка $proposedAction перед исполнением"
+            detail = if (forcePro) {
+                "Fusion-позиция: усиленная Pro-проверка $proposedAction перед виртуальным исполнением"
+            } else "независимая проверка $proposedAction перед исполнением"
         ))
         val verificationFrame = JSONObject(frame.toString())
             .put("proposed_decision", JSONObject(proposal.toString()))
@@ -899,6 +960,10 @@ class DeepSeekPrimaryAnalyst {
             Одиночный короткий тик, стенка стакана, гипотеза о сборе стопов или слабая минута Bitcoin — отказ EXIT.
             Null и просроченные поля не являются положительным доказательством. Confidence — качество имеющихся
             свидетельств, а не обещанная вероятность прибыли.
+            Если fusion_priority_position.maximum_control_active=true, перепроверь именно цену входа Fusion,
+            свежий bid/ask, спред, комиссию, чистый PnL и откат от пика. Два процента снижения сами по себе не
+            являются EXIT. При одобренном EXIT приложение закроет только открытые виртуальные позиции; позиция
+            Сержа и его кнопки полностью отделены.
             Верни только JSON: approved boolean; summary короткая причина; evidence массив до 3 фактов;
             risks массив до 3 рисков. Все текстовые поля пиши только по-русски, без китайских иероглифов.
         """.trimIndent()
