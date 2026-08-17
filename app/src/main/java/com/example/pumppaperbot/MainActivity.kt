@@ -82,10 +82,13 @@ class MainActivity : AppCompatActivity() {
     private var btnGeminiExperiment: Button? = null
     private var btnGeminiExitExperiment: Button? = null
     private var btnUserPaper: Button? = null
+    private var btnFusionSim: Button? = null
     private var btnCompetition: Button? = null
     private var btnCriticalOverview: Button? = null
     private var btnDeepSeekApi: Button? = null
     private var btnGeminiApi: Button? = null
+    private var btnBitpandaFusion: Button? = null
+    private var btnUnifiedLog: Button? = null
     private var evidenceMemoryDialogVisible = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -130,10 +133,13 @@ class MainActivity : AppCompatActivity() {
         btnGeminiExperiment = findViewById(R.id.btnGeminiExperiment)
         btnGeminiExitExperiment = findViewById(R.id.btnGeminiExitExperiment)
         btnUserPaper = findViewById(R.id.btnUserPaper)
+        btnFusionSim = findViewById(R.id.btnFusionSim)
         btnCompetition = findViewById(R.id.btnCompetition)
         btnCriticalOverview = findViewById(R.id.btnCriticalOverview)
         btnDeepSeekApi = findViewById(R.id.btnDeepSeekApi)
         btnGeminiApi = findViewById(R.id.btnGeminiApi)
+        btnBitpandaFusion = findViewById(R.id.btnBitpandaFusion)
+        btnUnifiedLog = findViewById(R.id.btnUnifiedLog)
 
         PumpBotEngine.ensureInitialized(this)
         requestNotificationPermission()
@@ -182,6 +188,9 @@ class MainActivity : AppCompatActivity() {
         btnUserPaper?.setOnClickListener {
             startActivity(Intent(this, AppPaperActivity::class.java))
         }
+        btnFusionSim?.setOnClickListener {
+            startActivity(Intent(this, BitpandaFusionActivity::class.java))
+        }
         btnCompetition?.setOnClickListener {
             startActivity(Intent(this, CompetitionActivity::class.java))
         }
@@ -197,6 +206,13 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, ApiCenterActivity::class.java).putExtra(
                 ApiCenterActivity.EXTRA_PROVIDER, ApiCenterActivity.GEMINI
             ))
+        }
+        btnBitpandaFusion?.setOnClickListener {
+            startActivity(Intent(this, BitpandaFusionActivity::class.java))
+        }
+        btnUnifiedLog?.setOnClickListener {
+            runCatching { UnifiedResearchLog.share(this) }
+                .onFailure { Toast.makeText(this, it.message ?: "Ошибка экспорта лога", Toast.LENGTH_LONG).show() }
         }
         chart?.setOnClickListener { startActivity(Intent(this, ChartDetailActivity::class.java)) }
         chart?.setVisibleBarLimit(mainChartVisibleBarLimit())
@@ -454,6 +470,9 @@ class MainActivity : AppCompatActivity() {
         val geminiExitExperiment = GeminiExitExperimentStore.state(this)?.portfolio
             ?: GeminiPaperPortfolio()
         val sergeAccount = UserPaperStore.markToMarket(this, accountPrice)
+        val fusionMarket = BitpandaFusionStore.state(this)
+        val fusionAccount = FusionSimStore.state(this)
+        val fusionMark = fusionMarket.bid.takeIf { fusionMarket.fresh(now) } ?: accountPrice
         btnAppPaper?.text = accountButtonText(
             "APP",
             appAccount.value(accountPrice),
@@ -474,10 +493,15 @@ class MainActivity : AppCompatActivity() {
             sergeAccount.value(accountPrice),
             sergeAccount.profitPercent(accountPrice)
         )
+        btnFusionSim?.text = accountButtonText(
+            "DEEPSIG FUSION",
+            fusionAccount.value(fusionMark),
+            fusionAccount.profit(fusionMark) / FusionSimPortfolio.START_BALANCE * 100.0
+        )
         tvStatus?.text = if (snapshot.running) {
-            "V5 PAPER‑ТЕСТ • монитор включён • обновлено ${PumpBotEngine.formatTime(snapshot.lastSync)}"
+            "V5.1 PAPER‑ТЕСТ • монитор включён • обновлено ${PumpBotEngine.formatTime(snapshot.lastSync)}"
         } else {
-            "V5 PAPER‑ТЕСТ • монитор остановлен • последнее обновление ${PumpBotEngine.formatTime(snapshot.lastSync)}"
+            "V5.1 PAPER‑ТЕСТ • монитор остановлен • последнее обновление ${PumpBotEngine.formatTime(snapshot.lastSync)}"
         }
         val deepSeekPrimary = DeepSeekPrimaryStore.state(this)
         tvDeepSeekPrimary?.text = DeepSeekPrimaryPolicy.compactStatus(
@@ -1011,6 +1035,12 @@ class MainActivity : AppCompatActivity() {
             "GEMINI API\nКЛЮЧ НЕ ВВЕДЁН\nоткрыть центр"
         } else {
             "GEMINI • РУЧНОЕ МНЕНИЕ\nавтоматические запросы выключены\nосталось ${budget.remainingToday}"
+        }
+        val fusion = BitpandaFusionStore.state(this)
+        btnBitpandaFusion?.text = when {
+            !fusion.configured -> "BITPANDA FUSION\nКЛЮЧ READ НЕ ВВЕДЁН\nоткрыть центр"
+            fusion.fresh() -> "BITPANDA • READ-ONLY\n${fusion.pair} • СПРЕД ${String.format(Locale.US, "%.3f", fusion.spreadPercent)}%\nFUSIONSIM РАБОТАЕТ"
+            else -> "BITPANDA • READ-ONLY\nНЕТ СВЕЖИХ ДАННЫХ\nпроверить соединение"
         }
     }
 

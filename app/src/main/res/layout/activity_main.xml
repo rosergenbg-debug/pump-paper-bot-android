@@ -205,6 +205,22 @@
                     android:textSize="11sp"
                     android:textStyle="bold" />
             </LinearLayout>
+
+            <Button
+                android:id="@+id/btnFusionSim"
+                android:layout_width="match_parent"
+                android:layout_height="68dp"
+                android:layout_marginTop="5dp"
+                android:backgroundTint="#0F6B78"
+                android:includeFontPadding="false"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:maxLines="3"
+                android:padding="2dp"
+                android:text="DEEPSIG FUSION • READ-ONLY SIM&#10;€1 000,00&#10;+0,00%"
+                android:textColor="#FFFFFF"
+                android:textSize="11sp"
+                android:textStyle="bold" />
         </LinearLayout>
 
         <Button
@@ -213,7 +229,7 @@
             android:layout_height="50dp"
             android:layout_marginTop="7dp"
             android:backgroundTint="#1F6FEB"
-            android:text="СРАВНИТЬ 3  •  APP | DEEPSIG | DEEPSIGX"
+            android:text="СРАВНИТЬ 4 • APP | DEEPSIG | DEEPSIGX | FUSION"
             android:textColor="#FFFFFF"
             android:textSize="13sp"
             android:textStyle="bold" />
@@ -324,6 +340,42 @@
                 android:layout_width="match_parent"
                 android:layout_height="320dp"
                 android:layout_marginTop="10dp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnBitpandaFusion"
+                android:layout_width="0dp"
+                android:layout_height="72dp"
+                android:layout_weight="1"
+                android:backgroundTint="#0F6B78"
+                android:gravity="center"
+                android:maxLines="4"
+                android:padding="3dp"
+                android:text="BITPANDA FUSION&#10;READ-ONLY API&#10;открыть центр"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/btnUnifiedLog"
+                android:layout_width="0dp"
+                android:layout_height="72dp"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:backgroundTint="#1F6FEB"
+                android:gravity="center"
+                android:maxLines="4"
+                android:padding="3dp"
+                android:text="ЕДИНЫЙ ЛОГ&#10;4 АГЕНТА&#10;экспорт JSON"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                android:textStyle="bold" />
         </LinearLayout>
 
         <TextView

@@ -40,8 +40,13 @@ class PumpBotWorker(
                 DeepSeekEvidenceMemory.updateOutcomes(applicationContext, freshPrice, evidenceNow)
             }
             runCatching { pumpEcosystem.sync(applicationContext) }
+            BitpandaFusionClient().sync(applicationContext)
             val eventState = eventRadar.sync(applicationContext)
             val personalGuard = PersonalPositionGuardStore.sync(applicationContext)
+            FusionSimStore.activate(
+                applicationContext,
+                DeepSeekPrimaryStore.state(applicationContext).lastSuccess
+            )
             DeepSeekTradeOwnership.activate(
                 applicationContext,
                 DeepSeekPrimaryStore.state(applicationContext).lastSuccess
@@ -68,6 +73,7 @@ class PumpBotWorker(
             val deepSeekPaper = DeepSeekPaperCoordinator().sync(
                 applicationContext, deepSeek, source
             )
+            FusionSimStore.sync(applicationContext, deepSeek)
             val rapidDropAlerted = if (PumpBotEngine.shouldAlertRapidDrop(applicationContext, snapshot)) {
                 PumpAlert.showRapidDrop(applicationContext, snapshot)
                 PumpBotEngine.markRapidDropAlerted(applicationContext, snapshot)
@@ -86,6 +92,7 @@ class PumpBotWorker(
             }
             EntryAlertReminderStore.flush(applicationContext)
             val finishedAt = System.currentTimeMillis()
+            UnifiedResearchLog.captureCycle(applicationContext, source, finishedAt)
             GeminiPaperStore.finishCycle(
                 applicationContext,
                 source,
