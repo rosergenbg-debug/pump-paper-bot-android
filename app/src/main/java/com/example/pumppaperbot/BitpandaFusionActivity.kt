@@ -39,7 +39,7 @@ class BitpandaFusionActivity : AppCompatActivity() {
         content.addView(button("← НАЗАД", "#30363D").apply { setOnClickListener { finish() } }, params(50))
         content.addView(label("BITPANDA FUSION • READ-ONLY", 24, "#F0F6FC", true))
         content.addView(label(
-            "V5.1 использует ключ только для чтения стакана PUMP-EUR. Реальные заявки, отмена заявок, переводы и вывод средств в приложении не реализованы. Создавайте ключ только со scope Read — без Trade и Transfer.",
+            "V${BuildConfig.VERSION_NAME} использует ключ только для чтения стакана PUMP-EUR. Реальные заявки, отмена заявок, переводы и вывод средств в приложении не реализованы. Создавайте ключ только со scope Read — без Trade и Transfer.",
             14, "#C9D1D9", false
         ))
         keyStatus = label("", 15, "#C9D1D9", true)
@@ -75,7 +75,7 @@ class BitpandaFusionActivity : AppCompatActivity() {
         }, params(56, 8))
         content.addView(button("СБРОСИТЬ ТОЛЬКО FUSIONSIM", "#8B1E1E").apply { setOnClickListener { confirmReset() } }, params(54, 4))
         content.addView(label(
-            "О цене API: отдельная подписка Fusion API в официальных материалах не указана; Fusion MCP прямо объявлен бесплатным и open source. Торговая комиссия возникает только при реальной сделке — V5.1 их не отправляет.",
+            "О цене API: отдельная подписка Fusion API в официальных материалах не указана; Fusion MCP прямо объявлен бесплатным и open source. Торговая комиссия возникает только при реальной сделке — V${BuildConfig.VERSION_NAME} их не отправляет.",
             13, "#8B949E", false
         ))
         setContentView(ScrollView(this).apply { addView(content) })

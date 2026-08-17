@@ -67,7 +67,7 @@ object UnifiedResearchLog {
             }
         val report = JSONObject()
             .put("schema", "pump-signal-unified-log-v51")
-            .put("appVersion", "5.1")
+            .put("appVersion", BuildConfig.VERSION_NAME)
             .put("generatedAt", now)
             .put("safety", JSONObject()
                 .put("realOrdersImplemented", false)
@@ -85,7 +85,7 @@ object UnifiedResearchLog {
             .put("deepSigActivity", JSONArray(deepSig.activity.map { it.toJson() }))
             .put("journal", journal)
         val dir = File(context.cacheDir, "reports").apply { mkdirs() }
-        return File(dir, "PumpSignal-V5.1-Log-${stamp(now)}.json").apply {
+        return File(dir, "PumpSignal-V${BuildConfig.VERSION_NAME}-Log-${stamp(now)}.json").apply {
             writeText(report.toString(2), Charsets.UTF_8)
         }
     }
@@ -96,7 +96,7 @@ object UnifiedResearchLog {
         val send = Intent(Intent.ACTION_SEND).apply {
             type = "application/json"
             putExtra(Intent.EXTRA_STREAM, uri)
-            putExtra(Intent.EXTRA_SUBJECT, "PumpSignal V5.1 — единый диагностический лог")
+            putExtra(Intent.EXTRA_SUBJECT, "PumpSignal V${BuildConfig.VERSION_NAME} — единый диагностический лог")
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         context.startActivity(Intent.createChooser(send, "Отправить единый лог"))

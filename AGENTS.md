@@ -43,6 +43,7 @@ V5 has one persistent master switch for user signal notifications, sound and vib
 - V4.22 separates sound policy by event importance. Executed APP, DeepSeek and DeepSeek-experiment BUY/SELL trades ring every day from 06:15 to 23:00 even when preparatory alerts remain in workday mode. Preparatory alerts may be workdays, daily daytime or 24 hours according to the saved setting; the setting must not be reset when its screen opens. Urgent confirmed Serge exits ring around the clock. V4.22 uses fresh selectable channel ids and provides an explicit sound test for each participant channel.
 - V5.0 replaces the old APP threshold path with the causal research baseline and starts three new isolated €1 000 paper portfolios for APP, DeepSig and DeepSigX; V4.22 data remains archived. Candidate output is analytical evidence for manual review, never a profitability claim or real-money order. Fresh V5.0 notification channels and the master switch above apply before every user alert, including urgent Serge alerts.
 - V5.1 adds Bitpanda Fusion strictly as a read-only execution-venue evidence layer and a fourth isolated €1 000 `DEEPSIG FUSION` paper account. Store its key only through Android Keystore, require users to create a Read-only key, never implement Fusion order/cancel/transfer calls, and fail closed when venue data is stale. The unified export must omit secrets and combine the four autonomous agents' decisions/trades in one sanitized log.
+- V5.1.1 fixes the comparison interaction: all five displayed accounts (four autonomous agents plus Serge reference) share the available screen height with equal weights. Do not reintroduce a vertical ScrollView around gesture-handling charts; their horizontal offsets remain synchronized.
 
 ## Release invariants
 
@@ -99,6 +100,7 @@ V5 has one persistent master switch for user signal notifications, sound and vib
 - V4.22: reliable ringing with separate executed-trade delivery, persistent workday/daily/24-hour modes and four participant-channel tests, code 77, current work.
 - V5.0: causal three-system paper research, analytical candidates, master alert switch default OFF and fresh V5 notification channels, code 78, current work.
 - V5.1: Bitpanda Fusion read-only market evidence, separate DeepSig Fusion paper account and sanitized unified four-agent log, code 79, current work.
+- V5.1.1: five simultaneously visible comparison charts without nested vertical scrolling, code 80, current work.
 
 ## Accumulated next-release backlog
 

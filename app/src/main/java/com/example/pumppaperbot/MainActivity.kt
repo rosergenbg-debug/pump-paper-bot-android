@@ -499,9 +499,9 @@ class MainActivity : AppCompatActivity() {
             fusionAccount.profit(fusionMark) / FusionSimPortfolio.START_BALANCE * 100.0
         )
         tvStatus?.text = if (snapshot.running) {
-            "V5.1 PAPER‑ТЕСТ • монитор включён • обновлено ${PumpBotEngine.formatTime(snapshot.lastSync)}"
+            "V${BuildConfig.VERSION_NAME} PAPER‑ТЕСТ • монитор включён • обновлено ${PumpBotEngine.formatTime(snapshot.lastSync)}"
         } else {
-            "V5.1 PAPER‑ТЕСТ • монитор остановлен • последнее обновление ${PumpBotEngine.formatTime(snapshot.lastSync)}"
+            "V${BuildConfig.VERSION_NAME} PAPER‑ТЕСТ • монитор остановлен • последнее обновление ${PumpBotEngine.formatTime(snapshot.lastSync)}"
         }
         val deepSeekPrimary = DeepSeekPrimaryStore.state(this)
         tvDeepSeekPrimary?.text = DeepSeekPrimaryPolicy.compactStatus(
