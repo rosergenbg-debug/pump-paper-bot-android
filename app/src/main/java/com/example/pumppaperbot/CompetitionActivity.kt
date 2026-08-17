@@ -85,7 +85,7 @@ class CompetitionActivity : AppCompatActivity() {
         val app = AppPaperStore.state(this)
         val gemini = GeminiPaperStore.state(this).portfolio
         val geminiExitExperiment = GeminiExitExperimentStore.state(this)?.portfolio
-            ?: gemini
+            ?: GeminiPaperPortfolio()
         val user = UserPaperStore.markToMarket(this, price)
         val closedCandles = if (historicalCandles.isNotEmpty()) {
             (historicalCandles + snapshot.chart.candles)
@@ -101,13 +101,13 @@ class CompetitionActivity : AppCompatActivity() {
         )
 
         charts[0].setData(
-            "DEEPSEEK",
+            "DEEPSIG",
             summary(gemini.value(price), gemini.profitPercent(price), gemini.inPosition),
             candles,
             gemini.trades.map { CompetitionMarker(it.time, it.action, it.price, it.pnlEur) }
         )
         charts[1].setData(
-            "DEEPSEEK‑ЭКСПЕРИМЕНТ",
+            "DEEPSIGX",
             summary(
                 geminiExitExperiment.value(price),
                 geminiExitExperiment.profitPercent(price),

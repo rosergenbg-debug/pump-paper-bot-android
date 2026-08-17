@@ -44,9 +44,9 @@ class AppPaperActivity : AppCompatActivity() {
         root.addView(button("← НАЗАД", "#30363D").apply {
             setOnClickListener { finish() }
         }, LinearLayout.LayoutParams(-1, dp(48)))
-        root.addView(label("APP • DEEPSEEK • ЭКСПЕРИМЕНТ • СЕРЖ", 22, "#F0F6FC", true, 12))
+        root.addView(label("APP • DEEPSIG • DEEPSIGX", 22, "#F0F6FC", true, 12))
         root.addView(label(
-            "Четыре независимых виртуальных счёта по €1 000. Реальные деньги не используются.",
+            "Три автономные тестовые системы с отдельными виртуальными счетами по €1 000. Счёт Сержа показан отдельно для ручного контроля. Реальные биржевые заявки приложение не исполняет; звонки управляются общей кнопкой.",
             14, "#C9D1D9", false, 6
         ))
 
@@ -71,7 +71,7 @@ class AppPaperActivity : AppCompatActivity() {
 
         comparison = card("#172033")
         root.addView(comparison, cardParams(10))
-        root.addView(button("ОТКРЫТЬ ПОДРОБНОСТИ DEEPSEEK", "#7C3AED").apply {
+        root.addView(button("ОТКРЫТЬ ПОДРОБНОСТИ DEEPSIG / DEEPSIGX", "#7C3AED").apply {
             setOnClickListener {
                 startActivity(android.content.Intent(this@AppPaperActivity, GeminiExperimentActivity::class.java))
             }
@@ -88,7 +88,7 @@ class AppPaperActivity : AppCompatActivity() {
             setOnClickListener {
                 AlertDialog.Builder(this@AppPaperActivity)
                     .setTitle("Начать счёт App заново с €1 000?")
-                    .setMessage("Удалятся сделки и решения только виртуального APP. DeepSeek, DeepSeek‑эксперимент и счёт Сержа не изменятся.")
+                    .setMessage("Удалятся сделки и решения только виртуального APP. DeepSig, DeepSigX и счёт Сержа не изменятся.")
                     .setNegativeButton("ОТМЕНА", null)
                     .setPositiveButton("СБРОСИТЬ") { _, _ ->
                         AppPaperStore.reset(this@AppPaperActivity)
@@ -116,7 +116,7 @@ class AppPaperActivity : AppCompatActivity() {
         val app = AppPaperStore.state(this)
         val geminiState = GeminiPaperStore.state(this)
         val gemini = geminiState.portfolio
-        val experiment = GeminiExitExperimentStore.state(this)?.portfolio ?: gemini
+        val experiment = GeminiExitExperimentStore.state(this)?.portfolio ?: GeminiPaperPortfolio()
         val user = UserPaperStore.markToMarket(this, price)
         val appValue = app.value(price)
         val geminiValue = gemini.value(price)
@@ -133,7 +133,7 @@ class AppPaperActivity : AppCompatActivity() {
             app.trades.lastOrNull()?.time
         )
         geminiCard.text = accountText(
-            "DEEPSEEK",
+            "DEEPSIG",
             geminiValue,
             gemini.profitPercent(price),
             gemini.inPosition,
@@ -142,7 +142,7 @@ class AppPaperActivity : AppCompatActivity() {
             gemini.trades.lastOrNull()?.time
         )
         experimentCard.text = accountText(
-            "DEEPSEEK‑ЭКСП.",
+            "DEEPSIGX",
             experimentValue,
             experiment.profitPercent(price),
             experiment.inPosition,
@@ -166,27 +166,26 @@ class AppPaperActivity : AppCompatActivity() {
 
         val ranking = listOf(
             "APP" to appValue,
-            "DEEPSEEK" to geminiValue,
-            "DEEPSEEK‑ЭКСП." to experimentValue,
-            "СЕРЖ" to userValue
+            "DEEPSIG" to geminiValue,
+            "DEEPSIGX" to experimentValue
         )
             .sortedByDescending { it.second }
         val leader = "Сейчас впереди ${ranking.first().first} • €${money(ranking.first().second)}"
         comparison.text = buildString {
             append("СРАВНЕНИЕ В МОМЕНТЕ\n$leader")
             append("\nAPP: ${positionWord(app.inPosition)}")
-            append("  •  DeepSeek: ${positionWord(gemini.inPosition)}")
-            append("  •  Эксп.: ${positionWord(experiment.inPosition)}")
-            append("  •  Серж: ${positionWord(user.inPosition)}")
+            append("  •  DeepSig: ${positionWord(gemini.inPosition)}")
+            append("  •  DeepSigX: ${positionWord(experiment.inPosition)}")
+            append("\nСерж (вне рейтинга): ${positionWord(user.inPosition)}")
             val appLast = app.trades.lastOrNull()
             val geminiLast = gemini.trades.lastOrNull()
             val experimentLast = experiment.trades.lastOrNull()
             val userLast = user.trades.lastOrNull()
             append("\nПоследнее действие APP: ${tradeWord(appLast?.action)} ${time(appLast?.time)}")
-            append("\nПоследнее действие DeepSeek: ${tradeWord(geminiLast?.action)} ${time(geminiLast?.time)}")
-            append("\nПоследнее действие DeepSeek‑эксп.: ${tradeWord(experimentLast?.action)} ${time(experimentLast?.time)}")
+            append("\nПоследнее действие DeepSig: ${tradeWord(geminiLast?.action)} ${time(geminiLast?.time)}")
+            append("\nПоследнее действие DeepSigX: ${tradeWord(experimentLast?.action)} ${time(experimentLast?.time)}")
             append("\nПоследнее действие Сержа: ${tradeWord(userLast?.action)} ${time(userLast?.time)}")
-            append("\n\nAPP принимает решение по закрытым 30‑минутным свечам, но исполняет его только по свежей цене и не догоняет рост. DeepSeek принимает решение примерно раз в 2 минуты и отдельно перепроверяет BUY/EXIT. DeepSeek‑эксперимент проверяет ранний вход и раньше защищает взятую вершину. Gemini не торгует виртуальными счетами, но автоматически даёт второе мнение только по открытой позиции Сержа. Серж действует вручную.")
+            append("\n\nAPP — воспроизводимая причинная V5‑база: режим рынка, pullback/reclaim/retest, зона входа, ATR‑инвалидация и издержки. DeepSig — независимое предложение модели, которое исполняется только после повторного подтверждения и отдельной проверки риска; APP ему не командует. DeepSigX — независимый быстрый количественный эксперимент по дыханию, потоку, CVD и структуре; он не зеркалит сделки двух других систем. Все три работают только с виртуальными деньгами и не звонят.")
         }
 
         appTrades.text = app.trades.takeLast(40).asReversed().joinToString("\n\n") { trade ->

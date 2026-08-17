@@ -19,6 +19,16 @@ data class GeminiEntryEvidence(
     companion object {
         private const val ENTRY_CONFIRMATION_WINDOW_MILLIS = 15L * 60L * 1000L
 
+        internal fun effectiveSignalSources(
+            observedAppReady: Boolean,
+            observedDeepSeekPositive: Boolean,
+            breathingPositive: Boolean
+        ): Triple<Boolean, Boolean, Boolean> = if (ResearchModePolicy.AUTONOMOUS_PARTICIPANTS) {
+            Triple(false, false, breathingPositive)
+        } else {
+            Triple(observedAppReady, observedDeepSeekPositive, breathingPositive)
+        }
+
         internal fun stableConfirmationAnchor(
             observedAt: Long,
             appReady: Boolean,
@@ -45,8 +55,8 @@ data class GeminiEntryEvidence(
             val snapshot = frame.snapshot
             val impulseFresh = impulse.candleTime > 0L &&
                 snapshot.lastSync - impulse.candleTime in 0L..20L * 60L * 1000L
-            val appReady = GeminiAppReadinessPolicy.isReady(appEvaluation)
-            val deepSeekPositive = DeepSeekPrimaryPolicy.isFreshSignal(
+            val observedAppReady = GeminiAppReadinessPolicy.isReady(appEvaluation)
+            val observedDeepSeekPositive = DeepSeekPrimaryPolicy.isFreshSignal(
                 deepSeekDecision,
                 System.currentTimeMillis()
             ) && deepSeekDecision.executionStatus != "ОТКЛОНЕНО ПРОВЕРКОЙ" &&
@@ -54,7 +64,12 @@ data class GeminiEntryEvidence(
                 deepSeekDecision.direction >= 20 && deepSeekDecision.confidence >= 55
             val breathingPositive = (breathing.experimentScore ?: 0) >= 25 &&
                 (breathing.normalScore ?: 0) >= 10
-            val signalActive = appReady || deepSeekPositive || breathingPositive
+            val (appReady, deepSeekPositive, effectiveBreathingPositive) = effectiveSignalSources(
+                observedAppReady,
+                observedDeepSeekPositive,
+                breathingPositive
+            )
+            val signalActive = appReady || deepSeekPositive || effectiveBreathingPositive
 
             val spotStrong = listOfNotNull(
                 frame.spotTakerBuyPercent?.let { it >= 51.0 },
@@ -113,7 +128,7 @@ data class GeminiEntryEvidence(
                 if (deepSeekPositive) add(
                     "DeepSeek ${deepSeekDecision.direction}/100, уверенность ${deepSeekDecision.confidence}/100"
                 )
-                if (breathingPositive) add("дыхание ${breathing.experimentScore}/100")
+                if (effectiveBreathingPositive) add("дыхание ${breathing.experimentScore}/100")
             }.joinToString(" + ").ifBlank { "сигнала входа нет" }
             val facts = buildList {
                 if (flowStrong) add("покупатели сильнее одновременно в spot и futures")
@@ -131,7 +146,7 @@ data class GeminiEntryEvidence(
                 appReady = appReady,
                 appCandleTime = appEvaluation.candleTime,
                 deepSeekPositive = deepSeekPositive,
-                breathingPositive = breathingPositive
+                breathingPositive = effectiveBreathingPositive
             )
             return GeminiEntryEvidence(
                 signalActive = signalActive,
@@ -291,8 +306,9 @@ data class GeminiExitEvidence(
                 priceWeak = priceWeak,
                 microWeak = microWeak,
                 reason = if (facts.isEmpty()) "подтверждённых признаков разворота нет" else facts.joinToString("; "),
-                appExitSignal = appEvaluation?.action == StrategyV2.ACTION_SELL ||
-                    appEvaluation?.action == StrategyV2.ACTION_SELL_HALF,
+                appExitSignal = !ResearchModePolicy.AUTONOMOUS_PARTICIPANTS &&
+                    (appEvaluation?.action == StrategyV2.ACTION_SELL ||
+                        appEvaluation?.action == StrategyV2.ACTION_SELL_HALF),
                 breathing5m = horizon(5),
                 breathing15m = horizon(15),
                 breathing30m = horizon(30),
@@ -424,8 +440,8 @@ internal object GeminiExitExperimentEngine {
         val coolingDown = lastExitAt > 0L && now - lastExitAt < REENTRY_COOLDOWN_MILLIS
         val alreadyUsed = evidence.anchorId > 0L && evidence.anchorId <= state.lastEntryAnchorId
         val statusReason = when {
-            !evidence.signalActive -> "В евро; ждём сигнал APP 99/100 или свежий положительный DeepSeek"
-            alreadyUsed -> "РАННИЙ ВХОД НЕ ВЫПОЛНЕН: этот же сигнал уже использовался; ждём новую закрытую свечу или новое решение DeepSeek. ${evidence.reason}"
+            !evidence.signalActive -> "В евро; DeepSigX ждёт собственное устойчивое рыночное дыхание"
+            alreadyUsed -> "РАННИЙ ВХОД НЕ ВЫПОЛНЕН: этот же 15-минутный рыночный кадр уже использовался; ждём новый независимый кадр. ${evidence.reason}"
             coolingDown -> "РАННИЙ ВХОД НЕ ВЫПОЛНЕН: после выхода действует 30-минутная защита от повторной торговли шумом. ${evidence.reason}"
             !evidence.eligible -> "РАННИЙ ВХОД НЕ ВЫПОЛНЕН: ${evidence.blockedReason}. ${evidence.reason}"
             else -> "РАННИЙ ВХОД ПОДТВЕРЖДЁН: ${evidence.reason}. Оценка ${evidence.score}/9, групп ${evidence.groups}/6."
@@ -606,7 +622,8 @@ internal object GeminiExitExperimentEngine {
 }
 
 object GeminiExitExperimentStore {
-    private const val PREFS = "gemini_exit_experiment_v319"
+    // New competition epoch. V4.22 remains untouched in gemini_exit_experiment_v319.
+    private const val PREFS = "deepsigx_paper_v5_research"
     private const val KEY_STATE = "state"
     private const val KEY_STATE_BACKUP = "state_backup_v322"
     private const val KEY_PENDING_ALERTS = "pending_trade_alerts_v322"
@@ -673,14 +690,21 @@ object GeminiExitExperimentStore {
         check(prefs(context).getString(KEY_STORAGE_ERROR, "").isNullOrBlank()) {
             prefs(context).getString(KEY_STORAGE_ERROR, "Ошибка хранилища Gemini‑эксперимента").orEmpty()
         }
-        var initial = GeminiExitExperimentEngine.bootstrap(existing, controlPortfolio, now)
-        controlPortfolio.trades.maxByOrNull { it.decisionId }?.let { latest ->
-            val mirrored = GeminiExitExperimentEngine.mirrorControlTrade(initial, latest)
-            initial = mirrored.state
-            if (mirrored.executedTrade != null) {
-                save(context, initial, mirrored.executedTrade)
-                flushPendingAlerts(context)
-                return initial
+        val bootstrapPortfolio = if (ResearchModePolicy.AUTONOMOUS_PARTICIPANTS) {
+            GeminiPaperPortfolio()
+        } else {
+            controlPortfolio
+        }
+        var initial = GeminiExitExperimentEngine.bootstrap(existing, bootstrapPortfolio, now)
+        if (!ResearchModePolicy.AUTONOMOUS_PARTICIPANTS) {
+            controlPortfolio.trades.maxByOrNull { it.decisionId }?.let { latest ->
+                val mirrored = GeminiExitExperimentEngine.mirrorControlTrade(initial, latest)
+                initial = mirrored.state
+                if (mirrored.executedTrade != null) {
+                    save(context, initial, mirrored.executedTrade)
+                    flushPendingAlerts(context)
+                    return initial
+                }
             }
         }
         val marked = GeminiPaperTrader.markToMarket(initial.portfolio, frame.preRequestPrice)

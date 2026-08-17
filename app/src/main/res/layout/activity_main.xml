@@ -37,7 +37,7 @@
             android:background="#10251C"
             android:minHeight="68dp"
             android:padding="9dp"
-            android:text="DEEPSEEK • ОСНОВНОЙ • ожидает первый анализ"
+            android:text="DEEPSIG • ОСНОВНОЙ • ожидает первый анализ"
             android:textColor="#7EE787"
             android:textSize="13sp"
             android:textStyle="bold" />
@@ -51,7 +51,7 @@
             android:gravity="center"
             android:minHeight="116dp"
             android:padding="10dp"
-            android:text="DEEPSEEK • ГОТОВНОСТЬ ВХОДА\n1/10 • НЕ ВХОДИТЬ\nЖдём свежий подтверждённый анализ"
+            android:text="DEEPSIG • ГОТОВНОСТЬ ВХОДА\n1/10 • НЕ ВХОДИТЬ\nЖдём свежий подтверждённый анализ"
             android:textColor="#FF7B72"
             android:textSize="20sp"
             android:textStyle="bold" />
@@ -160,7 +160,7 @@
                     android:insetBottom="0dp"
                     android:maxLines="3"
                     android:padding="2dp"
-                    android:text="DEEPSEEK&#10;€1 000,00&#10;+0,00%"
+                    android:text="DEEPSIG&#10;€1 000,00&#10;+0,00%"
                     android:textColor="#FFFFFF"
                     android:textSize="11sp"
                     android:textStyle="bold" />
@@ -183,7 +183,7 @@
                     android:insetBottom="0dp"
                     android:maxLines="3"
                     android:padding="2dp"
-                    android:text="DEEPSEEK‑ЭКСП.&#10;€1 000,00&#10;+0,00%"
+                    android:text="DEEPSIGX&#10;€1 000,00&#10;+0,00%"
                     android:textColor="#FFFFFF"
                     android:textSize="11sp"
                     android:textStyle="bold" />
@@ -213,7 +213,7 @@
             android:layout_height="50dp"
             android:layout_marginTop="7dp"
             android:backgroundTint="#1F6FEB"
-            android:text="СРАВНИТЬ 4  •  APP | DEEPSEEK | ЭКСП. | СЕРЖ"
+            android:text="СРАВНИТЬ 3  •  APP | DEEPSIG | DEEPSIGX"
             android:textColor="#FFFFFF"
             android:textSize="13sp"
             android:textStyle="bold" />
@@ -274,7 +274,7 @@
                 android:layout_marginTop="6dp"
                 android:background="#201522"
                 android:padding="10dp"
-                android:text="DEEPSEEK • ожидает открытия позиции"
+                android:text="DEEPSIG • ожидает открытия позиции"
                 android:textColor="#D2A8FF"
                 android:textSize="15sp"
                 android:textStyle="bold" />
@@ -470,7 +470,7 @@
             android:layout_height="52dp"
             android:layout_marginTop="6dp"
             android:backgroundTint="#1F6FEB"
-            android:text="ВРЕМЯ И РЕЖИМ ЗВОНКА"
+            android:text="ЗВОНКИ И РАСПИСАНИЕ"
             android:textColor="#FFFFFF"
             android:textStyle="bold" />
 
@@ -489,7 +489,7 @@
                 android:gravity="center"
                 android:maxLines="4"
                 android:padding="3dp"
-                android:text="DEEPSEEK API&#10;ОСНОВНОЙ&#10;открыть центр"
+                android:text="DEEPSIG API&#10;ОСНОВНОЙ&#10;открыть центр"
                 android:textColor="#FFFFFF"
                 android:textSize="12sp"
                 android:textStyle="bold" />

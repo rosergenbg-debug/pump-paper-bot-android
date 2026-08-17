@@ -157,7 +157,9 @@ class DeepSeekPaperCoordinator {
                     trade.time,
                     executedTrade = true
                 )
-                GeminiExitExperimentStore.mirrorControlTrade(context, trade)
+                if (!ResearchModePolicy.AUTONOMOUS_PARTICIPANTS) {
+                    GeminiExitExperimentStore.mirrorControlTrade(context, trade)
+                }
             }
             GeminiPaperStore.flushPendingTradeAlerts(context)
         }

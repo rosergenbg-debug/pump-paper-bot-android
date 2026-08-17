@@ -13,16 +13,15 @@ This file is mandatory context for every agent working in this repository.
 
 ## Product and user intent
 
-PumpSignal is an Android paper-trading and signal research application for PUMP/EUR. It never places real orders. Its purpose is to compare four independent participants:
+PumpSignal is an Android paper-trading and signal research application for PUMP/EUR. It never places real exchange orders. V5 compares three autonomous participants:
 
-- APP: built-in StrategyV2 virtual account.
-- DeepSeek: primary five-minute AI market circuit and virtual account. The legacy Gemini store is intentionally retained underneath so installed V4.6 balances, positions and history survive the ownership migration.
-- DeepSeek experiment: a separate virtual account that can mirror DeepSeek's executed BUY or enter earlier from a signed APP/DeepSeek signal confirmed by buyer flow/CVD, then tests a market-evidence exit without changing the main DeepSeek account.
-- SERGE: user-controlled virtual account.
+- APP: causal `ResearchDecisionEngine` baseline and its own V5 virtual account.
+- DeepSig: independent primary AI market circuit and its own V5 virtual account. Legacy Gemini-named storage/classes remain only where needed for installed-data compatibility.
+- DeepSigX: an independent quantitative flow/CVD/breathing experiment and its own V5 virtual account; it must not mirror APP or DeepSig.
 
-All four must keep separate balances, trades and performance. The comparison view must show current money, signed percent return, entry/exit markers and trade profit/loss. Stored data must survive compatible APK updates.
+SERGE is a separate user-controlled reference account, not a fourth autonomous competitor. The comparison view must show separate balances, signed percent return, entry/exit markers and trade profit/loss. Stored data must survive compatible APK updates. `Я купил` and `Я продал` record Serge's manual action and enable/disable personal-position supervision; they do not submit an exchange order.
 
-Serge values timely, unmistakable phone alerts. APP, DeepSeek and DeepSeek experiment must each generate their own loud notification for an executed entry and exit. Do not let one participant's notification replace another's. Quiet hours apply to ordinary preparatory signals, but actual requested trade alerts are intended to be delivered immediately.
+V5 has one persistent master switch for user signal notifications, sound and vibration. It defaults OFF after the update. Switching it off must immediately silence/cancel user alerts and reminders without stopping market analysis, AI cycles, journals or any of the three virtual portfolios. Switching it on restores the existing V4.22 workday/daily/24-hour schedule and participant-specific sound tests. No missed-alert backlog may ring after re-enabling.
 
 ## Current strategy direction
 
@@ -42,6 +41,7 @@ Serge values timely, unmistakable phone alerts. APP, DeepSeek and DeepSeek exper
 - V4.19 carries the unreleased V4.18 stabilization forward. Position warnings notify only on the first confirmed exit or material new deterioration, with oscillation protection and a ten-minute ordinary repeat floor. An isolated APP sell is warning-only; red 9–10/10 requires DeepSeek plus fresh multi-group confirmation or a real local emergency. A strong live 15s/60s/5m buyer-confirmed rebound clears a contradictory EXIT immediately; moderate recovery must persist for two control cycles before clearing it. A past alarm cannot keep the scale at 10/10 after its condition disappears. BTC is a regime filter rather than a minute-by-minute synchronization gate. No participant may auto-exit or cap profit at +8%; trend winners use confirmed pullback/trailing evidence and may continue beyond +20%.
 - V4.21 keeps APP as the stable pilot while restoring independent DeepSeek authority on its own account. APP-confirmed entries remain immediate; DeepSeek may enter with APP below 55/100 only after two separate strong 30–90-minute AI evaluations confirmed by 5/15-minute flow and no APP sell. A DeepSeek-only normal exit likewise needs two AI evaluations plus fresh selling and 15/30/60-minute weakness. The experiment uses a stable 15-minute signal anchor, three entry confirmations, a 30-minute ordinary hold, three exit confirmations and a 30-minute re-entry pause. Virtual BUY and SELL trades all notify, including while Serge is in a position, but ordinary sound still obeys the agreed work schedule. A position-adviser response must re-check the current position id before saving; responses that finish after sale or replacement are discarded and their old notifications cleared.
 - V4.22 separates sound policy by event importance. Executed APP, DeepSeek and DeepSeek-experiment BUY/SELL trades ring every day from 06:15 to 23:00 even when preparatory alerts remain in workday mode. Preparatory alerts may be workdays, daily daytime or 24 hours according to the saved setting; the setting must not be reset when its screen opens. Urgent confirmed Serge exits ring around the clock. V4.22 uses fresh selectable channel ids and provides an explicit sound test for each participant channel.
+- V5.0 replaces the old APP threshold path with the causal research baseline and starts three new isolated €1 000 paper portfolios for APP, DeepSig and DeepSigX; V4.22 data remains archived. Candidate output is analytical evidence for manual review, never a profitability claim or real-money order. Fresh V5.0 notification channels and the master switch above apply before every user alert, including urgent Serge alerts.
 
 ## Release invariants
 
@@ -61,7 +61,7 @@ Serge values timely, unmistakable phone alerts. APP, DeepSeek and DeepSeek exper
 - Update `DEVELOPMENT_LOG.md` in the same branch and commit as each material code, configuration, build, release or repository operation. Each entry must say: date/time and agent, what changed, why, exact files/branch/commit/release affected, verification performed, and any remaining risk or next step. Do not record secrets, API keys, signing-key material, private payloads or chain-of-thought.
 - Keep `AGENTS.md` concise and current: update it when a durable product rule, architecture invariant, workflow rule or active-version fact changes. Do not use it as a second chronological log. When the log becomes long, retain it as history rather than starting an unlinked replacement.
 - A completed version must exist on `main`, have an immutable `vX.Y` tag, and be published as a GitHub Release. The Release must contain one compatible final APK named `PumpSignal-VX.Y-Compatible-FINAL.apk` plus checksum/signature facts in the notes. Never store an APK as Base64 chunks or commit build outputs to the source tree.
-- Keep only the latest two user-facing releases/APKs readily available (currently V4.8 and V4.9). Older temporary build artifacts, redundant release branches and finished agent branches may be removed only after confirming that their source history is retained by `main` or an immutable tag. Source history itself must not be rewritten merely to save space.
+- Keep only the latest two user-facing releases/APKs readily available (V4.22 and V5.0 once V5.0 is verified and released). Older temporary build artifacts, redundant release branches and finished agent branches may be removed only after confirming that their source history is retained by `main` or an immutable tag. Source history itself must not be rewritten merely to save space.
 - Before giving Serge a download, verify the final APK itself: package id, version name/code, launch activity, ZIP integrity, signature schemes and compatible certificate fingerprint. Then provide both (1) a clickable local `sandbox:` link when the file exists in the current workspace and (2) the direct GitHub Release asset link for durable download. Never offer an expiring Actions artifact or an intermediate/debug-signed APK as the installable update.
 - At the end of every task, leave one clear handoff: canonical branch/commit, tests/build result, direct artifact link if applicable, and the exact unfinished items. If a requested upload or deletion could not be performed, state that plainly instead of inventing a location or claiming success.
 
@@ -96,6 +96,7 @@ Serge values timely, unmistakable phone alerts. APP, DeepSeek and DeepSeek exper
 - V4.20: local-only APP-led checkpoint, never built or released, code 75.
 - V4.21: dual APP/DeepSeek authority with two-cycle independent AI confirmation and a calmer 30-minute experiment regime, code 76, current work.
 - V4.22: reliable ringing with separate executed-trade delivery, persistent workday/daily/24-hour modes and four participant-channel tests, code 77, current work.
+- V5.0: causal three-system paper research, analytical candidates, master alert switch default OFF and fresh V5 notification channels, code 78, current work.
 
 ## Accumulated next-release backlog
 

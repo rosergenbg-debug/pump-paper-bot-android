@@ -726,7 +726,8 @@ object GeminiCycleGuard {
 }
 
 object GeminiPaperStore {
-    private const val PREFS = "gemini_paper_v34"
+    // New competition epoch. V4.22 remains untouched in gemini_paper_v34.
+    private const val PREFS = "deepsig_paper_v5_research"
     private const val KEY_PORTFOLIO = "portfolio"
     private const val KEY_PORTFOLIO_BACKUP = "portfolio_backup_v322"
     private const val KEY_PENDING_ALERTS = "pending_trade_alerts_v322"

@@ -186,7 +186,11 @@ data class AppPaperEvaluation(
     val reason: String,
     val strategyMode: String,
     val highestClose: Double,
-    val readinessScore: Int = 0
+    val readinessScore: Int = 0,
+    val entryAtr: Double = 0.0,
+    val invalidationPrice: Double = 0.0,
+    val entryZoneLow: Double = 0.0,
+    val entryZoneHigh: Double = 0.0
 )
 
 object PumpBotEngine {
@@ -445,6 +449,9 @@ object PumpBotEngine {
             parseSavedCandles(p.getString(keyMarketJson, "").orEmpty()),
             parseSavedCandles(p.getString(keyEurJson, "").orEmpty())
         )
+        if (ResearchModePolicy.USE_RESEARCH_APP_BASELINE) {
+            return evaluateResearchAppPaper(candles, portfolio)
+        }
         val evaluation = evaluateLive(
             candles = candles,
             btcCandles = parseSavedCandles(p.getString(keyBtcJson, "").orEmpty()),
@@ -480,6 +487,81 @@ object PumpBotEngine {
             strategyMode = evaluation.strategyMode,
             highestClose = evaluation.highestClose,
             readinessScore = evaluation.readinessScore
+        )
+    }
+
+    private fun evaluateResearchAppPaper(
+        candles: List<PumpCandle>,
+        portfolio: AppPaperPortfolio
+    ): AppPaperEvaluation {
+        val candle = candles.lastOrNull() ?: return AppPaperEvaluation(
+            0L, 0.0, "WAIT", "V5: ждём закрытые свечи PUMP/EUR",
+            ResearchSetup.NO_TRADE.name, portfolio.highestClose
+        )
+        if (!portfolio.inPosition) {
+            val decision = ResearchDecisionEngine.evaluate(candles)
+            val candidate = decision.status == ResearchSignalStatus.SHADOW_CANDIDATE ||
+                decision.status == ResearchSignalStatus.ACTIONABLE
+            val atr = decision.atrPercent?.let { candle.close * it / 100.0 } ?: 0.0
+            return AppPaperEvaluation(
+                candleTime = candle.closeTime,
+                price = candle.close,
+                action = if (candidate) "BUY" else "WAIT",
+                reason = "V5 paper-тест • ${decision.regime} • ${decision.reason}" +
+                    if (candidate) " • только виртуальная сделка" else "",
+                strategyMode = "V5_${decision.setup.name}",
+                highestClose = portfolio.highestClose,
+                readinessScore = if (candidate) 100 else 0,
+                entryAtr = atr,
+                invalidationPrice = decision.invalidationPrice ?: 0.0,
+                entryZoneLow = decision.entryZoneLow ?: 0.0,
+                entryZoneHigh = decision.entryZoneHigh ?: 0.0
+            )
+        }
+        if (candle.closeTime <= portfolio.entryTime) {
+            return AppPaperEvaluation(
+                candle.closeTime, candle.close, "WAIT",
+                "V5 paper-тест • ждём закрытия первой свечи после виртуального входа",
+                portfolio.strategyMode, maxOf(portfolio.highestClose, candle.high)
+            )
+        }
+        val currentAtr = ResearchDecisionEngine.atrAt(candles, candles.lastIndex, 14) ?: 0.0
+        val entryAtr = portfolio.entryAtr.takeIf { it > 0.0 } ?: currentAtr
+        if (entryAtr <= 0.0) {
+            return AppPaperEvaluation(
+                candle.closeTime, candle.close, "WAIT", "V5: ATR позиции недоступен",
+                portfolio.strategyMode, maxOf(portfolio.highestClose, candle.high)
+            )
+        }
+        val setup = portfolio.strategyMode.removePrefix("V5_")
+            .let { runCatching { ResearchSetup.valueOf(it) }.getOrDefault(ResearchSetup.NO_TRADE) }
+        val invalidation = portfolio.invalidationPrice.takeIf { it > 0.0 }
+            ?: (portfolio.entryPrice - entryAtr * 2.5).coerceAtLeast(0.0)
+        val exit = ResearchPositionEngine.evaluate(
+            candles = candles,
+            index = candles.lastIndex,
+            position = ResearchPositionState(
+                setup = setup,
+                entryPrice = portfolio.entryPrice,
+                entryAtr = entryAtr,
+                invalidationPrice = invalidation,
+                entryCandleIndex = candles.indexOfLast { it.closeTime <= portfolio.entryTime }
+                    .coerceAtLeast(0),
+                peakPrice = maxOf(portfolio.highestClose, portfolio.entryPrice)
+            )
+        )
+        val shouldExit = exit.status == ResearchExitStatus.SHADOW_EXIT ||
+            exit.status == ResearchExitStatus.ACTIONABLE_EXIT
+        return AppPaperEvaluation(
+            candleTime = candle.closeTime,
+            price = candle.close,
+            action = if (shouldExit) StrategyV2.ACTION_SELL else "WAIT",
+            reason = "V5 paper-тест • ${exit.reason}",
+            strategyMode = portfolio.strategyMode,
+            highestClose = exit.updatedPosition.peakPrice,
+            readinessScore = if (shouldExit) -100 else 0,
+            entryAtr = entryAtr,
+            invalidationPrice = invalidation
         )
     }
 
@@ -812,6 +894,7 @@ object PumpBotEngine {
     }
 
     fun shouldAlert(context: Context, snapshot: LiveSnapshot): Boolean {
+        if (!ResearchModePolicy.userAlertsAllowed(context)) return false
         if (!snapshot.running) return false
         val expected = (snapshot.waitMode == "BUY" && snapshot.readinessScore >= 99) ||
             (snapshot.waitMode == "SELL" && snapshot.readinessScore <= -99)
@@ -858,6 +941,7 @@ object PumpBotEngine {
     }
 
     fun shouldAlertRapidDrop(context: Context, snapshot: LiveSnapshot): Boolean {
+        if (!ResearchModePolicy.userAlertsAllowed(context)) return false
         if (!snapshot.running || !snapshot.rapidDrop.active) return false
         if (!PersonalExitAlertPolicy.bypassesQuietHours(snapshot.waitMode, -100) &&
             !AlertSchedule.isAllowedNow(context)

@@ -452,7 +452,7 @@ class MainActivity : AppCompatActivity() {
         val appAccount = AppPaperStore.state(this)
         val geminiAccount = GeminiPaperStore.state(this).portfolio
         val geminiExitExperiment = GeminiExitExperimentStore.state(this)?.portfolio
-            ?: geminiAccount
+            ?: GeminiPaperPortfolio()
         val sergeAccount = UserPaperStore.markToMarket(this, accountPrice)
         btnAppPaper?.text = accountButtonText(
             "APP",
@@ -460,12 +460,12 @@ class MainActivity : AppCompatActivity() {
             appAccount.profitPercent(accountPrice)
         )
         btnGeminiExperiment?.text = accountButtonText(
-            "DEEPSEEK",
+            "DEEPSIG",
             geminiAccount.value(accountPrice),
             geminiAccount.profitPercent(accountPrice)
         )
         btnGeminiExitExperiment?.text = accountButtonText(
-            "DEEPSEEK‑ЭКСП.",
+            "DEEPSIGX",
             geminiExitExperiment.value(accountPrice),
             geminiExitExperiment.profitPercent(accountPrice)
         )
@@ -475,9 +475,9 @@ class MainActivity : AppCompatActivity() {
             sergeAccount.profitPercent(accountPrice)
         )
         tvStatus?.text = if (snapshot.running) {
-            "Монитор включён • обновлено ${PumpBotEngine.formatTime(snapshot.lastSync)}"
+            "V5 PAPER‑ТЕСТ • монитор включён • обновлено ${PumpBotEngine.formatTime(snapshot.lastSync)}"
         } else {
-            "Монитор остановлен • последнее обновление ${PumpBotEngine.formatTime(snapshot.lastSync)}"
+            "V5 PAPER‑ТЕСТ • монитор остановлен • последнее обновление ${PumpBotEngine.formatTime(snapshot.lastSync)}"
         }
         val deepSeekPrimary = DeepSeekPrimaryStore.state(this)
         tvDeepSeekPrimary?.text = DeepSeekPrimaryPolicy.compactStatus(
@@ -495,7 +495,9 @@ class MainActivity : AppCompatActivity() {
         ))
         renderDeepSeekActionLevel(snapshot, deepSeekPrimary, now)
         renderLatestSignal()
-        tvMode?.text = if (snapshot.rapidDrop.active) {
+        tvMode?.text = if (ResearchModePolicy.ENABLED) {
+            "V5 АНАЛИТИКА + PAPER‑ТЕСТ • APP | DEEPSIG | DEEPSIGX"
+        } else if (snapshot.rapidDrop.active) {
             String.format(Locale.GERMANY, "АВАРИЙНОЕ ПАДЕНИЕ −%.1f%% — ПРОВЕРЬТЕ РЫНОК", snapshot.rapidDrop.dropPercent)
         } else if (snapshot.lateEntryBlocked && snapshot.waitMode == "BUY") {
             "ВХОД ЗАБЛОКИРОВАН — ЦЕНА УЖЕ ВЫСОКО"
@@ -532,13 +534,18 @@ class MainActivity : AppCompatActivity() {
             snapshot.lastEma200,
             snapshot.fundingRate * 100.0
         )
-        tvReason?.text = if (snapshot.weekRhythm.caution) {
+        val researchAppReason = appAccount.decisions.lastOrNull()?.reason
+        tvReason?.text = if (ResearchModePolicy.ENABLED) {
+            researchAppReason?.let { "APP V5 • последний причинный расчёт\n$it" }
+                ?: "APP V5 ждёт достаточную историю и первый причинный расчёт. Старый индикатор не является торговой командой."
+        } else if (snapshot.weekRhythm.caution) {
             "${snapshot.signalReason}\n${snapshot.weekRhythm.title}. ${snapshot.weekRhythm.explanation}"
         } else {
             snapshot.signalReason
         }
         tvReason?.setTextColor(
             when {
+                ResearchModePolicy.ENABLED -> Color.parseColor("#79C0FF")
                 snapshot.marketGateActive -> Color.parseColor("#F0B72F")
                 snapshot.signalReason.startsWith("СЕЙЧАС НЕ ПОКУПАТЬ") -> Color.parseColor("#FF7B72")
                 snapshot.readinessScore >= 95 -> Color.parseColor("#7EE787")
@@ -561,7 +568,20 @@ class MainActivity : AppCompatActivity() {
         }
         renderManualPosition(snapshot)
         renderPositionSupervisor(snapshot)
-        tvAlertStatus?.text = AlertSchedule.statusText(this)
+        val alertsEnabled = ResearchModePolicy.alertsEnabled(this)
+        tvAlertStatus?.text = if (alertsEnabled) {
+            "ЗВОНКИ ВКЛЮЧЕНЫ\n${AlertSchedule.statusText(this)}"
+        } else {
+            "ЗВОНКИ ВЫКЛЮЧЕНЫ • аналитика и виртуальные сделки продолжаются"
+        }
+        btnAlertSettings?.text = if (alertsEnabled) {
+            "ЗВОНКИ ВКЛЮЧЕНЫ • РАСПИСАНИЕ"
+        } else {
+            "ЗВОНКИ ВЫКЛЮЧЕНЫ • НАСТРОЙКИ"
+        }
+        btnAlertSettings?.backgroundTintList = ColorStateList.valueOf(
+            Color.parseColor(if (alertsEnabled) "#238636" else "#8E1519")
+        )
 
         btnStart?.isEnabled = !snapshot.running
         btnStart?.alpha = if (snapshot.running) 0.45f else 1f
@@ -587,7 +607,7 @@ class MainActivity : AppCompatActivity() {
                 geminiStatus = when {
                     deepSeekSignal.error.isNotBlank() -> "ОШИБКА: ${deepSeekSignal.error}"
                     !deepSeekFresh -> "ПОСЛЕДНИЙ СИГНАЛ УСТАРЕЛ"
-                    else -> "DEEPSEEK РАБОТАЕТ"
+                    else -> "DEEPSIG РАБОТАЕТ"
                 }
             )
         )
@@ -703,6 +723,23 @@ class MainActivity : AppCompatActivity() {
         primary: DeepSeekPrimaryState,
         now: Long
     ) {
+        if (ResearchModePolicy.ENABLED) {
+            val inPosition = GeminiPaperStore.state(this).portfolio.inPosition
+            val fresh = DeepSeekPrimaryPolicy.isFreshSignal(primary, now)
+            val score = if (inPosition) primary.danger.coerceIn(0, 10) else primary.entryReadiness.coerceIn(1, 10)
+            val phase = if (inPosition) "РИСК ВИРТУАЛЬНОЙ ПОЗИЦИИ" else "КАНДИДАТ ВХОДА"
+            val state = if (!fresh) "РЕЗУЛЬТАТ УСТАРЕЛ" else "${primary.action} • ${primary.executionStatus}"
+            tvDeepSeekActionLevel?.text = "DEEPSIG • $phase\n$score/10 • $state\nнезависимый paper‑тест, не рекомендация"
+            val color = when {
+                !fresh -> "#8B949E" to "#161B22"
+                inPosition && score >= 8 -> "#FF7B72" to "#3A171A"
+                !inPosition && score >= 8 -> "#7EE787" to "#15351F"
+                else -> "#FFD866" to "#3A300F"
+            }
+            tvDeepSeekActionLevel?.setTextColor(Color.parseColor(color.first))
+            tvDeepSeekActionLevel?.setBackgroundColor(Color.parseColor(color.second))
+            return
+        }
         val micro = MicroImpulseStore.state(this)
         val level = if (snapshot.waitMode == "SELL" && snapshot.entryPrice > 0.0) {
             DeepSeekActionLevelPolicy.fromPosition(
@@ -720,7 +757,7 @@ class MainActivity : AppCompatActivity() {
         } else {
             "ОПАСНОСТЬ ВЫХОДА"
         }
-        tvDeepSeekActionLevel?.text = "DEEPSEEK • $phase\n${level.level}/10 • ${level.label}\n${level.detail}"
+        tvDeepSeekActionLevel?.text = "DEEPSIG • $phase\n${level.level}/10 • ${level.label}\n${level.detail}"
         val colors = when (level.band) {
             DeepSeekActionBand.RED -> "#FF7B72" to "#3A171A"
             DeepSeekActionBand.YELLOW -> "#FFD866" to "#3A300F"
@@ -756,6 +793,29 @@ class MainActivity : AppCompatActivity() {
         )
 
     private fun renderLatestSignal() {
+        if (ResearchModePolicy.ENABLED) {
+            data class PaperEvent(val source: String, val action: String, val at: Long, val reason: String)
+            val events = buildList {
+                AppPaperStore.state(this@MainActivity).trades.lastOrNull()?.let {
+                    add(PaperEvent("APP", it.action, it.time, it.reason))
+                }
+                GeminiPaperStore.state(this@MainActivity).portfolio.trades.lastOrNull()?.let {
+                    add(PaperEvent("DEEPSIG", it.action, it.time, it.reason))
+                }
+                GeminiExitExperimentStore.state(this@MainActivity)?.portfolio?.trades?.lastOrNull()?.let {
+                    add(PaperEvent("DEEPSIGX", it.action, it.time, it.reason))
+                }
+            }
+            val latestPaper = events.maxByOrNull { it.at }
+            tvLatestSignal?.text = if (latestPaper == null) {
+                "ТИХИЙ PAPER‑ЖУРНАЛ\nТри системы ждут первую виртуальную сделку"
+            } else {
+                "${latestPaper.source} • ВИРТУАЛЬНО ${latestPaper.action}\n" +
+                    "${latestPaper.reason.take(260)}\n${PumpBotEngine.formatTime(latestPaper.at)}"
+            }
+            tvLatestSignal?.setTextColor(Color.parseColor("#79C0FF"))
+            return
+        }
         val latest = SignalAttributionStore.latest(this)
         if (latest == null) {
             tvLatestSignal?.text = "ПОСЛЕДНИЙ СИГНАЛ\nПока подписанных сигналов нет"
@@ -856,6 +916,22 @@ class MainActivity : AppCompatActivity() {
     private fun signed(value: Int): String = if (value >= 0) "+$value" else "−${kotlin.math.abs(value)}"
 
     private fun renderReadiness(snapshot: LiveSnapshot) {
+        if (ResearchModePolicy.ENABLED) {
+            val latest = AppPaperStore.state(this).decisions.lastOrNull()
+            tvReadiness?.text = if (latest == null) {
+                "APP V5 • АНАЛИТИК\nЖДЁМ ПЕРВЫЙ КАНДИДАТ\nреальные сделки только вручную"
+            } else {
+                val action = when (latest.action) {
+                    "BUY" -> "КАНДИДАТ ВХОДА • APP КУПИЛ ВИРТУАЛЬНО"
+                    StrategyV2.ACTION_SELL, StrategyV2.ACTION_SELL_HALF -> "КАНДИДАТ ВЫХОДА • APP ПРОДАЛ ВИРТУАЛЬНО"
+                    else -> "NO TRADE / НАБЛЮДЕНИЕ"
+                }
+                "APP V5 • $action\n${PumpBotEngine.formatTime(latest.time)}\nпроверьте причины перед ручным действием"
+            }
+            tvReadiness?.setTextColor(Color.parseColor("#79C0FF"))
+            tvReadiness?.setBackgroundColor(Color.parseColor("#101820"))
+            return
+        }
         val score = snapshot.readinessScore
         if (snapshot.rapidDrop.active && snapshot.waitMode == "BUY" && !snapshot.rapidDrop.recoveryConfirmed) {
             tvReadiness?.text = "АВАРИЙНЫЙ РЕЖИМ\nПОКУПКА ЕЩЁ НЕ ПОДТВЕРЖДЕНА\nждём остановку падения"
@@ -878,10 +954,10 @@ class MainActivity : AppCompatActivity() {
         tvReadiness?.text = when {
             score >= 100 -> "+100  ПОКУПАТЬ\nУСЛОВИЯ ПОДТВЕРЖДЕНЫ"
             score == 99 -> "+99  ЗВОНОК: ПРИГОТОВИТЬСЯ\nдо покупки остался 1 балл"
-            score >= 95 -> "+$score  СИГНАЛ ПРИБЛИЖАЕТСЯ\nзвонок будет на 99"
+            score >= 95 -> "+$score  КАНДИДАТ ПРИБЛИЖАЕТСЯ\nзапись в журнал на 99"
             score <= -100 -> "−100  ПРОДАВАТЬ\nУСЛОВИЯ ПОДТВЕРЖДЕНЫ"
             score == -99 -> "−99  ЗВОНОК: ПРИГОТОВИТЬСЯ\nдо продажи остался 1 балл"
-            score <= -95 -> "−${kotlin.math.abs(score)}  СИГНАЛ ПРИБЛИЖАЕТСЯ\nзвонок будет на −99"
+            score <= -95 -> "−${kotlin.math.abs(score)}  РИСК ПРИБЛИЖАЕТСЯ\nзапись в журнал на −99"
             score < 0 -> "ПРОДАЖА НЕ ПОДТВЕРЖДЕНА\nготовность ${kotlin.math.abs(score)}/100"
             else -> "ПОКУПКА НЕ ПОДТВЕРЖДЕНА\nготовность $score/100"
         }
@@ -896,6 +972,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun renderStrategyButtons(aggressive: Boolean) {
+        if (ResearchModePolicy.ENABLED) {
+            btnRisk30?.isEnabled = false
+            btnRisk35?.isEnabled = false
+            btnRisk30?.alpha = 0.45f
+            btnRisk35?.alpha = 0.45f
+            btnRisk30?.text = "СТАРАЯ НАСТРОЙКА\nНЕ ИСПОЛЬЗУЕТСЯ APP V5"
+            btnRisk35?.text = "СТАРАЯ НАСТРОЙКА\nНЕ ИСПОЛЬЗУЕТСЯ APP V5"
+            return
+        }
         btnRisk30?.backgroundTintList = ColorStateList.valueOf(Color.parseColor(if (!aggressive) "#238636" else "#30363D"))
         btnRisk35?.backgroundTintList = ColorStateList.valueOf(Color.parseColor(if (aggressive) "#B62324" else "#30363D"))
         btnRisk30?.alpha = if (!aggressive) 1f else 0.72f

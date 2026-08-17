@@ -15,6 +15,7 @@ import androidx.appcompat.app.AppCompatActivity
 import java.util.Locale
 
 class AlertSettingsActivity : AppCompatActivity() {
+    private lateinit var masterButton: Button
     private lateinit var workButton: Button
     private lateinit var dailyButton: Button
     private lateinit var alwaysButton: Button
@@ -22,6 +23,7 @@ class AlertSettingsActivity : AppCompatActivity() {
     private lateinit var endButton: Button
     private lateinit var soundButton: Button
     private lateinit var status: TextView
+    private val soundTestButtons = mutableListOf<Button>()
     private val ringtoneRequest = 417
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -32,8 +34,24 @@ class AlertSettingsActivity : AppCompatActivity() {
             setBackgroundColor(Color.parseColor("#0D1117"))
         }
         root.addView(button("← НАЗАД", "#30363D").apply { setOnClickListener { finish() } }, LinearLayout.LayoutParams(-1, dp(48)))
-        root.addView(label("ВРЕМЯ ЗВОНКА", 25, "#F0F6FC", true))
-        root.addView(label("По умолчанию подготовительные сигналы звонят в понедельник, вторник, четверг и пятницу с 06:15 до 23:00. Фактические сделки APP, DeepSeek и эксперимента звонят ежедневно в это время. Опасный выход Сержа остаётся круглосуточной тревогой.", 15, "#C9D1D9", true))
+        root.addView(label("ЗВОНКИ И РАСПИСАНИЕ • V5", 25, "#F0F6FC", true))
+        root.addView(label("APP, DeepSig и DeepSigX всегда продолжают анализ и виртуальные сделки. Эта кнопка управляет только пользовательскими сигналами, звуком и вибрацией.", 15, "#7EE787", true))
+
+        masterButton = button("", "#8E1519").apply {
+            setOnClickListener {
+                val enabled = !ResearchModePolicy.alertsEnabled(this@AlertSettingsActivity)
+                ResearchModePolicy.setAlertsEnabled(this@AlertSettingsActivity, enabled)
+                if (enabled) {
+                    PumpAlert.ensureChannels(this@AlertSettingsActivity)
+                } else {
+                    EntryAlertReminderStore.clear(this@AlertSettingsActivity)
+                    AlertSchedule.clearPending(this@AlertSettingsActivity)
+                    PumpAlert.silenceUserAlerts(this@AlertSettingsActivity)
+                }
+                updateUi()
+            }
+        }
+        root.addView(masterButton, LinearLayout.LayoutParams(-1, dp(64)).apply { topMargin = dp(12) })
 
         workButton = button("РАБОЧИЕ ДНИ: ПН • ВТ • ЧТ • ПТ", "#238636").apply {
             setOnClickListener { AlertSchedule.setMode(this@AlertSettingsActivity, AlertSchedule.MODE_WORK); updateUi() }
@@ -50,7 +68,7 @@ class AlertSettingsActivity : AppCompatActivity() {
         }
         root.addView(alwaysButton, LinearLayout.LayoutParams(-1, dp(58)).apply { topMargin = dp(8) })
 
-        root.addView(label("Режим меняет подготовительные звонки. В режиме рабочих дней фактические сделки всё равно звонят ежедневно 06:15–23:00; ночью они показываются без звука. Ранние сообщения «подготовиться» отключены: первый жёлтый сигнал приходит только при готовности 7/10.", 14, "#8B949E", false))
+        root.addView(label("Расписание сохраняется независимо от общей кнопки. Его можно настроить заранее, даже когда звонки выключены.", 14, "#8B949E", false))
         root.addView(label("Разрешённое время в рабочие дни", 17, "#F0F6FC", true))
         val hours = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         startButton = button("С 06:15", "#238636").apply { isEnabled = false }
@@ -61,15 +79,15 @@ class AlertSettingsActivity : AppCompatActivity() {
 
         soundButton = button("МЕЛОДИЯ ЗВОНКА", "#1F6FEB").apply { setOnClickListener { chooseSound() } }
         root.addView(soundButton, LinearLayout.LayoutParams(-1, dp(58)).apply { topMargin = dp(12) })
-        root.addView(label("Выбранная мелодия используется для входов в разрешённое время и для обязательной круглосуточной тревоги выхода из открытой позиции.", 14, "#F0B72F", true))
+        root.addView(label("При включённых звонках мелодия используется только в разрешённое расписанием время. Вне него сообщения остаются без звука.", 14, "#F0B72F", true))
 
-        root.addView(label("ПРОВЕРКА ЧЕТЫРЁХ КАНАЛОВ", 17, "#F0F6FC", true))
+        root.addView(label("ПРОВЕРКА ЗВУКОВЫХ КАНАЛОВ", 17, "#F0F6FC", true))
         val testRowOne = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         testRowOne.addView(testButton("ТЕСТ APP", PumpAlert.SoundTestTarget.APP), LinearLayout.LayoutParams(0, dp(54), 1f))
-        testRowOne.addView(testButton("ТЕСТ DEEPSEEK", PumpAlert.SoundTestTarget.DEEPSEEK), LinearLayout.LayoutParams(0, dp(54), 1f).apply { leftMargin = dp(8) })
+        testRowOne.addView(testButton("ТЕСТ DEEPSIG", PumpAlert.SoundTestTarget.DEEPSEEK), LinearLayout.LayoutParams(0, dp(54), 1f).apply { leftMargin = dp(8) })
         root.addView(testRowOne, LinearLayout.LayoutParams(-1, dp(54)).apply { topMargin = dp(8) })
         val testRowTwo = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        testRowTwo.addView(testButton("ТЕСТ ЭКСПЕРИМЕНТ", PumpAlert.SoundTestTarget.EXPERIMENT), LinearLayout.LayoutParams(0, dp(54), 1f))
+        testRowTwo.addView(testButton("ТЕСТ DEEPSIGX", PumpAlert.SoundTestTarget.EXPERIMENT), LinearLayout.LayoutParams(0, dp(54), 1f))
         testRowTwo.addView(testButton("ТЕСТ СЕРЖ", PumpAlert.SoundTestTarget.SERGE), LinearLayout.LayoutParams(0, dp(54), 1f).apply { leftMargin = dp(8) })
         root.addView(testRowTwo, LinearLayout.LayoutParams(-1, dp(54)).apply { topMargin = dp(8) })
 
@@ -82,7 +100,7 @@ class AlertSettingsActivity : AppCompatActivity() {
         }, LinearLayout.LayoutParams(-1, dp(54)).apply { topMargin = dp(10) })
         status = label("", 15, "#58A6FF", true)
         root.addView(status)
-        root.addView(label("Если сигнал APP возник вне звукового окна, приложение сохранит цену и время. В следующий разрешённый период оно сообщит: вход ещё возможен или уже пропущен.", 14, "#C9D1D9", false))
+        root.addView(label("Результаты теста смотрите на экране виртуальных счетов. Эти действия не являются рекомендациями и не исполняются на бирже.", 14, "#C9D1D9", false))
         setContentView(ScrollView(this).apply { addView(root) })
         updateUi()
     }
@@ -96,10 +114,26 @@ class AlertSettingsActivity : AppCompatActivity() {
         startButton.text = "С ${format(AlertSchedule.startMinutes(this))}"
         endButton.text = "ДО ${format(AlertSchedule.endMinutes(this))}"
         soundButton.text = "МЕЛОДИЯ: ${AlertSoundPreferences.title(this)}"
-        status.text = AlertSchedule.statusText(this)
+        val alertsEnabled = ResearchModePolicy.alertsEnabled(this)
+        masterButton.text = if (alertsEnabled) "ЗВОНКИ ВКЛЮЧЕНЫ • НАЖАТЬ, ЧТОБЫ ВЫКЛЮЧИТЬ" else "ЗВОНКИ ВЫКЛЮЧЕНЫ • НАЖАТЬ, ЧТОБЫ ВКЛЮЧИТЬ"
+        masterButton.backgroundTintList = ColorStateList.valueOf(Color.parseColor(if (alertsEnabled) "#238636" else "#8E1519"))
+        workButton.isEnabled = true
+        dailyButton.isEnabled = true
+        alwaysButton.isEnabled = true
+        soundButton.isEnabled = alertsEnabled
+        soundTestButtons.forEach {
+            it.isEnabled = alertsEnabled
+            it.alpha = if (alertsEnabled) 1f else 0.4f
+        }
+        status.text = if (alertsEnabled) {
+            "ЗВОНКИ ВКЛЮЧЕНЫ\n${AlertSchedule.statusText(this)}"
+        } else {
+            "ЗВОНКИ ВЫКЛЮЧЕНЫ • APP, DeepSig и DeepSigX продолжают анализ и виртуальные сделки без пользовательских тревог"
+        }
     }
 
     private fun testButton(text: String, target: PumpAlert.SoundTestTarget) = button(text, "#1F6FEB").apply {
+        soundTestButtons += this
         setOnClickListener {
             status.text = runCatching {
                 PumpAlert.showSoundTest(this@AlertSettingsActivity, target)

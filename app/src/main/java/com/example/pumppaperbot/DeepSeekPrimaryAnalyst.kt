@@ -212,12 +212,12 @@ object DeepSeekPrimaryPolicy {
         configured: Boolean,
         now: Long = System.currentTimeMillis()
     ): String = when {
-        !configured -> "APP + DEEPSEEK • СВЯЗКА • ключ DeepSeek не введён"
+        !configured -> "DEEPSIG • НЕЗАВИСИМЫЙ ТЕСТ • ключ DeepSeek не введён"
         state.lastSuccess <= 0L && state.error.isNotBlank() ->
-            "APP + DEEPSEEK • СВЯЗКА • ошибка: ${state.error}\nЗапросы сегодня: 0 успешно • ${state.failedToday} ошибок"
-        state.lastSuccess <= 0L -> "APP + DEEPSEEK • СВЯЗКА • ожидает первый анализ"
+            "DEEPSIG • НЕЗАВИСИМЫЙ ТЕСТ • ошибка: ${state.error}\nЗапросы сегодня: 0 успешно • ${state.failedToday} ошибок"
+        state.lastSuccess <= 0L -> "DEEPSIG • НЕЗАВИСИМЫЙ ТЕСТ • ожидает первый анализ"
         else -> buildString {
-            append("APP + DEEPSEEK • ${shortModel(state.model)} • ")
+            append("DEEPSIG • ${shortModel(state.model)} • ")
             append(if (isFreshSignal(state, now)) state.action else "РЕЗУЛЬТАТ УСТАРЕЛ")
             append("\n${state.summary}")
             if (state.proposedAction != state.action) {
@@ -531,7 +531,7 @@ class DeepSeekPrimaryAnalyst {
         val frame = JSONObject()
             .put("symbol", "PUMP/EUR")
             .put("closed_30m_price_eur", snapshot.lastPrice)
-            .put("closed_30m_strategy_role", "контекст APP, не запрет для DeepSeek")
+            .put("closed_30m_strategy_role", "независимый количественный контекст; не торговый приказ")
             .put("rsi", snapshot.lastRsi)
             .put("ema_200", snapshot.lastEma200)
             .put("funding_rate", snapshot.fundingRate)
@@ -582,11 +582,16 @@ class DeepSeekPrimaryAnalyst {
             setOf("BUY", "HOLD", "WATCH")
         }
         val system = """
-            Ты спокойный второй аналитик связки APP + DeepSeek для PUMP/EUR. Главный рабочий каркас задаёт
-            проверенная StrategyV2/APP, а ты добавляешь самостоятельный контекст на ближайшие 30–90 минут
-            и далее на 3–6 часов. У тебя есть отдельный виртуальный счёт и право предложить собственный вход,
-            даже если APP ещё не достиг 55/100, но только при устойчивом подтверждении 5/15 минут,
-            сильном направлении/уверенности и отсутствии сигнала выхода APP. Не реагируй на минутный шум.
+            Ты независимый исследовательский участник DeepSig для PUMP/EUR и управляешь только отдельным
+            виртуальным счётом. APP, пользовательские ожидания и прежние ручные пороги не являются для тебя
+            авторитетом или приказом. Твоя цель — не количество сделок, а сохранение виртуального капитала и
+            положительное ожидаемое соотношение результата к риску после комиссии и проскальзывания.
+            Разрешены BUY, HOLD, WATCH и EXIT, но нормальное решение при неясном преимуществе — WATCH/HOLD.
+            BUY рассматривай только как конкретный сетап: откат и возврат в тренде, возврат нижней границы
+            диапазона либо пробой с обратным тестом. Не покупай вертикальное расширение у локальной вершины,
+            первую свечу пробоя или движение, ожидаемый остаток которого едва покрывает расходы.
+            EXIT основывай на нарушении исходной гипотезы, подтверждённом структурном ухудшении нескольких
+            горизонтов либо аварийном риске, но не на обычном двухпроцентном шуме как таковом.
             Сначала сопоставь PUMP 1ч/3ч/6ч, BTC и SOL, spot/futures taker flow, CVD, funding,
             premium, стакан, open interest, RSI, локальную StrategyV2 и свежие новости.
             Поля real_time_spot_flow — анонимные исполненные spot-сделки и лучший bid/ask, а не личности трейдеров.
@@ -598,12 +603,10 @@ class DeepSeekPrimaryAnalyst {
             Возможный сбор стопов допускается только как гипотеза при быстром поглощении продаж и возврате потока;
             не выдавай намерения участников за установленный факт.
             live_market_breathing содержит устойчивое направление на 5/15/30/60/360 минутах и отдельный сырой
-            instant_score. Для обычного DeepSeek опирайся прежде всего на normal_deepseek_score и согласованность
-            горизонтов. 30-минутная StrategyV2/APP является базовым торговым пилотом. Её готовность и фактические
-            сигналы имеют больший вес, чем одиночная краткосрочная оценка DeepSeek. Ожидание закрытия, late-entry
-            флаг или отсутствие фактического APP BUY не должны скрывать самостоятельный вход DeepSeek, если
-            устойчивый поток 5/15 минут подтверждает разворот. Слабая готовность APP сама по себе не является
-            запретом; настоящий APP SELL, rapid drop и многоуровневая слабость остаются препятствиями.
+            instant_score. Опирайся прежде всего на normal_deepseek_score и согласованность горизонтов.
+            Локальные APP-поля — лишь ещё один вычисленный контекст: не копируй их решение и не позволяй им
+            создавать или запрещать твою сделку. Rapid drop и многоуровневая слабость являются самостоятельным
+            риском независимо от мнения APP.
             Внутри незакрытой 30-минутной свечи BUY разрешён при устойчивом 5/15-минутном дыхании, подтверждении
             исполненными покупками/5-минутным потоком и отсутствии реального разворота или rapid drop.
             Не считай один индикатор или один заголовок достаточным основанием. Не догоняй уже перегретую цену.
@@ -617,17 +620,18 @@ class DeepSeekPrimaryAnalyst {
             записей promoted_patterns; background_patterns используй как слабый фон. Память не отменяет свежесть,
             rapid drop, риск-контроль и обязательную независимую проверку сделки.
             BUY допустим только при подтверждении минимум двумя независимыми группами данных. Самостоятельный
-            BUY DeepSeek будет исполнен приложением лишь после двух отдельных последовательных AI-оценок.
+            BUY DeepSig будет исполнен приложением лишь после двух отдельных последовательных AI-оценок.
             Не запрещай BUY
             механически из-за уже растущей 30-минутной свечи: отличай устойчивое продолжение от выдохшегося рывка
             по 5/15-минутному дыханию. Rapid drop без восстановления остаётся запретом.
-            EXIT допустим только при открытой позиции и согласованном ухудшении нескольких горизонтов. Обычный
-            EXIT требует подтверждения APP или одновременной устойчивой слабости 15/30/60 минут и свежих продаж.
-            Самостоятельный EXIT DeepSeek без APP будет исполнен лишь после двух отдельных AI-оценок.
+            EXIT допустим только при открытой позиции и согласованном ухудшении нескольких горизонтов.
+            Обычный EXIT требует одновременной устойчивой слабости 15/30/60 минут и свежих продаж и будет
+            исполнен лишь после двух отдельных AI-оценок.
             Одна красная свеча, краткий сброс цены, стенка стакана либо слабая минута Bitcoin не являются EXIT.
-            Ты управляешь отдельным виртуальным счётом DeepSeek: BUY открывает его позицию, EXIT полностью закрывает.
+            Ты управляешь отдельным виртуальным счётом DeepSig: BUY открывает его позицию, EXIT полностью закрывает.
             Поле deepseek_paper_position_open показывает состояние именно этого счёта. Не меняй счёт APP или Сержа.
-            Отделяй факты из кадра от предположений. Не подменяй StrategyV2 и не обещай прибыль.
+            Отделяй факты из кадра от предположений. Null и просроченное означают отсутствие доказательства,
+            а не нейтральный или положительный факт. Не обещай прибыль и не изображай confidence вероятностью.
             Верни только JSON:
             action BUY, HOLD, WATCH или EXIT; direction целое -100..100; danger целое 0..10;
             confidence целое 0..100; entry_readiness целое 1..10, где 1 означает «не входить»,
@@ -641,7 +645,7 @@ class DeepSeekPrimaryAnalyst {
             uncertainty одно короткое пояснение главной неопределённости и уверенности;
             evidence массив из 2–4 коротких фактов; risks массив из 1–3 условий, которые опровергнут вывод.
             Все текстовые значения без исключения пиши только на русском языке. Китайские иероглифы запрещены.
-            Если виртуальный счёт DeepSeek не в позиции, EXIT не используй; если он уже в позиции, BUY не используй.
+            Если виртуальный счёт DeepSig не в позиции, EXIT не используй; если он уже в позиции, BUY не используй.
             Если данных недостаточно, выбери WATCH.
         """.trimIndent()
         val response = DeepSeekStructuredClient(http).request(
@@ -704,17 +708,15 @@ class DeepSeekPrimaryAnalyst {
         val microFresh = micro.connected && DeepSeekFreshMarketContext.isFresh(
             micro.updatedAt, now, DeepSeekFreshMarketContext.MICRO_MAX_AGE
         )
-        val appEvaluation = PumpBotEngine.evaluateAppPaper(context, AppPaperStore.state(context))
         val entryFusion = AppLedHybridPolicy.entry(AppLedEntryEvidence(
             aiFresh = true,
             aiAction = modelAction,
             aiDirection = json.optInt("direction"),
             aiConfidence = json.optInt("confidence"),
             aiReadiness = modelEntryReadiness,
-            appReadiness = appEvaluation.readinessScore.coerceAtLeast(0),
-            appBuySignal = appEvaluation.action == "BUY",
-            appSellSignal = appEvaluation.action == StrategyV2.ACTION_SELL ||
-                appEvaluation.action == StrategyV2.ACTION_SELL_HALF,
+            appReadiness = 0,
+            appBuySignal = false,
+            appSellSignal = false,
             hardVeto = snapshot.rapidDrop.active && !snapshot.rapidDrop.recoveryConfirmed,
             microFresh = microFresh,
             pumpBuyerPercent60s = micro.aggressiveBuyPercent60s,
@@ -733,8 +735,7 @@ class DeepSeekPrimaryAnalyst {
         } else 0.0
         val exitFusion = AppLedHybridPolicy.exit(AppLedExitEvidence(
             modelRequestsExit = modelAction == "EXIT",
-            appExitSignal = appEvaluation.action == StrategyV2.ACTION_SELL ||
-                appEvaluation.action == StrategyV2.ACTION_SELL_HALF,
+            appExitSignal = false,
             rapidDropUnrecovered = snapshot.rapidDrop.active && !snapshot.rapidDrop.recoveryConfirmed,
             currentReturnPercent = aiReturn,
             positionAgeMillis = (now - activeBuyAt).coerceAtLeast(0L),
@@ -757,11 +758,10 @@ class DeepSeekPrimaryAnalyst {
             now = now
         )
         val proposedAction = if (aiPaperPositionOpen) {
-            if (exitFusion.emergency || exitFusion.appConfirmedExit ||
-                persistence.confirmIndependentExit
+            if (exitFusion.emergency || persistence.confirmIndependentExit
             ) "EXIT" else "HOLD"
         } else {
-            if (entryFusion.appConfirmedEntry || persistence.confirmIndependentBuy) "BUY" else "WATCH"
+            if (persistence.confirmIndependentBuy) "BUY" else "WATCH"
         }
         val entryReadiness = if (aiPaperPositionOpen) modelEntryReadiness else when {
             persistence.confirmIndependentBuy -> maxOf(9, entryFusion.level)
@@ -784,17 +784,17 @@ class DeepSeekPrimaryAnalyst {
         } else if (!aiPaperPositionOpen && entryFusion.independentDeepSeekSetup &&
             !persistence.confirmIndependentBuy
         ) {
-            "DeepSeek самостоятельно подтвердил вход 1/2; ждём следующую отдельную оценку: ${entryFusion.reason}"
+            "DeepSig самостоятельно подтвердил вход 1/2; ждём следующую отдельную оценку: ${entryFusion.reason}"
         } else if (aiPaperPositionOpen && exitFusion.independentDeepSeekSetup &&
             !persistence.confirmIndependentExit
         ) {
-            "DeepSeek самостоятельно подтвердил риск 1/2; позиция пока удерживается: ${exitFusion.reason}"
+            "DeepSig самостоятельно подтвердил риск 1/2; позиция пока удерживается: ${exitFusion.reason}"
         } else if (!aiPaperPositionOpen && proposedAction != modelAction) {
-            "Связка APP + DeepSeek: ${entryFusion.reason}"
+            "DeepSig ещё не получил два независимых подтверждения: ${entryFusion.reason}"
         } else if (aiPaperPositionOpen && modelAction == "EXIT" && !exitFusion.allowExit) {
-            "Связка APP + DeepSeek удерживает позицию: ${exitFusion.reason}"
+            "DeepSig удерживает позицию: ${exitFusion.reason}"
         } else {
-            json.optString("summary", "DeepSeek не дал пояснение")
+            json.optString("summary", "DeepSig не дал пояснение")
         }
         return DeepSeekPrimaryResult(
             action = action,
@@ -863,19 +863,25 @@ class DeepSeekPrimaryAnalyst {
             .put("proposed_decision", JSONObject(proposal.toString()))
             .put("position_open", positionOpen)
         val system = """
-            Ты второй строгий контролёр сделки PumpSignal. Независимо перепроверь предложенный $proposedAction
-            по тому же свежему рыночному кадру. Сначала проверь live_market_breathing: обычный DeepSeek использует
+            Ты второй строгий контролёр независимого виртуального участника DeepSig. Перепроверь предложенный
+            $proposedAction по тому же свежему рыночному кадру. APP, пользовательские пожелания и ручные пороги
+            не являются подтверждением и не имеют права одобрить или запретить эту сделку. Сначала проверь
+            live_market_breathing: DeepSig использует
             normal_deepseek_score и согласованность 5/15/30/60 минут, а не одиночный instant_score.
-            30-минутная StrategyV2/APP задаёт базовую торговую фазу. Не отклоняй устойчивый внутрисвечный BUY
-            только из-за незакрытой свечи, старого APP late-entry флага или уже начавшегося роста.
+            Закрытая 30-минутная StrategyV2 — только один количественный контекст. Не отклоняй устойчивый
+            внутрисвечный BUY только из-за незакрытой свечи или уже начавшегося роста, но отклоняй погоню за
+            вертикальным расширением без возврата/ретеста и без достаточного остатка движения после расходов.
             Ищи настоящий выдох движения, противоречие spot/futures, слабость BTC/SOL, rapid drop и устаревшие данные.
             Не отклоняй BUY только из-за одиночной минутной слабости Bitcoin: PUMP может запаздывать или временно
             расходиться. Считай BTC запретом лишь при устойчивой слабости нескольких горизонтов вместе с потерей
             покупательского потока/относительной силы самого PUMP.
-            Одобряй BUY, когда APP задаёт готовую или близкую фазу и её подтверждают покупатели и устойчивое
-            5/15-минутное направление. DeepSeek добавляет контекст, но не обнуляет стабильный APP одним ответом.
-            Одобряй EXIT только при подтверждении APP либо согласованном ухудшении 15/30/60 минут вместе со свежими
-            продажами. Одиночный короткий тик, гипотеза о сборе стопов или слабая минута Bitcoin — отказ EXIT.
+            Одобряй BUY только при конкретном сетапе, согласованном 5/15-минутном направлении и подтверждении
+            минимум двумя независимыми группами: исполненный spot/futures поток, CVD, структура цены/ретест,
+            стакан либо относительная сила к рынку. Одобряй EXIT при нарушении гипотезы или согласованном
+            ухудшении 15/30/60 минут вместе со свежими продажами. Само снижение на 2% не является причиной EXIT.
+            Одиночный короткий тик, стенка стакана, гипотеза о сборе стопов или слабая минута Bitcoin — отказ EXIT.
+            Null и просроченные поля не являются положительным доказательством. Confidence — качество имеющихся
+            свидетельств, а не обещанная вероятность прибыли.
             Верни только JSON: approved boolean; summary короткая причина; evidence массив до 3 фактов;
             risks массив до 3 рисков. Все текстовые поля пиши только по-русски, без китайских иероглифов.
         """.trimIndent()

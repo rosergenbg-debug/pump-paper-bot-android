@@ -60,6 +60,23 @@ object PaperExecutionPolicy {
                     "Ждём следующую закрытую свечу."
             )
         }
+        val candidateFill = executionPrice(rawQuote, evaluation.action)
+        if (evaluation.action.equals("BUY", ignoreCase = true) &&
+            evaluation.entryZoneLow > 0.0 && evaluation.entryZoneHigh >= evaluation.entryZoneLow &&
+            candidateFill !in evaluation.entryZoneLow..evaluation.entryZoneHigh
+        ) {
+            return evaluation.copy(
+                price = rawQuote,
+                action = "WAIT",
+                reason = String.format(
+                    java.util.Locale.GERMANY,
+                    "V5 APP не исполнил виртуальный вход: цена €%.8f уже вне зоны €%.8f–€%.8f.",
+                    candidateFill,
+                    evaluation.entryZoneLow,
+                    evaluation.entryZoneHigh
+                )
+            )
+        }
         val chasedPercent = if (evaluation.price > 0.0) {
             (rawQuote / evaluation.price - 1.0) * 100.0
         } else 0.0
@@ -77,6 +94,6 @@ object PaperExecutionPolicy {
                 )
             )
         }
-        return evaluation.copy(price = executionPrice(rawQuote, evaluation.action))
+        return evaluation.copy(price = candidateFill)
     }
 }

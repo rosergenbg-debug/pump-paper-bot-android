@@ -23,14 +23,14 @@ object PumpAlert {
     )
 
     private const val monitorChannelId = "pump_rsi_risk_monitor"
-    private const val signalChannelId = "pump_rsi_risk_signals_v422"
-    private const val rapidDropChannelId = "pump_rapid_drop_v422"
-    private const val eventRadarChannelId = "pump_event_radar_v422"
-    private const val appTradeChannelId = "pump_app_trades_v422"
-    private const val geminiTradeChannelId = "pump_deepseek_trades_v422"
-    private const val geminiExitExperimentChannelId = "pump_deepseek_experiment_v422"
-    private const val positionSupervisorChannelId = "pump_position_supervisor_v422"
-    private const val silentAlertChannelId = "pump_silent_updates_v422"
+    private const val signalChannelId = "pump_rsi_risk_signals_v50"
+    private const val rapidDropChannelId = "pump_rapid_drop_v50"
+    private const val eventRadarChannelId = "pump_event_radar_v50"
+    private const val appTradeChannelId = "pump_app_trades_v50"
+    private const val geminiTradeChannelId = "pump_deepseek_trades_v50"
+    private const val geminiExitExperimentChannelId = "pump_deepseek_experiment_v50"
+    private const val positionSupervisorChannelId = "pump_position_supervisor_v50"
+    private const val silentAlertChannelId = "pump_silent_updates_v50"
     private const val deepSeekCostChannelId = "pump_deepseek_cost_v414"
     private const val monitorNotificationId = 3501
     private const val signalNotificationId = 3502
@@ -189,7 +189,6 @@ object PumpAlert {
 
     fun showSignal(context: Context, snapshot: LiveSnapshot) {
         ensureChannels(context)
-        requireTradeNotificationsAvailable(context)
         val score = snapshot.readinessScore
         val delayed = AlertSchedule.hasDelayedPossible(context)
         val title = when {
@@ -222,6 +221,8 @@ object PumpAlert {
             at = snapshot.lastSync,
             executedTrade = false
         )
+        if (!ResearchModePolicy.userAlertsAllowed(context)) return
+        requireTradeNotificationsAvailable(context)
         val notification = NotificationCompat.Builder(context, signalChannelId)
             .setSmallIcon(R.drawable.ic_launcher)
             .setContentTitle(title)
@@ -250,6 +251,7 @@ object PumpAlert {
 
     fun showRapidDrop(context: Context, snapshot: LiveSnapshot) {
         ensureChannels(context)
+        if (!ResearchModePolicy.userAlertsAllowed(context)) return
         val drop = snapshot.rapidDrop
         if (!drop.active) return
         val title = String.format(
@@ -304,6 +306,7 @@ object PumpAlert {
 
     fun showEventRadar(context: Context, state: EventRadarState, snapshot: LiveSnapshot) {
         ensureChannels(context)
+        if (!ResearchModePolicy.userAlertsAllowed(context)) return
         val event = state.alertCandidate ?: return
         val direction = when {
             event.directionScore >= 20 -> "ВОЗМОЖНОЕ ДАВЛЕНИЕ ВВЕРХ"
@@ -365,6 +368,7 @@ object PumpAlert {
             trade.time,
             executedTrade = true
         )
+        if (!ResearchModePolicy.userAlertsAllowed(context)) return
         if (!VirtualTradeAlertPolicy.shouldNotify(
                 trade.action,
                 PumpBotEngine.snapshot(context).waitMode == "SELL"
@@ -420,6 +424,7 @@ object PumpAlert {
             trade.time,
             executedTrade = true
         )
+        if (!ResearchModePolicy.userAlertsAllowed(context)) return
         if (!VirtualTradeAlertPolicy.shouldNotify(
                 trade.action,
                 PumpBotEngine.snapshot(context).waitMode == "SELL"
@@ -469,6 +474,7 @@ object PumpAlert {
             trade.time,
             executedTrade = true
         )
+        if (!ResearchModePolicy.userAlertsAllowed(context)) return
         if (!VirtualTradeAlertPolicy.shouldNotify(
                 trade.action,
                 PumpBotEngine.snapshot(context).waitMode == "SELL"
@@ -496,6 +502,7 @@ object PumpAlert {
         currentPrice: Double
     ) {
         ensureChannels(context)
+        if (!ResearchModePolicy.userAlertsAllowed(context)) return
         val (channel, id) = when (reminder.source) {
             "APP" -> appTradeChannelId to entryReminderAppId
             "DEEPSEEK" -> geminiTradeChannelId to entryReminderDeepSeekId
@@ -551,6 +558,7 @@ object PumpAlert {
             state.lastSuccess,
             executedTrade = false
         )
+        if (!ResearchModePolicy.userAlertsAllowed(context)) return
         showTradeNotification(
             context,
             signalChannelId,
@@ -567,6 +575,7 @@ object PumpAlert {
 
     fun showPersonalPositionGuard(context: Context, reason: String) {
         ensureChannels(context)
+        if (!ResearchModePolicy.userAlertsAllowed(context)) return
         showTradeNotification(
             context,
             positionSupervisorChannelId,
@@ -580,6 +589,7 @@ object PumpAlert {
 
     fun showPositionSupervision(context: Context, state: PositionSupervisionState) {
         ensureChannels(context)
+        if (!ResearchModePolicy.userAlertsAllowed(context)) return
         requireTradeNotificationsAvailable(context)
         val title = when {
             state.action == "CANCEL_EXIT" -> "ОТМЕНА ВЫХОДА — ПРОДОЛЖАЕМ"
@@ -617,6 +627,7 @@ object PumpAlert {
 
     fun showGeminiPositionAdvisor(context: Context, state: GeminiPositionAdvisorState) {
         ensureChannels(context)
+        if (!ResearchModePolicy.userAlertsAllowed(context)) return
         val sources = state.sources.take(2).joinToString("; ")
         val text = buildString {
             append(GeminiPositionAdvisorPolicy.statusText(state))
@@ -648,9 +659,43 @@ object PumpAlert {
         manager.cancel(geminiPositionAdvisorNotificationId)
     }
 
+    fun silenceUserAlerts(context: Context) {
+        val manager = context.getSystemService(NotificationManager::class.java)
+        listOf(
+            signalNotificationId,
+            rapidDropNotificationId,
+            eventRadarNotificationId,
+            geminiBuyNotificationId,
+            appBuyNotificationId,
+            appSellNotificationId,
+            geminiSellNotificationId,
+            geminiExperimentBuyNotificationId,
+            geminiExperimentSellNotificationId,
+            positionSupervisorNotificationId,
+            personalGuardNotificationId,
+            entryReminderAppId,
+            entryReminderDeepSeekId,
+            entryReminderExperimentId,
+            geminiPositionAdvisorNotificationId,
+            deepSeekActionLevelNotificationId,
+            appSoundTestNotificationId,
+            deepSeekSoundTestNotificationId,
+            experimentSoundTestNotificationId,
+            sergeSoundTestNotificationId
+        ).forEach(manager::cancel)
+        val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            context.getSystemService(VibratorManager::class.java).defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+        }
+        vibrator.cancel()
+    }
+
     enum class SoundTestTarget { APP, DEEPSEEK, EXPERIMENT, SERGE }
 
     fun showSoundTest(context: Context, target: SoundTestTarget) {
+        if (!ResearchModePolicy.soundAllowed(context)) return
         ensureChannels(context)
         requireTradeNotificationsAvailable(context)
         val config = when (target) {
@@ -662,7 +707,7 @@ object PumpAlert {
         val notification = NotificationCompat.Builder(context, config.channelId)
             .setSmallIcon(R.drawable.ic_launcher)
             .setContentTitle(config.title)
-            .setContentText("Проверка выбранной мелодии и отдельного звукового канала V4.22.")
+            .setContentText("Проверка выбранной мелодии и отдельного звукового канала V5.0.")
             .setContentIntent(openAppIntent(context))
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_MAX)
@@ -688,7 +733,10 @@ object PumpAlert {
             "Оценка расходов сегодня: $%.2f (примерно порог €5). Это только уведомление: анализ DeepSeek не остановлен.",
             estimatedCostUsd
         )
-        val notification = NotificationCompat.Builder(context, deepSeekCostChannelId)
+        val notification = NotificationCompat.Builder(
+            context,
+            if (ResearchModePolicy.soundAllowed(context)) deepSeekCostChannelId else silentAlertChannelId
+        )
             .setSmallIcon(R.drawable.ic_launcher)
             .setContentTitle("DeepSeek: расходы превысили примерно €5")
             .setContentText(text)
@@ -720,7 +768,7 @@ object PumpAlert {
             executedTradeAllowed = scheduledSound && AlertSchedule.isExecutedTradeAllowedNow(context),
             executedTrade = executedTrade,
             urgentPersonalExit = alwaysLoud
-        )
+        ) && ResearchModePolicy.soundAllowed(context)
         val notification = NotificationCompat.Builder(context, if (loud) channelId else silentAlertChannelId)
             .setSmallIcon(R.drawable.ic_launcher)
             .setContentTitle(title)
@@ -770,6 +818,7 @@ object PumpAlert {
         context: Context,
         pattern: LongArray = longArrayOf(0, 700, 250, 700, 250, 1100)
     ) {
+        if (!ResearchModePolicy.soundAllowed(context)) return
         val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             context.getSystemService(VibratorManager::class.java).defaultVibrator
         } else {
