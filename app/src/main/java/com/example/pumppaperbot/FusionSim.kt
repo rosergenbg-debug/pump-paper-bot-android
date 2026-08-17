@@ -66,6 +66,75 @@ data class FusionSimPortfolio(
     companion object { const val START_BALANCE = 1000.0 }
 }
 
+data class FusionPriorityPlan(
+    val active: Boolean,
+    val forcePro: Boolean,
+    val intervalMillis: Long,
+    val label: String
+)
+
+data class FusionPriorityMetrics(
+    val markPriceEur: Double,
+    val estimatedExitFeeEur: Double,
+    val netLiquidationValueEur: Double,
+    val netPnlEur: Double,
+    val netPnlPercent: Double,
+    val pullbackFromPeakPercent: Double,
+    val venueFresh: Boolean
+)
+
+/**
+ * V5.2 keeps Fusion supervision completely separate from Serge's manual position while
+ * giving an open Fusion paper position the strongest DeepSig market-analysis cadence.
+ */
+object FusionPriorityPolicy {
+    const val PRIORITY_INTERVAL_MILLIS = 60_000L
+    const val NORMAL_INTERVAL_MILLIS = 120_000L
+
+    fun plan(portfolio: FusionSimPortfolio): FusionPriorityPlan = if (portfolio.inPosition) {
+        FusionPriorityPlan(
+            active = true,
+            forcePro = true,
+            intervalMillis = PRIORITY_INTERVAL_MILLIS,
+            label = "FUSION POSITION • МАКСИМАЛЬНЫЙ КОНТРОЛЬ • DEEPSIG PRO • 1 МИН"
+        )
+    } else {
+        FusionPriorityPlan(
+            active = false,
+            forcePro = false,
+            intervalMillis = NORMAL_INTERVAL_MILLIS,
+            label = "FUSION POSITION • НЕТ"
+        )
+    }
+
+    fun metrics(
+        portfolio: FusionSimPortfolio,
+        markPriceEur: Double,
+        feeRate: Double,
+        venueFresh: Boolean
+    ): FusionPriorityMetrics {
+        val mark = markPriceEur.coerceAtLeast(0.0)
+        val exitFee = if (portfolio.inPosition) {
+            portfolio.pumpAmount * mark * feeRate.coerceIn(0.0, 0.02)
+        } else 0.0
+        val liquidation = portfolio.cashEur + portfolio.pumpAmount * mark - exitFee
+        val pnl = liquidation - FusionSimPortfolio.START_BALANCE
+        val peak = max(portfolio.peakValueEur, FusionSimPortfolio.START_BALANCE)
+        val pullback = if (peak > 0.0) {
+            ((peak - liquidation) / peak * 100.0).coerceAtLeast(0.0)
+        } else 0.0
+        return FusionPriorityMetrics(
+            markPriceEur = mark,
+            estimatedExitFeeEur = exitFee,
+            netLiquidationValueEur = liquidation,
+            netPnlEur = pnl,
+            netPnlPercent = pnl / FusionSimPortfolio.START_BALANCE * 100.0,
+            pullbackFromPeakPercent = pullback,
+            venueFresh = venueFresh
+        )
+    }
+}
+
 internal object FusionSimTrader {
     fun apply(
         current: FusionSimPortfolio,
@@ -172,6 +241,20 @@ object FusionSimStore {
         if (next != current) {
             save(context, next)
             UnifiedResearchLog.record(context, "FUSION_SIM", "OK", next.decisions.last().result)
+            when {
+                !current.inPosition && next.inPosition -> UnifiedResearchLog.record(
+                    context,
+                    "FUSION_PRIORITY",
+                    "START",
+                    "Виртуальный BUY исполнен по ask; включены DeepSig Pro и контроль раз в минуту"
+                )
+                current.inPosition && !next.inPosition -> UnifiedResearchLog.record(
+                    context,
+                    "FUSION_PRIORITY",
+                    "STOP",
+                    "Виртуальный EXIT исполнен по bid; максимальный контроль Fusion отключён"
+                )
+            }
         }
         return next
     }

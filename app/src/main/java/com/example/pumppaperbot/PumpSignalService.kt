@@ -73,7 +73,10 @@ class PumpSignalService : Service() {
         }
         executor.execute {
             val cycleIntervalMillis = nextCycleIntervalMillis()
-            val source = if (cycleIntervalMillis <= PositionSupervisorPolicy.PRO_RECHECK_INTERVAL) {
+            val fusionPriorityAtStart = FusionPriorityPolicy.plan(FusionSimStore.state(this))
+            val source = if (fusionPriorityAtStart.active) {
+                fusionPriorityAtStart.label
+            } else if (cycleIntervalMillis <= PositionSupervisorPolicy.PRO_RECHECK_INTERVAL) {
                 "МОНИТОР 1 МИН • УСИЛЕННАЯ ПОЗИЦИЯ"
             } else {
                 "МОНИТОР 2 МИН"
@@ -160,6 +163,8 @@ class PumpSignalService : Service() {
     }
 
     private fun nextCycleIntervalMillis(): Long {
+        val fusionPriority = FusionPriorityPolicy.plan(FusionSimStore.state(this))
+        if (fusionPriority.active) return fusionPriority.intervalMillis
         val snapshot = PumpBotEngine.snapshot(this)
         if (snapshot.waitMode != "SELL" || snapshot.entryPrice <= 0.0) {
             val level = DeepSeekActionLevelPolicy.fromMarket(

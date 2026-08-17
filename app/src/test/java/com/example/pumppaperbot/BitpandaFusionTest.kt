@@ -53,4 +53,42 @@ class BitpandaFusionTest {
         )
         assertEquals(bought, duplicate)
     }
+
+    @Test fun `open Fusion position enables one minute Pro priority only`() {
+        val inactive = FusionPriorityPolicy.plan(FusionSimPortfolio())
+        assertFalse(inactive.active)
+        assertFalse(inactive.forcePro)
+        assertEquals(120_000L, inactive.intervalMillis)
+
+        val open = FusionSimPortfolio(pumpAmount = 10.0, entryPrice = 1.0, entryCostEur = 10.0)
+        val active = FusionPriorityPolicy.plan(open)
+        assertTrue(active.active)
+        assertTrue(active.forcePro)
+        assertEquals(60_000L, active.intervalMillis)
+        assertTrue(active.label.contains("МАКСИМАЛЬНЫЙ КОНТРОЛЬ"))
+
+        val now = 1_000_000L
+        assertFalse(DeepSeekPrimaryPolicy.shouldRun(
+            DeepSeekPrimaryState(lastAttempt = now - 59_999L), true, false, now,
+            intervalMillis = active.intervalMillis
+        ))
+        assertTrue(DeepSeekPrimaryPolicy.shouldRun(
+            DeepSeekPrimaryState(lastAttempt = now - 60_000L), true, false, now,
+            intervalMillis = active.intervalMillis
+        ))
+    }
+
+    @Test fun `Fusion priority PnL includes hypothetical exit fee and peak pullback`() {
+        val bought = FusionSimTrader.apply(
+            FusionSimPortfolio(), 10L, "BUY", bid = 0.0021, ask = 0.0022,
+            feeRate = 0.0015, reason = "test", now = 100L
+        ).copy(peakValueEur = 1_050.0)
+        val metrics = FusionPriorityPolicy.metrics(
+            bought, markPriceEur = 0.0022, feeRate = 0.0015, venueFresh = true
+        )
+        assertTrue(metrics.estimatedExitFeeEur > 0.0)
+        assertTrue(metrics.netPnlEur < 0.0)
+        assertTrue(metrics.pullbackFromPeakPercent > 4.0)
+        assertTrue(metrics.venueFresh)
+    }
 }
