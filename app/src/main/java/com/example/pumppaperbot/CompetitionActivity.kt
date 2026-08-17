@@ -7,7 +7,6 @@ import android.os.Looper
 import android.view.Gravity
 import android.widget.Button
 import android.widget.LinearLayout
-import android.widget.ScrollView
 import androidx.appcompat.app.AppCompatActivity
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -46,12 +45,11 @@ class CompetitionActivity : AppCompatActivity() {
             setOnClickListener { finish() }
         }
         root.addView(back, LinearLayout.LayoutParams(-1, dp(44)))
-        val chartColumn = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         repeat(5) {
             val chart = CompetitionChartView(this)
             charts += chart
-            chartColumn.addView(chart, LinearLayout.LayoutParams(-1, dp(220)).apply {
-                topMargin = dp(5)
+            root.addView(chart, LinearLayout.LayoutParams(-1, 0, 1f).apply {
+                topMargin = dp(3)
             })
         }
         charts.forEach { source ->
@@ -59,7 +57,6 @@ class CompetitionActivity : AppCompatActivity() {
                 charts.filterNot { it === source }.forEach { it.setSynchronizedOffset(offset) }
             }
         }
-        root.addView(ScrollView(this).apply { addView(chartColumn) }, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
         render()
         loadSixMonths()
