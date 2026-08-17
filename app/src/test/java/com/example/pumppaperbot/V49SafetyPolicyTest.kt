@@ -53,7 +53,7 @@ class V49SafetyPolicyTest {
         assertEquals("BUY", PaperExecutionPolicy.prepareAppEvaluation(evaluation, 100.0, now).action)
         val outside = PaperExecutionPolicy.prepareAppEvaluation(evaluation, 101.2, now)
         assertEquals("WAIT", outside.action)
-        assertTrue(outside.reason.contains("зоны входа"))
+        assertTrue(outside.reason.contains("вне зоны"))
     }
 
     @Test fun `old DeepSeek trade recommendation is neutralized`() {

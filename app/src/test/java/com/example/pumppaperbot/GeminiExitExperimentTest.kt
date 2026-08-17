@@ -244,7 +244,7 @@ class GeminiExitExperimentTest {
 
         assertFalse(result.state.portfolio.inPosition)
         assertEquals(null, result.executedTrade)
-        assertTrue(result.state.lastReason.contains("сигнал уже использовался"))
+        assertTrue(result.state.lastReason.contains("кадр уже использовался"))
     }
 
     @Test fun `experiment waits thirty minutes after an exit before reentry`() {
