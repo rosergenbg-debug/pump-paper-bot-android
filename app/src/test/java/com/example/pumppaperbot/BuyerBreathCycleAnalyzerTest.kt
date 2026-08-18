@@ -1,6 +1,7 @@
 package com.example.pumppaperbot
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -65,6 +66,51 @@ class BuyerBreathCycleAnalyzerTest {
 
         assertEquals(BuyerBreathPhase.SHOCK, result.phase)
         assertTrue(result.actionHint.contains("аварийная", ignoreCase = true))
+    }
+
+    @Test fun `quiet phase keeps reference arc waiting at zero`() {
+        val timing = BuyerBreathTimingPolicy.estimate(BuyerBreathPhase.QUIET, 1_373)
+
+        assertFalse(timing.active)
+        assertTrue(timing.forecastReliable)
+        assertEquals(0, timing.progressPercent)
+        assertEquals(35, timing.estimatedTotalMinutes)
+    }
+
+    @Test fun `expansion receives adaptive elapsed time and peak window`() {
+        val timing = BuyerBreathTimingPolicy.estimate(BuyerBreathPhase.EXPANSION, 7)
+
+        assertTrue(timing.active)
+        assertTrue(timing.forecastReliable)
+        assertEquals(7, timing.elapsedMinutes)
+        assertTrue(timing.estimatedTotalMinutes in 20..65)
+        assertTrue(timing.estimatedFlowPeakMinute in 7..25)
+        assertEquals(3, timing.nextPhaseMinMinutes ?: -1)
+        assertEquals(12, timing.nextPhaseMaxMinutes ?: -1)
+    }
+
+    @Test fun `exhaustion is placed on descending side of arc`() {
+        val timing = BuyerBreathTimingPolicy.estimate(BuyerBreathPhase.EXHAUSTION, 12)
+
+        assertTrue(timing.progressPercent >= 62)
+        assertTrue(timing.elapsedMinutes < timing.estimatedTotalMinutes)
+        assertTrue(timing.status.contains("Нисходящая"))
+    }
+
+    @Test fun `seller takeover closes arc without inventing another phase timer`() {
+        val timing = BuyerBreathTimingPolicy.estimate(BuyerBreathPhase.SELLER_TAKEOVER, 15)
+
+        assertTrue(timing.progressPercent >= 85)
+        assertTrue(timing.nextPhaseMinMinutes == null)
+        assertTrue(timing.status.contains("завершена"))
+    }
+
+    @Test fun `shock disables ordinary timing forecast`() {
+        val timing = BuyerBreathTimingPolicy.estimate(BuyerBreathPhase.SHOCK, 2)
+
+        assertTrue(timing.active)
+        assertFalse(timing.forecastReliable)
+        assertTrue(timing.status.contains("Шоковый"))
     }
 
     private fun analyze(samples: List<LiveBreathingSample>): BuyerBreathSnapshot {

@@ -47,6 +47,7 @@ V5 has one persistent master switch for user signal notifications, sound and vib
 - V5.2 treats an open `DEEPSIG FUSION` paper position as the highest-priority virtual research position. It forces the primary DeepSig and its trade verification to Pro, targets a one-minute foreground cycle, supplies Fusion entry/bid/ask/spread/fees/net PnL/peak/pullback to the model, and continues supervision even if the main DeepSig paper position has already closed. It remains financially and logically separate from Serge's manual position; no real Fusion order is implemented.
 - V5.3 makes Serge's manual-position card action-first and explanatory: it must show a deterministic hold/watch/confirmed-exit command, urgency, trend, risk, 30–90 minute scenario and explicit invalidation while preserving the multi-group exit confirmation and hard emergency precedence. The BTC/PUMP relation is a probabilistic regime only; never encode a permanent inverse rule or an automatic BTC-sideways catch-up assumption.
 - V5.4 treats aggressive-buy share as direction, not a price guarantee. The always-visible buyer-breath module must combine buy share, notional activity, price-response efficiency, persistence and fresh book context into quiet/ignition/expansion/mature/exhaustion/seller-takeover/shock phases. High buy share with weak price response is possible absorption. A phase is explanatory context only: ordinary EXIT still needs the existing multi-group confirmation, while shock preserves emergency precedence.
+- V5.5 keeps one graphical destination: the established critical overview. Do not recreate a second buyer-breath screen. The overview must retain its factor bars and 24-hour horizons and add an adaptive time-labelled breath arc. The arc represents buyer-pressure lifecycle, not predicted price; its 20/35/65-minute historical anchors, current phase age and shock-disable state are explanatory only and cannot execute BUY/EXIT.
 
 ## Release invariants
 
@@ -106,7 +107,8 @@ V5 has one persistent master switch for user signal notifications, sound and vib
 - V5.1.1: five simultaneously visible comparison charts without nested vertical scrolling, code 80, current work.
 - V5.2: one-minute DeepSig Pro priority supervision for an open FusionSim position, code 81, completed.
 - V5.3: detailed personal-position adviser with BTC/PUMP regime analysis, code 82, completed.
-- V5.4: always-visible graphical buyer-breath lifecycle and three-month empirical ranges, code 83, current work.
+- V5.4: always-visible graphical buyer-breath lifecycle and three-month empirical ranges, code 83, completed.
+- V5.5: integrated critical overview with adaptive buyer-breath time arc and no duplicate screen, code 84, current work.
 
 ## Accumulated next-release backlog
 
