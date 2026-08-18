@@ -68,6 +68,31 @@
             android:textStyle="bold" />
 
         <TextView
+            android:id="@+id/tvBuyerBreathSummary"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="7dp"
+            android:background="#161B22"
+            android:lineSpacingExtra="2dp"
+            android:minHeight="106dp"
+            android:padding="11dp"
+            android:text="ДЫХАНИЕ РЫНКА • ждём живой поток"
+            android:textColor="#C9D1D9"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/btnBuyerBreath"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:layout_marginTop="6dp"
+            android:backgroundTint="#0F6B78"
+            android:text="ОТКРЫТЬ ГРАФИК • ВДОХ | РАЗГОН | ВЫДЫХАНИЕ"
+            android:textColor="#FFFFFF"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <TextView
             android:id="@+id/tvLatestSignal"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

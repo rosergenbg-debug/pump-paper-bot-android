@@ -131,7 +131,8 @@ object PersonalPositionAdvisorPolicy {
         state: PositionSupervisionState,
         regime: BtcPumpRegimeSnapshot,
         supportPlan: PositionSupportPlan,
-        intervalMinutes: Long
+        intervalMinutes: Long,
+        buyerBreath: BuyerBreathSnapshot = BuyerBreathSnapshot()
     ): PersonalAdvisorView {
         val hasAnswer = state.lastSuccess > 0L
         val severity = when {
@@ -191,6 +192,12 @@ object PersonalPositionAdvisorPolicy {
                 append("\nBITCOIN: ").append(state.bitcoinStatus)
                 append("\n").append(regime.title).append(" — ").append(regime.explanation)
                 append("\n").append(BtcPumpRegimePolicy.RESEARCH_NOTE)
+                append("\n\nДЫХАНИЕ РЫНКА: ").append(buyerBreath.title)
+                append(" • напор ").append(buyerBreath.pressureScore?.let { if (it >= 0) "+$it" else "$it" } ?: "—")
+                append(" • эффективность ").append(buyerBreath.efficiencyScore?.let { if (it >= 0) "+$it" else "$it" } ?: "—")
+                append(" • поглощение ").append(buyerBreath.absorptionRisk).append("/100")
+                append("\n").append(buyerBreath.actionHint)
+                append("\nСледить: ").append(buyerBreath.watchFor)
             }
         )
     }

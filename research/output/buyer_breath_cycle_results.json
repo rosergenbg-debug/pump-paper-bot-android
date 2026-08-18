@@ -1,0 +1,310 @@
+{
+  "window_utc": {
+    "start": "2026-05-18T00:00:00+00:00",
+    "end": "2026-08-18T00:00:00+00:00"
+  },
+  "bars": 26496,
+  "method": {
+    "interval": "5m closed bars",
+    "aggressive_buy": "taker_buy_quote / quote_volume",
+    "ignition": "5m buy>=55%, 5m volume>=1.20x rolling 7d median, 5m return>=0.04%, prior 30m included buy<=50%",
+    "calm_cycle_end": "two consecutive bars with 15m buy<49.5% and non-positive 15m return; maximum 6h",
+    "shock_exclusion": "absolute PUMP or BTC 5m return in top 0.5%"
+  },
+  "thresholds": {
+    "pump_abs_5m_shock_pct": 1.5475,
+    "btc_abs_5m_shock_pct": 0.56
+  },
+  "episodes": {
+    "all": 729,
+    "calm": 656,
+    "shock_affected": 73,
+    "calm_duration_minutes": {
+      "n": 656,
+      "p25": 20.0,
+      "median": 35.0,
+      "p75": 65.0,
+      "mean": 49.3216,
+      "positive_pct": 100.0
+    },
+    "calm_price_peak_minutes": {
+      "n": 656,
+      "p25": 0.0,
+      "median": 15.0,
+      "p75": 35.0,
+      "mean": 24.1997,
+      "positive_pct": 73.93
+    },
+    "calm_flow_peak_minutes": {
+      "n": 656,
+      "p25": 0.0,
+      "median": 10.0,
+      "p75": 15.0,
+      "mean": 15.7165,
+      "positive_pct": 74.24
+    },
+    "calm_max_return_pct": {
+      "n": 656,
+      "p25": 0.0,
+      "median": 0.3594,
+      "p75": 0.9499,
+      "mean": 0.6755,
+      "positive_pct": 73.93
+    },
+    "calm_end_return_pct": {
+      "n": 656,
+      "p25": -0.5805,
+      "median": -0.2301,
+      "p75": 0.2452,
+      "mean": -0.1053,
+      "positive_pct": 32.77
+    }
+  },
+  "onset_follow_through_60m": {
+    "events": 1087,
+    "additional_max_return_pct": {
+      "n": 1087,
+      "p25": 0.1122,
+      "median": 0.5448,
+      "p75": 1.1601,
+      "mean": 0.8196,
+      "positive_pct": 79.39
+    },
+    "minutes_to_price_peak": {
+      "n": 1087,
+      "p25": 5.0,
+      "median": 25.0,
+      "p75": 50.0,
+      "mean": 26.6789,
+      "positive_pct": 79.39
+    },
+    "return_at_60m_pct": {
+      "n": 1087,
+      "p25": -0.7926,
+      "median": -0.042,
+      "p75": 0.7933,
+      "mean": 0.014,
+      "positive_pct": 47.65
+    },
+    "by_month": {
+      "2026-05": {
+        "events": 163,
+        "additional_max_return_pct": {
+          "n": 163,
+          "p25": 0.1171,
+          "median": 0.4487,
+          "p75": 0.914,
+          "mean": 0.6466,
+          "positive_pct": 81.6
+        },
+        "minutes_to_price_peak": {
+          "n": 163,
+          "p25": 5.0,
+          "median": 25.0,
+          "p75": 50.0,
+          "mean": 27.9141,
+          "positive_pct": 81.6
+        },
+        "return_at_60m_pct": {
+          "n": 163,
+          "p25": -0.5658,
+          "median": 0.0609,
+          "p75": 0.5899,
+          "mean": 0.0502,
+          "positive_pct": 51.53
+        }
+      },
+      "2026-06": {
+        "events": 366,
+        "additional_max_return_pct": {
+          "n": 366,
+          "p25": 0.0674,
+          "median": 0.5546,
+          "p75": 1.2335,
+          "mean": 0.8546,
+          "positive_pct": 77.87
+        },
+        "minutes_to_price_peak": {
+          "n": 366,
+          "p25": 5.0,
+          "median": 20.0,
+          "p75": 50.0,
+          "mean": 26.5027,
+          "positive_pct": 77.87
+        },
+        "return_at_60m_pct": {
+          "n": 366,
+          "p25": -0.9042,
+          "median": -0.0681,
+          "p75": 0.7928,
+          "mean": -0.0748,
+          "positive_pct": 45.9
+        }
+      },
+      "2026-07": {
+        "events": 367,
+        "additional_max_return_pct": {
+          "n": 367,
+          "p25": 0.0648,
+          "median": 0.5487,
+          "p75": 1.1713,
+          "mean": 0.8103,
+          "positive_pct": 77.11
+        },
+        "minutes_to_price_peak": {
+          "n": 367,
+          "p25": 5.0,
+          "median": 25.0,
+          "p75": 50.0,
+          "mean": 25.9946,
+          "positive_pct": 77.11
+        },
+        "return_at_60m_pct": {
+          "n": 367,
+          "p25": -0.7368,
+          "median": -0.0552,
+          "p75": 0.8026,
+          "mean": 0.045,
+          "positive_pct": 46.32
+        }
+      },
+      "2026-08": {
+        "events": 191,
+        "additional_max_return_pct": {
+          "n": 191,
+          "p25": 0.2096,
+          "median": 0.6768,
+          "p75": 1.3519,
+          "mean": 0.918,
+          "positive_pct": 84.82
+        },
+        "minutes_to_price_peak": {
+          "n": 191,
+          "p25": 7.5,
+          "median": 25.0,
+          "p75": 50.0,
+          "mean": 27.2775,
+          "positive_pct": 84.82
+        },
+        "return_at_60m_pct": {
+          "n": 191,
+          "p25": -0.7659,
+          "median": 0.0346,
+          "p75": 0.9045,
+          "mean": 0.0935,
+          "positive_pct": 50.26
+        }
+      }
+    }
+  },
+  "conditions": {
+    "high_buy_with_price_response": {
+      "observations": 331,
+      "forward_15m": {
+        "n": 331,
+        "p25": -0.4291,
+        "median": -0.0573,
+        "p75": 0.3417,
+        "mean": -0.0183,
+        "positive_pct": 45.32
+      },
+      "forward_30m": {
+        "n": 331,
+        "p25": -0.552,
+        "median": 0.0,
+        "p75": 0.5201,
+        "mean": 0.0309,
+        "positive_pct": 47.43
+      },
+      "forward_60m": {
+        "n": 330,
+        "p25": -0.8462,
+        "median": -0.1221,
+        "p75": 0.7779,
+        "mean": 0.0109,
+        "positive_pct": 45.15
+      }
+    },
+    "high_buy_absorbed": {
+      "observations": 130,
+      "forward_15m": {
+        "n": 130,
+        "p25": -0.3481,
+        "median": 0.0683,
+        "p75": 0.3892,
+        "mean": 0.0581,
+        "positive_pct": 53.85
+      },
+      "forward_30m": {
+        "n": 130,
+        "p25": -0.3729,
+        "median": 0.0,
+        "p75": 0.4554,
+        "mean": 0.05,
+        "positive_pct": 45.38
+      },
+      "forward_60m": {
+        "n": 130,
+        "p25": -0.618,
+        "median": 0.0,
+        "p75": 0.5518,
+        "mean": 0.0299,
+        "positive_pct": 49.23
+      }
+    },
+    "flow_exhaustion": {
+      "observations": 1299,
+      "forward_15m": {
+        "n": 1299,
+        "p25": -0.2724,
+        "median": 0.0576,
+        "p75": 0.3547,
+        "mean": 0.046,
+        "positive_pct": 52.04
+      },
+      "forward_30m": {
+        "n": 1299,
+        "p25": -0.4249,
+        "median": 0.0563,
+        "p75": 0.4911,
+        "mean": 0.0569,
+        "positive_pct": 51.27
+      },
+      "forward_60m": {
+        "n": 1299,
+        "p25": -0.6487,
+        "median": 0.0505,
+        "p75": 0.7308,
+        "mean": 0.0759,
+        "positive_pct": 50.65
+      }
+    },
+    "confirmed_seller_takeover": {
+      "observations": 1179,
+      "forward_15m": {
+        "n": 1179,
+        "p25": -0.3221,
+        "median": 0.0,
+        "p75": 0.3098,
+        "mean": -0.0142,
+        "positive_pct": 47.67
+      },
+      "forward_30m": {
+        "n": 1179,
+        "p25": -0.4439,
+        "median": 0.0,
+        "p75": 0.4773,
+        "mean": 0.0074,
+        "positive_pct": 49.87
+      },
+      "forward_60m": {
+        "n": 1179,
+        "p25": -0.6154,
+        "median": 0.0,
+        "p75": 0.6536,
+        "mean": 0.0307,
+        "positive_pct": 49.45
+      }
+    }
+  }
+}

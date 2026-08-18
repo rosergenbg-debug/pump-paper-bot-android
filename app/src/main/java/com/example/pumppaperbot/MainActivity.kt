@@ -64,6 +64,7 @@ class MainActivity : AppCompatActivity() {
     private var tvDeepSeekPrimary: TextView? = null
     private var tvDeepSeekActionLevel: TextView? = null
     private var tvAlertStatus: TextView? = null
+    private var tvBuyerBreathSummary: TextView? = null
     private var chart: StrategyChartView? = null
     private var manualPositionChart: ManualPositionChartView? = null
     private var btnRisk30: Button? = null
@@ -85,6 +86,7 @@ class MainActivity : AppCompatActivity() {
     private var btnFusionSim: Button? = null
     private var btnCompetition: Button? = null
     private var btnCriticalOverview: Button? = null
+    private var btnBuyerBreath: Button? = null
     private var btnDeepSeekApi: Button? = null
     private var btnGeminiApi: Button? = null
     private var btnBitpandaFusion: Button? = null
@@ -115,6 +117,7 @@ class MainActivity : AppCompatActivity() {
         tvDeepSeekPrimary = findViewById(R.id.tvDeepSeekPrimary)
         tvDeepSeekActionLevel = findViewById(R.id.tvDeepSeekActionLevel)
         tvAlertStatus = findViewById(R.id.tvAlertStatus)
+        tvBuyerBreathSummary = findViewById(R.id.tvBuyerBreathSummary)
         chart = findViewById(R.id.chart)
         manualPositionChart = findViewById(R.id.manualPositionChart)
         btnRisk30 = findViewById(R.id.btnRisk30)
@@ -136,6 +139,7 @@ class MainActivity : AppCompatActivity() {
         btnFusionSim = findViewById(R.id.btnFusionSim)
         btnCompetition = findViewById(R.id.btnCompetition)
         btnCriticalOverview = findViewById(R.id.btnCriticalOverview)
+        btnBuyerBreath = findViewById(R.id.btnBuyerBreath)
         btnDeepSeekApi = findViewById(R.id.btnDeepSeekApi)
         btnGeminiApi = findViewById(R.id.btnGeminiApi)
         btnBitpandaFusion = findViewById(R.id.btnBitpandaFusion)
@@ -196,6 +200,9 @@ class MainActivity : AppCompatActivity() {
         }
         btnCriticalOverview?.setOnClickListener {
             startActivity(Intent(this, CriticalOverviewActivity::class.java))
+        }
+        btnBuyerBreath?.setOnClickListener {
+            startActivity(Intent(this, BuyerBreathActivity::class.java))
         }
         btnDeepSeekApi?.setOnClickListener {
             startActivity(Intent(this, ApiCenterActivity::class.java).putExtra(
@@ -543,6 +550,7 @@ class MainActivity : AppCompatActivity() {
         renderRapidDrop(snapshot)
         renderReadiness(snapshot)
         renderBreathing(snapshot)
+        renderBuyerBreath()
 
         renderStrategyButtons(snapshot.aggressive)
         renderApiButtons()
@@ -638,6 +646,20 @@ class MainActivity : AppCompatActivity() {
                 }
             )
         )
+    }
+
+    private fun renderBuyerBreath() {
+        val cycle = LiveMarketBreathingStore.snapshot(this, System.currentTimeMillis()).buyerBreath
+        tvBuyerBreathSummary?.text = BuyerBreathText.compact(cycle)
+        val colors = when (cycle.phase) {
+            BuyerBreathPhase.IGNITION, BuyerBreathPhase.EXPANSION -> "#D7FBE0" to "#14351F"
+            BuyerBreathPhase.MATURE, BuyerBreathPhase.QUIET -> "#FFF3BF" to "#3A300F"
+            BuyerBreathPhase.EXHAUSTION, BuyerBreathPhase.SELLER_TAKEOVER, BuyerBreathPhase.SHOCK ->
+                "#FFD7D5" to "#3A171A"
+            BuyerBreathPhase.STALE -> "#8B949E" to "#161B22"
+        }
+        tvBuyerBreathSummary?.setTextColor(Color.parseColor(colors.first))
+        tvBuyerBreathSummary?.setBackgroundColor(Color.parseColor(colors.second))
     }
 
     private fun maybeShowEvidenceMemoryPrompt() {
@@ -737,7 +759,13 @@ class MainActivity : AppCompatActivity() {
             confidence = 0,
             exitRiskAdjustment = 0
         )
-        val adviser = PersonalPositionAdvisorPolicy.render(state, regime, supportPlan, intervalMinutes)
+        val adviser = PersonalPositionAdvisorPolicy.render(
+            state,
+            regime,
+            supportPlan,
+            intervalMinutes,
+            LiveMarketBreathingStore.snapshot(this, System.currentTimeMillis()).buyerBreath
+        )
         tvPositionSupervisor?.text = buildString {
             append(adviser.text)
             append("\n\nКОНТРОЛЬ: ${state.model.ifBlank { "DeepSeek ещё не вызывался" }} • до ${intervalMinutes} мин")

@@ -16,7 +16,12 @@ data class LiveBreathingSample(
     val pumpChange60sPercent: Double,
     val bookImbalance: Double?,
     val bitcoinBuyerPercent: Double,
-    val bitcoinChange60sPercent: Double
+    val bitcoinChange60sPercent: Double,
+    val pumpBuyNotional60s: Double = 0.0,
+    val pumpSellNotional60s: Double = 0.0,
+    val pumpTrades60s: Int = 0,
+    val tradeAcceleration: Double = 0.0,
+    val bitcoinPriceUsdt: Double = 0.0
 )
 
 data class LiveBreathingHorizon(
@@ -36,7 +41,8 @@ data class LiveMarketBreathingSnapshot(
     val normalScore: Int? = null,
     val experimentScore: Int? = null,
     val regime: String = "НАКАПЛИВАЕМ ИСТОРИЮ",
-    val horizons: List<LiveBreathingHorizon> = emptyList()
+    val horizons: List<LiveBreathingHorizon> = emptyList(),
+    val buyerBreath: BuyerBreathSnapshot = BuyerBreathSnapshot()
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("updated_at", updatedAt)
@@ -47,6 +53,7 @@ data class LiveMarketBreathingSnapshot(
         .put("experiment_score", experimentScore ?: JSONObject.NULL)
         .put("normal_experiment_gap_max", LiveMarketBreathingAnalyzer.MAX_EXPERIMENT_GAP)
         .put("regime", regime)
+        .put("buyer_breath_cycle", buyerBreath.toJson())
         .put("horizons", JSONArray(horizons.map { horizon ->
             JSONObject()
                 .put("minutes", horizon.minutes)
@@ -103,6 +110,7 @@ object LiveMarketBreathingAnalyzer {
         }
         val historyMinutes = ((latest.at - valid.first().at).coerceAtLeast(0L) / 60_000L)
             .toInt().coerceAtMost(24 * 60)
+        val buyerBreath = BuyerBreathCycleAnalyzer.analyze(valid, horizons, fresh)
         return LiveMarketBreathingSnapshot(
             updatedAt = latest.at,
             fresh = fresh,
@@ -111,7 +119,8 @@ object LiveMarketBreathingAnalyzer {
             normalScore = normal.takeIf { fresh },
             experimentScore = experiment.takeIf { fresh },
             regime = regime,
-            horizons = horizons
+            horizons = horizons,
+            buyerBreath = buyerBreath
         )
     }
 
@@ -186,7 +195,12 @@ object LiveMarketBreathingStore {
             pumpChange60sPercent = micro.priceChange60sPercent,
             bookImbalance = micro.topBookImbalance,
             bitcoinBuyerPercent = micro.bitcoinAggressiveBuyPercent60s,
-            bitcoinChange60sPercent = micro.bitcoinPriceChange60sPercent
+            bitcoinChange60sPercent = micro.bitcoinPriceChange60sPercent,
+            pumpBuyNotional60s = micro.buyNotional60s,
+            pumpSellNotional60s = micro.sellNotional60s,
+            pumpTrades60s = micro.trades60s,
+            tradeAcceleration = micro.tradeAcceleration,
+            bitcoinPriceUsdt = micro.bitcoinPriceUsdt
         )
         samples.addLast(sample)
         trim(sample.at)
@@ -198,14 +212,19 @@ object LiveMarketBreathingStore {
             }
             val newFile = !file.exists() || file.length() == 0L
             file.appendText(buildString {
-                if (newFile) append("observed_at_ms,price_usdt,pump_buy_pct,pump_change_60s_pct,book_imbalance,btc_buy_pct,btc_change_60s_pct\n")
+                if (newFile) append("observed_at_ms,price_usdt,pump_buy_pct,pump_change_60s_pct,book_imbalance,btc_buy_pct,btc_change_60s_pct,pump_buy_notional_60s,pump_sell_notional_60s,pump_trades_60s,trade_acceleration,btc_price_usdt\n")
                 append(sample.at).append(',')
                 append(number(sample.priceUsdt)).append(',')
                 append(number(sample.pumpBuyerPercent)).append(',')
                 append(number(sample.pumpChange60sPercent)).append(',')
                 append(sample.bookImbalance?.let(::number).orEmpty()).append(',')
                 append(number(sample.bitcoinBuyerPercent)).append(',')
-                append(number(sample.bitcoinChange60sPercent)).append('\n')
+                append(number(sample.bitcoinChange60sPercent)).append(',')
+                append(number(sample.pumpBuyNotional60s)).append(',')
+                append(number(sample.pumpSellNotional60s)).append(',')
+                append(sample.pumpTrades60s).append(',')
+                append(number(sample.tradeAcceleration)).append(',')
+                append(number(sample.bitcoinPriceUsdt)).append('\n')
             }, Charsets.UTF_8)
         }
     }
@@ -252,7 +271,12 @@ object LiveMarketBreathingStore {
             pumpChange60sPercent = values[3].toDoubleOrNull() ?: return null,
             bookImbalance = values[4].toDoubleOrNull(),
             bitcoinBuyerPercent = values[5].toDoubleOrNull() ?: return null,
-            bitcoinChange60sPercent = values[6].toDoubleOrNull() ?: return null
+            bitcoinChange60sPercent = values[6].toDoubleOrNull() ?: return null,
+            pumpBuyNotional60s = values.getOrNull(7)?.toDoubleOrNull() ?: 0.0,
+            pumpSellNotional60s = values.getOrNull(8)?.toDoubleOrNull() ?: 0.0,
+            pumpTrades60s = values.getOrNull(9)?.toIntOrNull() ?: 0,
+            tradeAcceleration = values.getOrNull(10)?.toDoubleOrNull() ?: 0.0,
+            bitcoinPriceUsdt = values.getOrNull(11)?.toDoubleOrNull() ?: 0.0
         )
     }
 
