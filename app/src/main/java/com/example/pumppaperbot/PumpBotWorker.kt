@@ -41,62 +41,103 @@ class PumpBotWorker(
             val marketSnapshot = PumpBotEngine.snapshot(applicationContext)
             val evidenceNow = System.currentTimeMillis()
             PaperExecutionPolicy.freshLivePrice(marketSnapshot, evidenceNow)?.let { freshPrice ->
-                DeepSeekEvidenceMemory.updateOutcomes(applicationContext, freshPrice, evidenceNow)
+                CycleStageGuard.run(applicationContext, "EVIDENCE_OUTCOMES", { Unit }) {
+                    DeepSeekEvidenceMemory.updateOutcomes(applicationContext, freshPrice, evidenceNow)
+                }
             }
-            runCatching { pumpEcosystem.sync(applicationContext) }
-            BitpandaFusionClient().sync(applicationContext)
-            val eventState = eventRadar.sync(applicationContext)
-            val personalGuard = PersonalPositionGuardStore.sync(applicationContext)
-            FusionSimStore.activate(
-                applicationContext,
-                DeepSeekPrimaryStore.state(applicationContext).lastSuccess
-            )
-            DeepSeekTradeOwnership.activate(
-                applicationContext,
-                DeepSeekPrimaryStore.state(applicationContext).lastSuccess
-            )
-            val deepSeek = DeepSeekPrimaryAnalyst().sync(
-                applicationContext,
-                force = forcePositionPro || forcePrimaryDeepSeek
-            )
-            PositionSupervisorClient().sync(
-                applicationContext,
-                forceCritical = forcePositionPro || personalGuard.forceCriticalAi
-            )
-            GeminiPositionAdvisorClient().sync(
-                applicationContext,
-                forceCritical = forcePositionPro || personalGuard.forceCriticalAi
-            )
-            GeminiPaperStore.markDataReady(
-                applicationContext,
-                source,
-                startedAt
-            )
+            CycleStageGuard.run(applicationContext, "PUMP_ECOSYSTEM", {
+                PumpEcosystemStore.state(applicationContext)
+            }) { pumpEcosystem.sync(applicationContext) }
+            CycleStageGuard.run(applicationContext, "BITPANDA_FUSION", {
+                BitpandaFusionStore.state(applicationContext)
+            }) { BitpandaFusionClient().sync(applicationContext) }
+            val eventState = CycleStageGuard.run(applicationContext, "EVENT_RADAR", {
+                EventRadarStore.state(applicationContext)
+            }) { eventRadar.sync(applicationContext) }
+            val personalGuard = CycleStageGuard.run(applicationContext, "PERSONAL_GUARD", {
+                PersonalPositionGuardOutcome(PersonalPositionGuardStore.state(applicationContext))
+            }) { PersonalPositionGuardStore.sync(applicationContext) }
+            CycleStageGuard.run(applicationContext, "FUSION_ACTIVATION", { Unit }) {
+                FusionSimStore.activate(
+                    applicationContext,
+                    DeepSeekPrimaryStore.state(applicationContext).lastSuccess
+                )
+            }
+            CycleStageGuard.run(applicationContext, "DEEPSIG_OWNERSHIP", { Unit }) {
+                DeepSeekTradeOwnership.activate(
+                    applicationContext,
+                    DeepSeekPrimaryStore.state(applicationContext).lastSuccess
+                )
+            }
+            val deepSeek = CycleStageGuard.run(applicationContext, "DEEPSIG_PRIMARY", {
+                DeepSeekPrimaryStore.state(applicationContext)
+            }) {
+                DeepSeekPrimaryAnalyst().sync(
+                    applicationContext,
+                    force = forcePositionPro || forcePrimaryDeepSeek
+                )
+            }
+            CycleStageGuard.run(applicationContext, "POSITION_SUPERVISOR", {
+                PositionSupervisorStore.state(applicationContext)
+            }) {
+                PositionSupervisorClient().sync(
+                    applicationContext,
+                    forceCritical = forcePositionPro || personalGuard.forceCriticalAi
+                )
+            }
+            CycleStageGuard.run(applicationContext, "GEMINI_POSITION", {
+                GeminiPositionAdvisorStore.state(applicationContext)
+            }) {
+                GeminiPositionAdvisorClient().sync(
+                    applicationContext,
+                    forceCritical = forcePositionPro || personalGuard.forceCriticalAi
+                )
+            }
+            CycleStageGuard.run(applicationContext, "CYCLE_STATUS", { Unit }) {
+                GeminiPaperStore.markDataReady(applicationContext, source, startedAt)
+            }
             val snapshot = PumpBotEngine.snapshot(applicationContext)
-            val appTrade = AppPaperStore.syncWithAlerts(applicationContext)
-            val deepSeekPaper = DeepSeekPaperCoordinator().sync(
-                applicationContext, deepSeek, source
-            )
-            FusionSimStore.sync(applicationContext, deepSeek)
-            val rapidDropAlerted = if (PumpBotEngine.shouldAlertRapidDrop(applicationContext, snapshot)) {
-                PumpAlert.showRapidDrop(applicationContext, snapshot)
-                PumpBotEngine.markRapidDropAlerted(applicationContext, snapshot)
-                true
-            } else false
-            val signalAlerted = if (!rapidDropAlerted && !appTrade.tradeAlerted && PumpBotEngine.shouldAlert(applicationContext, snapshot)) {
-                PumpAlert.showSignal(applicationContext, snapshot)
-                PumpBotEngine.markAlerted(applicationContext, snapshot)
-                true
-            } else false
+            val appTrade = CycleStageGuard.run(applicationContext, "APP_PAPER", {
+                AppPaperSyncResult(AppPaperStore.state(applicationContext), false)
+            }) { AppPaperStore.syncWithAlerts(applicationContext) }
+            val deepSeekPaper = CycleStageGuard.run(applicationContext, "DEEPSIG_PAPER", {
+                DeepSeekPaperOutcome("ошибка модуля изолирована")
+            }) { DeepSeekPaperCoordinator().sync(applicationContext, deepSeek, source) }
+            CycleStageGuard.run(applicationContext, "FUSION_SIM", {
+                FusionSimStore.state(applicationContext)
+            }) { FusionSimStore.sync(applicationContext, deepSeek) }
+            val rapidDropAlerted = CycleStageGuard.run(applicationContext, "RAPID_DROP_ALERT", { false }) {
+                if (PumpBotEngine.shouldAlertRapidDrop(applicationContext, snapshot)) {
+                    PumpAlert.showRapidDrop(applicationContext, snapshot)
+                    PumpBotEngine.markRapidDropAlerted(applicationContext, snapshot)
+                    true
+                } else false
+            }
+            val signalAlerted = CycleStageGuard.run(applicationContext, "SIGNAL_ALERT", { false }) {
+                if (!rapidDropAlerted && !appTrade.tradeAlerted && PumpBotEngine.shouldAlert(applicationContext, snapshot)) {
+                    PumpAlert.showSignal(applicationContext, snapshot)
+                    PumpBotEngine.markAlerted(applicationContext, snapshot)
+                    true
+                } else false
+            }
             if (!rapidDropAlerted && !appTrade.tradeAlerted && !signalAlerted &&
                 EventRadarStore.shouldAlert(applicationContext, eventState)
             ) {
-                PumpAlert.showEventRadar(applicationContext, eventState, snapshot)
-                EventRadarStore.markAlerted(applicationContext, eventState)
+                CycleStageGuard.run(applicationContext, "EVENT_ALERT", { Unit }) {
+                    PumpAlert.showEventRadar(applicationContext, eventState, snapshot)
+                    EventRadarStore.markAlerted(applicationContext, eventState)
+                }
             }
-            EntryAlertReminderStore.flush(applicationContext)
+            CycleStageGuard.run(applicationContext, "ENTRY_REMINDER", { Unit }) {
+                EntryAlertReminderStore.flush(applicationContext)
+            }
             val finishedAt = System.currentTimeMillis()
-            UnifiedResearchLog.captureCycle(applicationContext, source, finishedAt)
+            CycleStageGuard.run(applicationContext, "PERFORMANCE_LEDGER", { Unit }) {
+                ResearchPerformanceLedger.capture(applicationContext)
+            }
+            CycleStageGuard.run(applicationContext, "UNIFIED_LOG", { Unit }) {
+                UnifiedResearchLog.captureCycle(applicationContext, source, finishedAt)
+            }
             GeminiPaperStore.finishCycle(
                 applicationContext,
                 source,

@@ -48,6 +48,9 @@ V5 has one persistent master switch for user signal notifications, sound and vib
 - V5.3 makes Serge's manual-position card action-first and explanatory: it must show a deterministic hold/watch/confirmed-exit command, urgency, trend, risk, 30–90 minute scenario and explicit invalidation while preserving the multi-group exit confirmation and hard emergency precedence. The BTC/PUMP relation is a probabilistic regime only; never encode a permanent inverse rule or an automatic BTC-sideways catch-up assumption.
 - V5.4 treats aggressive-buy share as direction, not a price guarantee. The always-visible buyer-breath module must combine buy share, notional activity, price-response efficiency, persistence and fresh book context into quiet/ignition/expansion/mature/exhaustion/seller-takeover/shock phases. High buy share with weak price response is possible absorption. A phase is explanatory context only: ordinary EXIT still needs the existing multi-group confirmation, while shock preserves emergency precedence.
 - V5.5 keeps one graphical destination: the established critical overview. Do not recreate a second buyer-breath screen. The overview must retain its factor bars and 24-hour horizons and add an adaptive time-labelled breath arc. The arc represents buyer-pressure lifecycle, not predicted price; its 20/35/65-minute historical anchors, current phase age and shock-disable state are explanatory only and cannot execute BUY/EXIT.
+- V5.6 must keep human-facing DeepSig cards action-first. Never expose internal execution wording such as `СДЕЛКА НЕ ЗАПРАШИВАЛАСЬ` without explaining that no BUY/EXIT signal was formed. A low entry score must say `НЕ ВХОДИТЬ`, not `КАНДИДАТ ВХОДА`.
+- Compatible app updates must never make older research history invisible. Strategy epochs may keep separate balances/PnL, but every available trade and decision must remain in the stable append-only performance ledger and the previous epoch must remain exportable. Capture the ledger before an explicit account reset.
+- After the mandatory fresh market sync, optional feeds, AI providers, paper participants, notifications and diagnostic writers are failure-isolated. One optional-stage exception must be logged and must not cancel later independent participants in the same cycle.
 
 ## Release invariants
 
@@ -108,7 +111,8 @@ V5 has one persistent master switch for user signal notifications, sound and vib
 - V5.2: one-minute DeepSig Pro priority supervision for an open FusionSim position, code 81, completed.
 - V5.3: detailed personal-position adviser with BTC/PUMP regime analysis, code 82, completed.
 - V5.4: always-visible graphical buyer-breath lifecycle and three-month empirical ranges, code 83, completed.
-- V5.5: integrated critical overview with adaptive buyer-breath time arc and no duplicate screen, code 84, current work.
+- V5.5: integrated critical overview with adaptive buyer-breath time arc and no duplicate screen, code 84.
+- V5.6: action-first DeepSig card, isolated cycle stages, V4 archive and append-only V4→V5+ performance ledger, code 85, current work.
 
 ## Accumulated next-release backlog
 

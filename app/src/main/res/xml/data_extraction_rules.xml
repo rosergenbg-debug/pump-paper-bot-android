@@ -6,6 +6,7 @@
         <include domain="database" path="." />
         <exclude domain="sharedpref" path="secure_gemini_credentials.xml" />
         <exclude domain="sharedpref" path="secure_deepseek_credentials_v4.xml" />
+        <exclude domain="sharedpref" path="secure_bitpanda_fusion_credentials_v51.xml" />
         <exclude domain="sharedpref" path="PumpEventRadarV3.xml" />
     </cloud-backup>
     <device-transfer>
@@ -14,6 +15,7 @@
         <include domain="database" path="." />
         <exclude domain="sharedpref" path="secure_gemini_credentials.xml" />
         <exclude domain="sharedpref" path="secure_deepseek_credentials_v4.xml" />
+        <exclude domain="sharedpref" path="secure_bitpanda_fusion_credentials_v51.xml" />
         <exclude domain="sharedpref" path="PumpEventRadarV3.xml" />
     </device-transfer>
 </data-extraction-rules>

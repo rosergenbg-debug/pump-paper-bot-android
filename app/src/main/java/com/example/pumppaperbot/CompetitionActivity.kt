@@ -7,6 +7,7 @@ import android.os.Looper
 import android.view.Gravity
 import android.widget.Button
 import android.widget.LinearLayout
+import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -23,6 +24,7 @@ class CompetitionActivity : AppCompatActivity() {
         .readTimeout(35, TimeUnit.SECONDS)
         .build()
     private var historicalCandles: List<PumpCandle> = emptyList()
+    private lateinit var archiveStatus: TextView
     private val refresh = object : Runnable {
         override fun run() {
             render()
@@ -45,6 +47,15 @@ class CompetitionActivity : AppCompatActivity() {
             setOnClickListener { finish() }
         }
         root.addView(back, LinearLayout.LayoutParams(-1, dp(44)))
+        archiveStatus = TextView(this).apply {
+            setTextColor(Color.parseColor("#C9D1D9"))
+            setBackgroundColor(Color.parseColor("#161B22"))
+            setPadding(dp(8), dp(6), dp(8), dp(6))
+            textSize = 11f
+        }
+        root.addView(archiveStatus, LinearLayout.LayoutParams(-1, dp(54)).apply {
+            topMargin = dp(3)
+        })
         repeat(5) {
             val chart = CompetitionChartView(this)
             charts += chart
@@ -79,6 +90,11 @@ class CompetitionActivity : AppCompatActivity() {
     }
 
     private fun render() {
+        val archive = ResearchHistoryArchive.summary(this)
+        val ledger = runCatching { ResearchPerformanceLedger.summary(this) }
+            .getOrDefault(ResearchLedgerSummary(0, 0, 0))
+        archiveStatus.text = archive.compactText() +
+            "\nНЕПРЕРЫВНЫЙ ЖУРНАЛ V4→V5+: ${ledger.trades} сделок, ${ledger.decisions} решений."
         val now = System.currentTimeMillis()
         val snapshot = PumpBotEngine.snapshot(this)
         val price = PaperExecutionPolicy.displayPrice(snapshot, now)

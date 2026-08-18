@@ -1080,6 +1080,7 @@ object GeminiPaperStore {
     }
 
     fun reset(context: Context) {
+        runCatching { ResearchPerformanceLedger.capture(context) }
         GeminiResearchStore.clear(context)
         prefs(context).edit().clear().putBoolean(KEY_ENABLED, true).apply()
     }

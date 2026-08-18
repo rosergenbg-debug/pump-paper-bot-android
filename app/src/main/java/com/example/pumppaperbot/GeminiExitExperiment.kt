@@ -772,6 +772,7 @@ object GeminiExitExperimentStore {
 
     @Synchronized
     fun reset(context: Context) {
+        runCatching { ResearchPerformanceLedger.capture(context) }
         prefs(context).edit().clear().apply()
     }
 

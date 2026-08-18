@@ -260,6 +260,7 @@ object FusionSimStore {
     }
 
     fun reset(context: Context) {
+        runCatching { ResearchPerformanceLedger.capture(context) }
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().commit()
     }
 
