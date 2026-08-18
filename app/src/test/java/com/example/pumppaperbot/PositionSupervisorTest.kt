@@ -30,6 +30,11 @@ class PositionSupervisorTest {
             bookStatus = "продавцы усилились",
             flowStatus = "покупки ослабевают",
             bitcoinStatus = "Bitcoin снижается",
+            btcPumpRegimeTitle = "BTC/PUMP: совместное снижение",
+            btcPumpRegimeExplanation = "Риск повышен, ждём подтверждение продажами",
+            trendStatus = "Нисходящая тенденция усиливается",
+            riskStatus = "Высокий риск подтверждён несколькими группами",
+            nearTermScenario = "Возможен новый минимум в следующие 30–90 минут",
             watchFor = "ускорение продаж",
             promptTokens = 123,
             completionTokens = 45

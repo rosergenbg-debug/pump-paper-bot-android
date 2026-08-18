@@ -29,6 +29,11 @@ data class PositionSupervisionState(
     val bookStatus: String = "Стакан ещё не оценён",
     val flowStatus: String = "Поток сделок ещё не оценён",
     val bitcoinStatus: String = "Bitcoin ещё не оценён",
+    val btcPumpRegimeTitle: String = "BTC/PUMP: накапливаем данные",
+    val btcPumpRegimeExplanation: String = "Решение пока принимается по APP, цене и потоку сделок.",
+    val trendStatus: String = "Тенденция ещё не оценена",
+    val riskStatus: String = "Риск ещё не оценён",
+    val nearTermScenario: String = "Ждём первый сценарий на 30–90 минут",
     val watchFor: String = "Ждём первый анализ",
     val error: String = "",
     val promptTokens: Int = 0,
@@ -61,6 +66,11 @@ data class PositionSupervisionState(
         .put("bookStatus", bookStatus)
         .put("flowStatus", flowStatus)
         .put("bitcoinStatus", bitcoinStatus)
+        .put("btcPumpRegimeTitle", btcPumpRegimeTitle)
+        .put("btcPumpRegimeExplanation", btcPumpRegimeExplanation)
+        .put("trendStatus", trendStatus)
+        .put("riskStatus", riskStatus)
+        .put("nearTermScenario", nearTermScenario)
         .put("watchFor", watchFor)
         .put("error", error)
         .put("promptTokens", promptTokens)
@@ -94,6 +104,20 @@ data class PositionSupervisionState(
             bookStatus = RussianOutputPolicy.visible(json.optString("bookStatus", "Стакан ещё не оценён")),
             flowStatus = RussianOutputPolicy.visible(json.optString("flowStatus", "Поток сделок ещё не оценён")),
             bitcoinStatus = RussianOutputPolicy.visible(json.optString("bitcoinStatus", "Bitcoin ещё не оценён")),
+            btcPumpRegimeTitle = RussianOutputPolicy.visible(
+                json.optString("btcPumpRegimeTitle", "BTC/PUMP: накапливаем данные")
+            ),
+            btcPumpRegimeExplanation = RussianOutputPolicy.visible(
+                json.optString(
+                    "btcPumpRegimeExplanation",
+                    "Решение пока принимается по APP, цене и потоку сделок."
+                )
+            ),
+            trendStatus = RussianOutputPolicy.visible(json.optString("trendStatus", "Тенденция ещё не оценена")),
+            riskStatus = RussianOutputPolicy.visible(json.optString("riskStatus", "Риск ещё не оценён")),
+            nearTermScenario = RussianOutputPolicy.visible(
+                json.optString("nearTermScenario", "Ждём первый сценарий на 30–90 минут")
+            ),
             watchFor = RussianOutputPolicy.visible(json.optString("watchFor", "Ждём первый анализ")),
             error = RussianOutputPolicy.visible(json.optString("error")),
             promptTokens = json.optInt("promptTokens"),
@@ -314,6 +338,11 @@ internal data class SupervisorApiResult(
     val flowStatus: String,
     val bitcoinStatus: String,
     val watchFor: String,
+    val btcPumpRegimeTitle: String = "BTC/PUMP: накапливаем данные",
+    val btcPumpRegimeExplanation: String = "Решение пока принимается по APP, цене и потоку сделок.",
+    val trendStatus: String = "Тенденция ещё не оценена",
+    val riskStatus: String = "Риск ещё не оценён",
+    val nearTermScenario: String = "Ждём первый сценарий на 30–90 минут",
     val promptTokens: Int,
     val completionTokens: Int,
     val repaired: Boolean,
@@ -606,6 +635,11 @@ class PositionSupervisorClient {
                     bookStatus = result.bookStatus,
                     flowStatus = result.flowStatus,
                     bitcoinStatus = result.bitcoinStatus,
+                    btcPumpRegimeTitle = result.btcPumpRegimeTitle,
+                    btcPumpRegimeExplanation = result.btcPumpRegimeExplanation,
+                    trendStatus = result.trendStatus,
+                    riskStatus = result.riskStatus,
+                    nearTermScenario = result.nearTermScenario,
                     watchFor = result.watchFor,
                     error = "",
                     promptTokens = previous.promptTokens + result.promptTokens,
@@ -690,6 +724,20 @@ class PositionSupervisorClient {
         val hourly = GeminiMarketFrame.from(context)
         val ecosystem = PumpEcosystemStore.state(context)
         val breathing = LiveMarketBreathingStore.snapshot(context, now)
+        val micro = MicroImpulseStore.state(context)
+        val btcPumpRegime = BtcPumpRegimePolicy.classify(BtcPumpRegimeInput(
+            pump1hPercent = hourly?.pump1hPercent,
+            pump3hPercent = hourly?.pump3hPercent,
+            pump6hPercent = hourly?.pump6hPercent,
+            btc1hPercent = hourly?.btc1hPercent,
+            btc3hPercent = hourly?.btc3hPercent,
+            btc6hPercent = hourly?.btc6hPercent,
+            pumpBuyerPercent60s = micro.aggressiveBuyPercent60s.takeIf { micro.connected },
+            pumpBuyerPercent5m = micro.aggressiveBuyPercent5m.takeIf { micro.connected },
+            btcBuyerPercent60s = micro.bitcoinAggressiveBuyPercent60s.takeIf { micro.connected },
+            btcChange60sPercent = micro.bitcoinPriceChange60sPercent.takeIf { micro.connected },
+            breathingScore = breathing.normalScore.takeIf { breathing.fresh }
+        ))
         val evidenceKey = EvidenceFeatureKey.from(snapshot, breathing.normalScore, ecosystem)
         val recentNews = JSONArray().apply {
             EventRadarStore.state(context).recent.sortedByDescending { it.publishedAt }.take(8).forEach { event ->
@@ -731,6 +779,7 @@ class PositionSupervisorClient {
             .put("hourly_pump_change_3h_pct", hourly?.pump3hPercent ?: JSONObject.NULL)
             .put("hourly_btc_change_1h_pct", hourly?.btc1hPercent ?: JSONObject.NULL)
             .put("hourly_btc_change_3h_pct", hourly?.btc3hPercent ?: JSONObject.NULL)
+            .put("hourly_btc_change_6h_pct", hourly?.btc6hPercent ?: JSONObject.NULL)
             .put("hourly_sol_change_1h_pct", hourly?.sol1hPercent ?: JSONObject.NULL)
             .put("hourly_sol_change_3h_pct", hourly?.sol3hPercent ?: JSONObject.NULL)
             .put("hourly_spot_taker_buy_pct", hourly?.spotTakerBuyPercent ?: JSONObject.NULL)
@@ -745,6 +794,14 @@ class PositionSupervisorClient {
             .put("local_reason", snapshot.signalReason.take(600))
             .put("recent_untrusted_news", recentNews)
             .put("pump_fun_ecosystem", ecosystem.toPromptJson(now))
+            .put("btc_pump_regime", JSONObject()
+                .put("type", btcPumpRegime.type.name)
+                .put("title", btcPumpRegime.title)
+                .put("explanation", btcPumpRegime.explanation)
+                .put("confidence", btcPumpRegime.confidence)
+                .put("exit_risk_adjustment", btcPumpRegime.exitRiskAdjustment)
+                .put("research_note", BtcPumpRegimePolicy.RESEARCH_NOTE)
+            )
             .put("verified_evidence_memory", DeepSeekEvidenceMemory.promptSummary(context, evidenceKey, now))
             .put("previous_exit_advised", previous.exitAdvised)
             .put("previous_condition_delta", previous.conditionDelta)
@@ -786,10 +843,17 @@ class PositionSupervisorClient {
             pump_fun_ecosystem и verified_evidence_memory — дополнительный фундаментальный и проверенный
             исторический фон. Учитывай возраст/качество, усиливай только promoted_patterns и не позволяй памяти
             либо экосистемному фону самостоятельно вызвать EXIT или отменить свежую опасность позиции.
+            btc_pump_regime построен по текущим данным и исследовательскому фону 4 088 общих часовых наблюдений
+            за 01.03–18.08.2026. В выборке PUMP и BTC чаще двигались в одну сторону в час импульса, а после
+            быстрого 6-часового роста BTC у PUMP чаще наблюдался откат. Устойчивое правило «BTC в боковике —
+            PUMP обязательно догонит» не подтвердилось. Используй это только как вероятностный режим: текущая
+            цена, APP, исполненные сделки и устойчивые 15/30/60 минут важнее исторической связи.
             Верни только JSON: action HOLD, EXIT или CANCEL_EXIT; condition_delta целое от -10 до +10;
             danger_level целое от 0 до 10; summary кратко по-русски; book_status — что сейчас в стакане;
             flow_status — кто давит исполненными сделками; bitcoin_status — помогает или мешает Bitcoin;
-            watch_for — конкретное условие, после которого решение надо пересмотреть.
+            trend_status — направление PUMP и устойчивость тенденции; risk_status — почему риск именно такого
+            уровня; near_term_scenario — наиболее вероятный сценарий на 30–90 минут и альтернативный риск;
+            watch_for — конкретное проверяемое условие, после которого решение надо пересмотреть.
             Все текстовые значения пиши только на русском языке. Китайские иероглифы запрещены.
             condition_delta сравнивает ситуацию с моментом первого EXIT: отрицательное означает ухудшение,
             положительное — улучшение. CANCEL_EXIT допустим только если прежняя причина выхода действительно исчезла.
@@ -813,10 +877,15 @@ class PositionSupervisorClient {
                     json.optString("book_status").isBlank() -> "нет book_status"
                     json.optString("flow_status").isBlank() -> "нет flow_status"
                     json.optString("bitcoin_status").isBlank() -> "нет bitcoin_status"
+                    json.optString("trend_status").isBlank() -> "нет trend_status"
+                    json.optString("risk_status").isBlank() -> "нет risk_status"
+                    json.optString("near_term_scenario").isBlank() -> "нет near_term_scenario"
                     json.optString("watch_for").isBlank() -> "нет watch_for"
-                    listOf("summary", "book_status", "flow_status", "bitcoin_status", "watch_for")
+                    listOf("summary", "book_status", "flow_status", "bitcoin_status", "trend_status",
+                        "risk_status", "near_term_scenario", "watch_for")
                         .firstNotNullOfOrNull { RussianOutputPolicy.validate(json.optString(it)) } != null ->
-                        listOf("summary", "book_status", "flow_status", "bitcoin_status", "watch_for")
+                        listOf("summary", "book_status", "flow_status", "bitcoin_status", "trend_status",
+                            "risk_status", "near_term_scenario", "watch_for")
                             .firstNotNullOfOrNull { RussianOutputPolicy.validate(json.optString(it)) }
                     else -> null
                 }
@@ -841,6 +910,13 @@ class PositionSupervisorClient {
             flowStatus = json.optString("flow_status", "Поток не оценён").take(400),
             bitcoinStatus = json.optString("bitcoin_status", "Bitcoin не оценён").take(400),
             watchFor = json.optString("watch_for", "Ждать следующую проверку").take(400),
+            btcPumpRegimeTitle = btcPumpRegime.title,
+            btcPumpRegimeExplanation = btcPumpRegime.explanation,
+            trendStatus = json.optString("trend_status", "Тенденция ещё не оценена").take(400),
+            riskStatus = json.optString("risk_status", "Риск ещё не оценён").take(400),
+            nearTermScenario = json.optString(
+                "near_term_scenario", "Ждём первый сценарий на 30–90 минут"
+            ).take(600),
             promptTokens = response.promptTokens,
             completionTokens = response.completionTokens,
             repaired = response.repaired,

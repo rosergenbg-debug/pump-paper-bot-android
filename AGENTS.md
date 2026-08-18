@@ -45,6 +45,7 @@ V5 has one persistent master switch for user signal notifications, sound and vib
 - V5.1 adds Bitpanda Fusion strictly as a read-only execution-venue evidence layer and a fourth isolated €1 000 `DEEPSIG FUSION` paper account. Store its key only through Android Keystore, require users to create a Read-only key, never implement Fusion order/cancel/transfer calls, and fail closed when venue data is stale. The unified export must omit secrets and combine the four autonomous agents' decisions/trades in one sanitized log.
 - V5.1.1 fixes the comparison interaction: all five displayed accounts (four autonomous agents plus Serge reference) share the available screen height with equal weights. Do not reintroduce a vertical ScrollView around gesture-handling charts; their horizontal offsets remain synchronized.
 - V5.2 treats an open `DEEPSIG FUSION` paper position as the highest-priority virtual research position. It forces the primary DeepSig and its trade verification to Pro, targets a one-minute foreground cycle, supplies Fusion entry/bid/ask/spread/fees/net PnL/peak/pullback to the model, and continues supervision even if the main DeepSig paper position has already closed. It remains financially and logically separate from Serge's manual position; no real Fusion order is implemented.
+- V5.3 makes Serge's manual-position card action-first and explanatory: it must show a deterministic hold/watch/confirmed-exit command, urgency, trend, risk, 30–90 minute scenario and explicit invalidation while preserving the multi-group exit confirmation and hard emergency precedence. The BTC/PUMP relation is a probabilistic regime only; never encode a permanent inverse rule or an automatic BTC-sideways catch-up assumption.
 
 ## Release invariants
 
@@ -102,7 +103,8 @@ V5 has one persistent master switch for user signal notifications, sound and vib
 - V5.0: causal three-system paper research, analytical candidates, master alert switch default OFF and fresh V5 notification channels, code 78, current work.
 - V5.1: Bitpanda Fusion read-only market evidence, separate DeepSig Fusion paper account and sanitized unified four-agent log, code 79, current work.
 - V5.1.1: five simultaneously visible comparison charts without nested vertical scrolling, code 80, current work.
-- V5.2: one-minute DeepSig Pro priority supervision for an open FusionSim position, code 81, current work.
+- V5.2: one-minute DeepSig Pro priority supervision for an open FusionSim position, code 81, completed.
+- V5.3: detailed personal-position adviser with BTC/PUMP regime analysis, code 82, current work.
 
 ## Accumulated next-release backlog
 
