@@ -104,7 +104,7 @@ V5 has one persistent master switch for user signal notifications, sound and vib
 - V5.1: Bitpanda Fusion read-only market evidence, separate DeepSig Fusion paper account and sanitized unified four-agent log, code 79, current work.
 - V5.1.1: five simultaneously visible comparison charts without nested vertical scrolling, code 80, current work.
 - V5.2: one-minute DeepSig Pro priority supervision for an open FusionSim position, code 81, completed.
-- V5.3: detailed personal-position adviser with BTC/PUMP regime analysis, code 82, current work.
+- V5.3: detailed personal-position adviser with BTC/PUMP regime analysis, code 82, completed.
 
 ## Accumulated next-release backlog
 
