@@ -37,7 +37,7 @@ class PumpSignalService : Service() {
             PumpAlert.monitorId(),
             PumpAlert.monitorNotification(
                 this,
-                "V5: APP, DeepSig и DeepSigX ведут отдельные виртуальные счета; " +
+                "V${BuildConfig.VERSION_NAME}: APP, DeepSig и DeepSigX ведут отдельные виртуальные счета; " +
                     (if (ResearchModePolicy.alertsEnabled(this)) "звонки включены." else "звонки выключены.")
             )
         )
@@ -98,41 +98,82 @@ class PumpSignalService : Service() {
                 val marketSnapshot = PumpBotEngine.snapshot(this)
                 val evidenceNow = System.currentTimeMillis()
                 PaperExecutionPolicy.freshLivePrice(marketSnapshot, evidenceNow)?.let { freshPrice ->
-                    DeepSeekEvidenceMemory.updateOutcomes(this, freshPrice, evidenceNow)
+                    CycleStageGuard.run(this, "EVIDENCE_OUTCOMES", { Unit }) {
+                        DeepSeekEvidenceMemory.updateOutcomes(this, freshPrice, evidenceNow)
+                    }
                 }
-                runCatching { pumpEcosystem.sync(this) }
-                BitpandaFusionClient().sync(this)
-                val eventState = eventRadar.sync(this)
-                val personalGuard = PersonalPositionGuardStore.sync(this)
-                FusionSimStore.activate(this, DeepSeekPrimaryStore.state(this).lastSuccess)
-                DeepSeekTradeOwnership.activate(this, DeepSeekPrimaryStore.state(this).lastSuccess)
-                val deepSeek = DeepSeekPrimaryAnalyst().sync(this)
-                PositionSupervisorClient().sync(this, forceCritical = personalGuard.forceCriticalAi)
-                GeminiPositionAdvisorClient().sync(this, forceCritical = personalGuard.forceCriticalAi)
-                GeminiPaperStore.markDataReady(this, source, startedAt)
+                CycleStageGuard.run(this, "PUMP_ECOSYSTEM", { PumpEcosystemStore.state(this) }) {
+                    pumpEcosystem.sync(this)
+                }
+                CycleStageGuard.run(this, "BITPANDA_FUSION", { BitpandaFusionStore.state(this) }) {
+                    BitpandaFusionClient().sync(this)
+                }
+                val eventState = CycleStageGuard.run(this, "EVENT_RADAR", { EventRadarStore.state(this) }) {
+                    eventRadar.sync(this)
+                }
+                val personalGuard = CycleStageGuard.run(
+                    this, "PERSONAL_GUARD", { PersonalPositionGuardStore.state(this) }
+                ) { PersonalPositionGuardStore.sync(this) }
+                CycleStageGuard.run(this, "FUSION_ACTIVATION", { Unit }) {
+                    FusionSimStore.activate(this, DeepSeekPrimaryStore.state(this).lastSuccess)
+                }
+                CycleStageGuard.run(this, "DEEPSIG_OWNERSHIP", { Unit }) {
+                    DeepSeekTradeOwnership.activate(this, DeepSeekPrimaryStore.state(this).lastSuccess)
+                }
+                val deepSeek = CycleStageGuard.run(
+                    this, "DEEPSIG_PRIMARY", { DeepSeekPrimaryStore.state(this) }
+                ) { DeepSeekPrimaryAnalyst().sync(this) }
+                CycleStageGuard.run(this, "POSITION_SUPERVISOR", { PositionSupervisorStore.state(this) }) {
+                    PositionSupervisorClient().sync(this, forceCritical = personalGuard.forceCriticalAi)
+                }
+                CycleStageGuard.run(this, "GEMINI_POSITION", { GeminiPositionAdvisorStore.state(this) }) {
+                    GeminiPositionAdvisorClient().sync(this, forceCritical = personalGuard.forceCriticalAi)
+                }
+                CycleStageGuard.run(this, "CYCLE_STATUS", { Unit }) {
+                    GeminiPaperStore.markDataReady(this, source, startedAt)
+                }
                 val snapshot = PumpBotEngine.snapshot(this)
-                val appTrade = AppPaperStore.syncWithAlerts(this)
-                val deepSeekPaper = DeepSeekPaperCoordinator().sync(this, deepSeek, source)
-                FusionSimStore.sync(this, deepSeek)
-                val rapidDropAlerted = if (PumpBotEngine.shouldAlertRapidDrop(this, snapshot)) {
-                    PumpAlert.showRapidDrop(this, snapshot)
-                    PumpBotEngine.markRapidDropAlerted(this, snapshot)
-                    true
-                } else false
-                val signalAlerted = if (!rapidDropAlerted && !appTrade.tradeAlerted && PumpBotEngine.shouldAlert(this, snapshot)) {
-                    PumpAlert.showSignal(this, snapshot)
-                    PumpBotEngine.markAlerted(this, snapshot)
-                    true
-                } else false
+                val appTrade = CycleStageGuard.run(
+                    this, "APP_PAPER", { AppPaperSyncResult(AppPaperStore.state(this), false) }
+                ) { AppPaperStore.syncWithAlerts(this) }
+                val deepSeekPaper = CycleStageGuard.run(
+                    this, "DEEPSIG_PAPER", { DeepSeekPaperOutcome("ошибка модуля изолирована") }
+                ) { DeepSeekPaperCoordinator().sync(this, deepSeek, source) }
+                CycleStageGuard.run(this, "FUSION_SIM", { FusionSimStore.state(this) }) {
+                    FusionSimStore.sync(this, deepSeek)
+                }
+                val rapidDropAlerted = CycleStageGuard.run(this, "RAPID_DROP_ALERT", { false }) {
+                    if (PumpBotEngine.shouldAlertRapidDrop(this, snapshot)) {
+                        PumpAlert.showRapidDrop(this, snapshot)
+                        PumpBotEngine.markRapidDropAlerted(this, snapshot)
+                        true
+                    } else false
+                }
+                val signalAlerted = CycleStageGuard.run(this, "SIGNAL_ALERT", { false }) {
+                    if (!rapidDropAlerted && !appTrade.tradeAlerted && PumpBotEngine.shouldAlert(this, snapshot)) {
+                        PumpAlert.showSignal(this, snapshot)
+                        PumpBotEngine.markAlerted(this, snapshot)
+                        true
+                    } else false
+                }
                 if (!rapidDropAlerted && !appTrade.tradeAlerted && !signalAlerted &&
                     EventRadarStore.shouldAlert(this, eventState)
                 ) {
-                    PumpAlert.showEventRadar(this, eventState, snapshot)
-                    EventRadarStore.markAlerted(this, eventState)
+                    CycleStageGuard.run(this, "EVENT_ALERT", { Unit }) {
+                        PumpAlert.showEventRadar(this, eventState, snapshot)
+                        EventRadarStore.markAlerted(this, eventState)
+                    }
                 }
-                EntryAlertReminderStore.flush(this)
+                CycleStageGuard.run(this, "ENTRY_REMINDER", { Unit }) {
+                    EntryAlertReminderStore.flush(this)
+                }
                 val finishedAt = System.currentTimeMillis()
-                UnifiedResearchLog.captureCycle(this, source, finishedAt)
+                CycleStageGuard.run(this, "PERFORMANCE_LEDGER", { Unit }) {
+                    ResearchPerformanceLedger.capture(this)
+                }
+                CycleStageGuard.run(this, "UNIFIED_LOG", { Unit }) {
+                    UnifiedResearchLog.captureCycle(this, source, finishedAt)
+                }
                 GeminiPaperStore.finishCycle(
                     this,
                     source,

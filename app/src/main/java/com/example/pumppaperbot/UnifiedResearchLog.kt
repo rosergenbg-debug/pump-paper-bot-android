@@ -67,6 +67,9 @@ object UnifiedResearchLog {
         val fusion = BitpandaFusionStore.state(context)
         val fusionSim = FusionSimStore.state(context)
         val deepSeek = DeepSeekPrimaryStore.state(context)
+        val legacyArchive = ResearchHistoryArchive.exportJson(context)
+        val performanceLedger = runCatching { ResearchPerformanceLedger.exportJson(context) }
+            .getOrElse { JSONObject().put("error", "performance ledger unavailable") }
         val journal = JSONArray()
         File(context.filesDir, DIRECTORY).listFiles()
             ?.filter { it.name.endsWith(".ndjson") }
@@ -78,7 +81,7 @@ object UnifiedResearchLog {
                 } }
             }
         val report = JSONObject()
-            .put("schema", "pump-signal-unified-log-v52")
+            .put("schema", "pump-signal-unified-log-v56")
             .put("appVersion", BuildConfig.VERSION_NAME)
             .put("generatedAt", now)
             .put("safety", JSONObject()
@@ -93,6 +96,8 @@ object UnifiedResearchLog {
                 .put("intervalSeconds", FusionPriorityPolicy.plan(fusionSim).intervalMillis / 1000L)
                 .put("separateFromSerge", true))
             .put("deepSeekAnalysis", deepSeek.toJson())
+            .put("legacyV4Archive", legacyArchive)
+            .put("performanceLedger", performanceLedger)
             .put("accounts", JSONObject()
                 .put("APP", appJson(app))
                 .put("DeepSig", geminiJson(deepSig.portfolio))

@@ -94,6 +94,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        runCatching { ResearchHistoryArchive.ensureCaptured(this) }
+        runCatching { ResearchPerformanceLedger.capture(this) }
         setContentView(R.layout.activity_main)
         findViewById<TextView>(R.id.tvAppTitle).text = "PUMP Сигнал V${BuildConfig.VERSION_NAME}"
 
@@ -275,6 +277,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun resetAll() {
+        runCatching { ResearchPerformanceLedger.capture(this) }
         stopService(Intent(this, PumpSignalService::class.java))
         WorkManager.getInstance(this).cancelUniqueWork(PumpBotEngine.uniqueWorkName)
         PumpBotEngine.reset(this)
@@ -788,15 +791,14 @@ class MainActivity : AppCompatActivity() {
         if (ResearchModePolicy.ENABLED) {
             val inPosition = GeminiPaperStore.state(this).portfolio.inPosition
             val fresh = DeepSeekPrimaryPolicy.isFreshSignal(primary, now)
-            val score = if (inPosition) primary.danger.coerceIn(0, 10) else primary.entryReadiness.coerceIn(1, 10)
-            val phase = if (inPosition) "РИСК ВИРТУАЛЬНОЙ ПОЗИЦИИ" else "КАНДИДАТ ВХОДА"
-            val state = if (!fresh) "РЕЗУЛЬТАТ УСТАРЕЛ" else "${primary.action} • ${primary.executionStatus}"
-            tvDeepSeekActionLevel?.text = "DEEPSIG • $phase\n$score/10 • $state\nнезависимый paper‑тест, не рекомендация"
-            val color = when {
-                !fresh -> "#8B949E" to "#161B22"
-                inPosition && score >= 8 -> "#FF7B72" to "#3A171A"
-                !inPosition && score >= 8 -> "#7EE787" to "#15351F"
-                else -> "#FFD866" to "#3A300F"
+            val card = DeepSeekResearchCardPolicy.render(primary, inPosition, fresh)
+            tvDeepSeekActionLevel?.text = card.text
+            val color = when (card.tone) {
+                DeepSeekResearchCardTone.SAFE -> "#FFB4AB" to "#3A171A"
+                DeepSeekResearchCardTone.WATCH -> "#FFD866" to "#3A300F"
+                DeepSeekResearchCardTone.READY -> "#7EE787" to "#15351F"
+                DeepSeekResearchCardTone.DANGER -> "#FFFFFF" to "#5A171C"
+                DeepSeekResearchCardTone.STALE -> "#8B949E" to "#161B22"
             }
             tvDeepSeekActionLevel?.setTextColor(Color.parseColor(color.first))
             tvDeepSeekActionLevel?.setBackgroundColor(Color.parseColor(color.second))
