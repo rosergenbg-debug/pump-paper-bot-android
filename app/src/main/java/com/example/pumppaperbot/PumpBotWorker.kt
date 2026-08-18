@@ -55,7 +55,7 @@ class PumpBotWorker(
                 EventRadarStore.state(applicationContext)
             }) { eventRadar.sync(applicationContext) }
             val personalGuard = CycleStageGuard.run(applicationContext, "PERSONAL_GUARD", {
-                PersonalPositionGuardStore.state(applicationContext)
+                PersonalPositionGuardOutcome(PersonalPositionGuardStore.state(applicationContext))
             }) { PersonalPositionGuardStore.sync(applicationContext) }
             CycleStageGuard.run(applicationContext, "FUSION_ACTIVATION", { Unit }) {
                 FusionSimStore.activate(

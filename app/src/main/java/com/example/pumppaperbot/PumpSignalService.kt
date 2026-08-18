@@ -112,7 +112,9 @@ class PumpSignalService : Service() {
                     eventRadar.sync(this)
                 }
                 val personalGuard = CycleStageGuard.run(
-                    this, "PERSONAL_GUARD", { PersonalPositionGuardStore.state(this) }
+                    this, "PERSONAL_GUARD", {
+                        PersonalPositionGuardOutcome(PersonalPositionGuardStore.state(this))
+                    }
                 ) { PersonalPositionGuardStore.sync(this) }
                 CycleStageGuard.run(this, "FUSION_ACTIVATION", { Unit }) {
                     FusionSimStore.activate(this, DeepSeekPrimaryStore.state(this).lastSuccess)
