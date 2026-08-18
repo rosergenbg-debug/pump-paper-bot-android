@@ -716,6 +716,7 @@ class MainActivity : AppCompatActivity() {
         if (snapshot.waitMode != "SELL") {
             tvPositionSupervisor?.text = "DEEPSEEK • ожидает нажатия «Я купил»"
             tvPositionSupervisor?.setTextColor(Color.parseColor("#8B949E"))
+            tvPositionSupervisor?.setBackgroundColor(Color.parseColor("#201522"))
             return
         }
         val state = PositionSupervisorStore.state(this)
@@ -729,20 +730,28 @@ class MainActivity : AppCompatActivity() {
             now = System.currentTimeMillis()
         )
         val intervalMinutes = supportPlan.intervalMillis / TimeUnit.MINUTES.toMillis(1)
+        val regime = BtcPumpRegimeSnapshot(
+            type = BtcPumpRegimeType.MIXED_OR_SIDEWAYS,
+            title = state.btcPumpRegimeTitle,
+            explanation = state.btcPumpRegimeExplanation,
+            confidence = 0,
+            exitRiskAdjustment = 0
+        )
+        val adviser = PersonalPositionAdvisorPolicy.render(state, regime, supportPlan, intervalMinutes)
         tvPositionSupervisor?.text = buildString {
-            append(PositionSupervisorPolicy.statusText(state))
-            append("\n${state.model.ifBlank { "DeepSeek ещё не вызывался" }} • контроль до ${intervalMinutes} мин")
+            append(adviser.text)
+            append("\n\nКОНТРОЛЬ: ${state.model.ifBlank { "DeepSeek ещё не вызывался" }} • до ${intervalMinutes} мин")
             if (state.lastSuccess > 0L) append(" • ответ ${PumpBotEngine.formatTime(state.lastSuccess)}")
-            append("\n\n${GeminiPositionAdvisorPolicy.statusText(gemini)}")
+            append("\n\nВТОРОЕ МНЕНИЕ: ${GeminiPositionAdvisorPolicy.statusText(gemini)}")
             append("\n${gemini.model.ifBlank { "Gemini ещё не вызывался" }}")
         }
-        val color = when {
-            gemini.action == "EXIT" -> "#FF7B72"
-            state.action == "CANCEL_EXIT" -> "#7EE787"
-            state.exitAdvised -> "#FF7B72"
-            else -> "#D2A8FF"
+        val colors = when (adviser.severity) {
+            PersonalAdvisorSeverity.EXIT -> "#FFFFFF" to "#5A171C"
+            PersonalAdvisorSeverity.WATCH -> "#FFF3BF" to "#493A0F"
+            PersonalAdvisorSeverity.CALM -> "#D7FBE0" to "#14351F"
         }
-        tvPositionSupervisor?.setTextColor(Color.parseColor(color))
+        tvPositionSupervisor?.setTextColor(Color.parseColor(colors.first))
+        tvPositionSupervisor?.setBackgroundColor(Color.parseColor(colors.second))
     }
 
     private fun renderDeepSeekActionLevel(
