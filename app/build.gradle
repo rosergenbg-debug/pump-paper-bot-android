@@ -21,8 +21,8 @@ android {
         applicationId "com.example.pumppaperbot.v8"
         minSdk 24
         targetSdk 34
-        versionCode 82
-        versionName "5.3"
+        versionCode 83
+        versionName "5.4"
     }
 
     signingConfigs {

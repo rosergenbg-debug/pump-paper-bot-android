@@ -46,6 +46,7 @@ V5 has one persistent master switch for user signal notifications, sound and vib
 - V5.1.1 fixes the comparison interaction: all five displayed accounts (four autonomous agents plus Serge reference) share the available screen height with equal weights. Do not reintroduce a vertical ScrollView around gesture-handling charts; their horizontal offsets remain synchronized.
 - V5.2 treats an open `DEEPSIG FUSION` paper position as the highest-priority virtual research position. It forces the primary DeepSig and its trade verification to Pro, targets a one-minute foreground cycle, supplies Fusion entry/bid/ask/spread/fees/net PnL/peak/pullback to the model, and continues supervision even if the main DeepSig paper position has already closed. It remains financially and logically separate from Serge's manual position; no real Fusion order is implemented.
 - V5.3 makes Serge's manual-position card action-first and explanatory: it must show a deterministic hold/watch/confirmed-exit command, urgency, trend, risk, 30–90 minute scenario and explicit invalidation while preserving the multi-group exit confirmation and hard emergency precedence. The BTC/PUMP relation is a probabilistic regime only; never encode a permanent inverse rule or an automatic BTC-sideways catch-up assumption.
+- V5.4 treats aggressive-buy share as direction, not a price guarantee. The always-visible buyer-breath module must combine buy share, notional activity, price-response efficiency, persistence and fresh book context into quiet/ignition/expansion/mature/exhaustion/seller-takeover/shock phases. High buy share with weak price response is possible absorption. A phase is explanatory context only: ordinary EXIT still needs the existing multi-group confirmation, while shock preserves emergency precedence.
 
 ## Release invariants
 
@@ -105,6 +106,7 @@ V5 has one persistent master switch for user signal notifications, sound and vib
 - V5.1.1: five simultaneously visible comparison charts without nested vertical scrolling, code 80, current work.
 - V5.2: one-minute DeepSig Pro priority supervision for an open FusionSim position, code 81, completed.
 - V5.3: detailed personal-position adviser with BTC/PUMP regime analysis, code 82, completed.
+- V5.4: always-visible graphical buyer-breath lifecycle and three-month empirical ranges, code 83, current work.
 
 ## Accumulated next-release backlog
 
