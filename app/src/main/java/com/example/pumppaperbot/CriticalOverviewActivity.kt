@@ -2,6 +2,7 @@ package com.example.pumppaperbot
 
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.DashPathEffect
 import android.graphics.Paint
 import android.graphics.Path
 import android.os.Bundle
@@ -15,6 +16,7 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import java.util.Locale
 import kotlin.math.max
+import kotlin.math.roundToInt
 
 data class CriticalOverviewHistoryPoint(
     val at: Long,
@@ -29,6 +31,8 @@ class CriticalOverviewActivity : AppCompatActivity() {
     private lateinit var status: TextView
     private lateinit var chart: CriticalOverviewChartView
     private lateinit var breathingChart: MarketBreathingChartView
+    private lateinit var breathCurve: BuyerBreathCurveView
+    private lateinit var breathTiming: TextView
     private lateinit var facts: TextView
     private lateinit var deepSeek: TextView
     private lateinit var cost: TextView
@@ -66,6 +70,22 @@ class CriticalOverviewActivity : AppCompatActivity() {
         ), params(-2, dp(10)))
         breathingChart = MarketBreathingChartView(this)
         content.addView(breathingChart, params(dp(330), dp(6)))
+        content.addView(label(
+            "ЦИКЛ ПОКУПОК • ВРЕМЕННАЯ ДУГА",
+            18,
+            "#F0F6FC",
+            true
+        ), params(-2, dp(10)))
+        content.addView(label(
+            "Дуга показывает не цену, а развитие покупательского напора во времени: начало, пик потока и выдыхание.",
+            12,
+            "#8B949E",
+            false
+        ), params(-2, dp(3)))
+        breathCurve = BuyerBreathCurveView(this)
+        content.addView(breathCurve, params(dp(275), dp(6)))
+        breathTiming = panel(14, true)
+        content.addView(breathTiming, params(-2, dp(6)))
         facts = panel(14, false)
         content.addView(facts, params(-2, dp(8)))
         deepSeek = panel(14, false)
@@ -149,6 +169,8 @@ class CriticalOverviewActivity : AppCompatActivity() {
         while (history.size > 120) history.removeFirst()
         chart.setData(model, history.toList())
         breathingChart.setData(breathing)
+        breathCurve.setData(breathing.buyerBreath)
+        breathTiming.text = BuyerBreathCurveText.describe(breathing.buyerBreath)
 
         facts.text = buildString {
             append("ЧТО ПРОИСХОДИТ СЕЙЧАС\n")
@@ -178,6 +200,7 @@ class CriticalOverviewActivity : AppCompatActivity() {
             append(" • эффективность ${breathing.buyerBreath.efficiencyScore?.let(::signed) ?: "—"}")
             append(" • поглощение ${breathing.buyerBreath.absorptionRisk}/100")
             append("\n${breathing.buyerBreath.actionHint}")
+            append("\nВремя: ${breathing.buyerBreath.timing.status}")
             append("\nНакоплено ${breathing.historyMinutes} мин.; данные старше 24 часов удаляются.")
             if (!breathing.fresh) append("\nВнимание: сглаженное дыхание устарело и не используется DeepSeek.")
             append("\n\nСвежесть: микросделки ${age(micro.updatedAt, now)} сек • 5‑мин данные ${age(impulse.candleTime, now)} сек")
@@ -418,6 +441,187 @@ class MarketBreathingChartView(context: android.content.Context) : View(context)
             }
             y += dp(50f)
         }
+    }
+
+    private fun dp(value: Float) = value * resources.displayMetrics.density
+    private fun sp(value: Float) = value * resources.displayMetrics.scaledDensity
+}
+
+object BuyerBreathCurveText {
+    fun describe(snapshot: BuyerBreathSnapshot): String {
+        val timing = snapshot.timing
+        if (!snapshot.fresh || snapshot.phase == BuyerBreathPhase.STALE) {
+            return "ВРЕМЕННАЯ ДУГА: ждём свежий поток сделок. Старые данные не используются."
+        }
+        if (!timing.forecastReliable) {
+            return "ВРЕМЕННАЯ ДУГА: ${timing.status}\nСначала нужна стабилизация; обычные минуты цикла сейчас ненадёжны."
+        }
+        if (!timing.active) {
+            return "ВРЕМЕННАЯ ДУГА: цикл ещё не начался.\nОриентир спокойного цикла: 20–65 мин, медиана 35 мин."
+        }
+        return buildString {
+            append("СЕЙЧАС: ${snapshot.title} • ${timing.elapsedMinutes} мин из ориентировочно ${timing.estimatedTotalMinutes} мин")
+            append(" • ${timing.progressPercent}% дуги")
+            append("\nПик потока ≈ ${timing.estimatedFlowPeakMinute}-я минута")
+            append(" • ценовая реакция часто позже, ориентир ≈ ${timing.estimatedPricePeakMinute}-я минута")
+            append("; широкое историческое окно локальной вершины 5–50 мин")
+            timing.nextPhaseMinMinutes?.let { min ->
+                append("\nДо переоценки следующей фазы: примерно $min–${timing.nextPhaseMaxMinutes ?: min} мин")
+            }
+            append("\n${timing.status}")
+            append("\nДиапазон 20–65 мин исторический: это не таймер обязательного роста и не команда EXIT.")
+        }
+    }
+}
+
+class BuyerBreathCurveView(context: android.content.Context) : View(context) {
+    private val background = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#101820") }
+    private val grid = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#30363D")
+        strokeWidth = dp(1f)
+    }
+    private val reference = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#6E7681")
+        strokeWidth = dp(2f)
+        style = Paint.Style.STROKE
+        pathEffect = DashPathEffect(floatArrayOf(dp(7f), dp(5f)), 0f)
+    }
+    private val completed = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#238636")
+        strokeWidth = dp(4f)
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+    }
+    private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#238636")
+        alpha = 32
+        style = Paint.Style.FILL
+    }
+    private val marker = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
+    private val label = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#C9D1D9")
+        textSize = sp(11f)
+        isFakeBoldText = true
+    }
+    private val detail = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#8B949E")
+        textSize = sp(9f)
+    }
+    private var snapshot = BuyerBreathSnapshot()
+
+    fun setData(snapshot: BuyerBreathSnapshot) {
+        this.snapshot = snapshot
+        invalidate()
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        super.onDraw(canvas)
+        canvas.drawColor(background.color)
+        val left = dp(16f)
+        val right = width - dp(16f)
+        val top = dp(43f)
+        val baseline = height - dp(52f)
+        val curveHeight = baseline - top
+        val timing = snapshot.timing
+        val total = timing.estimatedTotalMinutes.coerceAtLeast(1)
+        val peakProgress = (timing.estimatedFlowPeakMinute.toFloat() / total).coerceIn(0.16f, 0.70f)
+        val currentProgress = (timing.progressPercent / 100f).coerceIn(0f, 1f)
+
+        canvas.drawText("НАПОР ПОКУПАТЕЛЕЙ", left, dp(21f), label)
+        label.textAlign = Paint.Align.RIGHT
+        canvas.drawText(
+            if (timing.active) "СЕЙЧАС ${timing.elapsedMinutes} МИН" else "ЦИКЛ НЕ НАЧАЛСЯ",
+            right,
+            dp(21f),
+            label
+        )
+        label.textAlign = Paint.Align.LEFT
+        canvas.drawLine(left, baseline, right, baseline, grid)
+
+        val fullPath = curvePath(left, right, top, baseline, peakProgress, 1f)
+        canvas.drawPath(fullPath, reference)
+        if (timing.active && timing.forecastReliable) {
+            val phaseColor = when (snapshot.phase) {
+                BuyerBreathPhase.IGNITION, BuyerBreathPhase.EXPANSION -> "#2EA043"
+                BuyerBreathPhase.MATURE -> "#D29922"
+                BuyerBreathPhase.EXHAUSTION -> "#F0883E"
+                BuyerBreathPhase.SELLER_TAKEOVER -> "#DA3633"
+                else -> "#6E7681"
+            }
+            completed.color = Color.parseColor(phaseColor)
+            fill.color = completed.color
+            val done = curvePath(left, right, top, baseline, peakProgress, currentProgress)
+            canvas.drawPath(fillPath(done, left, right, baseline, currentProgress), fill)
+            canvas.drawPath(done, completed)
+            val markerX = left + (right - left) * currentProgress
+            val markerY = curveY(currentProgress, peakProgress, top, curveHeight)
+            canvas.drawLine(markerX, markerY, markerX, baseline, Paint(grid).apply { alpha = 170 })
+            marker.color = completed.color
+            canvas.drawCircle(markerX, markerY, dp(7f), marker)
+            canvas.drawCircle(markerX, markerY, dp(3f), Paint(marker).apply { color = Color.WHITE })
+        } else if (snapshot.phase == BuyerBreathPhase.SHOCK) {
+            completed.color = Color.parseColor("#DA3633")
+            canvas.drawLine(left, top, right, baseline, completed)
+            canvas.drawLine(left, baseline, right, top, completed)
+            detail.color = Color.parseColor("#FF7B72")
+            detail.textAlign = Paint.Align.CENTER
+            canvas.drawText("ШОК • ОБЫЧНОЕ ВРЕМЯ ЦИКЛА ОТКЛЮЧЕНО", (left + right) / 2f, baseline - dp(9f), detail)
+            detail.textAlign = Paint.Align.LEFT
+            detail.color = Color.parseColor("#8B949E")
+        }
+
+        val peakX = left + (right - left) * peakProgress
+        val priceX = left + (right - left) * (timing.estimatedPricePeakMinute.toFloat() / total).coerceIn(0f, 1f)
+        canvas.drawLine(peakX, top, peakX, baseline, Paint(grid).apply { alpha = 120 })
+        canvas.drawLine(priceX, top, priceX, baseline, Paint(grid).apply {
+            alpha = 80
+            pathEffect = DashPathEffect(floatArrayOf(dp(3f), dp(4f)), 0f)
+        })
+        detail.textAlign = Paint.Align.LEFT
+        canvas.drawText("0", left, baseline + dp(18f), detail)
+        detail.textAlign = Paint.Align.CENTER
+        canvas.drawText("пик потока ~${timing.estimatedFlowPeakMinute}м", peakX, baseline + dp(18f), detail)
+        detail.textAlign = Paint.Align.RIGHT
+        canvas.drawText("выдох ~${timing.estimatedTotalMinutes}м", right, baseline + dp(18f), detail)
+        detail.textAlign = Paint.Align.LEFT
+        canvas.drawText("Типично: поток ~10м • цена ~15м • цикл 20–65м", left, height - dp(12f), detail)
+    }
+
+    private fun curvePath(
+        left: Float,
+        right: Float,
+        top: Float,
+        baseline: Float,
+        peakProgress: Float,
+        endProgress: Float
+    ): Path {
+        val path = Path()
+        val steps = maxOf(2, (120 * endProgress).roundToInt())
+        repeat(steps + 1) { index ->
+            val progress = endProgress * index / steps.toFloat()
+            val x = left + (right - left) * progress
+            val y = curveY(progress, peakProgress, top, baseline - top)
+            if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
+        }
+        return path
+    }
+
+    private fun fillPath(path: Path, left: Float, right: Float, baseline: Float, endProgress: Float): Path =
+        Path(path).apply {
+            lineTo(left + (right - left) * endProgress, baseline)
+            lineTo(left, baseline)
+            close()
+        }
+
+    private fun curveY(progress: Float, peak: Float, top: Float, height: Float): Float {
+        val strength = if (progress <= peak) {
+            val normalized = (progress / peak.coerceAtLeast(0.01f)).coerceIn(0f, 1f)
+            1f - (1f - normalized) * (1f - normalized)
+        } else {
+            val normalized = ((progress - peak) / (1f - peak).coerceAtLeast(0.01f)).coerceIn(0f, 1f)
+            1f - normalized * normalized
+        }
+        return top + (1f - strength) * height
     }
 
     private fun dp(value: Float) = value * resources.displayMetrics.density

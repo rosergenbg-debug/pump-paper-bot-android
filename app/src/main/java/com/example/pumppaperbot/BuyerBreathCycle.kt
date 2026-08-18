@@ -16,6 +16,31 @@ enum class BuyerBreathPhase {
     SHOCK
 }
 
+data class BuyerBreathTiming(
+    val active: Boolean = false,
+    val forecastReliable: Boolean = false,
+    val elapsedMinutes: Int = 0,
+    val estimatedTotalMinutes: Int = 35,
+    val estimatedFlowPeakMinute: Int = 10,
+    val estimatedPricePeakMinute: Int = 15,
+    val progressPercent: Int = 0,
+    val nextPhaseMinMinutes: Int? = null,
+    val nextPhaseMaxMinutes: Int? = null,
+    val status: String = "Цикл ещё не начался."
+) {
+    fun toJson(): JSONObject = JSONObject()
+        .put("active", active)
+        .put("forecast_reliable", forecastReliable)
+        .put("elapsed_minutes", elapsedMinutes)
+        .put("estimated_total_minutes", estimatedTotalMinutes)
+        .put("estimated_flow_peak_minute", estimatedFlowPeakMinute)
+        .put("estimated_price_peak_minute", estimatedPricePeakMinute)
+        .put("progress_percent", progressPercent)
+        .put("next_phase_min_minutes", nextPhaseMinMinutes ?: JSONObject.NULL)
+        .put("next_phase_max_minutes", nextPhaseMaxMinutes ?: JSONObject.NULL)
+        .put("status", status)
+}
+
 data class BuyerBreathSnapshot(
     val phase: BuyerBreathPhase = BuyerBreathPhase.STALE,
     val title: String = "НЕТ СВЕЖЕГО ПОТОКА",
@@ -31,6 +56,7 @@ data class BuyerBreathSnapshot(
     val priceChange15mPercent: Double? = null,
     val activityRatio: Double? = null,
     val moveSincePhaseStartPercent: Double? = null,
+    val timing: BuyerBreathTiming = BuyerBreathTiming(),
     val explanation: String = "Ждём живые сделки.",
     val actionHint: String = "Решение по устаревшему потоку не принимается.",
     val watchFor: String = "Свежий поток PUMP и реакцию цены.",
@@ -51,6 +77,7 @@ data class BuyerBreathSnapshot(
         .put("price_change_15m_pct", priceChange15mPercent ?: JSONObject.NULL)
         .put("activity_vs_baseline", activityRatio ?: JSONObject.NULL)
         .put("move_since_phase_start_pct", moveSincePhaseStartPercent ?: JSONObject.NULL)
+        .put("timing", timing.toJson())
         .put("explanation", explanation)
         .put("action_hint", actionHint)
         .put("watch_for", watchFor)
@@ -59,6 +86,127 @@ data class BuyerBreathSnapshot(
     companion object {
         const val RESEARCH_REFERENCE =
             "Фон V5.4: 26 496 закрытых 5‑минутных свечей PUMP/BTC за 18.05–18.08.2026; это диапазон, не обещание."
+    }
+}
+
+/**
+ * Places the current phase on an adaptive, time-labelled breathing arc.
+ * Historical anchors come from the V5.4 three-month sample: calm cycles were
+ * 20/35/65 minutes at p25/median/p75, buyer flow peaked near 10 minutes and
+ * price inside the cycle peaked near 15 minutes at the median. This is a
+ * visual timing estimate, not a price or exit command.
+ */
+object BuyerBreathTimingPolicy {
+    const val HISTORICAL_TOTAL_P25_MINUTES = 20
+    const val HISTORICAL_TOTAL_MEDIAN_MINUTES = 35
+    const val HISTORICAL_TOTAL_P75_MINUTES = 65
+    const val HISTORICAL_FLOW_PEAK_MEDIAN_MINUTES = 10
+    const val HISTORICAL_PRICE_PEAK_MEDIAN_MINUTES = 15
+    private const val MAX_DISPLAY_CYCLE_MINUTES = 90
+
+    fun estimate(phase: BuyerBreathPhase, phaseAgeMinutes: Int): BuyerBreathTiming {
+        val age = phaseAgeMinutes.coerceAtLeast(0)
+        if (phase == BuyerBreathPhase.STALE) return BuyerBreathTiming(
+            status = "Нет свежих сделок: временная дуга не используется."
+        )
+        if (phase == BuyerBreathPhase.QUIET) return BuyerBreathTiming(
+            forecastReliable = true,
+            status = "Покой: ждём начало устойчивого вдоха. Типичный спокойный цикл — 20–65 минут."
+        )
+
+        val offset = when (phase) {
+            BuyerBreathPhase.IGNITION -> 0
+            BuyerBreathPhase.EXPANSION -> 5
+            BuyerBreathPhase.MATURE -> 10
+            BuyerBreathPhase.EXHAUSTION -> 18
+            BuyerBreathPhase.SELLER_TAKEOVER -> 25
+            BuyerBreathPhase.SHOCK -> 0
+            BuyerBreathPhase.QUIET, BuyerBreathPhase.STALE -> 0
+        }
+        val elapsed = when (phase) {
+            // These three phases share a continuous buyer-dominance age in the analyzer.
+            BuyerBreathPhase.IGNITION, BuyerBreathPhase.EXPANSION, BuyerBreathPhase.MATURE ->
+                maxOf(offset, age)
+            // Exhaustion and seller takeover have their own age predicates, so retain the
+            // empirical time already spent in the preceding parts of the arc.
+            else -> offset + age
+        }.coerceIn(0, MAX_DISPLAY_CYCLE_MINUTES)
+        if (phase == BuyerBreathPhase.SHOCK) return BuyerBreathTiming(
+            active = true,
+            elapsedMinutes = elapsed,
+            estimatedTotalMinutes = maxOf(HISTORICAL_TOTAL_MEDIAN_MINUTES, elapsed),
+            progressPercent = 100,
+            status = "Шоковый режим: обычная временная дуга отключена до стабилизации."
+        )
+
+        val phaseAnchor = when (phase) {
+            BuyerBreathPhase.IGNITION -> 0.12
+            BuyerBreathPhase.EXPANSION -> 0.35
+            BuyerBreathPhase.MATURE -> 0.58
+            BuyerBreathPhase.EXHAUSTION -> 0.78
+            BuyerBreathPhase.SELLER_TAKEOVER -> 0.95
+            else -> 0.50
+        }
+        val inferredTotal = if (elapsed > 0) (elapsed / phaseAnchor).roundToInt() else HISTORICAL_TOTAL_MEDIAN_MINUTES
+        val minimumRemaining = when (phase) {
+            BuyerBreathPhase.IGNITION -> 15
+            BuyerBreathPhase.EXPANSION -> 10
+            BuyerBreathPhase.MATURE -> 7
+            BuyerBreathPhase.EXHAUSTION -> 4
+            BuyerBreathPhase.SELLER_TAKEOVER -> 0
+            else -> 0
+        }
+        val blendedTotal = (HISTORICAL_TOTAL_MEDIAN_MINUTES * 0.60 + inferredTotal * 0.40).roundToInt()
+        val total = maxOf(blendedTotal, elapsed + minimumRemaining)
+            .coerceIn(HISTORICAL_TOTAL_P25_MINUTES, MAX_DISPLAY_CYCLE_MINUTES)
+        var flowPeak = (total * HISTORICAL_FLOW_PEAK_MEDIAN_MINUTES.toDouble() /
+            HISTORICAL_TOTAL_MEDIAN_MINUTES).roundToInt().coerceIn(7, 25)
+        if (phase == BuyerBreathPhase.EXPANSION && elapsed >= flowPeak) {
+            flowPeak = (elapsed + 3).coerceAtMost(25)
+        }
+        if (phase in listOf(BuyerBreathPhase.MATURE, BuyerBreathPhase.EXHAUSTION, BuyerBreathPhase.SELLER_TAKEOVER)) {
+            flowPeak = minOf(flowPeak, elapsed.coerceAtLeast(7))
+        }
+        val pricePeak = maxOf(flowPeak + 5, (total * HISTORICAL_PRICE_PEAK_MEDIAN_MINUTES.toDouble() /
+            HISTORICAL_TOTAL_MEDIAN_MINUTES).roundToInt()).coerceAtMost(total)
+        val rawProgress = (elapsed * 100.0 / total.coerceAtLeast(1)).roundToInt()
+        val phaseRange = when (phase) {
+            BuyerBreathPhase.IGNITION -> 3..25
+            BuyerBreathPhase.EXPANSION -> 18..52
+            BuyerBreathPhase.MATURE -> 40..70
+            BuyerBreathPhase.EXHAUSTION -> 62..90
+            BuyerBreathPhase.SELLER_TAKEOVER -> 85..100
+            else -> 0..100
+        }
+        val progress = rawProgress.coerceIn(phaseRange.first, phaseRange.last)
+        val nextRange = when (phase) {
+            BuyerBreathPhase.IGNITION -> 3 to 10
+            BuyerBreathPhase.EXPANSION -> 3 to 12
+            BuyerBreathPhase.MATURE -> 5 to 15
+            BuyerBreathPhase.EXHAUSTION -> 3 to 10
+            BuyerBreathPhase.SELLER_TAKEOVER -> null
+            else -> null
+        }
+        val status = when (phase) {
+            BuyerBreathPhase.IGNITION -> "Начало дуги: проверяем, закрепится ли вдох в следующие 3–10 минут."
+            BuyerBreathPhase.EXPANSION -> "Подъём дуги: пик потока ориентировочно около $flowPeak-й минуты."
+            BuyerBreathPhase.MATURE -> "Зрелая часть дуги: пик потока близко или уже пройден; цена часто реагирует позже."
+            BuyerBreathPhase.EXHAUSTION -> "Нисходящая часть дуги: в ближайшие 3–10 минут ищем подтверждение выдоха или новый вдох."
+            BuyerBreathPhase.SELLER_TAKEOVER -> "Дуга завершена продавцами; новый вдох пока не подтверждён."
+            else -> ""
+        }
+        return BuyerBreathTiming(
+            active = true,
+            forecastReliable = true,
+            elapsedMinutes = elapsed,
+            estimatedTotalMinutes = total,
+            estimatedFlowPeakMinute = flowPeak,
+            estimatedPricePeakMinute = pricePeak,
+            progressPercent = progress,
+            nextPhaseMinMinutes = nextRange?.first,
+            nextPhaseMaxMinutes = nextRange?.second,
+            status = status
+        )
     }
 }
 
@@ -168,7 +316,11 @@ object BuyerBreathCycleAnalyzer {
                 ({ sample: LiveBreathingSample -> sample.pumpBuyerPercent in 48.0..58.0 })
             BuyerBreathPhase.SELLER_TAKEOVER ->
                 ({ sample: LiveBreathingSample -> sample.pumpBuyerPercent <= 49.0 })
-            else -> ({ _: LiveBreathingSample -> true })
+            BuyerBreathPhase.QUIET ->
+                ({ sample: LiveBreathingSample -> sample.pumpBuyerPercent in 48.0..52.0 && abs(sample.pumpChange60sPercent) < 0.20 })
+            BuyerBreathPhase.SHOCK ->
+                ({ sample: LiveBreathingSample -> abs(sample.pumpChange60sPercent) >= 0.80 })
+            BuyerBreathPhase.STALE -> ({ _: LiveBreathingSample -> false })
         }
         val phaseStart = ordered.asReversed().takeWhile(agePredicate).lastOrNull() ?: latest
         val age = ((latest.at - phaseStart.at).coerceAtLeast(0L) / 60_000L).toInt().coerceAtMost(360)
@@ -178,9 +330,10 @@ object BuyerBreathCycleAnalyzer {
         val confidence = (35 + minOf(35, selected(15).size / 4) +
             (if (activityRatio != null) 15 else 0) + (if (horizons.count { it.score != null } >= 2) 15 else 0))
             .coerceIn(0, 100)
+        val timing = BuyerBreathTimingPolicy.estimate(phase, age)
         return presentation(
             phase, pressure, efficiency, absorption, confidence, age, buy5, buy15,
-            price5, price15, activityRatio, moveSinceStart
+            price5, price15, activityRatio, moveSinceStart, timing
         )
     }
 
@@ -196,7 +349,8 @@ object BuyerBreathCycleAnalyzer {
         price5: Double,
         price15: Double,
         activityRatio: Double?,
-        move: Double?
+        move: Double?,
+        timing: BuyerBreathTiming
     ): BuyerBreathSnapshot {
         val title: String
         val explanation: String
@@ -270,6 +424,7 @@ object BuyerBreathCycleAnalyzer {
             priceChange15mPercent = price15,
             activityRatio = activityRatio,
             moveSincePhaseStartPercent = move,
+            timing = timing,
             explanation = explanation,
             actionHint = action,
             watchFor = watch,
@@ -291,6 +446,11 @@ object BuyerBreathText {
         append("\nНапор ").append(signed(snapshot.pressureScore))
             .append(" • эффективность ").append(signed(snapshot.efficiencyScore))
             .append(" • поглощение ").append(snapshot.absorptionRisk).append("/100")
+        if (snapshot.timing.active && snapshot.timing.forecastReliable) {
+            append("\nДуга: ").append(snapshot.timing.elapsedMinutes).append(" из ~")
+                .append(snapshot.timing.estimatedTotalMinutes).append(" мин • ")
+                .append(snapshot.timing.progressPercent).append("%")
+        }
         if (snapshot.fresh) append("\n").append(snapshot.actionHint) else append("\nЖдём свежий поток сделок.")
     }
 
@@ -303,6 +463,11 @@ object BuyerBreathText {
         append(String.format(Locale.GERMANY, "\nЦена: 5 мин %+.3f%% • 15 мин %+.3f%%", snapshot.priceChange5mPercent ?: 0.0, snapshot.priceChange15mPercent ?: 0.0))
         snapshot.activityRatio?.let { append(String.format(Locale.GERMANY, " • активность %.2f×", it)) }
         snapshot.moveSincePhaseStartPercent?.let { append(String.format(Locale.GERMANY, "\nОт начала текущей фазы: %+.3f%%", it)) }
+        append("\nВременная дуга: ").append(snapshot.timing.status)
+        if (snapshot.timing.active && snapshot.timing.forecastReliable) {
+            append(" Сейчас ").append(snapshot.timing.elapsedMinutes).append(" из ~")
+                .append(snapshot.timing.estimatedTotalMinutes).append(" мин.")
+        }
         append("\n\nЧТО ЭТО ЗНАЧИТ: ").append(snapshot.explanation)
         append("\nЧТО ДЕЛАТЬ: ").append(snapshot.actionHint)
         append("\nЧТО СЛЕДИТЬ: ").append(snapshot.watchFor)

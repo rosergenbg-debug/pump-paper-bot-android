@@ -62,7 +62,7 @@
             android:layout_height="56dp"
             android:layout_marginTop="7dp"
             android:backgroundTint="#9A6700"
-            android:text="КРИТИЧЕСКИЙ ОБЗОР • СТАКАН | ПОТОКИ | BTC"
+            android:text="КРИТИЧЕСКИЙ ОБЗОР • ДЫХАНИЕ | СТАКАН | BTC"
             android:textColor="#FFFFFF"
             android:textSize="13sp"
             android:textStyle="bold" />
@@ -76,20 +76,9 @@
             android:lineSpacingExtra="2dp"
             android:minHeight="106dp"
             android:padding="11dp"
-            android:text="ДЫХАНИЕ РЫНКА • ждём живой поток"
+            android:text="ДЫХАНИЕ РЫНКА • ждём живой поток\nНажмите, чтобы открыть общий критический обзор"
             android:textColor="#C9D1D9"
             android:textSize="14sp"
-            android:textStyle="bold" />
-
-        <Button
-            android:id="@+id/btnBuyerBreath"
-            android:layout_width="match_parent"
-            android:layout_height="56dp"
-            android:layout_marginTop="6dp"
-            android:backgroundTint="#0F6B78"
-            android:text="ОТКРЫТЬ ГРАФИК • ВДОХ | РАЗГОН | ВЫДЫХАНИЕ"
-            android:textColor="#FFFFFF"
-            android:textSize="13sp"
             android:textStyle="bold" />
 
         <TextView

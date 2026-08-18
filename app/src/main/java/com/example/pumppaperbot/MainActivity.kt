@@ -86,7 +86,6 @@ class MainActivity : AppCompatActivity() {
     private var btnFusionSim: Button? = null
     private var btnCompetition: Button? = null
     private var btnCriticalOverview: Button? = null
-    private var btnBuyerBreath: Button? = null
     private var btnDeepSeekApi: Button? = null
     private var btnGeminiApi: Button? = null
     private var btnBitpandaFusion: Button? = null
@@ -139,7 +138,6 @@ class MainActivity : AppCompatActivity() {
         btnFusionSim = findViewById(R.id.btnFusionSim)
         btnCompetition = findViewById(R.id.btnCompetition)
         btnCriticalOverview = findViewById(R.id.btnCriticalOverview)
-        btnBuyerBreath = findViewById(R.id.btnBuyerBreath)
         btnDeepSeekApi = findViewById(R.id.btnDeepSeekApi)
         btnGeminiApi = findViewById(R.id.btnGeminiApi)
         btnBitpandaFusion = findViewById(R.id.btnBitpandaFusion)
@@ -201,8 +199,8 @@ class MainActivity : AppCompatActivity() {
         btnCriticalOverview?.setOnClickListener {
             startActivity(Intent(this, CriticalOverviewActivity::class.java))
         }
-        btnBuyerBreath?.setOnClickListener {
-            startActivity(Intent(this, BuyerBreathActivity::class.java))
+        tvBuyerBreathSummary?.setOnClickListener {
+            startActivity(Intent(this, CriticalOverviewActivity::class.java))
         }
         btnDeepSeekApi?.setOnClickListener {
             startActivity(Intent(this, ApiCenterActivity::class.java).putExtra(
