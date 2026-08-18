@@ -163,10 +163,12 @@ object BuyerBreathCycleAnalyzer {
         }
         val agePredicate: (LiveBreathingSample) -> Boolean = when (phase) {
             BuyerBreathPhase.IGNITION, BuyerBreathPhase.EXPANSION, BuyerBreathPhase.MATURE ->
-                { it.pumpBuyerPercent >= 52.0 }
-            BuyerBreathPhase.EXHAUSTION -> { it.pumpBuyerPercent in 48.0..58.0 }
-            BuyerBreathPhase.SELLER_TAKEOVER -> { it.pumpBuyerPercent <= 49.0 }
-            else -> { _ -> true }
+                ({ sample: LiveBreathingSample -> sample.pumpBuyerPercent >= 52.0 })
+            BuyerBreathPhase.EXHAUSTION ->
+                ({ sample: LiveBreathingSample -> sample.pumpBuyerPercent in 48.0..58.0 })
+            BuyerBreathPhase.SELLER_TAKEOVER ->
+                ({ sample: LiveBreathingSample -> sample.pumpBuyerPercent <= 49.0 })
+            else -> ({ _: LiveBreathingSample -> true })
         }
         val phaseStart = ordered.asReversed().takeWhile(agePredicate).lastOrNull() ?: latest
         val age = ((latest.at - phaseStart.at).coerceAtLeast(0L) / 60_000L).toInt().coerceAtMost(360)
