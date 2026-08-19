@@ -8,12 +8,15 @@ import android.graphics.Path
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.view.MotionEvent
 import android.view.View
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -31,8 +34,9 @@ class CriticalOverviewActivity : AppCompatActivity() {
     private lateinit var status: TextView
     private lateinit var chart: CriticalOverviewChartView
     private lateinit var breathingChart: MarketBreathingChartView
-    private lateinit var breathCurve: BuyerBreathCurveView
+    private lateinit var flowWaveChart: ContinuousFlowWaveView
     private lateinit var breathTiming: TextView
+    private lateinit var entryAudit: TextView
     private lateinit var facts: TextView
     private lateinit var deepSeek: TextView
     private lateinit var cost: TextView
@@ -71,21 +75,23 @@ class CriticalOverviewActivity : AppCompatActivity() {
         breathingChart = MarketBreathingChartView(this)
         content.addView(breathingChart, params(dp(330), dp(6)))
         content.addView(label(
-            "ЦИКЛ ПОКУПОК • ВРЕМЕННАЯ ДУГА",
+            "ЖИВАЯ КАРТА ПОТОКА • 15 МИН — 6 ЧАСОВ",
             18,
             "#F0F6FC",
             true
         ), params(-2, dp(10)))
         content.addView(label(
-            "Дуга показывает не цену, а развитие покупательского напора во времени: начало, пик потока и выдыхание.",
+            "Пять плавных волн показывают, как покупательский и продавцовский поток перетекает между 15 мин, 30 мин, 1 ч, 3 ч и 6 ч. Коснитесь графика для значений в выбранный момент.",
             12,
             "#8B949E",
             false
         ), params(-2, dp(3)))
-        breathCurve = BuyerBreathCurveView(this)
-        content.addView(breathCurve, params(dp(275), dp(6)))
+        flowWaveChart = ContinuousFlowWaveView(this)
+        content.addView(flowWaveChart, params(dp(390), dp(6)))
         breathTiming = panel(14, true)
         content.addView(breathTiming, params(-2, dp(6)))
+        entryAudit = panel(14, false)
+        content.addView(entryAudit, params(-2, dp(6)))
         facts = panel(14, false)
         content.addView(facts, params(-2, dp(8)))
         deepSeek = panel(14, false)
@@ -112,6 +118,8 @@ class CriticalOverviewActivity : AppCompatActivity() {
         val impulse = ImpulseRadarStore.state(this)
         val primary = DeepSeekPrimaryStore.state(this, now)
         val breathing = LiveMarketBreathingStore.snapshot(this, now)
+        val capitalFlow = CapitalFlowProxyPolicy.evaluate(impulse, breathing, now)
+        val audit = EntryOpportunityAuditStore.latest(this)
         val positionOpen = snapshot.waitMode == "SELL" && snapshot.entryPrice > 0.0
         val level = if (positionOpen) {
             DeepSeekActionLevelPolicy.fromPosition(
@@ -169,8 +177,23 @@ class CriticalOverviewActivity : AppCompatActivity() {
         while (history.size > 120) history.removeFirst()
         chart.setData(model, history.toList())
         breathingChart.setData(breathing)
-        breathCurve.setData(breathing.buyerBreath)
-        breathTiming.text = BuyerBreathCurveText.describe(breathing.buyerBreath)
+        flowWaveChart.setData(breathing)
+        breathTiming.text = ContinuousFlowWaveText.describe(breathing)
+        entryAudit.text = buildString {
+            append("ПОЧЕМУ СИСТЕМЫ ВОШЛИ ИЛИ НЕ ВОШЛИ")
+            if (audit.at <= 0L || audit.participants.isEmpty()) {
+                append("\nЖурнал причин появится после следующего полного цикла проверки.")
+            } else {
+                audit.participants.forEach { participant ->
+                    append("\n\n${participant.participant}: ${participant.state}")
+                    if (participant.confirmationsRequired > 0) {
+                        append(" • подтверждения ${participant.confirmations}/${participant.confirmationsRequired}")
+                    }
+                    append("\n${participant.reason}")
+                }
+                append("\n\nЭто фактическое состояние защит в момент последнего цикла, а не догадка задним числом.")
+            }
+        }
 
         facts.text = buildString {
             append("ЧТО ПРОИСХОДИТ СЕЙЧАС\n")
@@ -201,6 +224,10 @@ class CriticalOverviewActivity : AppCompatActivity() {
             append(" • поглощение ${breathing.buyerBreath.absorptionRisk}/100")
             append("\n${breathing.buyerBreath.actionHint}")
             append("\nВремя: ${breathing.buyerBreath.timing.status}")
+            append("\n\nКРУПНЫЙ ПОТОК — ОЦЕНКА МЕХАНИЗМА, НЕ ЛИЧНОСТИ")
+            append("\n${capitalFlow.title} • ${signed(capitalFlow.score)}/100 • уверенность ${capitalFlow.confidence}/100")
+            append("\n${capitalFlow.explanation}")
+            append("\n${capitalFlow.identityNote}")
             append("\nНакоплено ${breathing.historyMinutes} мин.; данные старше 24 часов удаляются.")
             if (!breathing.fresh) append("\nВнимание: сглаженное дыхание устарело и не используется DeepSeek.")
             append("\n\nСвежесть: микросделки ${age(micro.updatedAt, now)} сек • 5‑мин данные ${age(impulse.candleTime, now)} сек")
@@ -447,183 +474,223 @@ class MarketBreathingChartView(context: android.content.Context) : View(context)
     private fun sp(value: Float) = value * resources.displayMetrics.scaledDensity
 }
 
-object BuyerBreathCurveText {
-    fun describe(snapshot: BuyerBreathSnapshot): String {
-        val timing = snapshot.timing
-        if (!snapshot.fresh || snapshot.phase == BuyerBreathPhase.STALE) {
-            return "ВРЕМЕННАЯ ДУГА: ждём свежий поток сделок. Старые данные не используются."
+object ContinuousFlowWaveText {
+    fun describe(snapshot: LiveMarketBreathingSnapshot): String = buildString {
+        val wave = snapshot.flowWave
+        val latest = wave.latest
+        append("СЕЙЧАС: ").append(wave.state)
+        latest?.let {
+            append("\n15м ").append(signed(it.score15m))
+            append(" • 30м ").append(signed(it.score30m))
+            append(" • 1ч ").append(signed(it.score60m))
+            append(" • 3ч ").append(signed(it.score180m))
+            append(" • 6ч ").append(signed(it.score360m))
         }
-        if (!timing.forecastReliable) {
-            return "ВРЕМЕННАЯ ДУГА: ${timing.status}\nСначала нужна стабилизация; обычные минуты цикла сейчас ненадёжны."
-        }
-        if (!timing.active) {
-            return "ВРЕМЕННАЯ ДУГА: цикл ещё не начался.\nОриентир спокойного цикла: 20–65 мин, медиана 35 мин."
-        }
-        return buildString {
-            append("СЕЙЧАС: ${snapshot.title} • ${timing.elapsedMinutes} мин из ориентировочно ${timing.estimatedTotalMinutes} мин")
-            append(" • ${timing.progressPercent}% дуги")
-            append("\nПик потока ≈ ${timing.estimatedFlowPeakMinute}-я минута")
-            append(" • ценовая реакция часто позже, ориентир ≈ ${timing.estimatedPricePeakMinute}-я минута")
-            append("; широкое историческое окно локальной вершины 5–50 мин")
-            timing.nextPhaseMinMinutes?.let { min ->
-                append("\nДо переоценки следующей фазы: примерно $min–${timing.nextPhaseMaxMinutes ?: min} мин")
-            }
-            append("\n${timing.status}")
-            append("\nДиапазон 20–65 мин исторический: это не таймер обязательного роста и не команда EXIT.")
+        append("\nЧТО ДЕЛАТЬ: ").append(wave.guidance)
+        append("\nЗелёные/красные метки — зоны проверки разворота потока, не автоматические BUY/EXIT.")
+        if (wave.staleSeconds > LiveMarketBreathingAnalyzer.MAX_LIVE_AGE_MILLIS / 1_000L) {
+            append("\nПоток не обновлялся ").append(wave.staleSeconds).append(" сек.; история сохранена, новые решения заблокированы.")
         }
     }
+
+    private fun signed(value: Int) = if (value >= 0) "+$value" else value.toString()
 }
 
-class BuyerBreathCurveView(context: android.content.Context) : View(context) {
+class ContinuousFlowWaveView(context: android.content.Context) : View(context) {
     private val background = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#101820") }
-    private val grid = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#30363D")
-        strokeWidth = dp(1f)
-    }
-    private val reference = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#6E7681")
-        strokeWidth = dp(2f)
-        style = Paint.Style.STROKE
-        pathEffect = DashPathEffect(floatArrayOf(dp(7f), dp(5f)), 0f)
-    }
-    private val completed = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#238636")
-        strokeWidth = dp(4f)
-        style = Paint.Style.STROKE
-        strokeCap = Paint.Cap.ROUND
-    }
-    private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#238636")
-        alpha = 32
-        style = Paint.Style.FILL
-    }
-    private val marker = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
+    private val grid = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#30363D"); strokeWidth = dp(1f) }
     private val label = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#C9D1D9")
-        textSize = sp(11f)
-        isFakeBoldText = true
+        color = Color.parseColor("#C9D1D9"); textSize = sp(10f); isFakeBoldText = true
     }
-    private val detail = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#8B949E")
-        textSize = sp(9f)
-    }
-    private var snapshot = BuyerBreathSnapshot()
+    private val detail = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#8B949E"); textSize = sp(8.5f) }
+    private val selector = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; strokeWidth = dp(1f); alpha = 180 }
+    private val entryPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#3FB950"); style = Paint.Style.FILL }
+    private val exitPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#F85149"); style = Paint.Style.FILL }
+    private val layers = listOf(
+        15 to line("#FF8B3D", 3.0f),
+        30 to line("#FFD866", 2.5f),
+        60 to line("#58A6FF", 2.2f),
+        180 to line("#BC8CFF", 1.9f),
+        360 to line("#8B949E", 1.6f)
+    )
+    private val composite = line("#F0F6FC", 3.5f)
+    private var snapshot = LiveMarketBreathingSnapshot()
+    private var selectedAt: Long? = null
 
-    fun setData(snapshot: BuyerBreathSnapshot) {
+    fun setData(snapshot: LiveMarketBreathingSnapshot) {
         this.snapshot = snapshot
         invalidate()
+    }
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (event.action == MotionEvent.ACTION_DOWN || event.action == MotionEvent.ACTION_MOVE) {
+            val points = snapshot.flowWave.points
+            if (points.isNotEmpty()) {
+                val left = dp(31f)
+                val right = width - dp(13f)
+                val ratio = ((event.x - left) / (right - left).coerceAtLeast(1f)).coerceIn(0f, 1f)
+                val first = points.first().at
+                val last = points.last().at
+                selectedAt = first + ((last - first) * ratio).toLong()
+                invalidate()
+            }
+            return true
+        }
+        if (event.action == MotionEvent.ACTION_UP) {
+            performClick()
+            return true
+        }
+        return super.onTouchEvent(event)
+    }
+
+    override fun performClick(): Boolean {
+        super.performClick()
+        return true
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         canvas.drawColor(background.color)
-        val left = dp(16f)
-        val right = width - dp(16f)
-        val top = dp(43f)
-        val baseline = height - dp(52f)
-        val curveHeight = baseline - top
-        val timing = snapshot.timing
-        val total = timing.estimatedTotalMinutes.coerceAtLeast(1)
-        val peakProgress = (timing.estimatedFlowPeakMinute.toFloat() / total).coerceIn(0.16f, 0.70f)
-        val currentProgress = (timing.progressPercent / 100f).coerceIn(0f, 1f)
+        val points = snapshot.flowWave.points
+        val left = dp(31f)
+        val right = width - dp(13f)
+        val top = dp(58f)
+        val bottom = height - dp(80f)
+        val center = (top + bottom) / 2f
 
-        canvas.drawText("НАПОР ПОКУПАТЕЛЕЙ", left, dp(21f), label)
-        label.textAlign = Paint.Align.RIGHT
-        canvas.drawText(
-            if (timing.active) "СЕЙЧАС ${timing.elapsedMinutes} МИН" else "ЦИКЛ НЕ НАЧАЛСЯ",
-            right,
-            dp(21f),
-            label
-        )
-        label.textAlign = Paint.Align.LEFT
-        canvas.drawLine(left, baseline, right, baseline, grid)
-
-        val fullPath = curvePath(left, right, top, baseline, peakProgress, 1f)
-        canvas.drawPath(fullPath, reference)
-        if (timing.active && timing.forecastReliable) {
-            val phaseColor = when (snapshot.phase) {
-                BuyerBreathPhase.IGNITION, BuyerBreathPhase.EXPANSION -> "#2EA043"
-                BuyerBreathPhase.MATURE -> "#D29922"
-                BuyerBreathPhase.EXHAUSTION -> "#F0883E"
-                BuyerBreathPhase.SELLER_TAKEOVER -> "#DA3633"
-                else -> "#6E7681"
-            }
-            completed.color = Color.parseColor(phaseColor)
-            fill.color = completed.color
-            val done = curvePath(left, right, top, baseline, peakProgress, currentProgress)
-            canvas.drawPath(fillPath(done, left, right, baseline, currentProgress), fill)
-            canvas.drawPath(done, completed)
-            val markerX = left + (right - left) * currentProgress
-            val markerY = curveY(currentProgress, peakProgress, top, curveHeight)
-            canvas.drawLine(markerX, markerY, markerX, baseline, Paint(grid).apply { alpha = 170 })
-            marker.color = completed.color
-            canvas.drawCircle(markerX, markerY, dp(7f), marker)
-            canvas.drawCircle(markerX, markerY, dp(3f), Paint(marker).apply { color = Color.WHITE })
-        } else if (snapshot.phase == BuyerBreathPhase.SHOCK) {
-            completed.color = Color.parseColor("#DA3633")
-            canvas.drawLine(left, top, right, baseline, completed)
-            canvas.drawLine(left, baseline, right, top, completed)
-            detail.color = Color.parseColor("#FF7B72")
-            detail.textAlign = Paint.Align.CENTER
-            canvas.drawText("ШОК • ОБЫЧНОЕ ВРЕМЯ ЦИКЛА ОТКЛЮЧЕНО", (left + right) / 2f, baseline - dp(9f), detail)
-            detail.textAlign = Paint.Align.LEFT
-            detail.color = Color.parseColor("#8B949E")
+        drawLegend(canvas, left, right)
+        for (score in listOf(100, 50, 0, -50, -100)) {
+            val y = scoreY(score, top, bottom)
+            canvas.drawLine(left, y, right, y, Paint(grid).apply { alpha = if (score == 0) 220 else 100 })
+            detail.textAlign = Paint.Align.RIGHT
+            canvas.drawText(if (score > 0) "+$score" else "$score", left - dp(4f), y + dp(3f), detail)
         }
+        detail.textAlign = Paint.Align.LEFT
+        canvas.drawText("ПОКУПКИ", left, top - dp(7f), detail)
+        canvas.drawText("ПРОДАЖИ", left, bottom + dp(15f), detail)
 
-        val peakX = left + (right - left) * peakProgress
-        val priceX = left + (right - left) * (timing.estimatedPricePeakMinute.toFloat() / total).coerceIn(0f, 1f)
-        canvas.drawLine(peakX, top, peakX, baseline, Paint(grid).apply { alpha = 120 })
-        canvas.drawLine(priceX, top, priceX, baseline, Paint(grid).apply {
-            alpha = 80
-            pathEffect = DashPathEffect(floatArrayOf(dp(3f), dp(4f)), 0f)
-        })
-        detail.textAlign = Paint.Align.LEFT
-        canvas.drawText("0", left, baseline + dp(18f), detail)
-        detail.textAlign = Paint.Align.CENTER
-        canvas.drawText("пик потока ~${timing.estimatedFlowPeakMinute}м", peakX, baseline + dp(18f), detail)
+        if (points.size < 2) {
+            canvas.drawText("Накопление истории: линии появятся и останутся после первых минут потока", left, center, detail)
+            return
+        }
+        val firstAt = points.first().at
+        val lastAt = points.last().at.coerceAtLeast(firstAt + 1L)
+        layers.asReversed().forEach { (minutes, paint) ->
+            drawSeries(canvas, points, { it.score(minutes) }, paint, left, right, top, bottom, firstAt, lastAt)
+        }
+        drawSeries(canvas, points, LiveFlowWavePoint::composite, composite, left, right, top, bottom, firstAt, lastAt)
+        drawTurnMarkers(canvas, points, left, right, top, bottom, firstAt, lastAt)
+
+        val format = SimpleDateFormat("HH:mm", Locale.GERMANY)
+        canvas.drawText(format.format(Date(firstAt)), left, height - dp(13f), detail)
         detail.textAlign = Paint.Align.RIGHT
-        canvas.drawText("выдох ~${timing.estimatedTotalMinutes}м", right, baseline + dp(18f), detail)
+        canvas.drawText(format.format(Date(lastAt)), right, height - dp(13f), detail)
         detail.textAlign = Paint.Align.LEFT
-        canvas.drawText("Типично: поток ~10м • цена ~15м • цикл 20–65м", left, height - dp(12f), detail)
+
+        val selected = selectedAt?.let { target -> points.minByOrNull { kotlin.math.abs(it.at - target) } }
+            ?: points.last()
+        val x = timeX(selected.at, left, right, firstAt, lastAt)
+        canvas.drawLine(x, top, x, bottom, selector)
+        canvas.drawCircle(x, scoreY(selected.composite(), top, bottom), dp(4f), selector)
+        val selectedLine1 = "${format.format(Date(selected.at))} • 15м ${signed(selected.score15m)} • 30м ${signed(selected.score30m)} • 1ч ${signed(selected.score60m)}"
+        val selectedLine2 = "3ч ${signed(selected.score180m)} • 6ч ${signed(selected.score360m)} • итог ${signed(selected.composite())}"
+        detail.textAlign = Paint.Align.CENTER
+        canvas.drawText(selectedLine1, (left + right) / 2f, height - dp(34f), detail)
+        canvas.drawText(selectedLine2, (left + right) / 2f, height - dp(22f), detail)
+        detail.textAlign = Paint.Align.LEFT
+
+        if (snapshot.flowWave.staleSeconds > LiveMarketBreathingAnalyzer.MAX_LIVE_AGE_MILLIS / 1_000L) {
+            val stale = Paint(composite).apply { color = Color.parseColor("#FFD866"); pathEffect = DashPathEffect(floatArrayOf(dp(5f), dp(4f)), 0f) }
+            canvas.drawLine(x, center, right, center, stale)
+        }
     }
 
-    private fun curvePath(
+    private fun drawLegend(canvas: Canvas, left: Float, right: Float) {
+        var x = left
+        val step = ((right - left - dp(58f)) / layers.size).coerceAtLeast(dp(39f))
+        layers.forEach { (minutes, paint) ->
+            val text = when (minutes) { 60 -> "1Ч"; 180 -> "3Ч"; 360 -> "6Ч"; else -> "${minutes}М" }
+            canvas.drawLine(x, dp(22f), x + dp(13f), dp(22f), paint)
+            detail.color = paint.color
+            canvas.drawText(text, x + dp(16f), dp(25f), detail)
+            x += step
+        }
+        detail.color = composite.color
+        canvas.drawLine(right - dp(54f), dp(22f), right - dp(39f), dp(22f), composite)
+        canvas.drawText("ИТОГ", right - dp(35f), dp(25f), detail)
+        detail.color = Color.parseColor("#8B949E")
+        label.textAlign = Paint.Align.LEFT
+        canvas.drawText(snapshot.flowWave.state.take(48), left, dp(45f), label)
+    }
+
+    private fun drawSeries(
+        canvas: Canvas,
+        points: List<LiveFlowWavePoint>,
+        value: (LiveFlowWavePoint) -> Int,
+        paint: Paint,
         left: Float,
         right: Float,
         top: Float,
-        baseline: Float,
-        peakProgress: Float,
-        endProgress: Float
-    ): Path {
+        bottom: Float,
+        firstAt: Long,
+        lastAt: Long
+    ) {
         val path = Path()
-        val steps = maxOf(2, (120 * endProgress).roundToInt())
-        repeat(steps + 1) { index ->
-            val progress = endProgress * index / steps.toFloat()
-            val x = left + (right - left) * progress
-            val y = curveY(progress, peakProgress, top, baseline - top)
+        points.forEachIndexed { index, point ->
+            val x = timeX(point.at, left, right, firstAt, lastAt)
+            val y = scoreY(value(point), top, bottom)
             if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
         }
-        return path
+        canvas.drawPath(path, paint)
     }
 
-    private fun fillPath(path: Path, left: Float, right: Float, baseline: Float, endProgress: Float): Path =
-        Path(path).apply {
-            lineTo(left + (right - left) * endProgress, baseline)
-            lineTo(left, baseline)
-            close()
+    private fun drawTurnMarkers(
+        canvas: Canvas,
+        points: List<LiveFlowWavePoint>,
+        left: Float,
+        right: Float,
+        top: Float,
+        bottom: Float,
+        firstAt: Long,
+        lastAt: Long
+    ) {
+        var lastEntryAt = 0L
+        var lastExitAt = 0L
+        for (index in 1 until points.size) {
+            val before = points[index - 1]
+            val current = points[index]
+            val beforeShort = (before.score15m + before.score30m) / 2
+            val short = (current.score15m + current.score30m) / 2
+            val entry = beforeShort <= 0 && short >= 7 && current.score60m >= -15 && current.at - lastEntryAt >= 20L * 60L * 1_000L
+            val exit = beforeShort >= 12 && short <= 5 && current.composite() < before.composite() && current.at - lastExitAt >= 20L * 60L * 1_000L
+            if (!entry && !exit) continue
+            val x = timeX(current.at, left, right, firstAt, lastAt)
+            val y = scoreY(current.composite(), top, bottom)
+            val triangle = Path().apply {
+                if (entry) {
+                    moveTo(x, y - dp(8f)); lineTo(x - dp(6f), y + dp(5f)); lineTo(x + dp(6f), y + dp(5f))
+                } else {
+                    moveTo(x, y + dp(8f)); lineTo(x - dp(6f), y - dp(5f)); lineTo(x + dp(6f), y - dp(5f))
+                }
+                close()
+            }
+            canvas.drawPath(triangle, if (entry) entryPaint else exitPaint)
+            if (entry) lastEntryAt = current.at else lastExitAt = current.at
         }
-
-    private fun curveY(progress: Float, peak: Float, top: Float, height: Float): Float {
-        val strength = if (progress <= peak) {
-            val normalized = (progress / peak.coerceAtLeast(0.01f)).coerceIn(0f, 1f)
-            1f - (1f - normalized) * (1f - normalized)
-        } else {
-            val normalized = ((progress - peak) / (1f - peak).coerceAtLeast(0.01f)).coerceIn(0f, 1f)
-            1f - normalized * normalized
-        }
-        return top + (1f - strength) * height
     }
 
+    private fun timeX(at: Long, left: Float, right: Float, first: Long, last: Long): Float =
+        left + (right - left) * ((at - first).toDouble() / (last - first).coerceAtLeast(1L)).toFloat().coerceIn(0f, 1f)
+
+    private fun scoreY(score: Int, top: Float, bottom: Float): Float =
+        bottom - (score.coerceIn(-100, 100) + 100f) / 200f * (bottom - top)
+
+    private fun line(color: String, width: Float) = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        this.color = Color.parseColor(color); strokeWidth = dp(width); style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND
+    }
+
+    private fun signed(value: Int) = if (value >= 0) "+$value" else value.toString()
     private fun dp(value: Float) = value * resources.displayMetrics.density
     private fun sp(value: Float) = value * resources.displayMetrics.scaledDensity
 }

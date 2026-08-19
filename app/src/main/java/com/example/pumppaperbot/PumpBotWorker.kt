@@ -106,6 +106,9 @@ class PumpBotWorker(
             CycleStageGuard.run(applicationContext, "FUSION_SIM", {
                 FusionSimStore.state(applicationContext)
             }) { FusionSimStore.sync(applicationContext, deepSeek) }
+            CycleStageGuard.run(applicationContext, "ENTRY_GATE_AUDIT", {
+                EntryOpportunityAuditStore.latest(applicationContext)
+            }) { EntryOpportunityAuditStore.capture(applicationContext) }
             val rapidDropAlerted = CycleStageGuard.run(applicationContext, "RAPID_DROP_ALERT", { false }) {
                 if (PumpBotEngine.shouldAlertRapidDrop(applicationContext, snapshot)) {
                     PumpAlert.showRapidDrop(applicationContext, snapshot)

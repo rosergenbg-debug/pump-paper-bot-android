@@ -113,6 +113,7 @@ V5 has one persistent master switch for user signal notifications, sound and vib
 - V5.4: always-visible graphical buyer-breath lifecycle and three-month empirical ranges, code 83, completed.
 - V5.5: integrated critical overview with adaptive buyer-breath time arc and no duplicate screen, code 84.
 - V5.6: action-first DeepSig card, isolated cycle stages, V4 archive and append-only V4→V5+ performance ledger, code 85, current work.
+- V5.7: continuous 15m/30m/1h/3h/6h flow map, 30-day entry-blocker audit and anonymous capital-mechanism proxy, code 86, current work. Preserve every V5 preference name, V4 archive, SQLite ledger and breathing CSV across all compatible upgrades; no release may silently start a new research epoch. Public CEX flow must never be presented as a known person, firm or country.
 
 ## Accumulated next-release backlog
 
