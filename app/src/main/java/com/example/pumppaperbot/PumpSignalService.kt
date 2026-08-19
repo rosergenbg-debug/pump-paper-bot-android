@@ -144,6 +144,9 @@ class PumpSignalService : Service() {
                 CycleStageGuard.run(this, "FUSION_SIM", { FusionSimStore.state(this) }) {
                     FusionSimStore.sync(this, deepSeek)
                 }
+                CycleStageGuard.run(this, "ENTRY_GATE_AUDIT", { EntryOpportunityAuditStore.latest(this) }) {
+                    EntryOpportunityAuditStore.capture(this)
+                }
                 val rapidDropAlerted = CycleStageGuard.run(this, "RAPID_DROP_ALERT", { false }) {
                     if (PumpBotEngine.shouldAlertRapidDrop(this, snapshot)) {
                         PumpAlert.showRapidDrop(this, snapshot)

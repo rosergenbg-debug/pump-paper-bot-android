@@ -81,7 +81,7 @@ object UnifiedResearchLog {
                 } }
             }
         val report = JSONObject()
-            .put("schema", "pump-signal-unified-log-v56")
+            .put("schema", "pump-signal-unified-log-v57")
             .put("appVersion", BuildConfig.VERSION_NAME)
             .put("generatedAt", now)
             .put("safety", JSONObject()
@@ -98,6 +98,7 @@ object UnifiedResearchLog {
             .put("deepSeekAnalysis", deepSeek.toJson())
             .put("legacyV4Archive", legacyArchive)
             .put("performanceLedger", performanceLedger)
+            .put("entryOpportunityAudit", EntryOpportunityAuditStore.exportJson(context))
             .put("accounts", JSONObject()
                 .put("APP", appJson(app))
                 .put("DeepSig", geminiJson(deepSig.portfolio))

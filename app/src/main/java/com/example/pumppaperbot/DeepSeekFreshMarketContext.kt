@@ -33,6 +33,7 @@ object DeepSeekFreshMarketContext {
         val microFresh = micro.connected && micro.updatedAt > 0L &&
             isFresh(micro.updatedAt, now, MICRO_MAX_AGE)
         val breathing = LiveMarketBreathingStore.snapshot(context, now)
+        val capitalFlow = CapitalFlowProxyPolicy.evaluate(impulse, breathing, now)
 
         frame
             .put("current_price_eur", analysisPrice(snapshot, now))
@@ -47,6 +48,7 @@ object DeepSeekFreshMarketContext {
             .put("funding_source", "latest_settled_funding_rate")
             .put("hourly_flow_source", "closed_30m_klines_aligned_to_last_full_hour")
             .put("live_market_breathing", breathing.toJson())
+            .put("capital_flow_proxy", capitalFlow.toJson())
             .put("five_minute_flow", JSONObject()
                 .put("fresh", impulseFresh)
                 .put("candle_close_at", impulse.candleTime)
