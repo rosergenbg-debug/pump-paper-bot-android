@@ -37,7 +37,7 @@ class EntryGateStatusPolicyTest {
         val result = EntryGateStatusPolicy.fusion(
             FusionSimPortfolio(),
             FusionMarketSnapshot(configured = false),
-            DeepSeekPrimaryState(action = "BUY"),
+            LiveMarketBreathingSnapshot(),
             100L
         )
 

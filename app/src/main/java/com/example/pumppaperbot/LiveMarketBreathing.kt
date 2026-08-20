@@ -47,10 +47,14 @@ data class LiveFlowWavePoint(
     val score30m: Int,
     val score60m: Int,
     val score180m: Int,
-    val score360m: Int
+    val score360m: Int,
+    val score5m: Int = score15m,
+    val score20m: Int = (score15m + score30m) / 2
 ) {
     fun score(minutes: Int): Int = when (minutes) {
+        5 -> score5m
         15 -> score15m
+        20 -> score20m
         30 -> score30m
         60 -> score60m
         180 -> score180m
@@ -77,6 +81,8 @@ data class LiveFlowWave(
         put("stale_seconds", staleSeconds)
         latest?.let {
             put("score_15m", it.score15m)
+            put("score_5m", it.score5m)
+            put("score_20m", it.score20m)
             put("score_30m", it.score30m)
             put("score_1h", it.score60m)
             put("score_3h", it.score180m)
@@ -129,7 +135,7 @@ object LiveMarketBreathingAnalyzer {
     const val MAX_EXPERIMENT_GAP = 15
     const val MAX_LIVE_AGE_MILLIS = 90_000L
     private val windows = intArrayOf(5, 15, 30, 60, 360)
-    private val flowWindows = intArrayOf(15, 30, 60, 180, 360)
+    private val flowWindows = intArrayOf(5, 15, 20, 30, 60, 180, 360)
 
     fun analyze(samples: List<LiveBreathingSample>, now: Long): LiveMarketBreathingSnapshot {
         val valid = samples.asSequence()
@@ -254,11 +260,13 @@ object LiveMarketBreathingAnalyzer {
 
     private fun wavePoint(at: Long, values: DoubleArray) = LiveFlowWavePoint(
         at = at,
-        score15m = values[0].roundToInt().coerceIn(-100, 100),
-        score30m = values[1].roundToInt().coerceIn(-100, 100),
-        score60m = values[2].roundToInt().coerceIn(-100, 100),
-        score180m = values[3].roundToInt().coerceIn(-100, 100),
-        score360m = values[4].roundToInt().coerceIn(-100, 100)
+        score15m = values[1].roundToInt().coerceIn(-100, 100),
+        score30m = values[3].roundToInt().coerceIn(-100, 100),
+        score60m = values[4].roundToInt().coerceIn(-100, 100),
+        score180m = values[5].roundToInt().coerceIn(-100, 100),
+        score360m = values[6].roundToInt().coerceIn(-100, 100),
+        score5m = values[0].roundToInt().coerceIn(-100, 100),
+        score20m = values[2].roundToInt().coerceIn(-100, 100)
     )
 
     private fun flowGuidance(points: List<LiveFlowWavePoint>, staleMillis: Long): Pair<String, String> {

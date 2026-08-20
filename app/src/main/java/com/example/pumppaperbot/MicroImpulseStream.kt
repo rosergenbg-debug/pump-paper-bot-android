@@ -220,6 +220,7 @@ class MicroImpulseStream(context: Context) : WebSocketListener() {
                 (change60.coerceIn(0.0, 1.0) * 20.0) +
                 ((bookImbalance ?: 0.0).coerceIn(0.0, 0.5) / 0.5 * 10.0)
             ).toInt().coerceIn(0, 100)
+        val largeFlow = LargeFlowFingerprintPolicy.evaluate(trades.toList(), now, currentPrice)
 
         val snapshot = MicroImpulseSnapshot(
                 connected = true,
@@ -243,6 +244,7 @@ class MicroImpulseStream(context: Context) : WebSocketListener() {
                 bitcoinAggressiveBuyPercent15s = ratio(btcBuy15, btcSell15) * 100.0,
                 bitcoinAggressiveBuyPercent60s = ratio(btcBuy60, btcSell60) * 100.0,
                 bitcoinPriceChange60sPercent = btcChange60,
+                largeFlow = largeFlow,
                 error = ""
             )
         MicroImpulseStore.save(appContext, snapshot)
@@ -293,6 +295,7 @@ data class MicroImpulseSnapshot(
     val bitcoinAggressiveBuyPercent15s: Double = 50.0,
     val bitcoinAggressiveBuyPercent60s: Double = 50.0,
     val bitcoinPriceChange60sPercent: Double = 0.0,
+    val largeFlow: LargeFlowFingerprint = LargeFlowFingerprint(),
     val error: String = ""
 )
 
@@ -323,6 +326,9 @@ object MicroImpulseStore {
             bitcoinAggressiveBuyPercent15s = p.double("btc_buy_15s", 50.0),
             bitcoinAggressiveBuyPercent60s = p.double("btc_buy_60s", 50.0),
             bitcoinPriceChange60sPercent = p.double("btc_change_60s", 0.0),
+            largeFlow = runCatching {
+                LargeFlowFingerprint.fromJson(JSONObject(p.getString("large_flow_json", null).orEmpty()))
+            }.getOrDefault(LargeFlowFingerprint()),
             error = p.getString("error", "").orEmpty()
         )
     }
@@ -350,6 +356,7 @@ object MicroImpulseStore {
             .putDouble("btc_buy_15s", value.bitcoinAggressiveBuyPercent15s)
             .putDouble("btc_buy_60s", value.bitcoinAggressiveBuyPercent60s)
             .putDouble("btc_change_60s", value.bitcoinPriceChange60sPercent)
+            .putString("large_flow_json", value.largeFlow.toJson().toString())
             .putString("error", value.error)
             .apply()
     }

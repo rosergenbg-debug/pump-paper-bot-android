@@ -135,6 +135,45 @@ object FusionPriorityPolicy {
     }
 }
 
+data class FusionFlowDecision(
+    val action: String,
+    val reason: String,
+    val instant: Int,
+    val score5m: Int,
+    val score15m: Int,
+    val score20m: Int,
+    val score30m: Int
+)
+
+/** V5.8: an isolated, deterministic flow strategy for the Fusion paper account. */
+object FusionFlowPolicy {
+    fun decide(
+        inPosition: Boolean,
+        breathing: LiveMarketBreathingSnapshot
+    ): FusionFlowDecision? {
+        if (!breathing.fresh) return null
+        val latest = breathing.flowWave.latest ?: return null
+        val instant = breathing.instantScore ?: return null
+        val five = latest.score5m
+        val fifteen = latest.score15m
+        val twenty = latest.score20m
+        val thirty = latest.score30m
+        return when {
+            !inPosition && instant > 0 && five > 0 && fifteen > 0 && thirty > 0 -> FusionFlowDecision(
+                "BUY",
+                "FLOW V5.8: мгновенный, 5м, 15м и 30м одновременно выше нуля",
+                instant, five, fifteen, twenty, thirty
+            )
+            inPosition && instant < 0 && five < 0 && fifteen < 0 && twenty < 0 -> FusionFlowDecision(
+                "EXIT",
+                "FLOW V5.8: мгновенный, 5м, 15м и 20м ниже нуля; 30м может ещё оставаться положительным",
+                instant, five, fifteen, twenty, thirty
+            )
+            else -> null
+        }
+    }
+}
+
 internal object FusionSimTrader {
     fun apply(
         current: FusionSimPortfolio,
@@ -226,17 +265,20 @@ object FusionSimStore {
         val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         if (!p.getBoolean(ACTIVATED, false)) activate(context, deepSeek.lastSuccess)
         val current = state(context)
-        val watermark = p.getLong(ACTIVATION_WATERMARK, 0L)
-        if (deepSeek.lastSuccess <= max(current.lastDecisionId, watermark)) return current
+        val flow = FusionFlowPolicy.decide(
+            current.inPosition,
+            LiveMarketBreathingStore.snapshot(context, now)
+        ) ?: return current
         val market = BitpandaFusionStore.state(context)
         if (!market.fresh(now)) {
-            UnifiedResearchLog.record(context, "FUSION_SIM", "WAIT", "Новое решение DeepSig не исполнено: нет свежего read-only стакана Bitpanda")
+            UnifiedResearchLog.record(context, "FUSION_SIM", "WAIT", "Сигнал ${flow.action} по потокам не исполнен: нет свежего read-only стакана Bitpanda")
             return current
         }
-        val recommendation = DeepSeekPaperPolicy.executableRecommendation(deepSeek, now)
+        val decisionId = max(now, current.lastDecisionId + 1L)
+        val reason = "${flow.reason}; значения мгн/5/15/20/30: ${flow.instant}/${flow.score5m}/${flow.score15m}/${flow.score20m}/${flow.score30m}"
         val next = FusionSimTrader.apply(
-            current, deepSeek.lastSuccess, recommendation.action, market.bid, market.ask,
-            market.feeRate, recommendation.reason, now
+            current, decisionId, flow.action, market.bid, market.ask,
+            market.feeRate, reason, now
         )
         if (next != current) {
             save(context, next)

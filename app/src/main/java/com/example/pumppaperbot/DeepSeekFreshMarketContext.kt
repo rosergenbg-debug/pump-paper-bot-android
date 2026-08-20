@@ -49,6 +49,8 @@ object DeepSeekFreshMarketContext {
             .put("hourly_flow_source", "closed_30m_klines_aligned_to_last_full_hour")
             .put("live_market_breathing", breathing.toJson())
             .put("capital_flow_proxy", capitalFlow.toJson())
+            .put("anonymous_large_order_fingerprint", JSONObject(micro.largeFlow.toJson().toString())
+                .put("fresh", microFresh))
             .put("five_minute_flow", JSONObject()
                 .put("fresh", impulseFresh)
                 .put("candle_close_at", impulse.candleTime)

@@ -105,15 +105,16 @@ object EntryGateStatusPolicy {
     fun fusion(
         portfolio: FusionSimPortfolio,
         market: FusionMarketSnapshot,
-        deepSig: DeepSeekPrimaryState,
+        breathing: LiveMarketBreathingSnapshot,
         now: Long
     ): EntryGateStatus {
-        if (portfolio.inPosition) return EntryGateStatus("Fusion", "В ПОЗИЦИИ", "BUY DeepSig исполнен виртуально по Bitpanda ask.")
+        if (portfolio.inPosition) return EntryGateStatus("Fusion", "В ПОЗИЦИИ", "Flow BUY исполнен виртуально по Bitpanda ask; выход ждёт минус мгн/5/15/20.")
+        val wave = breathing.flowWave.latest
         val reason = when {
             !market.configured -> "Read-only ключ Bitpanda не настроен; Fusion не может проверить реальную цену исполнения."
             !market.fresh(now) -> "Стакан Bitpanda устарел или недоступен; виртуальное исполнение безопасно заблокировано."
-            deepSig.action.uppercase() != "BUY" -> "Fusion ждёт новый исполнимый BUY от DeepSig; сам направление не придумывает."
-            else -> "BUY DeepSig получен, ожидается следующий цикл виртуального исполнения."
+            !breathing.fresh || wave == null || breathing.instantScore == null -> "Fusion ждёт свежие мгновенный/5/15/30-минутные потоки."
+            else -> "Для BUY нужны все плюсы: сейчас мгн ${breathing.instantScore}, 5м ${wave.score5m}, 15м ${wave.score15m}, 30м ${wave.score30m}."
         }
         return EntryGateStatus("Fusion", "НЕ ВОШЁЛ", reason)
     }
@@ -147,7 +148,7 @@ object EntryOpportunityAuditStore {
                 EntryGateStatusPolicy.app(AppPaperStore.state(context)),
                 EntryGateStatusPolicy.deepSig(deepSig, deepSigPaper),
                 EntryGateStatusPolicy.deepSigX(GeminiExitExperimentStore.state(context)),
-                EntryGateStatusPolicy.fusion(FusionSimStore.state(context), fusionMarket, deepSig, now)
+                EntryGateStatusPolicy.fusion(FusionSimStore.state(context), fusionMarket, breathing, now)
             )
         )
         val dir = File(context.filesDir, DIRECTORY).apply { mkdirs() }

@@ -7,6 +7,52 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BitpandaFusionTest {
+    private fun flowSnapshot(
+        instant: Int,
+        five: Int,
+        fifteen: Int,
+        twenty: Int,
+        thirty: Int,
+        fresh: Boolean = true
+    ) = LiveMarketBreathingSnapshot(
+        fresh = fresh,
+        instantScore = instant,
+        flowWave = LiveFlowWave(points = listOf(LiveFlowWavePoint(
+            at = 1L,
+            score15m = fifteen,
+            score30m = thirty,
+            score60m = 0,
+            score180m = 0,
+            score360m = 0,
+            score5m = five,
+            score20m = twenty
+        )))
+    )
+
+    @Test fun `Fusion flow buys only when instant 5 15 and 30 are positive`() {
+        assertEquals("BUY", FusionFlowPolicy.decide(
+            false, flowSnapshot(8, 5, 3, -2, 1)
+        )?.action)
+        assertEquals(null, FusionFlowPolicy.decide(
+            false, flowSnapshot(8, 5, 3, 2, 0)
+        ))
+    }
+
+    @Test fun `Fusion exits early when instant 5 15 and exact 20m are negative`() {
+        val exit = FusionFlowPolicy.decide(true, flowSnapshot(-5, -4, -3, -1, 20))
+        assertEquals("EXIT", exit?.action)
+        assertEquals(20, exit?.score30m)
+        assertEquals(null, FusionFlowPolicy.decide(
+            true, flowSnapshot(-5, -4, -3, 1, -20)
+        ))
+    }
+
+    @Test fun `Fusion flow refuses stale data`() {
+        assertEquals(null, FusionFlowPolicy.decide(
+            false, flowSnapshot(10, 10, 10, 10, 10, fresh = false)
+        ))
+    }
+
     @Test fun `orderbook parser uses best bid ask and computes spread and depth`() {
         val snapshot = BitpandaFusionClient.parseOrderbook(
             JSONObject("""{
