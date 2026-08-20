@@ -134,7 +134,10 @@ data class LiveMarketBreathingSnapshot(
 object LiveMarketBreathingAnalyzer {
     const val MAX_EXPERIMENT_GAP = 15
     const val MAX_LIVE_AGE_MILLIS = 90_000L
-    private val windows = intArrayOf(5, 15, 30, 60, 360)
+    // These are the exact retrospective windows rendered as the upper bars in
+    // CriticalOverviewActivity.  Fusion must consume these same values instead
+    // of independently using the faster exponentially-decayed flow clock.
+    private val windows = intArrayOf(5, 15, 20, 30, 60, 360)
     private val flowWindows = intArrayOf(5, 15, 20, 30, 60, 180, 360)
 
     fun analyze(samples: List<LiveBreathingSample>, now: Long): LiveMarketBreathingSnapshot {
@@ -149,9 +152,10 @@ object LiveMarketBreathingAnalyzer {
         val fresh = now >= latest.at && now - latest.at <= MAX_LIVE_AGE_MILLIS
         val instant = instantScore(latest)
         val horizons = windows.map { minutes -> horizon(valid, latest, minutes) }
-        val weighted = listOf(0.25, 0.25, 0.20, 0.18, 0.12)
-            .zip(horizons)
-            .filter { it.second.score != null }
+        val normalWeights = mapOf(5 to 0.25, 15 to 0.25, 30 to 0.20, 60 to 0.18, 360 to 0.12)
+        val weighted = horizons.mapNotNull { horizon ->
+            normalWeights[horizon.minutes]?.let { weight -> weight to horizon }
+        }.filter { it.second.score != null }
         val normal = if (weighted.isEmpty()) null else (
             weighted.sumOf { (weight, horizon) -> weight * horizon.score!! } /
                 weighted.sumOf { it.first }

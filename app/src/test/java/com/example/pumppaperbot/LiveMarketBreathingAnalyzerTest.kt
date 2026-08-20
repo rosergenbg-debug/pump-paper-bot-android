@@ -7,6 +7,25 @@ import org.junit.Test
 import kotlin.math.abs
 
 class LiveMarketBreathingAnalyzerTest {
+    @Test fun `upper overview bars include exact 20 minute retrospective window`() {
+        val now = 2_000_000L
+        val samples = (0..80).map { index ->
+            LiveBreathingSample(
+                at = now - (80 - index) * 15_000L,
+                priceUsdt = 1.0 + index * 0.0001,
+                pumpBuyerPercent = 56.0,
+                pumpChange60sPercent = 0.02,
+                bookImbalance = 0.08,
+                bitcoinBuyerPercent = 52.0,
+                bitcoinChange60sPercent = 0.01
+            )
+        }
+
+        val result = LiveMarketBreathingAnalyzer.analyze(samples, now)
+
+        assertTrue(result.horizons.any { it.minutes == 20 && it.score != null })
+    }
+
     @Test fun `single violent tick cannot overturn sustained positive breathing`() {
         val now = 20L * 60L * 1000L
         val samples = (0..79).map { index ->

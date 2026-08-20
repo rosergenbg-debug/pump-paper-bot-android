@@ -115,6 +115,7 @@ V5 has one persistent master switch for user signal notifications, sound and vib
 - V5.6: action-first DeepSig card, isolated cycle stages, V4 archive and append-only V4→V5+ performance ledger, code 85, current work.
 - V5.7: continuous 15m/30m/1h/3h/6h flow map, 30-day entry-blocker audit and anonymous capital-mechanism proxy, code 86.
 - V5.8: human-readable 5m/15m/30m/60m flow clock, anonymous large-taker/metaorder fingerprint and isolated FusionSim flow strategy, code 87, current work. FusionSim BUY requires positive instant/5m/15m/30m flow; EXIT requires negative instant/5m/15m/20m flow while 30m may remain positive. Preserve every V5 preference name, V4 archive, SQLite ledger and breathing CSV across all compatible upgrades; no release may silently start a new research epoch. Public CEX flow must never be presented as a known person, firm or country.
+- V5.9: FusionSim reads the exact retrospective instant/5m/15m/20m/30m values rendered by the upper critical-overview bars, code 88. The lower exponentially-decayed flow clock is diagnostic only and cannot execute Fusion trades. Storage names, research epoch, package id and compatible signing line remain unchanged.
 
 ## Accumulated next-release backlog
 
