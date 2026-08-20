@@ -144,6 +144,11 @@ class BitpandaFusionActivity : AppCompatActivity() {
         val mark = if (s.fresh()) s.bid else s.mid
         val priority = FusionPriorityPolicy.plan(p)
         val metrics = FusionPriorityPolicy.metrics(p, mark, s.feeRate, s.fresh())
+        val breathing = LiveMarketBreathingStore.snapshot(this)
+        val wave = breathing.flowWave.latest
+        val flowNow = "мгн ${breathing.instantScore?.let(::signed) ?: "—"} • " +
+            "5м ${wave?.score5m?.let(::signed) ?: "—"} • 15м ${wave?.score15m?.let(::signed) ?: "—"} • " +
+            "20м ${wave?.score20m?.let(::signed) ?: "—"} • 30м ${wave?.score30m?.let(::signed) ?: "—"}"
         account.text = "Старт: €1 000,00\nEUR: ${eur(p.cashEur)}\nPUMP: ${String.format(Locale.US, "%.4f", p.pumpAmount)}\n" +
             "Режим: ${if (priority.active) priority.label else "обычное автономное наблюдение"}\n" +
             "Чистая стоимость при виртуальном выходе: ${eur(metrics.netLiquidationValueEur)}\n" +
@@ -151,18 +156,21 @@ class BitpandaFusionActivity : AppCompatActivity() {
             "Цена результата: ${if (metrics.venueFresh) "свежий Fusion bid" else "справочная, исполнение заблокировано"}\n" +
             "Откат от пика: ${String.format(Locale.US, "%.2f", metrics.pullbackFromPeakPercent)}%\n" +
             "Комиссии: ${eur(p.totalFeesEur)} • сделок: ${p.trades.size}\n" +
-            "Логика: после BUY DeepSig Pro проверяет позицию раз в минуту; EXIT исполняется по свежему Bitpanda bid, только виртуально. Позиция Сержа отделена."
+            "Потоки сейчас: $flowNow\n" +
+            "BUY: мгн/5/15/30 все выше 0. EXIT: мгн/5/15/20 все ниже 0; положительные 30м выхода не задерживают. " +
+            "Исполнение по свежим Bitpanda ask/bid, только виртуально. Позиция Сержа отделена."
     }
 
     private fun venueAdvice(spread: Double, imbalance: Double): String = when {
-        spread > 1.0 -> "широкий спред — виртуальный вход блокируется только правилами DeepSig, риск исполнения высокий"
+        spread > 1.0 -> "широкий спред — flow-сигнал может дать невыгодное виртуальное исполнение"
         imbalance < -35.0 -> "в ask-глубине перевес; вход требует дополнительного подтверждения"
         imbalance > 35.0 -> "в bid-глубине перевес; это подтверждение, но не самостоятельный BUY"
-        else -> "стакан сбалансирован; решение остаётся за независимым анализом DeepSig"
+        else -> "стакан сбалансирован; направление задаёт отдельная flow-логика FusionSim"
     }
 
     private fun eur(v: Double) = String.format(Locale.GERMANY, "€%,.2f", v)
     private fun signedEur(v: Double) = String.format(Locale.GERMANY, "%+,.2f €", v)
+    private fun signed(v: Int) = if (v >= 0) "+$v" else v.toString()
     private fun money(v: Double) = String.format(Locale.US, "€%.6f", v)
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
     private fun params(height: Int, top: Int = 0) = LinearLayout.LayoutParams(-1, if (height < 0) -2 else dp(height)).apply { topMargin = dp(top) }

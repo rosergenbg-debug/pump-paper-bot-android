@@ -2,21 +2,18 @@ package com.example.pumppaperbot
 
 import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.DashPathEffect
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.RectF
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.view.MotionEvent
 import android.view.View
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
-import java.text.SimpleDateFormat
-import java.util.Date
 import java.util.Locale
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -34,7 +31,8 @@ class CriticalOverviewActivity : AppCompatActivity() {
     private lateinit var status: TextView
     private lateinit var chart: CriticalOverviewChartView
     private lateinit var breathingChart: MarketBreathingChartView
-    private lateinit var flowWaveChart: ContinuousFlowWaveView
+    private lateinit var flowWaveChart: FlowClockView
+    private lateinit var largeFlow: TextView
     private lateinit var breathTiming: TextView
     private lateinit var entryAudit: TextView
     private lateinit var facts: TextView
@@ -75,21 +73,23 @@ class CriticalOverviewActivity : AppCompatActivity() {
         breathingChart = MarketBreathingChartView(this)
         content.addView(breathingChart, params(dp(330), dp(6)))
         content.addView(label(
-            "ЖИВАЯ КАРТА ПОТОКА • 15 МИН — 6 ЧАСОВ",
+            "ЧАСЫ РЫНОЧНОГО ПОТОКА",
             18,
             "#F0F6FC",
             true
         ), params(-2, dp(10)))
         content.addView(label(
-            "Пять плавных волн показывают, как покупательский и продавцовский поток перетекает между 15 мин, 30 мин, 1 ч, 3 ч и 6 ч. Коснитесь графика для значений в выбранный момент.",
+            "Четыре отдельные дуги не накладываются друг на друга: 5 мин быстро реагируют, 15 мин показывают основное движение, 30 и 60 мин подтверждают фон. Маркеры плавно перетекают между продавцами и покупателями.",
             12,
             "#8B949E",
             false
         ), params(-2, dp(3)))
-        flowWaveChart = ContinuousFlowWaveView(this)
-        content.addView(flowWaveChart, params(dp(390), dp(6)))
+        flowWaveChart = FlowClockView(this)
+        content.addView(flowWaveChart, params(dp(430), dp(6)))
         breathTiming = panel(14, true)
         content.addView(breathTiming, params(-2, dp(6)))
+        largeFlow = panel(14, true)
+        content.addView(largeFlow, params(-2, dp(6)))
         entryAudit = panel(14, false)
         content.addView(entryAudit, params(-2, dp(6)))
         facts = panel(14, false)
@@ -179,6 +179,7 @@ class CriticalOverviewActivity : AppCompatActivity() {
         breathingChart.setData(breathing)
         flowWaveChart.setData(breathing)
         breathTiming.text = ContinuousFlowWaveText.describe(breathing)
+        largeFlow.text = LargeFlowFingerprintText.describe(micro.largeFlow)
         entryAudit.text = buildString {
             append("ПОЧЕМУ СИСТЕМЫ ВОШЛИ ИЛИ НЕ ВОШЛИ")
             if (audit.at <= 0L || audit.participants.isEmpty()) {
@@ -480,11 +481,10 @@ object ContinuousFlowWaveText {
         val latest = wave.latest
         append("СЕЙЧАС: ").append(wave.state)
         latest?.let {
+            append("\n5м ").append(signed(it.score5m))
             append("\n15м ").append(signed(it.score15m))
             append(" • 30м ").append(signed(it.score30m))
             append(" • 1ч ").append(signed(it.score60m))
-            append(" • 3ч ").append(signed(it.score180m))
-            append(" • 6ч ").append(signed(it.score360m))
         }
         append("\nЧТО ДЕЛАТЬ: ").append(wave.guidance)
         append("\nЗелёные/красные метки — зоны проверки разворота потока, не автоматические BUY/EXIT.")
@@ -496,198 +496,109 @@ object ContinuousFlowWaveText {
     private fun signed(value: Int) = if (value >= 0) "+$value" else value.toString()
 }
 
-class ContinuousFlowWaveView(context: android.content.Context) : View(context) {
-    private val background = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#101820") }
-    private val grid = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#30363D"); strokeWidth = dp(1f) }
-    private val label = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#C9D1D9"); textSize = sp(10f); isFakeBoldText = true
+object LargeFlowFingerprintText {
+    fun describe(value: LargeFlowFingerprint): String = buildString {
+        append("КРУПНЫЙ ПОТОК • ВИДИМЫЙ ОТПЕЧАТОК\n")
+        append(value.title).append(" • уверенность ").append(value.confidence).append("/100")
+        append(String.format(Locale.GERMANY, "\nДинамический порог крупной заявки: $%,.0f", value.thresholdUsdt))
+        append(String.format(Locale.GERMANY, "\nКрупные покупки за 5 мин: $%,.0f • продажи: $%,.0f", value.largeBuyUsdt, value.largeSellUsdt))
+        append(String.format(Locale.GERMANY, "\nКрупнейшая покупка: $%,.0f • продажа: $%,.0f", value.largestBuyUsdt, value.largestSellUsdt))
+        append("\nПочерк: ").append(value.fingerprint)
+        append("\n").append(value.explanation)
+        append("\nВажно: биржа не показывает имя владельца. Похожая сумма и ритм — косвенный признак алгоритма, а не доказательство, что это один человек или фирма.")
     }
-    private val detail = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#8B949E"); textSize = sp(8.5f) }
-    private val selector = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; strokeWidth = dp(1f); alpha = 180 }
-    private val entryPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#3FB950"); style = Paint.Style.FILL }
-    private val exitPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#F85149"); style = Paint.Style.FILL }
-    private val layers = listOf(
-        15 to line("#FF8B3D", 3.0f),
-        30 to line("#FFD866", 2.5f),
-        60 to line("#58A6FF", 2.2f),
-        180 to line("#BC8CFF", 1.9f),
-        360 to line("#8B949E", 1.6f)
+}
+
+class FlowClockView(context: android.content.Context) : View(context) {
+    private val background = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#101820") }
+    private val track = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#30363D"); style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND
+    }
+    private val label = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#F0F6FC"); textSize = sp(11f); isFakeBoldText = true
+    }
+    private val detail = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#8B949E"); textSize = sp(9f) }
+    private val red = Color.parseColor("#F85149")
+    private val green = Color.parseColor("#3FB950")
+    private val neutral = Color.parseColor("#8B949E")
+    private val ringColors = intArrayOf(
+        Color.parseColor("#FF8B3D"), Color.parseColor("#FFD866"),
+        Color.parseColor("#58A6FF"), Color.parseColor("#BC8CFF")
     )
-    private val composite = line("#F0F6FC", 3.5f)
     private var snapshot = LiveMarketBreathingSnapshot()
-    private var selectedAt: Long? = null
+    private val displayed = FloatArray(4)
+    private val targets = FloatArray(4)
+    private var initialized = false
 
     fun setData(snapshot: LiveMarketBreathingSnapshot) {
         this.snapshot = snapshot
+        snapshot.flowWave.latest?.let {
+            val next = floatArrayOf(it.score5m.toFloat(), it.score15m.toFloat(), it.score30m.toFloat(), it.score60m.toFloat())
+            next.copyInto(targets)
+            if (!initialized) { next.copyInto(displayed); initialized = true }
+        }
         invalidate()
-    }
-
-    override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (event.action == MotionEvent.ACTION_DOWN || event.action == MotionEvent.ACTION_MOVE) {
-            val points = snapshot.flowWave.points
-            if (points.isNotEmpty()) {
-                val left = dp(31f)
-                val right = width - dp(13f)
-                val ratio = ((event.x - left) / (right - left).coerceAtLeast(1f)).coerceIn(0f, 1f)
-                val first = points.first().at
-                val last = points.last().at
-                selectedAt = first + ((last - first) * ratio).toLong()
-                invalidate()
-            }
-            return true
-        }
-        if (event.action == MotionEvent.ACTION_UP) {
-            performClick()
-            return true
-        }
-        return super.onTouchEvent(event)
-    }
-
-    override fun performClick(): Boolean {
-        super.performClick()
-        return true
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         canvas.drawColor(background.color)
-        val points = snapshot.flowWave.points
-        val left = dp(31f)
-        val right = width - dp(13f)
-        val top = dp(58f)
-        val bottom = height - dp(80f)
-        val center = (top + bottom) / 2f
-
-        drawLegend(canvas, left, right)
-        for (score in listOf(100, 50, 0, -50, -100)) {
-            val y = scoreY(score, top, bottom)
-            canvas.drawLine(left, y, right, y, Paint(grid).apply { alpha = if (score == 0) 220 else 100 })
-            detail.textAlign = Paint.Align.RIGHT
-            canvas.drawText(if (score > 0) "+$score" else "$score", left - dp(4f), y + dp(3f), detail)
+        var moving = false
+        for (i in displayed.indices) {
+            val delta = targets[i] - displayed[i]
+            if (kotlin.math.abs(delta) > 0.15f) { displayed[i] += delta * 0.14f; moving = true }
         }
+        val cx = width / 2f
+        val cy = dp(245f)
+        val maxRadius = minOf(width / 2f - dp(24f), dp(190f))
+        val radii = floatArrayOf(maxRadius, maxRadius - dp(28f), maxRadius - dp(56f), maxRadius - dp(84f))
         detail.textAlign = Paint.Align.LEFT
-        canvas.drawText("ПОКУПКИ", left, top - dp(7f), detail)
-        canvas.drawText("ПРОДАЖИ", left, bottom + dp(15f), detail)
-
-        if (points.size < 2) {
-            canvas.drawText("Накопление истории: линии появятся и останутся после первых минут потока", left, center, detail)
-            return
+        detail.color = red; canvas.drawText("ПРОДАВЦЫ", dp(12f), dp(25f), detail)
+        detail.textAlign = Paint.Align.CENTER; detail.color = neutral; canvas.drawText("РАВНОВЕСИЕ", cx, dp(25f), detail)
+        detail.textAlign = Paint.Align.RIGHT; detail.color = green; canvas.drawText("ПОКУПАТЕЛИ", width - dp(12f), dp(25f), detail)
+        val names = arrayOf("5 МИН", "15 МИН • ОСНОВНОЙ", "30 МИН", "60 МИН")
+        radii.forEachIndexed { index, radius ->
+            track.strokeWidth = dp(if (index == 1) 11f else 8f)
+            track.color = Color.parseColor("#30363D")
+            val oval = RectF(cx - radius, cy - radius, cx + radius, cy + radius)
+            canvas.drawArc(oval, 180f, 180f, false, track)
+            val score = displayed[index].coerceIn(-100f, 100f)
+            val sweep = (score + 100f) / 200f * 180f
+            track.color = if (score > 5f) green else if (score < -5f) red else neutral
+            canvas.drawArc(oval, 270f, sweep - 90f, false, track)
+            val angle = Math.toRadians((180f + sweep).toDouble())
+            val x = cx + kotlin.math.cos(angle).toFloat() * radius
+            val y = cy + kotlin.math.sin(angle).toFloat() * radius
+            val marker = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = ringColors[index]; style = Paint.Style.FILL }
+            canvas.drawCircle(x, y, dp(if (index == 1) 7f else 6f), marker)
         }
-        val firstAt = points.first().at
-        val lastAt = points.last().at.coerceAtLeast(firstAt + 1L)
-        layers.asReversed().forEach { (minutes, paint) ->
-            drawSeries(canvas, points, { it.score(minutes) }, paint, left, right, top, bottom, firstAt, lastAt)
+        detail.textAlign = Paint.Align.CENTER; detail.color = neutral
+        canvas.drawText("−100", dp(24f), cy + dp(17f), detail)
+        canvas.drawText("0", cx, cy - maxRadius - dp(8f), detail)
+        canvas.drawText("+100", width - dp(24f), cy + dp(17f), detail)
+        val rowTop = dp(278f)
+        names.forEachIndexed { index, name ->
+            val y = rowTop + index * dp(32f)
+            val dot = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = ringColors[index] }
+            canvas.drawCircle(dp(20f), y - dp(4f), dp(4f), dot)
+            label.textAlign = Paint.Align.LEFT; label.color = Color.parseColor("#F0F6FC")
+            canvas.drawText(name, dp(32f), y, label)
+            label.textAlign = Paint.Align.RIGHT
+            label.color = if (displayed[index] > 5) green else if (displayed[index] < -5) red else neutral
+            canvas.drawText("${signed(displayed[index].roundToInt())} • ${phase(displayed[index].roundToInt())}", width - dp(12f), y, label)
         }
-        drawSeries(canvas, points, LiveFlowWavePoint::composite, composite, left, right, top, bottom, firstAt, lastAt)
-        drawTurnMarkers(canvas, points, left, right, top, bottom, firstAt, lastAt)
-
-        val format = SimpleDateFormat("HH:mm", Locale.GERMANY)
-        canvas.drawText(format.format(Date(firstAt)), left, height - dp(13f), detail)
-        detail.textAlign = Paint.Align.RIGHT
-        canvas.drawText(format.format(Date(lastAt)), right, height - dp(13f), detail)
-        detail.textAlign = Paint.Align.LEFT
-
-        val selected = selectedAt?.let { target -> points.minByOrNull { kotlin.math.abs(it.at - target) } }
-            ?: points.last()
-        val x = timeX(selected.at, left, right, firstAt, lastAt)
-        canvas.drawLine(x, top, x, bottom, selector)
-        canvas.drawCircle(x, scoreY(selected.composite(), top, bottom), dp(4f), selector)
-        val selectedLine1 = "${format.format(Date(selected.at))} • 15м ${signed(selected.score15m)} • 30м ${signed(selected.score30m)} • 1ч ${signed(selected.score60m)}"
-        val selectedLine2 = "3ч ${signed(selected.score180m)} • 6ч ${signed(selected.score360m)} • итог ${signed(selected.composite())}"
-        detail.textAlign = Paint.Align.CENTER
-        canvas.drawText(selectedLine1, (left + right) / 2f, height - dp(34f), detail)
-        canvas.drawText(selectedLine2, (left + right) / 2f, height - dp(22f), detail)
-        detail.textAlign = Paint.Align.LEFT
-
-        if (snapshot.flowWave.staleSeconds > LiveMarketBreathingAnalyzer.MAX_LIVE_AGE_MILLIS / 1_000L) {
-            val stale = Paint(composite).apply { color = Color.parseColor("#FFD866"); pathEffect = DashPathEffect(floatArrayOf(dp(5f), dp(4f)), 0f) }
-            canvas.drawLine(x, center, right, center, stale)
-        }
+        detail.textAlign = Paint.Align.CENTER; detail.color = Color.parseColor("#8B949E")
+        val freshness = if (snapshot.fresh) "ЖИВОЙ ПОТОК" else "ДАННЫЕ УСТАРЕЛИ — НОВЫЕ РЕШЕНИЯ ЗАБЛОКИРОВАНЫ"
+        canvas.drawText(freshness, cx, height - dp(12f), detail)
+        if (moving) postInvalidateOnAnimation()
     }
 
-    private fun drawLegend(canvas: Canvas, left: Float, right: Float) {
-        var x = left
-        val step = ((right - left - dp(58f)) / layers.size).coerceAtLeast(dp(39f))
-        layers.forEach { (minutes, paint) ->
-            val text = when (minutes) { 60 -> "1Ч"; 180 -> "3Ч"; 360 -> "6Ч"; else -> "${minutes}М" }
-            canvas.drawLine(x, dp(22f), x + dp(13f), dp(22f), paint)
-            detail.color = paint.color
-            canvas.drawText(text, x + dp(16f), dp(25f), detail)
-            x += step
-        }
-        detail.color = composite.color
-        canvas.drawLine(right - dp(54f), dp(22f), right - dp(39f), dp(22f), composite)
-        canvas.drawText("ИТОГ", right - dp(35f), dp(25f), detail)
-        detail.color = Color.parseColor("#8B949E")
-        label.textAlign = Paint.Align.LEFT
-        canvas.drawText(snapshot.flowWave.state.take(48), left, dp(45f), label)
-    }
-
-    private fun drawSeries(
-        canvas: Canvas,
-        points: List<LiveFlowWavePoint>,
-        value: (LiveFlowWavePoint) -> Int,
-        paint: Paint,
-        left: Float,
-        right: Float,
-        top: Float,
-        bottom: Float,
-        firstAt: Long,
-        lastAt: Long
-    ) {
-        val path = Path()
-        points.forEachIndexed { index, point ->
-            val x = timeX(point.at, left, right, firstAt, lastAt)
-            val y = scoreY(value(point), top, bottom)
-            if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
-        }
-        canvas.drawPath(path, paint)
-    }
-
-    private fun drawTurnMarkers(
-        canvas: Canvas,
-        points: List<LiveFlowWavePoint>,
-        left: Float,
-        right: Float,
-        top: Float,
-        bottom: Float,
-        firstAt: Long,
-        lastAt: Long
-    ) {
-        var lastEntryAt = 0L
-        var lastExitAt = 0L
-        for (index in 1 until points.size) {
-            val before = points[index - 1]
-            val current = points[index]
-            val beforeShort = (before.score15m + before.score30m) / 2
-            val short = (current.score15m + current.score30m) / 2
-            val entry = beforeShort <= 0 && short >= 7 && current.score60m >= -15 && current.at - lastEntryAt >= 20L * 60L * 1_000L
-            val exit = beforeShort >= 12 && short <= 5 && current.composite() < before.composite() && current.at - lastExitAt >= 20L * 60L * 1_000L
-            if (!entry && !exit) continue
-            val x = timeX(current.at, left, right, firstAt, lastAt)
-            val y = scoreY(current.composite(), top, bottom)
-            val triangle = Path().apply {
-                if (entry) {
-                    moveTo(x, y - dp(8f)); lineTo(x - dp(6f), y + dp(5f)); lineTo(x + dp(6f), y + dp(5f))
-                } else {
-                    moveTo(x, y + dp(8f)); lineTo(x - dp(6f), y - dp(5f)); lineTo(x + dp(6f), y - dp(5f))
-                }
-                close()
-            }
-            canvas.drawPath(triangle, if (entry) entryPaint else exitPaint)
-            if (entry) lastEntryAt = current.at else lastExitAt = current.at
-        }
-    }
-
-    private fun timeX(at: Long, left: Float, right: Float, first: Long, last: Long): Float =
-        left + (right - left) * ((at - first).toDouble() / (last - first).coerceAtLeast(1L)).toFloat().coerceIn(0f, 1f)
-
-    private fun scoreY(score: Int, top: Float, bottom: Float): Float =
-        bottom - (score.coerceIn(-100, 100) + 100f) / 200f * (bottom - top)
-
-    private fun line(color: String, width: Float) = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        this.color = Color.parseColor(color); strokeWidth = dp(width); style = Paint.Style.STROKE
-        strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND
+    private fun phase(score: Int) = when {
+        score >= 35 -> "СИЛЬНЫЕ ПОКУПКИ"
+        score >= 8 -> "ПОКУПКИ"
+        score <= -35 -> "ПРОДАВЦЫ ДАВЯТ"
+        score <= -8 -> "ПРОДАЖИ"
+        else -> "РАВНОВЕСИЕ"
     }
 
     private fun signed(value: Int) = if (value >= 0) "+$value" else value.toString()
