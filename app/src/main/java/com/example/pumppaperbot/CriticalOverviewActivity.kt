@@ -71,7 +71,7 @@ class CriticalOverviewActivity : AppCompatActivity() {
             true
         ), params(-2, dp(10)))
         breathingChart = MarketBreathingChartView(this)
-        content.addView(breathingChart, params(dp(330), dp(6)))
+        content.addView(breathingChart, params(dp(380), dp(6)))
         content.addView(label(
             "ЧАСЫ РЫНОЧНОГО ПОТОКА",
             18,

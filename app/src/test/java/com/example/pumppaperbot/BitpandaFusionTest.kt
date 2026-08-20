@@ -7,7 +7,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BitpandaFusionTest {
-    private fun flowSnapshot(
+    private fun upperBarSnapshot(
         instant: Int,
         five: Int,
         fifteen: Int,
@@ -17,40 +17,62 @@ class BitpandaFusionTest {
     ) = LiveMarketBreathingSnapshot(
         fresh = fresh,
         instantScore = instant,
-        flowWave = LiveFlowWave(points = listOf(LiveFlowWavePoint(
-            at = 1L,
-            score15m = fifteen,
-            score30m = thirty,
-            score60m = 0,
-            score180m = 0,
-            score360m = 0,
-            score5m = five,
-            score20m = twenty
-        )))
+        horizons = listOf(
+            LiveBreathingHorizon(5, five, null, null, 70, 20),
+            LiveBreathingHorizon(15, fifteen, null, null, 70, 60),
+            LiveBreathingHorizon(20, twenty, null, null, 70, 80),
+            LiveBreathingHorizon(30, thirty, null, null, 70, 120)
+        )
     )
 
     @Test fun `Fusion flow buys only when instant 5 15 and 30 are positive`() {
         assertEquals("BUY", FusionFlowPolicy.decide(
-            false, flowSnapshot(8, 5, 3, -2, 1)
+            false, upperBarSnapshot(8, 5, 3, -2, 1)
         )?.action)
         assertEquals(null, FusionFlowPolicy.decide(
-            false, flowSnapshot(8, 5, 3, 2, 0)
+            false, upperBarSnapshot(8, 5, 3, 2, 0)
         ))
     }
 
     @Test fun `Fusion exits early when instant 5 15 and exact 20m are negative`() {
-        val exit = FusionFlowPolicy.decide(true, flowSnapshot(-5, -4, -3, -1, 20))
+        val exit = FusionFlowPolicy.decide(true, upperBarSnapshot(-5, -4, -3, -1, 20))
         assertEquals("EXIT", exit?.action)
         assertEquals(20, exit?.score30m)
         assertEquals(null, FusionFlowPolicy.decide(
-            true, flowSnapshot(-5, -4, -3, 1, -20)
+            true, upperBarSnapshot(-5, -4, -3, 1, -20)
         ))
     }
 
     @Test fun `Fusion flow refuses stale data`() {
         assertEquals(null, FusionFlowPolicy.decide(
-            false, flowSnapshot(10, 10, 10, 10, 10, fresh = false)
+            false, upperBarSnapshot(10, 10, 10, 10, 10, fresh = false)
         ))
+    }
+
+    @Test fun `Fusion ignores contradictory lower flow clock values`() {
+        val upper = upperBarSnapshot(12, 9, 7, 5, 4).copy(
+            flowWave = LiveFlowWave(points = listOf(LiveFlowWavePoint(
+                at = 1L,
+                score15m = -80,
+                score30m = -80,
+                score60m = -80,
+                score180m = -80,
+                score360m = -80,
+                score5m = -80,
+                score20m = -80
+            )))
+        )
+
+        assertEquals("BUY", FusionFlowPolicy.decide(false, upper)?.action)
+    }
+
+    @Test fun `Fusion waits until every required upper bar exists`() {
+        val missing20 = upperBarSnapshot(-8, -7, -6, -5, 20).copy(
+            horizons = upperBarSnapshot(-8, -7, -6, -5, 20).horizons
+                .filterNot { it.minutes == 20 }
+        )
+
+        assertEquals(null, FusionFlowPolicy.decide(true, missing20))
     }
 
     @Test fun `orderbook parser uses best bid ask and computes spread and depth`() {

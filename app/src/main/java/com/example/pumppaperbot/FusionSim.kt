@@ -145,28 +145,30 @@ data class FusionFlowDecision(
     val score30m: Int
 )
 
-/** V5.8: an isolated, deterministic flow strategy for the Fusion paper account. */
+/** V5.9: Fusion uses the same retrospective values shown by the upper overview bars. */
 object FusionFlowPolicy {
     fun decide(
         inPosition: Boolean,
         breathing: LiveMarketBreathingSnapshot
     ): FusionFlowDecision? {
         if (!breathing.fresh) return null
-        val latest = breathing.flowWave.latest ?: return null
         val instant = breathing.instantScore ?: return null
-        val five = latest.score5m
-        val fifteen = latest.score15m
-        val twenty = latest.score20m
-        val thirty = latest.score30m
+        fun upperBar(minutes: Int): Int? = breathing.horizons
+            .firstOrNull { it.minutes == minutes }
+            ?.score
+        val five = upperBar(5) ?: return null
+        val fifteen = upperBar(15) ?: return null
+        val twenty = upperBar(20) ?: return null
+        val thirty = upperBar(30) ?: return null
         return when {
             !inPosition && instant > 0 && five > 0 && fifteen > 0 && thirty > 0 -> FusionFlowDecision(
                 "BUY",
-                "FLOW V5.8: мгновенный, 5м, 15м и 30м одновременно выше нуля",
+                "FLOW V5.9: верхние сглаженные столбики сейчас/5м/15м/30м одновременно выше нуля",
                 instant, five, fifteen, twenty, thirty
             )
             inPosition && instant < 0 && five < 0 && fifteen < 0 && twenty < 0 -> FusionFlowDecision(
                 "EXIT",
-                "FLOW V5.8: мгновенный, 5м, 15м и 20м ниже нуля; 30м может ещё оставаться положительным",
+                "FLOW V5.9: верхние сглаженные столбики сейчас/5м/15м/20м ниже нуля; 30м может ещё оставаться положительным",
                 instant, five, fifteen, twenty, thirty
             )
             else -> null
