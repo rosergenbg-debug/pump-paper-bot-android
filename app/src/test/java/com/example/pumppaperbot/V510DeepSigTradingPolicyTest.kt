@@ -34,6 +34,33 @@ class V510DeepSigTradingPolicyTest {
         assertTrue(result.reason.contains("WATCH") || result.reason.contains("BUY"))
     }
 
+    @Test fun `candidate below final execution confidence stays non executable`() {
+        val result = AppLedHybridPolicy.entry(
+            AppLedEntryEvidence(
+                aiFresh = true,
+                aiAction = "WATCH",
+                aiDirection = 68,
+                aiConfidence = 64,
+                aiReadiness = 9,
+                appReadiness = 22,
+                appBuySignal = false,
+                appSellSignal = false,
+                hardVeto = false,
+                microFresh = true,
+                pumpBuyerPercent60s = 61.0,
+                pumpChange60sPercent = 0.16,
+                bitcoinBuyerPercent60s = 50.0,
+                bitcoinChange60sPercent = 0.01,
+                breathing5m = 31,
+                breathing15m = 18,
+                breathing30m = 4,
+                breathing60m = 2
+            )
+        )
+
+        assertFalse(result.independentDeepSeekSetup)
+    }
+
     @Test fun `one strong independent setup reaches verifier in v510`() {
         val decision = DeepSeekPersistencePolicy.update(
             previousEntryStreak = 0,
