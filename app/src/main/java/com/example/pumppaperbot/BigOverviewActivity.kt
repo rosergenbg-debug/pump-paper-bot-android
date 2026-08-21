@@ -300,7 +300,8 @@ class BigOverviewActivity : AppCompatActivity() {
         flowBars.setData(scores)
         flowClock.setData(breathing)
         flowText.text = ContinuousFlowWaveText.describe(breathing)
-        moneyText.text = BigOverviewMoneyText.describe(micro)
+        moneyText.text = runCatching { BigOverviewMoneyText.describe(micro) }
+            .getOrElse { error -> "КРУПНЫЙ ПОТОК: ошибка отображения (${error.javaClass.simpleName}). Остальной обзор продолжает работать." }
     }
 
     private fun loadSixMonths() {
@@ -492,12 +493,12 @@ object BigOverviewMoneyText {
         }
         return buildString {
             append(side)
-            append(String.format(Locale.GERMANY, "\nЧистый крупный поток 5 мин: %+$,.0f USDT", netLarge))
+            append(String.format(Locale.GERMANY, "\nЧистый крупный поток 5 мин: %+,.0f USDT", netLarge))
             append(String.format(Locale.GERMANY, "\nКрупные BUY $%,.0f • SELL $%,.0f", f.largeBuyUsdt, f.largeSellUsdt))
             append(String.format(Locale.GERMANY, "\nДинамический порог крупной заявки: $%,.0f", f.thresholdUsdt))
             append(String.format(Locale.GERMANY, "\nКрупнейшая BUY $%,.0f • SELL $%,.0f", f.largestBuyUsdt, f.largestSellUsdt))
             append("\nСерии частей: BUY ${f.buySlices} • SELL ${f.sellSlices}")
-            append(String.format(Locale.GERMANY, "\n\nВесь taker-поток 60 сек: $%,.0f • нетто %+$,.0f", all60, allNet60))
+            append(String.format(Locale.GERMANY, "\n\nВесь taker-поток 60 сек: $%,.0f • нетто %+,.0f", all60, allNet60))
             append("\n${f.title} • уверенность ${f.confidence}/100")
             append("\n${f.explanation}")
             append("\nПочерк: ${f.fingerprint}")
