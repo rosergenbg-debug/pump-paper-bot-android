@@ -143,6 +143,20 @@ data class FusionFlowFrame(
     val exitSignal: Boolean get() = instant < 0 && score5m < 0 && score15m < 0 && score20m < 0
     val strongBuy: Boolean get() = instant >= 8 && score5m >= 6 && score15m >= 5 && score30m >= 3
     val exitRecovery: Boolean get() = score5m >= 5 || score15m >= 5 || score20m >= 5
+
+    /** Earlier warning: the medium horizons are no longer just noisy around zero. */
+    val deteriorationSignal: Boolean get() {
+        val mediumNegative = listOf(score5m, score15m, score20m).count { it <= -2 } >= 2
+        val fastBreak = instant <= -6 && score5m <= -2
+        return mediumNegative || fastBreak
+    }
+
+    /** Full system exit still uses current/5/15/20, but ignores tiny -1/-1/-1/-1 chatter. */
+    val meaningfulExitSignal: Boolean get() = exitSignal && (
+        instant <= -4 || score5m <= -3 || score15m <= -2 || score20m <= -2
+    )
+
+    val severeExitSignal: Boolean get() = instant <= -10 && score5m <= -7 && score15m <= -5 && score20m <= -4
 }
 
 data class FusionFlowDecision(
@@ -155,7 +169,6 @@ data class FusionFlowDecision(
     val score30m: Int
 )
 
-/** V5.11 keeps the exact upper-bar hypotheses but adds execution smoothing downstream. */
 object FusionFlowPolicy {
     fun frame(breathing: LiveMarketBreathingSnapshot): FusionFlowFrame? {
         if (!breathing.fresh) return null
@@ -180,12 +193,12 @@ object FusionFlowPolicy {
         return when {
             !inPosition && frame.buySignal -> FusionFlowDecision(
                 "BUY",
-                "FLOW V5.11: верхние сглаженные столбики сейчас/5м/15м/30м одновременно выше нуля",
+                "FLOW V5.16: сейчас/5м/15м/30м выше нуля; исполнение пройдёт anti-churn подтверждение",
                 frame.instant, frame.score5m, frame.score15m, frame.score20m, frame.score30m
             )
-            inPosition && frame.exitSignal -> FusionFlowDecision(
+            inPosition && frame.meaningfulExitSignal -> FusionFlowDecision(
                 "EXIT",
-                "FLOW V5.11: сейчас/5м/15м/20м ниже нуля; выход сначала вооружается и ждёт фактическое движение цены вниз",
+                "FLOW V5.16: сейчас/5м/15м/20м устойчиво отрицательны; выход проходит подтверждение цены/времени",
                 frame.instant, frame.score5m, frame.score15m, frame.score20m, frame.score30m
             )
             else -> null
@@ -195,27 +208,45 @@ object FusionFlowPolicy {
 
 data class FusionStabilityState(
     val entryStreak: Int = 0,
+    val entryCandidateAt: Long = 0L,
     val exitStreak: Int = 0,
     val exitArmedAt: Long = 0L,
     val exitArmedBid: Double = 0.0,
-    val peakBid: Double = 0.0
+    val peakBid: Double = 0.0,
+    val profitDefenseArmed: Boolean = false,
+    val cooldownUntil: Long = 0L,
+    val lastExitAt: Long = 0L,
+    val lastLossExitAt: Long = 0L,
+    val lossExitStreak: Int = 0
 ) {
     val exitArmed: Boolean get() = exitArmedAt > 0L && exitArmedBid > 0.0
 
     fun toJson(): JSONObject = JSONObject()
         .put("entryStreak", entryStreak)
+        .put("entryCandidateAt", entryCandidateAt)
         .put("exitStreak", exitStreak)
         .put("exitArmedAt", exitArmedAt)
         .put("exitArmedBid", exitArmedBid)
         .put("peakBid", peakBid)
+        .put("profitDefenseArmed", profitDefenseArmed)
+        .put("cooldownUntil", cooldownUntil)
+        .put("lastExitAt", lastExitAt)
+        .put("lastLossExitAt", lastLossExitAt)
+        .put("lossExitStreak", lossExitStreak)
 
     companion object {
         fun fromJson(j: JSONObject) = FusionStabilityState(
             entryStreak = j.optInt("entryStreak"),
+            entryCandidateAt = j.optLong("entryCandidateAt"),
             exitStreak = j.optInt("exitStreak"),
             exitArmedAt = j.optLong("exitArmedAt"),
             exitArmedBid = j.optDouble("exitArmedBid"),
-            peakBid = j.optDouble("peakBid")
+            peakBid = j.optDouble("peakBid"),
+            profitDefenseArmed = j.optBoolean("profitDefenseArmed"),
+            cooldownUntil = j.optLong("cooldownUntil"),
+            lastExitAt = j.optLong("lastExitAt"),
+            lastLossExitAt = j.optLong("lastLossExitAt"),
+            lossExitStreak = j.optInt("lossExitStreak")
         )
     }
 }
@@ -229,10 +260,9 @@ data class FusionStabilityDecision(
 
 /** Pure virtual stop/trailing calculations. No exchange order path exists here. */
 object FusionRiskPolicy {
-    const val INITIAL_STOP_PERCENT = 1.50
-    const val PROFIT_LOCK_TRIGGER_PERCENT = 0.60
-    const val TRAIL_FROM_PEAK_PERCENT = 0.60
-    const val MIN_NET_LOCK_PERCENT = 0.02
+    const val STRUCTURAL_TRAIL_PERCENT = 1.75
+    const val PROFIT_DEFENSE_TRAIL_PERCENT = 1.00
+    const val PROFIT_DEFENSE_EXTRA_CUSHION_PERCENT = 1.15
 
     fun breakEvenGrossPercent(feeRate: Double): Double {
         val fee = feeRate.coerceIn(0.0, 0.02)
@@ -240,37 +270,52 @@ object FusionRiskPolicy {
         return (grossFactor - 1.0) * 100.0
     }
 
+    fun peakGainPercent(entryPrice: Double, peakBid: Double): Double = if (entryPrice > 0.0) {
+        (max(entryPrice, peakBid) / entryPrice - 1.0) * 100.0
+    } else 0.0
+
+    fun profitDefenseEligible(entryPrice: Double, peakBid: Double, feeRate: Double): Boolean {
+        val required = breakEvenGrossPercent(feeRate) + PROFIT_DEFENSE_EXTRA_CUSHION_PERCENT
+        return peakGainPercent(entryPrice, peakBid) >= required
+    }
+
     fun activeStopPrice(
         entryPrice: Double,
         peakBid: Double,
-        feeRate: Double
+        feeRate: Double,
+        profitDefenseArmed: Boolean = false
     ): Double {
         if (entryPrice <= 0.0) return 0.0
-        val initial = entryPrice * (1.0 - INITIAL_STOP_PERCENT / 100.0)
         val peak = max(entryPrice, peakBid)
-        val peakGainPercent = (peak / entryPrice - 1.0) * 100.0
-        if (peakGainPercent < PROFIT_LOCK_TRIGGER_PERCENT) return initial
-
-        val profitFloorPercent = breakEvenGrossPercent(feeRate) + MIN_NET_LOCK_PERCENT
-        val profitFloor = entryPrice * (1.0 + profitFloorPercent / 100.0)
-        val trailing = peak * (1.0 - TRAIL_FROM_PEAK_PERCENT / 100.0)
-        return max(initial, max(profitFloor, trailing))
+        val structural = peak * (1.0 - STRUCTURAL_TRAIL_PERCENT / 100.0)
+        if (!profitDefenseArmed) return structural
+        val defense = peak * (1.0 - PROFIT_DEFENSE_TRAIL_PERCENT / 100.0)
+        return max(structural, defense)
     }
 }
 
 /**
- * V5.11 anti-chatter layer.
- * - Entry still requires current/5/15/30 > 0. A clearly strong alignment enters immediately;
- *   a weak just-above-zero alignment must survive two evaluations.
- * - Exit still starts from current/5/15/20 < 0, but it is armed first. If price is sideways or
- *   rising, the position is held. A later real decline executes the exit.
- * - Virtual protective/trailing stop bypasses the delay on a genuine sharp drop.
+ * V5.16 anti-churn state machine.
+ *
+ * Two independent exits are kept intentionally:
+ * 1) HARD_TRAILING_STOP / PROFIT_DEFENSE_STOP protects capital and already earned profit.
+ * 2) SYSTEM_EXIT uses current/5/15/20 flow deterioration plus real price confirmation.
+ *
+ * Profit defense does NOT tighten merely because a small profit appeared. It arms only after
+ * enough fee-covered upside exists AND the flow columns materially deteriorate. Once armed,
+ * the stop never loosens during that position.
  */
 object FusionStabilityPolicy {
     const val ENTRY_CONFIRMATIONS = 2
-    const val EXIT_ARM_TTL_MILLIS = 6L * 60L * 1000L
-    const val REQUIRED_DOWN_FROM_ARM_PERCENT = 0.12
-    const val REQUIRED_PULLBACK_FROM_PEAK_PERCENT = 0.35
+    const val ENTRY_CONFIRM_MIN_MILLIS = 60L * 1000L
+    const val MIN_HOLD_MILLIS = 10L * 60L * 1000L
+    const val EXIT_ARM_TTL_MILLIS = 8L * 60L * 1000L
+    const val REQUIRED_DOWN_FROM_ARM_PERCENT = 0.20
+    const val REQUIRED_PULLBACK_FROM_PEAK_PERCENT = 0.50
+    const val NORMAL_REENTRY_COOLDOWN_MILLIS = 15L * 60L * 1000L
+    const val STOP_REENTRY_COOLDOWN_MILLIS = 20L * 60L * 1000L
+    const val DOUBLE_LOSS_COOLDOWN_MILLIS = 30L * 60L * 1000L
+    const val LOSS_STREAK_WINDOW_MILLIS = 60L * 60L * 1000L
 
     fun evaluate(
         inPosition: Boolean,
@@ -279,52 +324,126 @@ object FusionStabilityPolicy {
         frame: FusionFlowFrame?,
         bid: Double,
         feeRate: Double,
-        now: Long
+        now: Long,
+        positionAgeMillis: Long = Long.MAX_VALUE
     ): FusionStabilityDecision {
         if (bid <= 0.0) return FusionStabilityDecision(null, previous, 0.0, "Нет свежего bid")
 
         if (!inPosition) {
+            if (previous.cooldownUntil > now) {
+                val leftSeconds = ((previous.cooldownUntil - now + 999L) / 1000L).coerceAtLeast(1L)
+                return FusionStabilityDecision(
+                    null,
+                    previous.copy(
+                        entryStreak = 0,
+                        entryCandidateAt = 0L,
+                        exitStreak = 0,
+                        exitArmedAt = 0L,
+                        exitArmedBid = 0.0,
+                        peakBid = 0.0,
+                        profitDefenseArmed = false
+                    ),
+                    0.0,
+                    "COOLDOWN: повторный вход заблокирован ещё ${leftSeconds}с после предыдущего выхода"
+                )
+            }
+
             val buy = frame?.buySignal == true
-            val streak = if (buy) (previous.entryStreak + 1).coerceAtMost(ENTRY_CONFIRMATIONS) else 0
-            val next = FusionStabilityState(entryStreak = streak)
-            return when {
-                frame?.strongBuy == true -> FusionStabilityDecision(
-                    "BUY", next, 0.0,
-                    "Сильное согласование сейчас/5/15/30 прошло зону шума — BUY без лишней задержки"
+            if (!buy) {
+                return FusionStabilityDecision(
+                    null,
+                    previous.copy(
+                        entryStreak = 0,
+                        entryCandidateAt = 0L,
+                        exitStreak = 0,
+                        exitArmedAt = 0L,
+                        exitArmedBid = 0.0,
+                        peakBid = 0.0,
+                        profitDefenseArmed = false,
+                        cooldownUntil = 0L
+                    ),
+                    0.0,
+                    "Условия BUY ещё не собраны"
                 )
-                buy && streak >= ENTRY_CONFIRMATIONS -> FusionStabilityDecision(
+            }
+
+            val candidateAt = if (previous.entryStreak > 0 && previous.entryCandidateAt > 0L) {
+                previous.entryCandidateAt
+            } else now
+            val streak = (previous.entryStreak + 1).coerceAtMost(ENTRY_CONFIRMATIONS)
+            val confirmedByTime = now - candidateAt >= ENTRY_CONFIRM_MIN_MILLIS
+            val next = previous.copy(
+                entryStreak = streak,
+                entryCandidateAt = candidateAt,
+                exitStreak = 0,
+                exitArmedAt = 0L,
+                exitArmedBid = 0.0,
+                peakBid = 0.0,
+                profitDefenseArmed = false,
+                cooldownUntil = 0L
+            )
+            return if (streak >= ENTRY_CONFIRMATIONS && confirmedByTime) {
+                FusionStabilityDecision(
                     "BUY", next, 0.0,
-                    "Слабое пересечение нуля удержалось два цикла — BUY подтверждён"
+                    "ENTRY_CONFIRMED: согласование сейчас/5/15/30 пережило минимум два наблюдения и 60с; импульс не ловим одним тиком"
                 )
-                buy -> FusionStabilityDecision(
+            } else {
+                FusionStabilityDecision(
                     null, next, 0.0,
-                    "BUY-кандидат вооружён: ждём ещё одно подтверждение, чтобы не реагировать на микрофлуктуацию"
+                    if (frame?.strongBuy == true) {
+                        "ENTRY_ARMED_STRONG: сигнал сильный, но V5.16 всё равно ждёт устойчивое подтверждение"
+                    } else {
+                        "ENTRY_ARMED: положительный поток подтверждаем во времени перед BUY"
+                    }
                 )
-                else -> FusionStabilityDecision(null, next, 0.0, "Условия BUY ещё не собраны")
             }
         }
 
         val peak = max(max(previous.peakBid, bid), entryPrice)
-        val activeStop = FusionRiskPolicy.activeStopPrice(entryPrice, peak, feeRate)
+        val deterioration = frame?.deteriorationSignal == true
+        val defenseEligible = FusionRiskPolicy.profitDefenseEligible(entryPrice, peak, feeRate)
+        val defenseArmed = previous.profitDefenseArmed || (deterioration && defenseEligible)
+        val activeStop = FusionRiskPolicy.activeStopPrice(
+            entryPrice = entryPrice,
+            peakBid = peak,
+            feeRate = feeRate,
+            profitDefenseArmed = defenseArmed
+        )
+
+        val basePositionState = previous.copy(
+            entryStreak = 0,
+            entryCandidateAt = 0L,
+            peakBid = peak,
+            profitDefenseArmed = defenseArmed,
+            cooldownUntil = 0L
+        )
+
         if (activeStop > 0.0 && bid <= activeStop) {
+            val tag = if (defenseArmed) "PROFIT_DEFENSE_STOP" else "HARD_TRAILING_STOP"
+            val trail = if (defenseArmed) FusionRiskPolicy.PROFIT_DEFENSE_TRAIL_PERCENT else FusionRiskPolicy.STRUCTURAL_TRAIL_PERCENT
             return FusionStabilityDecision(
                 "EXIT",
-                previous.copy(entryStreak = 0, peakBid = peak),
+                basePositionState,
                 activeStop,
-                "Защитный виртуальный STOP: bid дошёл до динамического порога"
+                "$tag: bid дошёл до защитного trailing-порога; дистанция от пика ${String.format(java.util.Locale.US, "%.2f", trail)}%"
             )
         }
 
-        val rawExit = frame?.exitSignal == true
+        val rawExit = frame?.meaningfulExitSignal == true
+        val severeExit = frame?.severeExitSignal == true
         val recovered = frame?.exitRecovery == true
         val armedStillFresh = previous.exitArmed && now - previous.exitArmedAt in 0..EXIT_ARM_TTL_MILLIS
 
         if (recovered) {
             return FusionStabilityDecision(
                 null,
-                FusionStabilityState(peakBid = peak),
+                basePositionState.copy(exitStreak = 0, exitArmedAt = 0L, exitArmedBid = 0.0),
                 activeStop,
-                "Выход снят: 5/15/20 минут показали заметное восстановление"
+                if (defenseArmed) {
+                    "HOLD: поток восстановился; системный EXIT снят, но уже поднятая защита прибыли не опускается"
+                } else {
+                    "HOLD: выход снят — 5/15/20 минут показали заметное восстановление"
+                }
             )
         }
 
@@ -338,48 +457,95 @@ object FusionStabilityPolicy {
             armedStillFresh -> previous.exitArmedBid
             else -> 0.0
         }
-        val streak = if (rawExit) (previous.exitStreak + 1).coerceAtMost(99) else if (armedStillFresh) previous.exitStreak else 0
+        val streak = if (rawExit) {
+            (previous.exitStreak + 1).coerceAtMost(99)
+        } else if (armedStillFresh) {
+            previous.exitStreak
+        } else 0
         val armed = armedAt > 0L && armedBid > 0.0
-        val downFromArm = if (armed && armedBid > 0.0) {
+        val downFromArm = if (armed) {
             ((armedBid - bid) / armedBid * 100.0).coerceAtLeast(0.0)
         } else 0.0
         val pullbackFromPeak = if (peak > 0.0) {
             ((peak - bid) / peak * 100.0).coerceAtLeast(0.0)
         } else 0.0
-        val next = FusionStabilityState(
-            entryStreak = 0,
+        val next = basePositionState.copy(
             exitStreak = streak,
             exitArmedAt = armedAt,
-            exitArmedBid = armedBid,
-            peakBid = peak
+            exitArmedBid = armedBid
         )
 
         val actualDecline = downFromArm >= REQUIRED_DOWN_FROM_ARM_PERCENT ||
             pullbackFromPeak >= REQUIRED_PULLBACK_FROM_PEAK_PERCENT
-        if (armed && actualDecline && (rawExit || armedStillFresh)) {
+        val exitConfirmed = severeExit || streak >= 2
+        val holdLockActive = positionAgeMillis < MIN_HOLD_MILLIS
+
+        if (armed && actualDecline && exitConfirmed && (!holdLockActive || severeExit)) {
             return FusionStabilityDecision(
                 "EXIT", next, activeStop,
-                "EXIT подтверждён ценой: сигнал был вооружён, затем bid реально пошёл вниз " +
+                "SYSTEM_EXIT: сейчас/5/15/20 подтвердили отрицательное давление, затем bid реально пошёл вниз " +
                     String.format(java.util.Locale.US, "(от arm %.2f%%, от пика %.2f%%)", downFromArm, pullbackFromPeak)
+            )
+        }
+        if (rawExit && holdLockActive && !severeExit) {
+            val left = ((MIN_HOLD_MILLIS - positionAgeMillis).coerceAtLeast(0L) / 1000L)
+            return FusionStabilityDecision(
+                null, next, activeStop,
+                "HOLD_LOCK: обычный системный EXIT пока не исполняем; минимальное удержание ещё ${left}с, аварийный stop остаётся активным"
             )
         }
         if (rawExit) {
             return FusionStabilityDecision(
                 null, next, activeStop,
-                "EXIT вооружён, но цена пока не падает — держим позицию и ждём подтверждение движения вниз"
+                if (exitConfirmed) {
+                    "EXIT_ARMED: поток подтвердился, но ждём реальное снижение цены вместо продажи в боковике"
+                } else {
+                    "EXIT_ARMED: первое устойчивое отрицательное наблюдение; ждём второе подтверждение"
+                }
             )
         }
         if (armedStillFresh) {
             return FusionStabilityDecision(
                 null, next, activeStop,
-                "EXIT остаётся вооружён на короткое окно; боковик сам по себе продажу не запускает"
+                "EXIT_ARMED: короткое окно остаётся активным; боковик сам по себе продажу не запускает"
             )
         }
         return FusionStabilityDecision(
             null,
-            FusionStabilityState(peakBid = peak),
+            basePositionState.copy(exitStreak = 0, exitArmedAt = 0L, exitArmedBid = 0.0),
             activeStop,
-            "Позиция удерживается; условий выхода нет"
+            when {
+                defenseArmed -> "PROFIT_DEFENSE: поток ухудшился после достаточного навара; stop подтянут до 1% от пика и больше не опускается"
+                deterioration && !defenseEligible -> "HOLD: поток ухудшается, но навар ещё недостаточен для tight profit-defense; работает базовый trailing 1,75%"
+                else -> "HOLD: позиция удерживается; работает базовый trailing 1,75% от пика"
+            }
+        )
+    }
+
+    fun cooldownAfterExit(
+        previous: FusionStabilityState,
+        exitPnlEur: Double,
+        wasProtectiveStop: Boolean,
+        now: Long
+    ): FusionStabilityState {
+        val loss = exitPnlEur < 0.0
+        val recentPriorLoss = loss && previous.lastLossExitAt > 0L &&
+            now - previous.lastLossExitAt in 0..LOSS_STREAK_WINDOW_MILLIS
+        val lossStreak = when {
+            !loss -> 0
+            recentPriorLoss -> (previous.lossExitStreak + 1).coerceAtMost(99)
+            else -> 1
+        }
+        val cooldown = when {
+            loss && lossStreak >= 2 -> DOUBLE_LOSS_COOLDOWN_MILLIS
+            wasProtectiveStop -> STOP_REENTRY_COOLDOWN_MILLIS
+            else -> NORMAL_REENTRY_COOLDOWN_MILLIS
+        }
+        return FusionStabilityState(
+            cooldownUntil = now + cooldown,
+            lastExitAt = now,
+            lastLossExitAt = if (loss) now else previous.lastLossExitAt,
+            lossExitStreak = lossStreak
         )
     }
 }
@@ -503,6 +669,12 @@ object FusionSimStore {
         if (tracked != current) save(context, tracked)
 
         val previousStability = stability(context)
+        val lastBuyAt = if (tracked.inPosition) {
+            tracked.trades.asReversed().firstOrNull { it.action == "BUY" }?.time ?: 0L
+        } else 0L
+        val positionAgeMillis = if (tracked.inPosition && lastBuyAt > 0L) {
+            (now - lastBuyAt).coerceAtLeast(0L)
+        } else Long.MAX_VALUE
         val plan = FusionStabilityPolicy.evaluate(
             inPosition = tracked.inPosition,
             entryPrice = tracked.entryPrice,
@@ -510,7 +682,8 @@ object FusionSimStore {
             frame = frame,
             bid = market.bid,
             feeRate = market.feeRate,
-            now = now
+            now = now,
+            positionAgeMillis = positionAgeMillis
         )
         if (plan.nextState != previousStability) saveStability(context, plan.nextState)
         val action = plan.action ?: return tracked
@@ -530,9 +703,26 @@ object FusionSimStore {
         if (next != tracked) {
             save(context, next)
             val afterTradeState = if (!tracked.inPosition && next.inPosition) {
-                FusionStabilityState(peakBid = market.bid)
+                previousStability.copy(
+                    entryStreak = 0,
+                    entryCandidateAt = 0L,
+                    exitStreak = 0,
+                    exitArmedAt = 0L,
+                    exitArmedBid = 0.0,
+                    peakBid = market.bid,
+                    profitDefenseArmed = false,
+                    cooldownUntil = 0L
+                )
             } else if (tracked.inPosition && !next.inPosition) {
-                FusionStabilityState()
+                val exitPnl = next.trades.lastOrNull { it.action == "SELL" }?.pnlEur ?: 0.0
+                val protective = plan.reason.startsWith("HARD_TRAILING_STOP") ||
+                    plan.reason.startsWith("PROFIT_DEFENSE_STOP")
+                FusionStabilityPolicy.cooldownAfterExit(
+                    previous = previousStability,
+                    exitPnlEur = exitPnl,
+                    wasProtectiveStop = protective,
+                    now = now
+                )
             } else plan.nextState
             saveStability(context, afterTradeState)
             UnifiedResearchLog.record(context, "FUSION_SIM", "OK", next.decisions.last().result)
@@ -541,14 +731,17 @@ object FusionSimStore {
                     context,
                     "FUSION_PRIORITY",
                     "START",
-                    "Виртуальный BUY исполнен по ask; комиссия 0,25% учтена; локальный контроль остаётся непрерывным, DeepSig опрашивается каждые 3 минуты"
+                    "Виртуальный BUY исполнен по ask; комиссия 0,25% учтена; V5.16 подтверждает вход во времени и не ловит один зелёный тик"
                 )
-                tracked.inPosition && !next.inPosition -> UnifiedResearchLog.record(
-                    context,
-                    "FUSION_PRIORITY",
-                    "STOP",
-                    "Виртуальный EXIT исполнен по bid; контроль Fusion возвращён в обычный режим"
-                )
+                tracked.inPosition && !next.inPosition -> {
+                    val cooldownSeconds = ((afterTradeState.cooldownUntil - now).coerceAtLeast(0L) / 1000L)
+                    UnifiedResearchLog.record(
+                        context,
+                        "FUSION_PRIORITY",
+                        "STOP",
+                        "Виртуальный EXIT исполнен по bid; повторный BUY заблокирован на ${cooldownSeconds}с anti-churn cooldown"
+                    )
+                }
             }
         }
         return next
