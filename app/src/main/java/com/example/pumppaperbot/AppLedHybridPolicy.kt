@@ -155,8 +155,11 @@ object AppLedHybridPolicy {
 
         val appConfirmedEntry = (evidence.appBuySignal || evidence.appReadiness >= 99) &&
             reboundConfirmed && !bitcoinSystemicWeak
+        // Keep this threshold aligned with GeminiExecutionPolicy.MIN_BUY_CONFIDENCE (65),
+        // otherwise a candidate could pass the DeepSig gate and still be silently downgraded
+        // to HOLD at the final paper-execution layer.
         val independentDeepSeekSetup = evidence.aiFresh && effectiveAiAction == "BUY" &&
-            evidence.aiReadiness >= 8 && evidence.aiDirection >= 55 && evidence.aiConfidence >= 60 &&
+            evidence.aiReadiness >= 8 && evidence.aiDirection >= 55 && evidence.aiConfidence >= 65 &&
             localEntryConfirmed && !structuralWeakness && !bitcoinSystemicWeak && !evidence.appSellSignal
         // APP may open immediately when its own stable phase is confirmed. DeepSig's
         // independent lane is now executable after this strong setup plus the existing
