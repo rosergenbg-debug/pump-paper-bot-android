@@ -201,6 +201,6 @@ class DeepSeekStructuredClient(private val http: OkHttpClient) {
         ))
 
     companion object {
-        const val REPAIR_MAX_TOKENS = 550
+        const val REPAIR_MAX_TOKENS = 350
     }
 }
