@@ -33,10 +33,7 @@ data class LiveBreathingHorizon(
     val samples: Int
 )
 
-/**
- * One point of the V5.14 continuous flow surface. All layers now come from the same
- * completed-minute fixed-window engine as the upper 5/15/20/30-minute bars.
- */
+/** One point of the unified completed-minute flow surface. */
 data class LiveFlowWavePoint(
     val at: Long,
     val score15m: Int,
@@ -123,11 +120,9 @@ data class LiveMarketBreathingSnapshot(
 }
 
 /**
- * V5.14 multi-horizon market breathing.
- *
- * "Instant" remains deliberately fast. Every labelled 5/15/20/30/60/360-minute value is
- * produced from UnifiedFlowEngine's completed, non-overlapping minute buckets. Therefore
- * a still-forming 60-second sample cannot flip a 30-minute bar every few seconds.
+ * V5.15 keeps V5.14's completed-minute flow semantics but makes the hot path cheap.
+ * Multi-minute horizons are stable for the whole forming wall-clock minute; only Instant
+ * is allowed to react every few seconds. The store caches the heavy minute snapshot.
  */
 object LiveMarketBreathingAnalyzer {
     const val MAX_EXPERIMENT_GAP = 15
@@ -143,7 +138,7 @@ object LiveMarketBreathingAnalyzer {
         if (valid.isEmpty()) return LiveMarketBreathingSnapshot()
 
         val latest = valid.last()
-        val fresh = now >= latest.at && now - latest.at <= MAX_LIVE_AGE_MILLIS
+        val fresh = isFresh(latest, now)
         val instant = instantScore(latest)
         val minuteBuckets = UnifiedFlowEngine.completedMinuteBuckets(valid, now)
         val horizons = windows.map { minutes ->
@@ -170,31 +165,15 @@ object LiveMarketBreathingAnalyzer {
             weighted.sumOf { (weight, horizon) -> weight * horizon.score!! } /
                 weighted.sumOf { it.first }
             ).roundToInt().coerceIn(-100, 100)
-        val experiment = normal?.let { stable ->
-            val faster = (stable * 0.55 + instant * 0.45).roundToInt()
-            faster.coerceIn(stable - MAX_EXPERIMENT_GAP, stable + MAX_EXPERIMENT_GAP)
-                .coerceIn(-100, 100)
-        }
-        val regime = when {
-            !fresh -> "ИСТОРИЯ УСТАРЕЛА — ЖДЁМ ЖИВОЙ ПОТОК"
-            normal == null -> "НАКАПЛИВАЕМ ИСТОРИЮ"
-            normal >= 35 && horizons.count { (it.score ?: 0) >= 20 } >= 2 ->
-                "УСТОЙЧИВОЕ ДАВЛЕНИЕ ПОКУПАТЕЛЕЙ"
-            normal <= -35 && horizons.count { (it.score ?: 0) <= -20 } >= 2 ->
-                "УСТОЙЧИВОЕ ДАВЛЕНИЕ ПРОДАВЦОВ"
-            abs(normal) < 15 -> "РЫНОЧНЫЙ ШУМ / БОКОВИК"
-            normal > 0 -> "УМЕРЕННОЕ УЛУЧШЕНИЕ"
-            else -> "УМЕРЕННОЕ УХУДШЕНИЕ"
-        }
+        val experiment = experimentScore(normal, instant)
+        val regime = regime(fresh, normal, horizons)
         val historyMinutes = ((latest.at - valid.first().at).coerceAtLeast(0L) / 60_000L)
             .toInt().coerceAtMost(24 * 60)
 
-        // BuyerBreath keeps its own semantic phase model, but receives the exact same
-        // one-observation-per-completed-minute base instead of overlapping 15-second copies.
-        val buyerBreathInput = UnifiedFlowEngine.representativeSamples(valid, now)
+        val buyerBreathInput = UnifiedFlowEngine.representativeSamplesFromBuckets(minuteBuckets)
             .takeIf { it.size >= 2 } ?: valid
         val buyerBreath = BuyerBreathCycleAnalyzer.analyze(buyerBreathInput, horizons, fresh)
-        val flowWave = continuousFlow(valid, now)
+        val flowWave = continuousFlowFromBuckets(minuteBuckets, latest.at, now)
 
         return LiveMarketBreathingSnapshot(
             updatedAt = latest.at,
@@ -210,24 +189,54 @@ object LiveMarketBreathingAnalyzer {
         )
     }
 
-    /**
-     * Historical arcs use the same fixed-window engine as the upper bars. No V5.7 EWMA
-     * half-life path remains here. During feed pauses the last observed pressure is held
-     * and marked stale instead of being mathematically invented toward zero.
-     */
+    /** Cheap refresh used between completed-minute boundaries. */
+    internal fun refreshLive(
+        stable: LiveMarketBreathingSnapshot,
+        latest: LiveBreathingSample,
+        now: Long
+    ): LiveMarketBreathingSnapshot {
+        val fresh = isFresh(latest, now)
+        val instant = instantScore(latest)
+        val experiment = experimentScore(stable.normalScore, instant).takeIf { fresh }
+        val staleMillis = (now - latest.at).coerceAtLeast(0L)
+        return stable.copy(
+            updatedAt = latest.at,
+            fresh = fresh,
+            instantScore = instant,
+            experimentScore = experiment,
+            flowWave = stable.flowWave.copy(staleSeconds = staleMillis / 1_000L)
+        )
+    }
+
     internal fun continuousFlow(samples: List<LiveBreathingSample>, now: Long): LiveFlowWave {
         if (samples.isEmpty()) return LiveFlowWave()
         val latestSampleAt = samples.maxOfOrNull { it.at } ?: return LiveFlowWave()
+        return continuousFlowFromBuckets(
+            UnifiedFlowEngine.completedMinuteBuckets(samples, now),
+            latestSampleAt,
+            now
+        )
+    }
+
+    /**
+     * Build only the six-hour visible path. Earlier minute buckets stay available to the
+     * 180/360-minute windows, but we no longer recalculate invisible historical endpoints.
+     */
+    private fun continuousFlowFromBuckets(
+        allBuckets: List<UnifiedMinuteFlow>,
+        latestSampleAt: Long,
+        now: Long
+    ): LiveFlowWave {
         val warmupCutoff = now - 12L * 60L * 60L * 1_000L
-        val buckets = UnifiedFlowEngine.completedMinuteBuckets(samples, now)
-            .filter { it.at >= warmupCutoff }
+        val buckets = allBuckets.dropWhile { it.at < warmupCutoff }
         if (buckets.isEmpty()) {
             val stale = (now - latestSampleAt).coerceAtLeast(0L)
             return LiveFlowWave(staleSeconds = stale / 1_000L)
         }
 
-        val allPoints = ArrayList<LiveFlowWavePoint>(buckets.size + 1)
-        buckets.indices.forEach { index ->
+        val firstVisibleIndex = (buckets.size - 361).coerceAtLeast(0)
+        val allPoints = ArrayList<LiveFlowWavePoint>(buckets.size - firstVisibleIndex + 1)
+        for (index in firstVisibleIndex..buckets.lastIndex) {
             val bucket = buckets[index]
             allPoints += LiveFlowWavePoint(
                 at = bucket.at,
@@ -245,11 +254,9 @@ object LiveMarketBreathingAnalyzer {
         if (staleMillis >= 30_000L && allPoints.isNotEmpty()) {
             allPoints += allPoints.last().copy(at = now)
         }
-        val visibleCutoff = now - 6L * 60L * 60L * 1_000L
-        val visible = allPoints.filter { it.at >= visibleCutoff }.takeLast(361)
-        val stateAndGuidance = flowGuidance(visible, staleMillis)
+        val stateAndGuidance = flowGuidance(allPoints, staleMillis)
         return LiveFlowWave(
-            points = visible,
+            points = allPoints.takeLast(361),
             state = stateAndGuidance.first,
             guidance = stateAndGuidance.second,
             staleSeconds = staleMillis / 1_000L
@@ -311,11 +318,33 @@ object LiveMarketBreathingAnalyzer {
                 sample.bitcoinChange60sPercent * 80.0
             ).coerceIn(-100.0, 100.0)
         return (
-            buyer * 0.48 +
-                price * 0.32 +
-                book * 0.10 +
-                bitcoin * 0.10
+            buyer * 0.48 + price * 0.32 + book * 0.10 + bitcoin * 0.10
             ).roundToInt().coerceIn(-100, 100)
+    }
+
+    private fun isFresh(latest: LiveBreathingSample, now: Long): Boolean =
+        now >= latest.at && now - latest.at <= MAX_LIVE_AGE_MILLIS
+
+    private fun experimentScore(normal: Int?, instant: Int): Int? = normal?.let { stable ->
+        val faster = (stable * 0.55 + instant * 0.45).roundToInt()
+        faster.coerceIn(stable - MAX_EXPERIMENT_GAP, stable + MAX_EXPERIMENT_GAP)
+            .coerceIn(-100, 100)
+    }
+
+    private fun regime(
+        fresh: Boolean,
+        normal: Int?,
+        horizons: List<LiveBreathingHorizon>
+    ): String = when {
+        !fresh -> "ИСТОРИЯ УСТАРЕЛА — ЖДЁМ ЖИВОЙ ПОТОК"
+        normal == null -> "НАКАПЛИВАЕМ ИСТОРИЮ"
+        normal >= 35 && horizons.count { (it.score ?: 0) >= 20 } >= 2 ->
+            "УСТОЙЧИВОЕ ДАВЛЕНИЕ ПОКУПАТЕЛЕЙ"
+        normal <= -35 && horizons.count { (it.score ?: 0) <= -20 } >= 2 ->
+            "УСТОЙЧИВОЕ ДАВЛЕНИЕ ПРОДАВЦОВ"
+        abs(normal) < 15 -> "РЫНОЧНЫЙ ШУМ / БОКОВИК"
+        normal > 0 -> "УМЕРЕННОЕ УЛУЧШЕНИЕ"
+        else -> "УМЕРЕННОЕ УХУДШЕНИЕ"
     }
 }
 
@@ -325,6 +354,14 @@ object LiveMarketBreathingStore {
     private val samples = ArrayDeque<LiveBreathingSample>()
     private var initialized = false
     private var lastPrunedAt = 0L
+
+    // V5.15: the expensive 5/15/20/30/60/360 history changes only when a wall-clock
+    // minute closes. UI callers may ask every two seconds, but they now receive a cheap
+    // Instant refresh instead of rebuilding hours of history every time.
+    private var cachedCurrentMinute = Long.MIN_VALUE
+    private var cachedFreshState: Boolean? = null
+    private var cachedSnapshot: LiveMarketBreathingSnapshot? = null
+    private var cacheInvalidated = true
 
     @Synchronized
     fun append(context: Context, micro: MicroImpulseSnapshot) {
@@ -346,6 +383,9 @@ object LiveMarketBreathingStore {
             bitcoinPriceUsdt = micro.bitcoinPriceUsdt
         )
         samples.addLast(sample)
+        if (cachedCurrentMinute != Long.MIN_VALUE && sample.at / 60_000L < cachedCurrentMinute) {
+            cacheInvalidated = true
+        }
         trim(sample.at)
         runCatching {
             val file = File(context.filesDir, FILE_NAME)
@@ -383,7 +423,24 @@ object LiveMarketBreathingStore {
     ): LiveMarketBreathingSnapshot {
         ensureLoaded(context)
         trim(now)
-        return LiveMarketBreathingAnalyzer.analyze(samples.toList(), now)
+        val latest = samples.peekLast() ?: return LiveMarketBreathingSnapshot()
+        val currentMinute = now / 60_000L
+        val fresh = now >= latest.at && now - latest.at <= LiveMarketBreathingAnalyzer.MAX_LIVE_AGE_MILLIS
+        val cached = cachedSnapshot
+
+        if (
+            cached == null || cacheInvalidated || cachedCurrentMinute != currentMinute ||
+            cachedFreshState != fresh
+        ) {
+            val rebuilt = LiveMarketBreathingAnalyzer.analyze(samples.toList(), now)
+            cachedCurrentMinute = currentMinute
+            cachedFreshState = fresh
+            cachedSnapshot = rebuilt
+            cacheInvalidated = false
+            return rebuilt
+        }
+
+        return LiveMarketBreathingAnalyzer.refreshLive(cached, latest, now)
     }
 
     @Synchronized
@@ -391,26 +448,41 @@ object LiveMarketBreathingStore {
         samples.clear()
         initialized = false
         lastPrunedAt = 0L
+        invalidateCache()
     }
 
     private fun ensureLoaded(context: Context) {
         if (initialized) return
         initialized = true
         val file = File(context.filesDir, FILE_NAME)
-        if (!file.exists()) return
+        if (!file.exists()) {
+            invalidateCache()
+            return
+        }
         runCatching {
             file.useLines(Charsets.UTF_8) { lines ->
                 lines.drop(1).mapNotNull(::parse).forEach(samples::addLast)
             }
         }
         trim(System.currentTimeMillis())
+        invalidateCache()
     }
 
     private fun trim(now: Long) {
         val cutoff = now - RollingCsvRetention.RETENTION_MILLIS
+        var removed = false
         while (samples.isNotEmpty() && samples.peekFirst().at < cutoff) {
             samples.removeFirst()
+            removed = true
         }
+        if (removed) cacheInvalidated = true
+    }
+
+    private fun invalidateCache() {
+        cachedCurrentMinute = Long.MIN_VALUE
+        cachedFreshState = null
+        cachedSnapshot = null
+        cacheInvalidated = true
     }
 
     private fun parse(line: String): LiveBreathingSample? {
