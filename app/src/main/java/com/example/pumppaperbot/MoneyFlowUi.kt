@@ -102,7 +102,7 @@ object MoneyFlowPresentation {
             absolute >= 1_000.0 -> String.format(Locale.GERMANY, "%.1fk", absolute / 1_000.0)
             else -> String.format(Locale.GERMANY, "%.0f", absolute)
         }
-        return "$sign$$body"
+        return "${sign}\$$body"
     }
 
     fun summary(data: MoneyFlowPanelData): String = buildString {
@@ -187,6 +187,8 @@ class MoneyFlowStripView(context: Context) : View(context) {
 }
 
 class MoneyMassDialView(context: Context) : View(context) {
+    companion object { const val VIEW_TAG = "v518_money_mass_dial" }
+
     private val bg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#101820") }
     private val base = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#30363D"); style = Paint.Style.STROKE; strokeCap = Paint.Cap.BUTT
@@ -201,6 +203,8 @@ class MoneyMassDialView(context: Context) : View(context) {
     private val small = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#8B949E"); textAlign = Paint.Align.CENTER }
     private val rect = RectF()
     private var data: MoneyFlowPanelData? = null
+
+    init { tag = VIEW_TAG }
 
     fun setData(value: MoneyFlowPanelData) {
         data = value
