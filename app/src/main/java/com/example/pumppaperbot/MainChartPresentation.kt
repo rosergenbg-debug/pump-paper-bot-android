@@ -9,7 +9,7 @@ internal data class MainChartPriceWindow(
     val span: Double get() = (maxPrice - minPrice).coerceAtLeast(0.0000000001)
 }
 
-internal data class MainChartFlowScores(
+data class MainChartFlowScores(
     val instant: Int?,
     val fiveMinutes: Int?,
     val fifteenMinutes: Int?,
