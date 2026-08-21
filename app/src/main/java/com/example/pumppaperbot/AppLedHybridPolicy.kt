@@ -70,9 +70,11 @@ data class DeepSeekPersistenceDecision(
 )
 
 /**
- * V5.10 keeps APP as context but restores an actually executable independent DeepSig lane.
- * A strong locally confirmed DeepSig setup may trade after one AI evaluation; the separate
- * trade-verification AI call is still mandatory before the virtual order is applied.
+ * APP remains context, while DeepSig keeps an independently executable lane.
+ * V5.17 stops requiring a nearly perfect 9/10 frame: a genuine DeepSeek BUY may proceed
+ * from 7/10 and a strong WATCH/HOLD may be promoted from 8/10, but only when 5/15-minute
+ * buyers confirm the move, 30 minutes is not breaking down, and all hard vetoes stay clear.
+ * The separate trade-verification AI call remains mandatory before a virtual order is applied.
  */
 object AppLedHybridPolicy {
     const val MIN_ORDINARY_HOLD_MILLIS = 20L * 60L * 1000L
@@ -104,6 +106,7 @@ object AppLedHybridPolicy {
         val localEntryConfirmed = strongTurn || (sustainedTurn && microBuyers)
         val reboundConfirmed = microBuyers && (sustainedTurn || evidence.appReadiness >= 70) || strongTurn
         val structuralWeakness = fifteen <= -20 && thirty <= -15 && sixty <= -10
+        val mediumSupport = thirty >= -10
         val bitcoinSystemicWeak = evidence.microFresh &&
             evidence.bitcoinBuyerPercent60s < 38.0 && evidence.bitcoinChange60sPercent <= -0.25 &&
             structuralWeakness
@@ -111,10 +114,13 @@ object AppLedHybridPolicy {
             abs(evidence.bitcoinChange60sPercent) <= 0.10 &&
             evidence.bitcoinBuyerPercent60s in 44.0..56.0
 
-        // V5.9 defined this normalizer and tested it, but the live entry path never used it.
-        // V5.10 wires it into the real gate: a 9/10 WATCH/HOLD with strong direction,
-        // confidence and confirmed 5/15-minute flow becomes a genuine BUY candidate.
-        val effectiveAiAction = if (evidence.aiFresh) {
+        val moderateWatchPromotion = evidence.aiFresh &&
+            evidence.aiAction in setOf("WATCH", "HOLD") &&
+            evidence.aiReadiness >= 8 && evidence.aiDirection >= 50 && evidence.aiConfidence >= 65 &&
+            localEntryConfirmed && mediumSupport
+        val effectiveAiAction = if (moderateWatchPromotion) {
+            "BUY"
+        } else if (evidence.aiFresh) {
             DeepSeekTradeIntentPolicy.normalize(
                 modelAction = evidence.aiAction,
                 positionOpen = false,
@@ -137,11 +143,10 @@ object AppLedHybridPolicy {
         }
         var level = maxOf(appLevel, flowLevel).coerceIn(1, 10)
 
-        // DeepSeek adjusts the stable APP baseline instead of replacing it.
         val aiAdjustment = when {
             !evidence.aiFresh -> 0
-            effectiveAiAction == "BUY" && evidence.aiReadiness >= 8 &&
-                evidence.aiDirection >= 55 && evidence.aiConfidence >= 60 -> 2
+            effectiveAiAction == "BUY" && evidence.aiReadiness >= 7 &&
+                evidence.aiDirection >= 45 && evidence.aiConfidence >= 65 -> 2
             evidence.aiDirection >= 25 && evidence.aiConfidence >= 55 -> 1
             evidence.aiReadiness <= 3 && evidence.aiDirection <= -60 && evidence.aiConfidence >= 70 -> -1
             else -> 0
@@ -155,15 +160,15 @@ object AppLedHybridPolicy {
 
         val appConfirmedEntry = (evidence.appBuySignal || evidence.appReadiness >= 99) &&
             reboundConfirmed && !bitcoinSystemicWeak
-        // Keep this threshold aligned with GeminiExecutionPolicy.MIN_BUY_CONFIDENCE (65),
-        // otherwise a candidate could pass the DeepSig gate and still be silently downgraded
-        // to HOLD at the final paper-execution layer.
+        val explicitDeepSeekEntry = evidence.aiAction == "BUY" &&
+            evidence.aiReadiness >= 7 && evidence.aiDirection >= 45 && evidence.aiConfidence >= 65
+        val promotedDeepSeekEntry = evidence.aiAction in setOf("WATCH", "HOLD") &&
+            evidence.aiReadiness >= 8 && evidence.aiDirection >= 50 && evidence.aiConfidence >= 65
         val independentDeepSeekSetup = evidence.aiFresh && effectiveAiAction == "BUY" &&
-            evidence.aiReadiness >= 8 && evidence.aiDirection >= 55 && evidence.aiConfidence >= 65 &&
-            localEntryConfirmed && !structuralWeakness && !bitcoinSystemicWeak && !evidence.appSellSignal
-        // APP may open immediately when its own stable phase is confirmed. DeepSig's
-        // independent lane is now executable after this strong setup plus the existing
-        // separate trade-verification call.
+            (explicitDeepSeekEntry || promotedDeepSeekEntry) &&
+            localEntryConfirmed && mediumSupport && !structuralWeakness &&
+            !bitcoinSystemicWeak && !evidence.appSellSignal
+
         val tradeAction = if (appConfirmedEntry) "BUY" else "WATCH"
         if (independentDeepSeekSetup) level = maxOf(level, 8)
         if (tradeAction == "BUY") {
@@ -174,10 +179,12 @@ object AppLedHybridPolicy {
         val reason = when {
             tradeAction == "BUY" && appConfirmedEntry ->
                 "APP подтвердил вход, а поток покупателей и движение 5–15 минут согласуются."
-            independentDeepSeekSetup && effectiveAiAction != evidence.aiAction ->
-                "DeepSig дал высокий вход 9/10, а 5–15 минут подтвердили разворот; осторожный WATCH повышен до проверки BUY."
+            independentDeepSeekSetup && moderateWatchPromotion ->
+                "DeepSig дал сильный 8/10 WATCH/HOLD, 5–15 минут подтвердили покупателей, а 30 минут не разваливается; запускается проверка BUY."
             independentDeepSeekSetup ->
-                "DeepSig самостоятельно подтвердил устойчивый вход, а 5–15 минут поддерживают движение; запускается проверка BUY."
+                "DeepSig самостоятельно дал пригодный BUY, 5–15 минут подтверждают движение, а 30 минут не ломает средний фон; запускается проверка BUY."
+            !mediumSupport && localEntryConfirmed ->
+                "5–15 минут растут, но 30-минутный фон уже заметно ухудшается; DeepSig ждёт."
             structuralWeakness && !reboundConfirmed ->
                 "Средний фон ещё слабый; одного зелёного микродвижения недостаточно."
             evidence.appReadiness >= 70 && reboundConfirmed ->
@@ -214,9 +221,6 @@ object AppLedHybridPolicy {
             evidence.pumpChange60sPercent >= 0.08
         val structuralWeakness = fifteen <= -20 && thirty <= -15 &&
             (five <= -15 || sixty <= -10)
-        // Profit-protection lane: once a trade is already meaningfully positive, do not wait
-        // for slow 30/60-minute layers to become deeply negative before accepting a model EXIT.
-        // The model still has to request EXIT and the second verifier still has to approve it.
         val profitableFade = evidence.currentReturnPercent >= PROFIT_FADE_RETURN_PERCENT &&
             freshSelling && five <= -10 && fifteen <= -5
         val emergency = evidence.currentReturnPercent <= HARD_STOP_PERCENT ||
