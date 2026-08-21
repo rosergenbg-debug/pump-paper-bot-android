@@ -13,24 +13,59 @@ import java.util.WeakHashMap
 import kotlin.math.abs
 
 /**
- * V5.11 viewport guard for data-heavy screens that update while the user is reading them.
- * It keeps the first visible direct child at the same visual offset when text above it changes
- * height. During touch/fling the guard never fights the user's own scrolling.
+ * Keeps data-heavy screens visually stable while also wiring presentation-only live helpers.
+ * Trading/decision logic is deliberately not touched here.
  */
 class StableScrollApplication : Application() {
+    private val mainChartUpdaters = WeakHashMap<Activity, Runnable>()
+
     override fun onCreate() {
         super.onCreate()
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
             override fun onActivityResumed(activity: Activity) {
-                activity.window?.decorView?.post { StableScrollGuard.attach(activity.window.decorView) }
+                activity.window?.decorView?.post {
+                    StableScrollGuard.attach(activity.window.decorView)
+                    if (activity is MainActivity) startMainChartPresentation(activity)
+                }
             }
+
+            override fun onActivityPaused(activity: Activity) {
+                stopMainChartPresentation(activity)
+            }
+
+            override fun onActivityDestroyed(activity: Activity) {
+                stopMainChartPresentation(activity)
+            }
+
             override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
             override fun onActivityStarted(activity: Activity) = Unit
-            override fun onActivityPaused(activity: Activity) = Unit
             override fun onActivityStopped(activity: Activity) = Unit
             override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
-            override fun onActivityDestroyed(activity: Activity) = Unit
         })
+    }
+
+    private fun startMainChartPresentation(activity: MainActivity) {
+        stopMainChartPresentation(activity)
+        val chart = activity.findViewById<StrategyChartView>(R.id.chart) ?: return
+        chart.setMainViewportMode(true)
+        val updater = object : Runnable {
+            override fun run() {
+                if (activity.isFinishing || activity.isDestroyed || !chart.isAttachedToWindow) return
+                chart.setFlowScores(
+                    MainChartFlowPresentation.from(
+                        LiveMarketBreathingStore.snapshot(activity, System.currentTimeMillis())
+                    )
+                )
+                chart.postDelayed(this, 2_000L)
+            }
+        }
+        mainChartUpdaters[activity] = updater
+        chart.post(updater)
+    }
+
+    private fun stopMainChartPresentation(activity: Activity) {
+        val updater = mainChartUpdaters.remove(activity) ?: return
+        activity.findViewById<StrategyChartView>(R.id.chart)?.removeCallbacks(updater)
     }
 }
 
