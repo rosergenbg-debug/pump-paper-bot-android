@@ -24,8 +24,11 @@ class MicroImpulseStream(context: Context) : WebSocketListener() {
         .pingInterval(20, TimeUnit.SECONDS)
         .readTimeout(0, TimeUnit.MILLISECONDS)
         .build()
+    // Raw trades stay at the proven five-minute retention used by the existing algorithms.
     private val trades = ArrayDeque<MicroTrade>()
     private val bitcoinTrades = ArrayDeque<MicroTrade>()
+    // V5.18 keeps only 16 tiny minute buckets for the new 15m money-mass display.
+    private val moneyMinutes = ArrayDeque<MoneyMinuteBucket>()
     private var socket: WebSocket? = null
     private var stopped = true
     private var bestBid = 0.0
@@ -112,9 +115,27 @@ class MicroImpulseStream(context: Context) : WebSocketListener() {
         val quantity = data.optString("q").toDoubleOrNull() ?: return
         val at = data.optLong("T", System.currentTimeMillis())
         if (price <= 0.0 || quantity <= 0.0) return
+        val notional = price * quantity
+        val aggressiveBuy = !data.optBoolean("m", true)
         // Binance m=false means the buyer was the aggressive taker.
-        trades.addLast(MicroTrade(at, price, price * quantity, aggressiveBuy = !data.optBoolean("m", true)))
+        trades.addLast(MicroTrade(at, price, notional, aggressiveBuy = aggressiveBuy))
+        recordMoneyMinute(at, notional, aggressiveBuy)
         evaluate(at, price)
+    }
+
+    private fun recordMoneyMinute(at: Long, notional: Double, aggressiveBuy: Boolean) {
+        val key = at / 60_000L
+        val last = moneyMinutes.peekLast()
+        if (last == null || last.minuteKey != key) {
+            moneyMinutes.addLast(MoneyMinuteBucket(key))
+        }
+        moneyMinutes.peekLast()?.let { bucket ->
+            if (aggressiveBuy) bucket.buyUsdt += notional else bucket.sellUsdt += notional
+        }
+        val cutoffKey = key - 15L
+        while (moneyMinutes.isNotEmpty() && moneyMinutes.peekFirst().minuteKey < cutoffKey) {
+            moneyMinutes.removeFirst()
+        }
     }
 
     @Synchronized
@@ -141,24 +162,26 @@ class MicroImpulseStream(context: Context) : WebSocketListener() {
         bitcoinTrades.addLast(
             MicroTrade(at, price, price * quantity, aggressiveBuy = !data.optBoolean("m", true))
         )
-        val cutoff = at - HISTORY_MILLIS
+        val cutoff = at - BITCOIN_HISTORY_MILLIS
         while (bitcoinTrades.isNotEmpty() && bitcoinTrades.peekFirst().at < cutoff) {
             bitcoinTrades.removeFirst()
         }
     }
 
     private fun evaluate(now: Long, currentPrice: Double) {
-        val cutoff = now - HISTORY_MILLIS
+        val cutoff = now - RAW_HISTORY_MILLIS
         while (trades.isNotEmpty() && trades.peekFirst().at < cutoff) trades.removeFirst()
-        while (bitcoinTrades.isNotEmpty() && bitcoinTrades.peekFirst().at < cutoff) bitcoinTrades.removeFirst()
+        val btcCutoff = now - BITCOIN_HISTORY_MILLIS
+        while (bitcoinTrades.isNotEmpty() && bitcoinTrades.peekFirst().at < btcCutoff) bitcoinTrades.removeFirst()
         if (now - lastSavedAt < SAVE_INTERVAL_MILLIS) return
         lastSavedAt = now
 
         val five = trades.filter { it.at >= now - 5_000L }
         val fifteen = trades.filter { it.at >= now - 15_000L }
         val sixty = trades.filter { it.at >= now - 60_000L }
-        val fiveMinutes = trades.filter { it.at >= now - 5L * 60L * 1_000L }
-        val fifteenMinutes = trades.toList()
+        val fiveMinutes = trades.toList()
+        val fifteenMinuteKey = now / 60_000L - 14L
+        val fifteenMinuteBuckets = moneyMinutes.filter { it.minuteKey >= fifteenMinuteKey }
         val buy5 = five.filter { it.aggressiveBuy }.sumOf { it.notional }
         val sell5 = five.filterNot { it.aggressiveBuy }.sumOf { it.notional }
         val buy15 = fifteen.filter { it.aggressiveBuy }.sumOf { it.notional }
@@ -167,8 +190,8 @@ class MicroImpulseStream(context: Context) : WebSocketListener() {
         val sell60 = sixty.filterNot { it.aggressiveBuy }.sumOf { it.notional }
         val buy5m = fiveMinutes.filter { it.aggressiveBuy }.sumOf { it.notional }
         val sell5m = fiveMinutes.filterNot { it.aggressiveBuy }.sumOf { it.notional }
-        val buy15m = fifteenMinutes.filter { it.aggressiveBuy }.sumOf { it.notional }
-        val sell15m = fifteenMinutes.filterNot { it.aggressiveBuy }.sumOf { it.notional }
+        val buy15m = fifteenMinuteBuckets.sumOf { it.buyUsdt }
+        val sell15m = fifteenMinuteBuckets.sumOf { it.sellUsdt }
         val buyRatio5 = ratio(buy5, sell5)
         val buyRatio15 = ratio(buy15, sell15)
         val buyRatio60 = ratio(buy60, sell60)
@@ -224,8 +247,6 @@ class MicroImpulseStream(context: Context) : WebSocketListener() {
                 (change60.coerceIn(0.0, 1.0) * 20.0) +
                 ((bookImbalance ?: 0.0).coerceIn(0.0, 0.5) / 0.5 * 10.0)
             ).toInt().coerceIn(0, 100)
-        // Large-order fingerprint remains a five-minute observation. Extending the raw
-        // money-flow history to 15 minutes must not silently change its semantics.
         val largeFlow = LargeFlowFingerprintPolicy.evaluate(fiveMinutes, now, currentPrice)
         val flowHistorySeconds = if (connectedAt > 0L) {
             ((now - connectedAt).coerceAtLeast(0L) / 1_000L).coerceAtMost(15L * 60L)
@@ -273,13 +294,20 @@ class MicroImpulseStream(context: Context) : WebSocketListener() {
 
     private companion object {
         const val STREAM_URL = "wss://stream.binance.com:9443/stream?streams=pumpusdt@aggTrade/pumpusdt@bookTicker/btcusdt@aggTrade"
-        const val HISTORY_MILLIS = 15L * 60L * 1_000L
+        const val RAW_HISTORY_MILLIS = 5L * 60L * 1_000L
+        const val BITCOIN_HISTORY_MILLIS = 60_000L
         const val SAVE_INTERVAL_MILLIS = 15_000L
         const val WARMUP_MILLIS = 60_000L
         const val CONFIRMATION_WINDOW_MILLIS = 3L * 60L * 1000L
         const val RECONNECT_MILLIS = 5_000L
     }
 }
+
+private data class MoneyMinuteBucket(
+    val minuteKey: Long,
+    var buyUsdt: Double = 0.0,
+    var sellUsdt: Double = 0.0
+)
 
 data class MicroTrade(
     val at: Long,
