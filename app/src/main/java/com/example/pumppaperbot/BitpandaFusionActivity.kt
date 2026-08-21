@@ -75,7 +75,7 @@ class BitpandaFusionActivity : AppCompatActivity() {
         }, params(56, 8))
         content.addView(button("СБРОСИТЬ ТОЛЬКО FUSIONSIM", "#8B1E1E").apply { setOnClickListener { confirmReset() } }, params(54, 4))
         content.addView(label(
-            "О цене API: отдельная подписка Fusion API в официальных материалах не указана; Fusion MCP прямо объявлен бесплатным и open source. Торговая комиссия возникает только при реальной сделке — V${BuildConfig.VERSION_NAME} их не отправляет.",
+            "Fusion остаётся полностью виртуальным. В V${BuildConfig.VERSION_NAME} симулятор считает 0,25% на входе и 0,25% на выходе; реальные торговые команды Bitpanda не реализованы.",
             13, "#8B949E", false
         ))
         setContentView(ScrollView(this).apply { addView(content) })
@@ -107,7 +107,7 @@ class BitpandaFusionActivity : AppCompatActivity() {
 
     private fun confirmReset() = AlertDialog.Builder(this)
         .setTitle("Сбросить FusionSim?")
-        .setMessage("Будут удалены только виртуальные деньги, сделки и решения FusionSim. Остальные счета не изменятся.")
+        .setMessage("Будут удалены только виртуальные деньги, сделки, решения и состояние динамического stop FusionSim. Остальные счета не изменятся.")
         .setPositiveButton("Сбросить") { _, _ -> FusionSimStore.reset(this); updateUi() }
         .setNegativeButton("Отмена", null).show()
 
@@ -140,25 +140,45 @@ class BitpandaFusionActivity : AppCompatActivity() {
                 "Рекомендация исполнения: ${venueAdvice(s.spreadPercent, imbalance)}\n" +
                 "Торговые права: НЕ ИСПОЛЬЗУЮТСЯ"
         } else "Статус: НЕТ СВЕЖИХ ДАННЫХ\n${s.error.ifBlank { "Нажмите проверку API" }}"
+
         val p = FusionSimStore.state(this)
+        val guard = FusionSimStore.stability(this)
         val mark = if (s.fresh()) s.bid else s.mid
         val priority = FusionPriorityPolicy.plan(p)
         val metrics = FusionPriorityPolicy.metrics(p, mark, s.feeRate, s.fresh())
         val breathing = LiveMarketBreathingStore.snapshot(this)
-        val wave = breathing.flowWave.latest
-        val flowNow = "мгн ${breathing.instantScore?.let(::signed) ?: "—"} • " +
-            "5м ${wave?.score5m?.let(::signed) ?: "—"} • 15м ${wave?.score15m?.let(::signed) ?: "—"} • " +
-            "20м ${wave?.score20m?.let(::signed) ?: "—"} • 30м ${wave?.score30m?.let(::signed) ?: "—"}"
+        val frame = FusionFlowPolicy.frame(breathing)
+        val flowNow = if (frame == null) {
+            "мгн/5/15/20/30: —"
+        } else {
+            "мгн ${signed(frame.instant)} • 5м ${signed(frame.score5m)} • 15м ${signed(frame.score15m)} • " +
+                "20м ${signed(frame.score20m)} • 30м ${signed(frame.score30m)}"
+        }
+        val activeStop = if (p.inPosition) {
+            FusionRiskPolicy.activeStopPrice(p.entryPrice, guard.peakBid, s.feeRate)
+        } else 0.0
+        val stopText = if (p.inPosition && activeStop > 0.0) {
+            "${money(activeStop)} • пик bid ${money(guard.peakBid)}"
+        } else "не активен до следующего BUY"
+        val smoothing = when {
+            guard.exitArmed -> "EXIT ВООРУЖЁН • ждём фактическое движение bid вниз"
+            guard.entryStreak > 0 -> "BUY-КАНДИДАТ ${guard.entryStreak}/${FusionStabilityPolicy.ENTRY_CONFIRMATIONS}"
+            else -> "спокойное наблюдение"
+        }
+
         account.text = "Старт: €1 000,00\nEUR: ${eur(p.cashEur)}\nPUMP: ${String.format(Locale.US, "%.4f", p.pumpAmount)}\n" +
             "Режим: ${if (priority.active) priority.label else "обычное автономное наблюдение"}\n" +
             "Чистая стоимость при виртуальном выходе: ${eur(metrics.netLiquidationValueEur)}\n" +
             "Чистый результат: ${signedEur(metrics.netPnlEur)}\n" +
             "Цена результата: ${if (metrics.venueFresh) "свежий Fusion bid" else "справочная, исполнение заблокировано"}\n" +
             "Откат от пика: ${String.format(Locale.US, "%.2f", metrics.pullbackFromPeakPercent)}%\n" +
-            "Комиссии: ${eur(p.totalFeesEur)} • сделок: ${p.trades.size}\n" +
-            "Потоки сейчас: $flowNow\n" +
-            "BUY: мгн/5/15/30 все выше 0. EXIT: мгн/5/15/20 все ниже 0; положительные 30м выхода не задерживают. " +
-            "Исполнение по свежим Bitpanda ask/bid, только виртуально. Позиция Сержа отделена."
+            "Комиссия симуляции: 0,25% вход + 0,25% выход • уплачено: ${eur(p.totalFeesEur)}\n" +
+            "Динамический STOP: $stopText\n" +
+            "Сглаживание: $smoothing\n" +
+            "Потоки верхнего графика: $flowNow\n" +
+            "BUY: мгн/5/15/30 > 0; сильное согласование входит сразу, слабое пересечение нуля подтверждается ещё раз. " +
+            "EXIT: мгн/5/15/20 < 0 сначала вооружает выход; при боковике ждём, при реальном движении вниз продаём. " +
+            "Начальный виртуальный stop −1,5%; после пика +0,60% он поднимается к безубытку и затем следует за максимумом."
     }
 
     private fun venueAdvice(spread: Double, imbalance: Double): String = when {
