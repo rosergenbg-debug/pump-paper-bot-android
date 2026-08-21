@@ -86,7 +86,7 @@ object DeepSeekActionLevelPolicy {
             fused.level,
             fused.reason,
             intensive = fused.level >= APPROACHING_LEVEL || microPressure || evidence.appReadiness >= 70,
-            proPreferred = fused.level >= READY_LEVEL
+            proPreferred = fused.level >= READY_LEVEL && evidence.aiAction.uppercase() == "BUY"
         )
     }
 
