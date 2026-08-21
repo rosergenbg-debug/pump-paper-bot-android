@@ -190,7 +190,7 @@ class BitpandaFusionTest {
         assertEquals(bought, duplicate)
     }
 
-    @Test fun `open Fusion position enables one minute Pro priority only`() {
+    @Test fun `open Fusion position uses three minute Flash priority by default`() {
         val inactive = FusionPriorityPolicy.plan(FusionSimPortfolio())
         assertFalse(inactive.active)
         assertFalse(inactive.forcePro)
@@ -199,17 +199,18 @@ class BitpandaFusionTest {
         val open = FusionSimPortfolio(pumpAmount = 10.0, entryPrice = 1.0, entryCostEur = 10.0)
         val active = FusionPriorityPolicy.plan(open)
         assertTrue(active.active)
-        assertTrue(active.forcePro)
-        assertEquals(60_000L, active.intervalMillis)
-        assertTrue(active.label.contains("МАКСИМАЛЬНЫЙ КОНТРОЛЬ"))
+        assertFalse(active.forcePro)
+        assertEquals(180_000L, active.intervalMillis)
+        assertTrue(active.label.contains("ЛОКАЛЬНЫЙ КОНТРОЛЬ"))
+        assertTrue(active.label.contains("FLASH"))
 
         val now = 1_000_000L
         assertFalse(DeepSeekPrimaryPolicy.shouldRun(
-            DeepSeekPrimaryState(lastAttempt = now - 59_999L), true, false, now,
+            DeepSeekPrimaryState(lastAttempt = now - 179_999L), true, false, now,
             intervalMillis = active.intervalMillis
         ))
         assertTrue(DeepSeekPrimaryPolicy.shouldRun(
-            DeepSeekPrimaryState(lastAttempt = now - 60_000L), true, false, now,
+            DeepSeekPrimaryState(lastAttempt = now - 180_000L), true, false, now,
             intervalMillis = active.intervalMillis
         ))
     }
