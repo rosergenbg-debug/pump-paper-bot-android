@@ -7,8 +7,6 @@ import java.io.File
 import java.util.ArrayDeque
 import java.util.Locale
 import kotlin.math.abs
-import kotlin.math.exp
-import kotlin.math.ln
 import kotlin.math.roundToInt
 
 data class LiveBreathingSample(
@@ -36,10 +34,8 @@ data class LiveBreathingHorizon(
 )
 
 /**
- * One minute of the continuous V5.7 flow surface.  These values are exponentially
- * decayed pressure, not price forecasts.  A feed pause therefore makes the short
- * wave fade toward zero while the longer waves and the already observed path stay
- * visible instead of resetting the chart.
+ * One point of the V5.14 continuous flow surface. All layers now come from the same
+ * completed-minute fixed-window engine as the upper 5/15/20/30-minute bars.
  */
 data class LiveFlowWavePoint(
     val at: Long,
@@ -127,18 +123,16 @@ data class LiveMarketBreathingSnapshot(
 }
 
 /**
- * Converts noisy 15-second public trade/book snapshots into persistent multi-horizon context.
- * It never executes a trade. The experiment remains faster, but cannot differ from the normal
- * DeepSeek breathing score by more than 15 points.
+ * V5.14 multi-horizon market breathing.
+ *
+ * "Instant" remains deliberately fast. Every labelled 5/15/20/30/60/360-minute value is
+ * produced from UnifiedFlowEngine's completed, non-overlapping minute buckets. Therefore
+ * a still-forming 60-second sample cannot flip a 30-minute bar every few seconds.
  */
 object LiveMarketBreathingAnalyzer {
     const val MAX_EXPERIMENT_GAP = 15
     const val MAX_LIVE_AGE_MILLIS = 90_000L
-    // These are the exact retrospective windows rendered as the upper bars in
-    // CriticalOverviewActivity.  Fusion must consume these same values instead
-    // of independently using the faster exponentially-decayed flow clock.
     private val windows = intArrayOf(5, 15, 20, 30, 60, 360)
-    private val flowWindows = intArrayOf(5, 15, 20, 30, 60, 180, 360)
 
     fun analyze(samples: List<LiveBreathingSample>, now: Long): LiveMarketBreathingSnapshot {
         val valid = samples.asSequence()
@@ -151,7 +145,23 @@ object LiveMarketBreathingAnalyzer {
         val latest = valid.last()
         val fresh = now >= latest.at && now - latest.at <= MAX_LIVE_AGE_MILLIS
         val instant = instantScore(latest)
-        val horizons = windows.map { minutes -> horizon(valid, latest, minutes) }
+        val minuteBuckets = UnifiedFlowEngine.completedMinuteBuckets(valid, now)
+        val horizons = windows.map { minutes ->
+            val flow = UnifiedFlowEngine.window(
+                buckets = minuteBuckets,
+                minutes = minutes,
+                requireFullCoverage = true
+            )
+            LiveBreathingHorizon(
+                minutes = minutes,
+                score = flow.score,
+                priceChangePercent = flow.priceChangePercent,
+                buyerPercent = flow.buyerPercent,
+                persistencePercent = flow.persistencePercent,
+                samples = flow.minuteCount
+            )
+        }
+
         val normalWeights = mapOf(5 to 0.25, 15 to 0.25, 30 to 0.20, 60 to 0.18, 360 to 0.12)
         val weighted = horizons.mapNotNull { horizon ->
             normalWeights[horizon.minutes]?.let { weight -> weight to horizon }
@@ -168,16 +178,24 @@ object LiveMarketBreathingAnalyzer {
         val regime = when {
             !fresh -> "ИСТОРИЯ УСТАРЕЛА — ЖДЁМ ЖИВОЙ ПОТОК"
             normal == null -> "НАКАПЛИВАЕМ ИСТОРИЮ"
-            normal >= 35 && horizons.count { (it.score ?: 0) >= 20 } >= 2 -> "УСТОЙЧИВОЕ ДАВЛЕНИЕ ПОКУПАТЕЛЕЙ"
-            normal <= -35 && horizons.count { (it.score ?: 0) <= -20 } >= 2 -> "УСТОЙЧИВОЕ ДАВЛЕНИЕ ПРОДАВЦОВ"
+            normal >= 35 && horizons.count { (it.score ?: 0) >= 20 } >= 2 ->
+                "УСТОЙЧИВОЕ ДАВЛЕНИЕ ПОКУПАТЕЛЕЙ"
+            normal <= -35 && horizons.count { (it.score ?: 0) <= -20 } >= 2 ->
+                "УСТОЙЧИВОЕ ДАВЛЕНИЕ ПРОДАВЦОВ"
             abs(normal) < 15 -> "РЫНОЧНЫЙ ШУМ / БОКОВИК"
             normal > 0 -> "УМЕРЕННОЕ УЛУЧШЕНИЕ"
             else -> "УМЕРЕННОЕ УХУДШЕНИЕ"
         }
         val historyMinutes = ((latest.at - valid.first().at).coerceAtLeast(0L) / 60_000L)
             .toInt().coerceAtMost(24 * 60)
-        val buyerBreath = BuyerBreathCycleAnalyzer.analyze(valid, horizons, fresh)
+
+        // BuyerBreath keeps its own semantic phase model, but receives the exact same
+        // one-observation-per-completed-minute base instead of overlapping 15-second copies.
+        val buyerBreathInput = UnifiedFlowEngine.representativeSamples(valid, now)
+            .takeIf { it.size >= 2 } ?: valid
+        val buyerBreath = BuyerBreathCycleAnalyzer.analyze(buyerBreathInput, horizons, fresh)
         val flowWave = continuousFlow(valid, now)
+
         return LiveMarketBreathingSnapshot(
             updatedAt = latest.at,
             fresh = fresh,
@@ -193,49 +211,39 @@ object LiveMarketBreathingAnalyzer {
     }
 
     /**
-     * Builds five simultaneous causal waves from public executed flow.  The input
-     * is first reduced to one point per minute, then each layer gets its own decay
-     * horizon.  BTC is deliberately capped at 5% of the pulse: it is regime context,
-     * not a minute-by-minute master switch for PUMP.
+     * Historical arcs use the same fixed-window engine as the upper bars. No V5.7 EWMA
+     * half-life path remains here. During feed pauses the last observed pressure is held
+     * and marked stale instead of being mathematically invented toward zero.
      */
     internal fun continuousFlow(samples: List<LiveBreathingSample>, now: Long): LiveFlowWave {
         if (samples.isEmpty()) return LiveFlowWave()
-        val ordered = samples.sortedBy { it.at }
+        val latestSampleAt = samples.maxOfOrNull { it.at } ?: return LiveFlowWave()
         val warmupCutoff = now - 12L * 60L * 60L * 1_000L
-        val minuteSamples = ordered.asSequence()
+        val buckets = UnifiedFlowEngine.completedMinuteBuckets(samples, now)
             .filter { it.at >= warmupCutoff }
-            .groupBy { it.at / 60_000L }
-            .values
-            .mapNotNull { minute -> minute.maxByOrNull { sample: LiveBreathingSample -> sample.at } }
-            .sortedBy { it.at }
-        if (minuteSamples.isEmpty()) return LiveFlowWave()
-
-        val states = DoubleArray(flowWindows.size)
-        var initialized = false
-        var previousAt = minuteSamples.first().at
-        val allPoints = ArrayList<LiveFlowWavePoint>(minuteSamples.size + 1)
-        minuteSamples.forEach { sample ->
-            val pulse = flowPulse(sample)
-            val elapsedMinutes = ((sample.at - previousAt).coerceAtLeast(15_000L) / 60_000.0)
-            flowWindows.forEachIndexed { index, minutes ->
-                val halfLifeMinutes = (minutes / 3.0).coerceAtLeast(3.0)
-                val alpha = 1.0 - exp(-ln(2.0) * elapsedMinutes / halfLifeMinutes)
-                states[index] = if (!initialized) pulse else states[index] + alpha * (pulse - states[index])
-            }
-            initialized = true
-            previousAt = sample.at
-            allPoints += wavePoint(sample.at, states)
+        if (buckets.isEmpty()) {
+            val stale = (now - latestSampleAt).coerceAtLeast(0L)
+            return LiveFlowWave(staleSeconds = stale / 1_000L)
         }
 
-        val latestAt = minuteSamples.last().at
-        val staleMillis = (now - latestAt).coerceAtLeast(0L)
-        if (staleMillis >= 30_000L) {
-            val gapMinutes = staleMillis / 60_000.0
-            flowWindows.forEachIndexed { index, minutes ->
-                val holdHalfLife = (minutes / 2.0).coerceAtLeast(4.0)
-                states[index] *= exp(-ln(2.0) * gapMinutes / holdHalfLife)
-            }
-            allPoints += wavePoint(now, states)
+        val allPoints = ArrayList<LiveFlowWavePoint>(buckets.size + 1)
+        buckets.indices.forEach { index ->
+            val bucket = buckets[index]
+            allPoints += LiveFlowWavePoint(
+                at = bucket.at,
+                score5m = UnifiedFlowEngine.historyScore(buckets, index, 5),
+                score15m = UnifiedFlowEngine.historyScore(buckets, index, 15),
+                score20m = UnifiedFlowEngine.historyScore(buckets, index, 20),
+                score30m = UnifiedFlowEngine.historyScore(buckets, index, 30),
+                score60m = UnifiedFlowEngine.historyScore(buckets, index, 60),
+                score180m = UnifiedFlowEngine.historyScore(buckets, index, 180),
+                score360m = UnifiedFlowEngine.historyScore(buckets, index, 360)
+            )
+        }
+
+        val staleMillis = (now - latestSampleAt).coerceAtLeast(0L)
+        if (staleMillis >= 30_000L && allPoints.isNotEmpty()) {
+            allPoints += allPoints.last().copy(at = now)
         }
         val visibleCutoff = now - 6L * 60L * 60L * 1_000L
         val visible = allPoints.filter { it.at >= visibleCutoff }.takeLast(361)
@@ -248,57 +256,49 @@ object LiveMarketBreathingAnalyzer {
         )
     }
 
-    internal fun flowPulse(sample: LiveBreathingSample): Double {
-        val total = sample.pumpBuyNotional60s + sample.pumpSellNotional60s
-        val buyerPercent = if (total > 0.0) sample.pumpBuyNotional60s / total * 100.0
-        else sample.pumpBuyerPercent
-        val executedFlow = ((buyerPercent - 50.0) * 4.0).coerceIn(-100.0, 100.0)
-        val priceResponse = (sample.pumpChange60sPercent * 110.0).coerceIn(-100.0, 100.0)
-        val book = ((sample.bookImbalance ?: 0.0) * 100.0).coerceIn(-100.0, 100.0)
-        val btcRegime = (
-            (sample.bitcoinBuyerPercent - 50.0) * 1.5 + sample.bitcoinChange60sPercent * 55.0
-            ).coerceIn(-100.0, 100.0)
-        return (executedFlow * 0.62 + priceResponse * 0.25 + book * 0.08 + btcRegime * 0.05)
-            .coerceIn(-100.0, 100.0)
-    }
+    internal fun flowPulse(sample: LiveBreathingSample): Double =
+        UnifiedFlowEngine.samplePulse(sample)
 
-    private fun wavePoint(at: Long, values: DoubleArray) = LiveFlowWavePoint(
-        at = at,
-        score15m = values[1].roundToInt().coerceIn(-100, 100),
-        score30m = values[3].roundToInt().coerceIn(-100, 100),
-        score60m = values[4].roundToInt().coerceIn(-100, 100),
-        score180m = values[5].roundToInt().coerceIn(-100, 100),
-        score360m = values[6].roundToInt().coerceIn(-100, 100),
-        score5m = values[0].roundToInt().coerceIn(-100, 100),
-        score20m = values[2].roundToInt().coerceIn(-100, 100)
-    )
-
-    private fun flowGuidance(points: List<LiveFlowWavePoint>, staleMillis: Long): Pair<String, String> {
+    private fun flowGuidance(
+        points: List<LiveFlowWavePoint>,
+        staleMillis: Long
+    ): Pair<String, String> {
         val latest = points.lastOrNull() ?: return "НАКАПЛИВАЕМ ЖИВОЙ ПОТОК" to
             "Ждём устойчивые данные 15–30 минут."
-        if (staleMillis > MAX_LIVE_AGE_MILLIS) return "СВЯЗЬ ПРИОСТАНОВЛЕНА • ВОЛНЫ ПЛАВНО ЗАТУХАЮТ" to
-            "Старый путь сохранён на графике; новых решений до восстановления потока не принимать."
-        val fiveMinutesAgo = points.lastOrNull { it.at <= latest.at - 5L * 60L * 1_000L } ?: points.first()
+        if (staleMillis > MAX_LIVE_AGE_MILLIS) {
+            return "СВЯЗЬ ПРИОСТАНОВЛЕНА • ПОСЛЕДНЯЯ ВОЛНА ЗАФИКСИРОВАНА" to
+                "История сохранена без искусственного затухания; новых решений до восстановления потока не принимать."
+        }
+        val fiveMinutesAgo = points.lastOrNull {
+            it.at <= latest.at - 5L * 60L * 1_000L
+        } ?: points.first()
         val short = (latest.score15m + latest.score30m) / 2
         val shortBefore = (fiveMinutesAgo.score15m + fiveMinutesAgo.score30m) / 2
         val slope = short - shortBefore
         val long = (latest.score60m + latest.score180m + latest.score360m) / 3
         val recentPeak = points.takeLast(60).maxOfOrNull { it.composite() } ?: latest.composite()
         return when {
-            short >= 20 && slope >= 7 && long >= -10 -> "ПОКУПАТЕЛЬСКАЯ ВОЛНА НАБИРАЕТ СИЛУ" to
-                "Зона входа только для проверки: дождаться удержания 15/30 мин и не покупать после вертикального отрыва цены."
-            short >= 18 && long >= 8 -> "ПОКУПАТЕЛИ УДЕРЖИВАЮТ НЕСКОЛЬКО ГОРИЗОНТОВ" to
-                "Открытую позицию можно сопровождать; новый вход — после отката/ретеста, не по одному проценту покупок."
-            recentPeak >= 25 && slope <= -10 && short <= 8 -> "КОРОТКАЯ ВОЛНА ВЫДЫХАЕТСЯ" to
-                "Подготовить выход и искать подтверждение продажами, ценой, OI и 15/30/60-минутной слабостью."
-            short <= -22 && long <= -8 -> "ПРОДАВЦЫ ПЕРЕХВАТЫВАЮТ ПОТОК" to
-                "Новый вход не делать; открытую позицию срочно перепроверить по независимым защитным правилам."
-            abs(short) < 12 && abs(long) < 12 -> "БОКОВИК • ВОЛНЫ ОКОЛО НУЛЯ" to
-                "Ждать, пока 15/30-минутные линии выйдут из шума и более длинный фон не будет против движения."
-            slope > 0 -> "ПОТОК ПОСТЕПЕННО УЛУЧШАЕТСЯ" to
-                "Это подготовка, не команда BUY: нужен переход коротких волн выше нуля с реакцией цены."
-            else -> "ПОТОК ПОСТЕПЕННО СЛАБЕЕТ" to
-                "Не реагировать на один тик; следить, станет ли ослабление общим для 15м, 30м и 1ч."
+            short >= 20 && slope >= 7 && long >= -10 ->
+                "ПОКУПАТЕЛЬСКАЯ ВОЛНА НАБИРАЕТ СИЛУ" to
+                    "Зона входа только для проверки: дождаться удержания 15/30 мин и не покупать после вертикального отрыва цены."
+            short >= 18 && long >= 8 ->
+                "ПОКУПАТЕЛИ УДЕРЖИВАЮТ НЕСКОЛЬКО ГОРИЗОНТОВ" to
+                    "Открытую позицию можно сопровождать; новый вход — после отката/ретеста, не по одному проценту покупок."
+            recentPeak >= 25 && slope <= -10 && short <= 8 ->
+                "КОРОТКАЯ ВОЛНА ВЫДЫХАЕТСЯ" to
+                    "Подготовить выход и искать подтверждение продажами, ценой, OI и 15/30/60-минутной слабостью."
+            short <= -22 && long <= -8 ->
+                "ПРОДАВЦЫ ПЕРЕХВАТЫВАЮТ ПОТОК" to
+                    "Новый вход не делать; открытую позицию срочно перепроверить по независимым защитным правилам."
+            abs(short) < 12 && abs(long) < 12 ->
+                "БОКОВИК • ВОЛНЫ ОКОЛО НУЛЯ" to
+                    "Ждать, пока 15/30-минутные линии выйдут из шума и более длинный фон не будет против движения."
+            slope > 0 ->
+                "ПОТОК ПОСТЕПЕННО УЛУЧШАЕТСЯ" to
+                    "Это подготовка, не команда BUY: нужен переход коротких волн выше нуля с реакцией цены."
+            else ->
+                "ПОТОК ПОСТЕПЕННО СЛАБЕЕТ" to
+                    "Не реагировать на один тик; следить, станет ли ослабление общим для 15м, 30м и 1ч."
         }
     }
 
@@ -307,50 +307,15 @@ object LiveMarketBreathingAnalyzer {
         val price = (sample.pumpChange60sPercent * 125.0).coerceIn(-100.0, 100.0)
         val book = ((sample.bookImbalance ?: 0.0) * 100.0).coerceIn(-100.0, 100.0)
         val bitcoin = (
-            (sample.bitcoinBuyerPercent - 50.0) * 2.0 + sample.bitcoinChange60sPercent * 80.0
+            (sample.bitcoinBuyerPercent - 50.0) * 2.0 +
+                sample.bitcoinChange60sPercent * 80.0
             ).coerceIn(-100.0, 100.0)
-        return (buyer * 0.48 + price * 0.32 + book * 0.10 + bitcoin * 0.10)
-            .roundToInt().coerceIn(-100, 100)
-    }
-
-    private fun horizon(
-        all: List<LiveBreathingSample>,
-        latest: LiveBreathingSample,
-        minutes: Int
-    ): LiveBreathingHorizon {
-        val selected = all.filter { it.at >= latest.at - minutes * 60_000L }
-        if (selected.size < 2) return LiveBreathingHorizon(minutes, null, null, null, 0, selected.size)
-        val buyer = median(selected.map { it.pumpBuyerPercent })
-        val first = selected.first()
-        val change = if (first.priceUsdt > 0.0) (latest.priceUsdt / first.priceUsdt - 1.0) * 100.0 else 0.0
-        val book = median(selected.mapNotNull { it.bookImbalance }) ?: 0.0
-        val bitcoinBuyer = median(selected.map { it.bitcoinBuyerPercent }) ?: 50.0
-        val directionSamples = selected.map(::instantScore)
-        val dominantPositive = directionSamples.count { it >= 5 } >= directionSamples.count { it <= -5 }
-        val persistent = directionSamples.count { if (dominantPositive) it >= 0 else it <= 0 }
-        val persistence = (persistent * 100.0 / directionSamples.size).roundToInt()
-        val priceScale = when (minutes) {
-            5 -> 0.75
-            15 -> 1.25
-            30 -> 1.75
-            60 -> 2.50
-            else -> 6.0
-        }
-        val buyerScore = (((buyer ?: 50.0) - 50.0) * 4.0).coerceIn(-100.0, 100.0)
-        val priceScore = (change / priceScale * 100.0).coerceIn(-100.0, 100.0)
-        val bookScore = (book * 100.0).coerceIn(-100.0, 100.0)
-        val btcScore = ((bitcoinBuyer - 50.0) * 2.0).coerceIn(-100.0, 100.0)
-        val persistenceFactor = (0.65 + persistence.coerceIn(50, 100) / 100.0 * 0.35)
-        val score = ((buyerScore * 0.44 + priceScore * 0.38 + bookScore * 0.08 + btcScore * 0.10) *
-            persistenceFactor).roundToInt().coerceIn(-100, 100)
-        return LiveBreathingHorizon(minutes, score, change, buyer, persistence, selected.size)
-    }
-
-    private fun median(values: List<Double>): Double? {
-        val sorted = values.filter(Double::isFinite).sorted()
-        if (sorted.isEmpty()) return null
-        val middle = sorted.size / 2
-        return if (sorted.size % 2 == 1) sorted[middle] else (sorted[middle - 1] + sorted[middle]) / 2.0
+        return (
+            buyer * 0.48 +
+                price * 0.32 +
+                book * 0.10 +
+                bitcoin * 0.10
+            ).roundToInt().coerceIn(-100, 100)
     }
 }
 
@@ -390,7 +355,11 @@ object LiveMarketBreathingStore {
             }
             val newFile = !file.exists() || file.length() == 0L
             file.appendText(buildString {
-                if (newFile) append("observed_at_ms,price_usdt,pump_buy_pct,pump_change_60s_pct,book_imbalance,btc_buy_pct,btc_change_60s_pct,pump_buy_notional_60s,pump_sell_notional_60s,pump_trades_60s,trade_acceleration,btc_price_usdt\n")
+                if (newFile) append(
+                    "observed_at_ms,price_usdt,pump_buy_pct,pump_change_60s_pct,book_imbalance," +
+                        "btc_buy_pct,btc_change_60s_pct,pump_buy_notional_60s,pump_sell_notional_60s," +
+                        "pump_trades_60s,trade_acceleration,btc_price_usdt\n"
+                )
                 append(sample.at).append(',')
                 append(number(sample.priceUsdt)).append(',')
                 append(number(sample.pumpBuyerPercent)).append(',')
@@ -408,7 +377,10 @@ object LiveMarketBreathingStore {
     }
 
     @Synchronized
-    fun snapshot(context: Context, now: Long = System.currentTimeMillis()): LiveMarketBreathingSnapshot {
+    fun snapshot(
+        context: Context,
+        now: Long = System.currentTimeMillis()
+    ): LiveMarketBreathingSnapshot {
         ensureLoaded(context)
         trim(now)
         return LiveMarketBreathingAnalyzer.analyze(samples.toList(), now)
@@ -436,7 +408,9 @@ object LiveMarketBreathingStore {
 
     private fun trim(now: Long) {
         val cutoff = now - RollingCsvRetention.RETENTION_MILLIS
-        while (samples.isNotEmpty() && samples.peekFirst().at < cutoff) samples.removeFirst()
+        while (samples.isNotEmpty() && samples.peekFirst().at < cutoff) {
+            samples.removeFirst()
+        }
     }
 
     private fun parse(line: String): LiveBreathingSample? {
@@ -458,5 +432,6 @@ object LiveMarketBreathingStore {
         )
     }
 
-    private fun number(value: Double): String = String.format(Locale.US, "%.8f", value)
+    private fun number(value: Double): String =
+        String.format(Locale.US, "%.8f", value)
 }
