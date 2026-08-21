@@ -6,29 +6,70 @@ import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import android.view.Gravity
-import android.view.View
 import android.widget.Button
 import android.widget.LinearLayout
+import java.util.WeakHashMap
 
-/** V5.13 keeps the stable-scroll guard and adds the direct big-overview entry point. */
+/**
+ * V5.13.1 is strictly additive over V5.12/V5.13:
+ * - keeps the V5.12 stable-scroll guard;
+ * - keeps the V5.12 live main-chart four-flow updater;
+ * - adds only the V5.13 big-overview entry point.
+ */
 class V513Application : Application() {
+    private val mainChartUpdaters = WeakHashMap<Activity, Runnable>()
+
     override fun onCreate() {
         super.onCreate()
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
             override fun onActivityResumed(activity: Activity) {
                 activity.window?.decorView?.post {
                     StableScrollGuard.attach(activity.window.decorView)
-                    V513MainUiInjector.install(activity)
+                    if (activity is MainActivity) {
+                        startMainChartPresentation(activity)
+                        V513MainUiInjector.install(activity)
+                    }
                 }
+            }
+
+            override fun onActivityPaused(activity: Activity) {
+                stopMainChartPresentation(activity)
+            }
+
+            override fun onActivityDestroyed(activity: Activity) {
+                stopMainChartPresentation(activity)
             }
 
             override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
             override fun onActivityStarted(activity: Activity) = Unit
-            override fun onActivityPaused(activity: Activity) = Unit
             override fun onActivityStopped(activity: Activity) = Unit
             override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
-            override fun onActivityDestroyed(activity: Activity) = Unit
         })
+    }
+
+    /** Exact V5.12 presentation behavior: MГН / 5м / 15м / 30м stay live on the main chart. */
+    private fun startMainChartPresentation(activity: MainActivity) {
+        stopMainChartPresentation(activity)
+        val chart = activity.findViewById<StrategyChartView>(R.id.chart) ?: return
+        chart.setMainViewportMode(true)
+        val updater = object : Runnable {
+            override fun run() {
+                if (activity.isFinishing || activity.isDestroyed || !chart.isAttachedToWindow) return
+                chart.setFlowScores(
+                    MainChartFlowPresentation.from(
+                        LiveMarketBreathingStore.snapshot(activity, System.currentTimeMillis())
+                    )
+                )
+                chart.postDelayed(this, 2_000L)
+            }
+        }
+        mainChartUpdaters[activity] = updater
+        chart.post(updater)
+    }
+
+    private fun stopMainChartPresentation(activity: Activity) {
+        val updater = mainChartUpdaters.remove(activity) ?: return
+        activity.findViewById<StrategyChartView>(R.id.chart)?.removeCallbacks(updater)
     }
 }
 
