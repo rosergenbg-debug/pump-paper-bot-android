@@ -6,15 +6,14 @@ import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import android.view.Gravity
+import android.view.View
 import android.widget.Button
 import android.widget.LinearLayout
 import java.util.WeakHashMap
 
 /**
- * V5.13.1 is strictly additive over V5.12/V5.13:
- * - keeps the V5.12 stable-scroll guard;
- * - keeps the V5.12 live main-chart four-flow updater;
- * - adds only the V5.13 big-overview entry point.
+ * Sequential presentation layer retained from V5.13.1+.
+ * V5.18 adds only a visual money-flow strip; trading logic is not changed here.
  */
 class V513Application : Application() {
     private val mainChartUpdaters = WeakHashMap<Activity, Runnable>()
@@ -26,8 +25,8 @@ class V513Application : Application() {
                 activity.window?.decorView?.post {
                     StableScrollGuard.attach(activity.window.decorView)
                     if (activity is MainActivity) {
-                        startMainChartPresentation(activity)
                         V513MainUiInjector.install(activity)
+                        startMainChartPresentation(activity)
                     }
                 }
             }
@@ -47,7 +46,7 @@ class V513Application : Application() {
         })
     }
 
-    /** Exact V5.12 presentation behavior: MГН / 5м / 15м / 30м stay live on the main chart. */
+    /** Main-chart flow and V5.18 money strip share one cheap two-second presentation refresh. */
     private fun startMainChartPresentation(activity: MainActivity) {
         stopMainChartPresentation(activity)
         val chart = activity.findViewById<StrategyChartView>(R.id.chart) ?: return
@@ -55,10 +54,12 @@ class V513Application : Application() {
         val updater = object : Runnable {
             override fun run() {
                 if (activity.isFinishing || activity.isDestroyed || !chart.isAttachedToWindow) return
-                chart.setFlowScores(
-                    MainChartFlowPresentation.from(
-                        LiveMarketBreathingStore.snapshot(activity, System.currentTimeMillis())
-                    )
+                val now = System.currentTimeMillis()
+                val breathing = LiveMarketBreathingStore.snapshot(activity, now)
+                chart.setFlowScores(MainChartFlowPresentation.from(breathing))
+                V513MainUiInjector.updateMoneyFlow(
+                    activity,
+                    MoneyFlowPresentation.from(MicroImpulseStore.state(activity), breathing, now)
                 )
                 chart.postDelayed(this, 2_000L)
             }
@@ -79,6 +80,7 @@ internal object V513MainUiInjector {
     fun install(activity: Activity) {
         if (activity !is MainActivity) return
 
+        installMoneyFlowStrip(activity)
         activity.findViewById<StrategyChartView>(R.id.chart)?.setOnClickListener {
             open(activity, false)
         }
@@ -130,6 +132,32 @@ internal object V513MainUiInjector {
             }
         )
         parent.addView(row, index, rowParams)
+    }
+
+    fun updateMoneyFlow(activity: Activity, data: MoneyFlowPanelData) {
+        activity.window?.decorView
+            ?.findViewWithTag<MoneyFlowStripView>(MoneyFlowStripView.VIEW_TAG)
+            ?.setData(data)
+    }
+
+    private fun installMoneyFlowStrip(activity: MainActivity) {
+        val root = activity.findViewById<View>(R.id.tvLatestSignal)?.parent as? LinearLayout ?: return
+        if (root.findViewWithTag<MoneyFlowStripView>(MoneyFlowStripView.VIEW_TAG) != null) return
+        val anchor = activity.findViewById<View>(R.id.tvLatestSignal) ?: return
+        val index = root.indexOfChild(anchor)
+        if (index < 0) return
+        val strip = MoneyFlowStripView(activity).apply {
+            minimumHeight = dp(activity, 104)
+            contentDescription = "Денежный поток за одну, пять и пятнадцать минут"
+        }
+        root.addView(
+            strip,
+            index,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                dp(activity, 104)
+            ).apply { topMargin = dp(activity, 7) }
+        )
     }
 
     private fun open(activity: Activity, zoomed: Boolean) {
