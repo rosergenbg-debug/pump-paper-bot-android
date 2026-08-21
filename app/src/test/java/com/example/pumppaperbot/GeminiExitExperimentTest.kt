@@ -324,6 +324,7 @@ class GeminiExitExperimentTest {
                 score = 6,
                 groups = 4,
                 priceWeak = true,
+                currentReturn = 0.2,
                 breathing5m = -24,
                 breathing15m = -20,
                 breathing20m = -16,
