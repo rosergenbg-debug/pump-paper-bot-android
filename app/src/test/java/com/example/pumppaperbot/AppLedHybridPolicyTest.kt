@@ -68,19 +68,16 @@ class AppLedHybridPolicyTest {
         assertTrue(result.level >= 8)
     }
 
-    @Test fun `independent DeepSeek entry requires two separate AI cycles`() {
+    @Test fun `independent DeepSeek entry reaches verifier after one strong AI cycle in V510`() {
         val first = DeepSeekPersistencePolicy.update(0, 0, 0L, true, false, 120_000L)
         val duplicate = DeepSeekPersistencePolicy.update(
             first.entryStreak, first.exitStreak, first.lastEvaluationAt, true, false, 150_000L
         )
-        val second = DeepSeekPersistencePolicy.update(
-            duplicate.entryStreak, duplicate.exitStreak, duplicate.lastEvaluationAt,
-            true, false, 240_000L
-        )
 
-        assertFalse(first.confirmIndependentBuy)
+        assertTrue(first.confirmIndependentBuy)
+        assertEquals(1, first.entryStreak)
+        assertTrue(duplicate.confirmIndependentBuy)
         assertEquals(1, duplicate.entryStreak)
-        assertTrue(second.confirmIndependentBuy)
     }
 
     @Test fun `independent DeepSeek exit is armed before it is executable`() {
