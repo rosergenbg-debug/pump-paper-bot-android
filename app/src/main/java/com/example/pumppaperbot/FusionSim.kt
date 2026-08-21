@@ -85,15 +85,15 @@ data class FusionPriorityMetrics(
 )
 
 object FusionPriorityPolicy {
-    const val PRIORITY_INTERVAL_MILLIS = 60_000L
+    const val PRIORITY_INTERVAL_MILLIS = 3L * 60L * 1000L
     const val NORMAL_INTERVAL_MILLIS = 120_000L
 
     fun plan(portfolio: FusionSimPortfolio): FusionPriorityPlan = if (portfolio.inPosition) {
         FusionPriorityPlan(
             active = true,
-            forcePro = true,
+            forcePro = false,
             intervalMillis = PRIORITY_INTERVAL_MILLIS,
-            label = "FUSION POSITION • МАКСИМАЛЬНЫЙ КОНТРОЛЬ • DEEPSIG PRO • 1 МИН"
+            label = "FUSION POSITION • ЛОКАЛЬНЫЙ КОНТРОЛЬ • DEEPSIG FLASH • 3 МИН"
         )
     } else {
         FusionPriorityPlan(
@@ -497,7 +497,6 @@ object FusionSimStore {
             }
             return current
         }
-
         val tracked = if (current.inPosition) {
             current.copy(peakValueEur = max(current.peakValueEur, current.value(market.bid)))
         } else current
@@ -542,7 +541,7 @@ object FusionSimStore {
                     context,
                     "FUSION_PRIORITY",
                     "START",
-                    "Виртуальный BUY исполнен по ask; комиссия 0,25% учтена; включён контроль позиции раз в минуту"
+                    "Виртуальный BUY исполнен по ask; комиссия 0,25% учтена; локальный контроль остаётся непрерывным, DeepSig опрашивается каждые 3 минуты"
                 )
                 tracked.inPosition && !next.inPosition -> UnifiedResearchLog.record(
                     context,
