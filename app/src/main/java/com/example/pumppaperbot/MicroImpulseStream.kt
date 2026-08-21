@@ -157,7 +157,8 @@ class MicroImpulseStream(context: Context) : WebSocketListener() {
         val five = trades.filter { it.at >= now - 5_000L }
         val fifteen = trades.filter { it.at >= now - 15_000L }
         val sixty = trades.filter { it.at >= now - 60_000L }
-        val fiveMinutes = trades.toList()
+        val fiveMinutes = trades.filter { it.at >= now - 5L * 60L * 1_000L }
+        val fifteenMinutes = trades.toList()
         val buy5 = five.filter { it.aggressiveBuy }.sumOf { it.notional }
         val sell5 = five.filterNot { it.aggressiveBuy }.sumOf { it.notional }
         val buy15 = fifteen.filter { it.aggressiveBuy }.sumOf { it.notional }
@@ -166,10 +167,13 @@ class MicroImpulseStream(context: Context) : WebSocketListener() {
         val sell60 = sixty.filterNot { it.aggressiveBuy }.sumOf { it.notional }
         val buy5m = fiveMinutes.filter { it.aggressiveBuy }.sumOf { it.notional }
         val sell5m = fiveMinutes.filterNot { it.aggressiveBuy }.sumOf { it.notional }
+        val buy15m = fifteenMinutes.filter { it.aggressiveBuy }.sumOf { it.notional }
+        val sell15m = fifteenMinutes.filterNot { it.aggressiveBuy }.sumOf { it.notional }
         val buyRatio5 = ratio(buy5, sell5)
         val buyRatio15 = ratio(buy15, sell15)
         val buyRatio60 = ratio(buy60, sell60)
         val buyRatio5m = ratio(buy5m, sell5m)
+        val buyRatio15m = ratio(buy15m, sell15m)
         val expectedFiveSecondTrades = max(sixty.size / 12.0, fiveMinutes.size / 60.0).coerceAtLeast(1.0)
         val tradeAcceleration = five.size / expectedFiveSecondTrades
         val oldPrice = sixty.firstOrNull()?.price ?: currentPrice
@@ -220,33 +224,44 @@ class MicroImpulseStream(context: Context) : WebSocketListener() {
                 (change60.coerceIn(0.0, 1.0) * 20.0) +
                 ((bookImbalance ?: 0.0).coerceIn(0.0, 0.5) / 0.5 * 10.0)
             ).toInt().coerceIn(0, 100)
-        val largeFlow = LargeFlowFingerprintPolicy.evaluate(trades.toList(), now, currentPrice)
+        // Large-order fingerprint remains a five-minute observation. Extending the raw
+        // money-flow history to 15 minutes must not silently change its semantics.
+        val largeFlow = LargeFlowFingerprintPolicy.evaluate(fiveMinutes, now, currentPrice)
+        val flowHistorySeconds = if (connectedAt > 0L) {
+            ((now - connectedAt).coerceAtLeast(0L) / 1_000L).coerceAtMost(15L * 60L)
+        } else 0L
 
         val snapshot = MicroImpulseSnapshot(
-                connected = true,
-                phase = phase,
-                score = score,
-                updatedAt = now,
-                priceUsdt = currentPrice,
-                trades5s = five.size,
-                trades60s = sixty.size,
-                tradeAcceleration = tradeAcceleration,
-                aggressiveBuyPercent5s = buyRatio5 * 100.0,
-                aggressiveBuyPercent15s = buyRatio15 * 100.0,
-                aggressiveBuyPercent60s = buyRatio60 * 100.0,
-                aggressiveBuyPercent5m = buyRatio5m * 100.0,
-                buyNotional60s = buy60,
-                sellNotional60s = sell60,
-                priceChange60sPercent = change60,
-                spreadPercent = spread,
-                topBookImbalance = bookImbalance,
-                bitcoinPriceUsdt = bitcoinPrice,
-                bitcoinAggressiveBuyPercent15s = ratio(btcBuy15, btcSell15) * 100.0,
-                bitcoinAggressiveBuyPercent60s = ratio(btcBuy60, btcSell60) * 100.0,
-                bitcoinPriceChange60sPercent = btcChange60,
-                largeFlow = largeFlow,
-                error = ""
-            )
+            connected = true,
+            phase = phase,
+            score = score,
+            updatedAt = now,
+            priceUsdt = currentPrice,
+            trades5s = five.size,
+            trades60s = sixty.size,
+            tradeAcceleration = tradeAcceleration,
+            aggressiveBuyPercent5s = buyRatio5 * 100.0,
+            aggressiveBuyPercent15s = buyRatio15 * 100.0,
+            aggressiveBuyPercent60s = buyRatio60 * 100.0,
+            aggressiveBuyPercent5m = buyRatio5m * 100.0,
+            buyNotional60s = buy60,
+            sellNotional60s = sell60,
+            priceChange60sPercent = change60,
+            spreadPercent = spread,
+            topBookImbalance = bookImbalance,
+            bitcoinPriceUsdt = bitcoinPrice,
+            bitcoinAggressiveBuyPercent15s = ratio(btcBuy15, btcSell15) * 100.0,
+            bitcoinAggressiveBuyPercent60s = ratio(btcBuy60, btcSell60) * 100.0,
+            bitcoinPriceChange60sPercent = btcChange60,
+            largeFlow = largeFlow,
+            error = "",
+            aggressiveBuyPercent15m = buyRatio15m * 100.0,
+            buyNotional5m = buy5m,
+            sellNotional5m = sell5m,
+            buyNotional15m = buy15m,
+            sellNotional15m = sell15m,
+            flowHistorySeconds = flowHistorySeconds
+        )
         MicroImpulseStore.save(appContext, snapshot)
         LiveMarketBreathingStore.append(appContext, snapshot)
     }
@@ -258,7 +273,7 @@ class MicroImpulseStream(context: Context) : WebSocketListener() {
 
     private companion object {
         const val STREAM_URL = "wss://stream.binance.com:9443/stream?streams=pumpusdt@aggTrade/pumpusdt@bookTicker/btcusdt@aggTrade"
-        const val HISTORY_MILLIS = 300_000L
+        const val HISTORY_MILLIS = 15L * 60L * 1_000L
         const val SAVE_INTERVAL_MILLIS = 15_000L
         const val WARMUP_MILLIS = 60_000L
         const val CONFIRMATION_WINDOW_MILLIS = 3L * 60L * 1000L
@@ -296,7 +311,13 @@ data class MicroImpulseSnapshot(
     val bitcoinAggressiveBuyPercent60s: Double = 50.0,
     val bitcoinPriceChange60sPercent: Double = 0.0,
     val largeFlow: LargeFlowFingerprint = LargeFlowFingerprint(),
-    val error: String = ""
+    val error: String = "",
+    val aggressiveBuyPercent15m: Double = 50.0,
+    val buyNotional5m: Double = 0.0,
+    val sellNotional5m: Double = 0.0,
+    val buyNotional15m: Double = 0.0,
+    val sellNotional15m: Double = 0.0,
+    val flowHistorySeconds: Long = 0L
 )
 
 object MicroImpulseStore {
@@ -329,7 +350,13 @@ object MicroImpulseStore {
             largeFlow = runCatching {
                 LargeFlowFingerprint.fromJson(JSONObject(p.getString("large_flow_json", null).orEmpty()))
             }.getOrDefault(LargeFlowFingerprint()),
-            error = p.getString("error", "").orEmpty()
+            error = p.getString("error", "").orEmpty(),
+            aggressiveBuyPercent15m = p.double("buy_15m", 50.0),
+            buyNotional5m = p.double("buy_notional_5m", 0.0),
+            sellNotional5m = p.double("sell_notional_5m", 0.0),
+            buyNotional15m = p.double("buy_notional_15m", 0.0),
+            sellNotional15m = p.double("sell_notional_15m", 0.0),
+            flowHistorySeconds = p.getLong("flow_history_seconds", 0L)
         )
     }
 
@@ -358,6 +385,12 @@ object MicroImpulseStore {
             .putDouble("btc_change_60s", value.bitcoinPriceChange60sPercent)
             .putString("large_flow_json", value.largeFlow.toJson().toString())
             .putString("error", value.error)
+            .putDouble("buy_15m", value.aggressiveBuyPercent15m)
+            .putDouble("buy_notional_5m", value.buyNotional5m)
+            .putDouble("sell_notional_5m", value.sellNotional5m)
+            .putDouble("buy_notional_15m", value.buyNotional15m)
+            .putDouble("sell_notional_15m", value.sellNotional15m)
+            .putLong("flow_history_seconds", value.flowHistorySeconds)
             .apply()
     }
 
