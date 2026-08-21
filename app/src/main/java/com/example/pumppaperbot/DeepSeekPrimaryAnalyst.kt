@@ -167,7 +167,7 @@ object DeepSeekPrimaryStore {
 }
 
 object DeepSeekPrimaryPolicy {
-    const val INTERVAL = 2L * 60L * 1000L
+    const val INTERVAL = 5L * 60L * 1000L
     const val SIGNAL_MAX_AGE = 12L * 60L * 1000L
 
     fun isFreshSignal(state: DeepSeekPrimaryState, now: Long = System.currentTimeMillis()): Boolean =
@@ -373,7 +373,7 @@ class DeepSeekPrimaryAnalyst {
             model = requestedModel, status = "START", at = started,
             detail = buildString {
                 append(when {
-                fusionPriority.active -> "Fusion-позиция: максимальный контроль раз в минуту"
+                fusionPriority.active -> "Fusion-позиция: локальная защита постоянно, DeepSig по экономичному интервалу"
                 force -> "ручная усиленная проверка"
                 materialChange -> "существенно изменился рыночный сигнал"
                 else -> "плановый анализ"
@@ -573,7 +573,7 @@ class DeepSeekPrimaryAnalyst {
                 .put("position_open", fusionSim.inPosition)
                 .put("maximum_control_active", fusionPriority.active)
                 .put("control_interval_seconds", fusionPriority.intervalMillis / 1000L)
-                .put("forced_model", if (fusionPriority.active) PositionSupervisorPolicy.PRO_MODEL else JSONObject.NULL)
+                .put("forced_model", if (fusionPriority.forcePro) PositionSupervisorPolicy.PRO_MODEL else JSONObject.NULL)
                 .put("entry_time", fusionEntryTime.takeIf { it > 0L } ?: JSONObject.NULL)
                 .put("entry_ask_eur", fusionSim.entryPrice.takeIf { fusionSim.inPosition } ?: JSONObject.NULL)
                 .put("entry_cost_eur", fusionSim.entryCostEur.takeIf { fusionSim.inPosition } ?: JSONObject.NULL)
@@ -733,7 +733,7 @@ class DeepSeekPrimaryAnalyst {
             system = system,
             frame = frame,
             reasoningEffort = if (model == PositionSupervisorPolicy.PRO_MODEL) "high" else "low",
-            maxTokens = if (model == PositionSupervisorPolicy.PRO_MODEL) 3200 else 1600,
+            maxTokens = if (model == PositionSupervisorPolicy.PRO_MODEL) 2400 else 1200,
             validate = { json ->
                 when {
                     json.optString("action").uppercase(Locale.ROOT) !in allowedActions -> "action отсутствует или недопустим"
@@ -854,7 +854,8 @@ class DeepSeekPrimaryAnalyst {
         val verification = if (proposedAction == "BUY" || proposedAction == "EXIT") {
             verifyTradeDecision(
                 context, apiKey, frame, json, proposedAction, managedVirtualPositionOpen,
-                forcePro = fusionPriority.active
+                forcePro = fusionPriority.active && exitFusion.emergency &&
+                    snapshot.rapidDrop.active && !snapshot.rapidDrop.recoveryConfirmed
             )
         } else null
         val action = DeepSeekTradeVerificationPolicy.finalAction(
@@ -880,7 +881,7 @@ class DeepSeekPrimaryAnalyst {
         } else if (managedVirtualPositionOpen && modelAction == "EXIT" && !exitFusion.allowExit) {
             "DeepSig удерживает позицию: ${exitFusion.reason}"
         } else if (fusionPriority.active) {
-            "Fusion под максимальным контролем: ${json.optString("summary", "позиция удерживается")}"
+            "Fusion под локальным контролем; DeepSig проверяет ключевые изменения: ${json.optString("summary", "позиция удерживается")}"
         } else {
             json.optString("summary", "DeepSig не дал пояснение")
         }
@@ -947,8 +948,8 @@ class DeepSeekPrimaryAnalyst {
             provider = "DEEPSEEK", circuit = "ПРОВЕРКА СДЕЛКИ",
             model = model, status = "START", at = started,
             detail = if (forcePro) {
-                "Fusion-позиция: усиленная Pro-проверка $proposedAction перед виртуальным исполнением"
-            } else "независимая проверка $proposedAction перед исполнением"
+                "Fusion-позиция: аварийная Pro-проверка $proposedAction перед виртуальным исполнением"
+            } else "экономичная независимая Flash-проверка $proposedAction перед исполнением"
         ))
         val verificationFrame = JSONObject(frame.toString())
             .put("proposed_decision", JSONObject(proposal.toString()))
@@ -989,8 +990,8 @@ class DeepSeekPrimaryAnalyst {
                 model = model,
                 system = system,
                 frame = verificationFrame,
-                reasoningEffort = "high",
-                maxTokens = 1200,
+                reasoningEffort = if (forcePro) "high" else "low",
+                maxTokens = if (forcePro) 900 else 650,
                 validate = { result ->
                     when {
                         !result.has("approved") -> "нет approved"
