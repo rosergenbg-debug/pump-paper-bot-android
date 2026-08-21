@@ -68,6 +68,54 @@ class AppLedHybridPolicyTest {
         assertTrue(result.level >= 8)
     }
 
+    @Test fun `V517 explicit DeepSig buy can qualify from seven with confirmed flow`() {
+        val result = AppLedHybridPolicy.entry(entryEvidence(
+            aiAction = "BUY",
+            aiDirection = 46,
+            aiConfidence = 67,
+            aiReadiness = 7,
+            appReadiness = 18,
+            breathing5m = 29,
+            breathing15m = 17,
+            breathing30m = 2
+        ))
+
+        assertTrue(result.independentDeepSeekSetup)
+        assertTrue(result.level >= 8)
+    }
+
+    @Test fun `V517 strong eight of ten watch can be promoted when 30 minute flow is stable`() {
+        val result = AppLedHybridPolicy.entry(entryEvidence(
+            aiAction = "WATCH",
+            aiDirection = 52,
+            aiConfidence = 68,
+            aiReadiness = 8,
+            appReadiness = 22,
+            breathing5m = 28,
+            breathing15m = 16,
+            breathing30m = -4
+        ))
+
+        assertTrue(result.independentDeepSeekSetup)
+        assertTrue(result.reason.contains("8/10 WATCH/HOLD"))
+    }
+
+    @Test fun `V517 medium background breakdown still blocks promoted DeepSig entry`() {
+        val result = AppLedHybridPolicy.entry(entryEvidence(
+            aiAction = "WATCH",
+            aiDirection = 58,
+            aiConfidence = 72,
+            aiReadiness = 8,
+            appReadiness = 22,
+            breathing5m = 30,
+            breathing15m = 18,
+            breathing30m = -15
+        ))
+
+        assertFalse(result.independentDeepSeekSetup)
+        assertTrue(result.reason.contains("30-минутный фон"))
+    }
+
     @Test fun `independent DeepSeek entry reaches verifier after one strong AI cycle in V510`() {
         val first = DeepSeekPersistencePolicy.update(0, 0, 0L, true, false, 120_000L)
         val duplicate = DeepSeekPersistencePolicy.update(
@@ -167,7 +215,8 @@ class AppLedHybridPolicyTest {
         bitcoinBuyerPercent60s: Double = 50.0,
         bitcoinChange60sPercent: Double = 0.0,
         breathing5m: Int? = null,
-        breathing15m: Int? = null
+        breathing15m: Int? = null,
+        breathing30m: Int? = 0
     ) = AppLedEntryEvidence(
         aiFresh = true,
         aiAction = aiAction,
@@ -185,7 +234,7 @@ class AppLedHybridPolicyTest {
         bitcoinChange60sPercent = bitcoinChange60sPercent,
         breathing5m = breathing5m,
         breathing15m = breathing15m,
-        breathing30m = 0,
+        breathing30m = breathing30m,
         breathing60m = 0
     )
 
