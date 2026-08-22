@@ -2,13 +2,13 @@ name: Android Build
 
 on:
   push:
-    branches: [ "main", "chatgpt/v5-19-deepsig-independence-exit-tuning" ]
+    branches: [ "main" ]
   pull_request:
     branches: [ "main", "chatgpt/v5-10-deepsig-trading", "chatgpt/v5-11-fusion-stability", "chatgpt/v5-12-main-chart-flow", "chatgpt/v5-13-big-overview", "chatgpt/v5-13-1-sequential-fix", "chatgpt/v5-14-unified-flow", "chatgpt/v5-15-flow-performance", "chatgpt/v5-16-anti-churn-profit-defense", "chatgpt/v5-17-deepsig-entry-exit", "chatgpt/v5-18-ci-base" ]
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -16,45 +16,24 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Apply and commit V5.19 guarded patch
-        if: github.ref == 'refs/heads/chatgpt/v5-19-deepsig-independence-exit-tuning'
+      - name: Apply guarded V5.19 source patch
         run: |
-          python3 tools/apply_v519_patch.py
+          python3 tools/apply_v519_sources.py
           git diff --check
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add \
-            app/src/main/java/com/example/pumppaperbot/DeepSeekPrimaryAnalyst.kt \
-            app/src/main/java/com/example/pumppaperbot/AppLedHybridPolicy.kt \
-            app/src/main/java/com/example/pumppaperbot/FusionSim.kt \
-            app/src/main/java/com/example/pumppaperbot/GeminiExitExperiment.kt \
-            app/src/main/java/com/example/pumppaperbot/V513Application.kt \
-            app/src/test/java/com/example/pumppaperbot/AppLedHybridPolicyTest.kt \
-            app/src/test/java/com/example/pumppaperbot/FusionAntiChurnPolicyTest.kt \
-            app/src/test/java/com/example/pumppaperbot/GeminiExitExperimentTest.kt \
-            app/build.gradle .github/workflows/android.yml
-          git diff --cached --quiet && { echo "No source changes produced"; exit 1; }
-          git commit -m "V5.19: decouple DeepSig and tune exits"
-          git push origin HEAD:chatgpt/v5-19-deepsig-independence-exit-tuning
 
       - name: Set up JDK 17
-        if: github.ref != 'refs/heads/chatgpt/v5-19-deepsig-independence-exit-tuning'
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Validate and build V5.18 money-flow UI debug APK
-        if: github.ref != 'refs/heads/chatgpt/v5-19-deepsig-independence-exit-tuning'
+      - name: Validate patched sources on V5.18 metadata
         run: |
           chmod +x gradlew
           ./gradlew testDebugUnitTest lintDebug assembleDebug
 
       - name: Verify intermediate debug APK
-        if: github.ref != 'refs/heads/chatgpt/v5-19-deepsig-independence-exit-tuning'
         run: |
           "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose --print-certs \
             app/build/outputs/apk/debug/app-debug.apk | tee "$RUNNER_TEMP/signature.txt"
@@ -70,13 +49,11 @@ jobs:
           test "$(stat -c%s app/build/outputs/apk/debug/app-debug.apk)" -gt 6000000
 
       - name: Prepare named APK
-        if: github.ref != 'refs/heads/chatgpt/v5-19-deepsig-independence-exit-tuning'
-        run: cp app/build/outputs/apk/debug/app-debug.apk PumpSignal-V5.18-Money-Flow-UI.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk PumpSignal-V5.18-V519-Source-Validation.apk
 
       - name: Upload intermediate APK
-        if: github.ref != 'refs/heads/chatgpt/v5-19-deepsig-independence-exit-tuning'
         uses: actions/upload-artifact@v4
         with:
-          name: PumpSignal-V5.18-Money-Flow-UI-APK
-          path: PumpSignal-V5.18-Money-Flow-UI.apk
-          retention-days: 30
+          name: PumpSignal-V5.18-V519-Source-Validation-APK
+          path: PumpSignal-V5.18-V519-Source-Validation.apk
+          retention-days: 7
