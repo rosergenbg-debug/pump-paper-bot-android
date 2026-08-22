@@ -1,5 +1,7 @@
 from pathlib import Path
 
+# V5.19 is validated sequentially on the exact V5.18 branch; the patch remains guarded so
+# an unexpected base change fails before compilation instead of silently producing mixed logic.
 source = Path("tools/apply_v519_patch.py").read_text(encoding="utf-8")
 source = source.replace(
     'replace_all_checked(path, "managedVirtualPositionOpen", "deepSigPositionOpen", 8)',
