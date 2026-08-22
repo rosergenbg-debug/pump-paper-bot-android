@@ -4,7 +4,7 @@ on:
   push:
     branches: [ "main" ]
   pull_request:
-    branches: [ "main", "chatgpt/v5-10-deepsig-trading", "chatgpt/v5-11-fusion-stability", "chatgpt/v5-12-main-chart-flow", "chatgpt/v5-13-big-overview", "chatgpt/v5-13-1-sequential-fix", "chatgpt/v5-14-unified-flow", "chatgpt/v5-15-flow-performance", "chatgpt/v5-16-anti-churn-profit-defense", "chatgpt/v5-17-deepsig-entry-exit", "chatgpt/v5-18-ci-base", "chatgpt/v5-18-money-flow-ui", "chatgpt/v5-19-deepsig-independence-exit-tuning", "chatgpt/v5-20-background-persistence", "chatgpt/v5-21-pump-machine" ]
+    branches: [ "main", "chatgpt/v5-10-deepsig-trading", "chatgpt/v5-11-fusion-stability", "chatgpt/v5-12-main-chart-flow", "chatgpt/v5-13-big-overview", "chatgpt/v5-13-1-sequential-fix", "chatgpt/v5-14-unified-flow", "chatgpt/v5-15-flow-performance", "chatgpt/v5-16-anti-churn-profit-defense", "chatgpt/v5-17-deepsig-entry-exit", "chatgpt/v5-18-ci-base", "chatgpt/v5-18-money-flow-ui", "chatgpt/v5-19-deepsig-independence-exit-tuning", "chatgpt/v5-20-background-persistence", "chatgpt/v5-21-pump-machine", "chatgpt/v5-22-shared-fusion-entry-lab" ]
   workflow_dispatch:
 
 permissions:
@@ -17,13 +17,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Apply guarded V5.19 to V5.22 source patches
+      - name: Apply guarded V5.19 to V5.23 source patches
         run: |
           python3 tools/apply_v519_sources.py
           python3 tools/apply_v520_persistence.py
           python3 tools/apply_v520_compile_fix.py
           python3 tools/apply_v521_pump_machine.py
           python3 tools/apply_v522_shared_entry.py
+          python3 tools/apply_v523_clean_lab_reset.py
           git diff --check
 
       - name: Set up JDK 17
@@ -32,7 +33,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Validate and build V5.22
+      - name: Validate and build V5.23
         run: |
           chmod +x gradlew
           ./gradlew testDebugUnitTest lintDebug assembleDebug
@@ -44,7 +45,7 @@ jobs:
           grep -F "Verified using v2 scheme (APK Signature Scheme v2): true" "$RUNNER_TEMP/signature.txt"
           "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging \
             app/build/outputs/apk/debug/app-debug.apk | tee "$RUNNER_TEMP/badging.txt"
-          grep -F "package: name='com.example.pumppaperbot.v8' versionCode='102' versionName='5.22'" \
+          grep -F "package: name='com.example.pumppaperbot.v8' versionCode='103' versionName='5.23'" \
             "$RUNNER_TEMP/badging.txt"
           grep -F "launchable-activity: name='com.example.pumppaperbot.MainActivity'" \
             "$RUNNER_TEMP/badging.txt"
@@ -53,11 +54,11 @@ jobs:
           test "$(stat -c%s app/build/outputs/apk/debug/app-debug.apk)" -gt 6000000
 
       - name: Prepare named APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk PumpSignal-V5.22-Shared-Fusion-Entry.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk PumpSignal-V5.23-Clean-Lab.apk
 
       - name: Upload intermediate APK
         uses: actions/upload-artifact@v4
         with:
-          name: PumpSignal-V5.22-Shared-Fusion-Entry-APK
-          path: PumpSignal-V5.22-Shared-Fusion-Entry.apk
+          name: PumpSignal-V5.23-Clean-Lab-APK
+          path: PumpSignal-V5.23-Clean-Lab.apk
           retention-days: 7
