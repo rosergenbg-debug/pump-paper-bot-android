@@ -3,12 +3,14 @@ name: V5.25 Compatible Build
 on:
   push:
     branches: [ "chatgpt/v5-25-six-account-comparison" ]
+    paths-ignore:
+      - "dist/**"
   pull_request:
     branches: [ "chatgpt/v5-24-pump-machine-2" ]
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -154,7 +156,7 @@ jobs:
           grep -F "package: name='com.example.pumppaperbot.v8' versionCode='105' versionName='5.25'" "$RUNNER_TEMP/final-badging.txt"
           grep -F "launchable-activity: name='com.example.pumppaperbot.MainActivity'" "$RUNNER_TEMP/final-badging.txt"
           unzip -t PumpSignal-V5.25-Compatible-FINAL.apk >/dev/null
-          sha256sum PumpSignal-V5.25-Compatible-FINAL.apk
+          sha256sum PumpSignal-V5.25-Compatible-FINAL.apk | tee "$RUNNER_TEMP/final-sha256.txt"
 
       - name: Upload compatible V5.25 APK
         uses: actions/upload-artifact@v4
@@ -162,3 +164,15 @@ jobs:
           name: PumpSignal-V5.25-Compatible-FINAL
           path: PumpSignal-V5.25-Compatible-FINAL.apk
           retention-days: 7
+
+      - name: Publish signed APK to branch
+        if: github.event_name == 'push'
+        run: |
+          mkdir -p dist
+          cp PumpSignal-V5.25-Compatible-FINAL.apk dist/PumpSignal-V5.25-Compatible-FINAL.apk
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add dist/PumpSignal-V5.25-Compatible-FINAL.apk
+          git diff --cached --quiet && exit 0
+          git commit -m "Publish signed PumpSignal V5.25 APK"
+          git push
