@@ -3,6 +3,8 @@ name: V5.25 Compatible Build
 on:
   push:
     branches: [ "chatgpt/v5-25-six-account-comparison" ]
+  pull_request:
+    branches: [ "chatgpt/v5-24-pump-machine-2" ]
   workflow_dispatch:
 
 permissions:
