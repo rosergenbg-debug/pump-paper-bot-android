@@ -1,0 +1,54 @@
+name: Apply V5.19 Source Patch
+
+on:
+  push:
+    branches:
+      - chatgpt/v5-19-deepsig-independence-exit-tuning
+    paths:
+      - .github/workflows/apply-v519-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/v5-19-deepsig-independence-exit-tuning
+          fetch-depth: 0
+
+      - name: Apply guarded V5.19 replacements
+        run: python3 tools/apply_v519_patch.py
+
+      - name: Validate patch shape
+        run: |
+          git diff --check
+          git diff -- app/src/main/java/com/example/pumppaperbot/DeepSeekPrimaryAnalyst.kt \
+            app/src/main/java/com/example/pumppaperbot/AppLedHybridPolicy.kt \
+            app/src/main/java/com/example/pumppaperbot/FusionSim.kt \
+            app/src/main/java/com/example/pumppaperbot/GeminiExitExperiment.kt \
+            app/src/main/java/com/example/pumppaperbot/V513Application.kt \
+            app/src/test/java/com/example/pumppaperbot/AppLedHybridPolicyTest.kt \
+            app/src/test/java/com/example/pumppaperbot/FusionAntiChurnPolicyTest.kt \
+            app/src/test/java/com/example/pumppaperbot/GeminiExitExperimentTest.kt \
+            app/build.gradle .github/workflows/android.yml
+
+      - name: Commit patched sources
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            app/src/main/java/com/example/pumppaperbot/DeepSeekPrimaryAnalyst.kt \
+            app/src/main/java/com/example/pumppaperbot/AppLedHybridPolicy.kt \
+            app/src/main/java/com/example/pumppaperbot/FusionSim.kt \
+            app/src/main/java/com/example/pumppaperbot/GeminiExitExperiment.kt \
+            app/src/main/java/com/example/pumppaperbot/V513Application.kt \
+            app/src/test/java/com/example/pumppaperbot/AppLedHybridPolicyTest.kt \
+            app/src/test/java/com/example/pumppaperbot/FusionAntiChurnPolicyTest.kt \
+            app/src/test/java/com/example/pumppaperbot/GeminiExitExperimentTest.kt \
+            app/build.gradle .github/workflows/android.yml
+          git diff --cached --quiet && { echo "No source changes produced"; exit 1; }
+          git commit -m "V5.19: decouple DeepSig and tune exits"
+          git push origin HEAD:chatgpt/v5-19-deepsig-independence-exit-tuning
