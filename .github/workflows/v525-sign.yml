@@ -1,0 +1,132 @@
+name: V5.25 Exact Compatible Sign
+
+on:
+  push:
+    branches: [ "chatgpt/v5-25-six-account-comparison" ]
+    paths:
+      - ".github/workflows/v525-sign.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  sign:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download exact verified V5.25 artifact from run 32593378264
+        id: download
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: PumpSignal-V5.25-Six-Accounts-APK
+          path: input
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: 32593378264
+
+      - name: Sign with existing compatible PumpSignal update key
+        id: sign
+        if: steps.download.outcome == 'success'
+        continue-on-error: true
+        env:
+          KS_PUMP: ${{ secrets.PUMP_SIGNING_KEYSTORE_BASE64 }}
+          KS_ANDROID: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_RELEASE: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          KS_KEYSTORE: ${{ secrets.KEYSTORE_BASE64 }}
+          SP_PUMP: ${{ secrets.PUMP_SIGNING_STORE_PASSWORD }}
+          SP_PUMP2: ${{ secrets.PUMP_SIGNING_KEYSTORE_PASSWORD }}
+          SP_ANDROID: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          SP_GENERIC: ${{ secrets.KEYSTORE_PASSWORD }}
+          KP_PUMP: ${{ secrets.PUMP_SIGNING_KEY_PASSWORD }}
+          KP_ANDROID: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KP_GENERIC: ${{ secrets.KEY_PASSWORD }}
+          AL_PUMP: ${{ secrets.PUMP_SIGNING_KEY_ALIAS }}
+          AL_ANDROID: ${{ secrets.ANDROID_KEY_ALIAS }}
+          AL_GENERIC: ${{ secrets.KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          EXPECTED="1f778c4291c9d11c5f89f4de8773bda35a0125031adc05785daee23f27dc7823"
+          KEYFILE="$RUNNER_TEMP/pump-compatible.jks"
+          INPUT_APK="$(find input -type f -name '*.apk' | head -n 1)"
+          if [ -z "$INPUT_APK" ]; then echo "NO_APK_IN_VERIFIED_ARTIFACT" > sign-reason.txt; exit 40; fi
+
+          KEY_SOURCE=""
+          for name in KS_PUMP KS_ANDROID KS_RELEASE KS_KEYSTORE; do
+            value="${!name:-}"
+            if [ -n "$value" ] && printf '%s' "$value" | base64 --decode > "$KEYFILE" 2>/dev/null && [ -s "$KEYFILE" ]; then
+              KEY_SOURCE="$name"; break
+            fi
+          done
+          if [ -z "$KEY_SOURCE" ]; then echo "NO_COMPATIBLE_KEYSTORE_SECRET_PRESENT" > sign-reason.txt; exit 41; fi
+
+          PASS=""
+          for name in SP_PUMP SP_PUMP2 SP_ANDROID SP_GENERIC; do
+            value="${!name:-}"
+            if [ -n "$value" ] && keytool -list -keystore "$KEYFILE" -storepass "$value" >/dev/null 2>&1; then PASS="$value"; break; fi
+          done
+          if [ -z "$PASS" ]; then echo "KEYSTORE_PRESENT_BUT_PASSWORD_NOT_FOUND" > sign-reason.txt; exit 42; fi
+
+          keytool -list -v -keystore "$KEYFILE" -storepass "$PASS" > "$RUNNER_TEMP/keyinfo.txt"
+          FOUND=$(grep -i 'SHA256:' "$RUNNER_TEMP/keyinfo.txt" | tr -d ': ' | tr 'A-F' 'a-f' || true)
+          if ! printf '%s\n' "$FOUND" | grep -Fq "$EXPECTED"; then echo "KEYSTORE_CERTIFICATE_MISMATCH" > sign-reason.txt; exit 43; fi
+
+          ALIAS=""
+          for candidate in "${AL_PUMP:-}" "${AL_ANDROID:-}" "${AL_GENERIC:-}" "pump-signal-update" "pump-update"; do
+            [ -z "$candidate" ] && continue
+            if keytool -list -keystore "$KEYFILE" -storepass "$PASS" -alias "$candidate" >/dev/null 2>&1; then ALIAS="$candidate"; break; fi
+          done
+          if [ -z "$ALIAS" ]; then echo "COMPATIBLE_CERT_FOUND_BUT_ALIAS_NOT_RESOLVED" > sign-reason.txt; exit 44; fi
+
+          KEYPASS=""
+          for candidate in "${KP_PUMP:-}" "${KP_ANDROID:-}" "${KP_GENERIC:-}" "$PASS"; do
+            [ -z "$candidate" ] && continue
+            if "$ANDROID_HOME/build-tools/34.0.0/apksigner" sign \
+                --ks "$KEYFILE" --ks-pass "pass:$PASS" --ks-key-alias "$ALIAS" --key-pass "pass:$candidate" \
+                --v1-signing-enabled false --v2-signing-enabled true --v3-signing-enabled true \
+                --out "$RUNNER_TEMP/test-signed.apk" "$INPUT_APK" >/dev/null 2>&1; then KEYPASS="$candidate"; break; fi
+          done
+          if [ -z "$KEYPASS" ]; then echo "COMPATIBLE_KEY_FOUND_BUT_KEY_PASSWORD_NOT_RESOLVED" > sign-reason.txt; exit 45; fi
+
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" sign \
+            --ks "$KEYFILE" --ks-pass "pass:$PASS" --ks-key-alias "$ALIAS" --key-pass "pass:$KEYPASS" \
+            --v1-signing-enabled false --v2-signing-enabled true --v3-signing-enabled true \
+            --out PumpSignal-V5.25-Compatible-FINAL.apk "$INPUT_APK"
+
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose --print-certs PumpSignal-V5.25-Compatible-FINAL.apk > "$RUNNER_TEMP/verify.txt"
+          grep -F "Verified using v2 scheme (APK Signature Scheme v2): true" "$RUNNER_TEMP/verify.txt"
+          grep -F "Verified using v3 scheme (APK Signature Scheme v3): true" "$RUNNER_TEMP/verify.txt"
+          ACTUAL=$(grep -F "Signer #1 certificate SHA-256 digest:" "$RUNNER_TEMP/verify.txt" | awk '{print $NF}' | tr 'A-F' 'a-f')
+          if [ "$ACTUAL" != "$EXPECTED" ]; then echo "FINAL_CERTIFICATE_MISMATCH" > sign-reason.txt; exit 46; fi
+
+          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging PumpSignal-V5.25-Compatible-FINAL.apk > "$RUNNER_TEMP/badging.txt"
+          grep -F "package: name='com.example.pumppaperbot.v8' versionCode='105' versionName='5.25'" "$RUNNER_TEMP/badging.txt"
+          grep -F "launchable-activity: name='com.example.pumppaperbot.MainActivity'" "$RUNNER_TEMP/badging.txt"
+          unzip -t PumpSignal-V5.25-Compatible-FINAL.apk >/dev/null
+          sha256sum PumpSignal-V5.25-Compatible-FINAL.apk | awk '{print $1}' > final-sha256.txt
+          echo "SIGNED_OK" > sign-reason.txt
+
+      - name: Publish result and APK to branch
+        if: always()
+        run: |
+          mkdir -p dist
+          {
+            echo "run_id=${GITHUB_RUN_ID}"
+            echo "download_outcome=${{ steps.download.outcome }}"
+            echo "sign_outcome=${{ steps.sign.outcome }}"
+            if [ -f sign-reason.txt ]; then printf 'result='; cat sign-reason.txt; else echo "result=SIGN_STEP_NOT_REACHED"; fi
+            echo "expected_certificate_sha256=1f778c4291c9d11c5f89f4de8773bda35a0125031adc05785daee23f27dc7823"
+            if [ -f final-sha256.txt ]; then printf 'apk_sha256='; cat final-sha256.txt; fi
+          } > dist/V5.25_SIGNING_STATUS.txt
+          if [ -f PumpSignal-V5.25-Compatible-FINAL.apk ]; then
+            cp PumpSignal-V5.25-Compatible-FINAL.apk dist/PumpSignal-V5.25-Compatible-FINAL.apk
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add dist/
+          git diff --cached --quiet && exit 0
+          git commit -m "Publish V5.25 compatible signing result"
+          git push
