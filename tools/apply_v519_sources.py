@@ -13,4 +13,7 @@ exec(compile(source_only, "tools/apply_v519_patch.py", "exec"), {})
 
 fast_extension = Path("tools/apply_v519_fast_extension.py").read_text(encoding="utf-8")
 exec(compile(fast_extension, "tools/apply_v519_fast_extension.py", "exec"), {})
-print("V5.19 source + fast shock extension applied")
+
+contract_fixes = Path("tools/apply_v519_contract_fixes.py").read_text(encoding="utf-8")
+exec(compile(contract_fixes, "tools/apply_v519_contract_fixes.py", "exec"), {})
+print("V5.19 source + fast shock + alert contract patches applied")
