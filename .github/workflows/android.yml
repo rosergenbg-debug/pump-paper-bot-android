@@ -3,6 +3,8 @@ name: V5.24 Compatible Signing Recovery
 on:
   push:
     branches: [ "chatgpt/v5-24-signing-recovery" ]
+  pull_request:
+    branches: [ "chatgpt/v5-24-pump-machine-2" ]
   workflow_dispatch:
 
 permissions:
@@ -113,6 +115,7 @@ jobs:
           echo "Resolved signing alias: $ALIAS"
 
           KEYPASS="$PASS"
+          SIGNED=0
           for candidate in "${KP_PUMP:-}" "${KP_ANDROID:-}" "${KP_GENERIC:-}" "$PASS"; do
             [ -z "$candidate" ] && continue
             if "$ANDROID_HOME/build-tools/34.0.0/apksigner" sign \
@@ -120,9 +123,14 @@ jobs:
                 --v1-signing-enabled false --v2-signing-enabled true --v3-signing-enabled true \
                 --out "$RUNNER_TEMP/test-signed.apk" app/build/outputs/apk/debug/app-debug.apk >/dev/null 2>&1; then
               KEYPASS="$candidate"
+              SIGNED=1
               break
             fi
           done
+          if [ "$SIGNED" != 1 ]; then
+            echo "MATCHED_KEYSTORE_BUT_NO_SIGNING_KEY_PASSWORD_MATCHED"
+            exit 45
+          fi
 
           "$ANDROID_HOME/build-tools/34.0.0/apksigner" sign \
             --ks "$KEYFILE" --ks-pass "pass:$PASS" --ks-key-alias "$ALIAS" --key-pass "pass:$KEYPASS" \
