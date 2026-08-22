@@ -10,24 +10,14 @@ def replace_once(path: str, old: str, new: str) -> None:
     p.write_text(text.replace(old, new, 1), encoding="utf-8")
 
 
-# V5.23 is a clean A/B lab start. This reset executes exactly once per installed app data set.
-# The marker lives in its own prefs so resetting either paper portfolio cannot erase it.
+# V5.23 originally introduced a clean A/B lab start. On the V5.24 continuation branch
+# the reset implementation is retained for source compatibility/audit history, but it is
+# deliberately NOT invoked. V5.24 must preserve every accumulated Fusion/PM3 state even
+# if an old marker is missing or damaged; only the brand-new PM2 store starts fresh.
 path = "app/src/main/java/com/example/pumppaperbot/V513Application.kt"
-replace_once(
-    path,
-    '''    override fun onCreate() {
-        super.onCreate()
-        registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
-''',
-    '''    override fun onCreate() {
-        super.onCreate()
-        CleanFusionLabResetV523.ensure(this)
-        registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
-'''
-)
 
 with Path(path).open("a", encoding="utf-8") as f:
-    f.write('''\n\n/** V5.23 one-shot clean start for the Fusion vs Pump Machine 24H lab. */\ninternal object CleanFusionLabResetV523 {\n    private const val MARKER_PREFS = "v523_clean_fusion_lab_reset"\n    private const val DONE = "done"\n    private const val PUMP_MACHINE_PREFS = "pump_machine_paper_v521"\n\n    @Synchronized\n    fun ensure(context: android.content.Context) {\n        val marker = context.getSharedPreferences(MARKER_PREFS, android.content.Context.MODE_PRIVATE)\n        if (marker.getBoolean(DONE, false)) return\n\n        // Preserve unrelated app/user history. Only the two paper contestants are reset.\n        FusionSimStore.reset(context)\n        context.getSharedPreferences(PUMP_MACHINE_PREFS, android.content.Context.MODE_PRIVATE)\n            .edit().clear().commit()\n\n        // Write the marker only after both accounts are clean. If the process dies earlier,\n        // the next start safely repeats the idempotent reset rather than starting half-clean.\n        marker.edit().putBoolean(DONE, true).commit()\n        UnifiedResearchLog.record(\n            context,\n            "V523_LAB",\n            "START",\n            "Fusion и Pump Machine сброшены один раз: €1000 / 0 сделок / чистые entry-cooldown состояния"\n        )\n    }\n}\n''')
+    f.write('''\n\n/** V5.23 one-shot reset implementation retained but intentionally dormant in V5.24. */\ninternal object CleanFusionLabResetV523 {\n    private const val MARKER_PREFS = "v523_clean_fusion_lab_reset"\n    private const val DONE = "done"\n    private const val PUMP_MACHINE_PREFS = "pump_machine_paper_v521"\n\n    @Synchronized\n    fun ensure(context: android.content.Context) {\n        val marker = context.getSharedPreferences(MARKER_PREFS, android.content.Context.MODE_PRIVATE)\n        if (marker.getBoolean(DONE, false)) return\n\n        FusionSimStore.reset(context)\n        context.getSharedPreferences(PUMP_MACHINE_PREFS, android.content.Context.MODE_PRIVATE)\n            .edit().clear().commit()\n\n        marker.edit().putBoolean(DONE, true).commit()\n        UnifiedResearchLog.record(\n            context,\n            "V523_LAB",\n            "START",\n            "Fusion и Pump Machine сброшены один раз: €1000 / 0 сделок / чистые entry-cooldown состояния"\n        )\n    }\n}\n''')
 
 path = "app/build.gradle"
 replace_once(
@@ -40,4 +30,4 @@ replace_once(
 '''
 )
 
-print("V5.23 one-time clean Fusion/Pump Machine lab reset applied")
+print("V5.23 compatibility layer applied with reset invocation disabled for V5.24")
