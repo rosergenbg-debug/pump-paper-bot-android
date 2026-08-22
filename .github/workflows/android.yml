@@ -21,6 +21,7 @@ jobs:
         run: |
           python3 tools/apply_v519_sources.py
           python3 tools/apply_v520_persistence.py
+          python3 tools/apply_v520_compile_fix.py
           git diff --check
 
       - name: Set up JDK 17
