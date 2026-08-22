@@ -2,7 +2,6 @@ package com.example.pumppaperbot
 
 import android.content.Context
 import org.json.JSONObject
-import kotlin.math.max
 
 /**
  * V5.19 fast local shock/rebound lane.
@@ -30,6 +29,7 @@ data class ShockReboundState(
     val active: Boolean = false,
     val ready: Boolean = false,
     val failed: Boolean = false,
+    val shockAt: Long = 0L,
     val candidateAt: Long = 0L,
     val confirmations: Int = 0,
     val lastObservedAt: Long = 0L,
@@ -44,6 +44,7 @@ data class ShockReboundState(
         .put("active", active)
         .put("ready", ready)
         .put("failed", failed)
+        .put("shockAt", shockAt)
         .put("candidateAt", candidateAt)
         .put("confirmations", confirmations)
         .put("lastObservedAt", lastObservedAt)
@@ -58,6 +59,7 @@ data class ShockReboundState(
             active = j.optBoolean("active"),
             ready = j.optBoolean("ready"),
             failed = j.optBoolean("failed"),
+            shockAt = j.optLong("shockAt"),
             candidateAt = j.optLong("candidateAt"),
             confirmations = j.optInt("confirmations"),
             lastObservedAt = j.optLong("lastObservedAt"),
@@ -110,10 +112,31 @@ object ShockReboundPolicy {
     fun update(previous: ShockReboundState, o: ShockReboundObservation): ShockReboundState {
         val shockNow = o.drawdown3mPercent >= SHOCK_DRAWDOWN_3M_PERCENT ||
             o.change60sPercent <= SHOCK_CHANGE_60S_PERCENT
-        val previousStillActive = previous.active && previous.lastObservedAt > 0L &&
-            o.at - previous.lastObservedAt in 0..ACTIVE_TTL_MILLIS
+        val shockAt = when {
+            shockNow -> o.at
+            previous.shockAt > 0L -> previous.shockAt
+            else -> 0L
+        }
+        val previousStillActive = previous.active && shockAt > 0L &&
+            o.at - shockAt in 0..ACTIVE_TTL_MILLIS
         val active = shockNow || previousStillActive
         if (!active) return ShockReboundState(lastObservedAt = o.at, lastPrice = o.price)
+
+        // Once a confirmed shock rebound fails, keep that failure latched while this shock is
+        // active. The fast Fusion lane then has enough time to execute its defensive paper exit.
+        if (previous.failed && previousStillActive) {
+            return previous.copy(
+                active = true,
+                ready = false,
+                failed = true,
+                shockAt = shockAt,
+                lastObservedAt = o.at,
+                drawdown3mPercent = o.drawdown3mPercent,
+                rebound3mPercent = o.rebound3mPercent,
+                lastPrice = o.price,
+                reason = "SHOCK_REBOUND_FAILED: отскок сорвался, быстрые продавцы снова контролируют цену"
+            )
+        }
 
         val bookOkay = (o.bookImbalance ?: 0.0) > -0.18
         val activityOkay = (o.moneyActivityRatio ?: o.tradeAcceleration) >= 1.15 || o.tradeAcceleration >= 1.45
@@ -133,6 +156,7 @@ object ShockReboundPolicy {
                 active = true,
                 ready = false,
                 failed = true,
+                shockAt = shockAt,
                 confirmations = 0,
                 candidateAt = 0L,
                 lastObservedAt = o.at,
@@ -148,6 +172,7 @@ object ShockReboundPolicy {
                 active = true,
                 ready = false,
                 failed = false,
+                shockAt = shockAt,
                 confirmations = 0,
                 candidateAt = 0L,
                 lastObservedAt = o.at,
@@ -166,6 +191,7 @@ object ShockReboundPolicy {
             active = true,
             ready = ready,
             failed = false,
+            shockAt = shockAt,
             candidateAt = candidateAt,
             confirmations = confirmations,
             lastObservedAt = o.at,
