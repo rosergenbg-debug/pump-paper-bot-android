@@ -10,4 +10,7 @@ if marker not in source:
     raise SystemExit("V5.19 source patch marker not found")
 source_only = source.split(marker, 1)[0]
 exec(compile(source_only, "tools/apply_v519_patch.py", "exec"), {})
-print("V5.19 source-only patch applied")
+
+fast_extension = Path("tools/apply_v519_fast_extension.py").read_text(encoding="utf-8")
+exec(compile(fast_extension, "tools/apply_v519_fast_extension.py", "exec"), {})
+print("V5.19 source + fast shock extension applied")
