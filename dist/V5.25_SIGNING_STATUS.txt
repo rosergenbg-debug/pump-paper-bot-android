@@ -1,0 +1,5 @@
+run_id=32594865114
+download_outcome=success
+sign_outcome=failure
+result=NO_COMPATIBLE_KEYSTORE_SECRET_PRESENT
+expected_certificate_sha256=1f778c4291c9d11c5f89f4de8773bda35a0125031adc05785daee23f27dc7823
