@@ -1,5 +1,6 @@
 name: Apply V5.19 Source Patch
 
+# One-shot helper for the V5.19 branch only.
 on:
   push:
     branches:
