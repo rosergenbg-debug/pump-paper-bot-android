@@ -4,7 +4,7 @@ on:
   push:
     branches: [ "main" ]
   pull_request:
-    branches: [ "main", "chatgpt/v5-10-deepsig-trading", "chatgpt/v5-11-fusion-stability", "chatgpt/v5-12-main-chart-flow", "chatgpt/v5-13-big-overview", "chatgpt/v5-13-1-sequential-fix", "chatgpt/v5-14-unified-flow", "chatgpt/v5-15-flow-performance", "chatgpt/v5-16-anti-churn-profit-defense", "chatgpt/v5-17-deepsig-entry-exit", "chatgpt/v5-18-ci-base", "chatgpt/v5-18-money-flow-ui" ]
+    branches: [ "main", "chatgpt/v5-10-deepsig-trading", "chatgpt/v5-11-fusion-stability", "chatgpt/v5-12-main-chart-flow", "chatgpt/v5-13-big-overview", "chatgpt/v5-13-1-sequential-fix", "chatgpt/v5-14-unified-flow", "chatgpt/v5-15-flow-performance", "chatgpt/v5-16-anti-churn-profit-defense", "chatgpt/v5-17-deepsig-entry-exit", "chatgpt/v5-18-ci-base", "chatgpt/v5-18-money-flow-ui", "chatgpt/v5-19-deepsig-independence-exit-tuning" ]
   workflow_dispatch:
 
 permissions:
@@ -17,9 +17,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Apply guarded V5.19 source patch
+      - name: Apply guarded V5.19 and V5.20 source patches
         run: |
           python3 tools/apply_v519_sources.py
+          python3 tools/apply_v520_persistence.py
           git diff --check
 
       - name: Set up JDK 17
@@ -28,7 +29,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Validate and build V5.19
+      - name: Validate and build V5.20
         run: |
           chmod +x gradlew
           ./gradlew testDebugUnitTest lintDebug assembleDebug
@@ -40,7 +41,7 @@ jobs:
           grep -F "Verified using v2 scheme (APK Signature Scheme v2): true" "$RUNNER_TEMP/signature.txt"
           "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging \
             app/build/outputs/apk/debug/app-debug.apk | tee "$RUNNER_TEMP/badging.txt"
-          grep -F "package: name='com.example.pumppaperbot.v8' versionCode='99' versionName='5.19'" \
+          grep -F "package: name='com.example.pumppaperbot.v8' versionCode='100' versionName='5.20'" \
             "$RUNNER_TEMP/badging.txt"
           grep -F "launchable-activity: name='com.example.pumppaperbot.MainActivity'" \
             "$RUNNER_TEMP/badging.txt"
@@ -49,11 +50,11 @@ jobs:
           test "$(stat -c%s app/build/outputs/apk/debug/app-debug.apk)" -gt 6000000
 
       - name: Prepare named APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk PumpSignal-V5.19-Fast-Shock-Exit-Focus.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk PumpSignal-V5.20-Background-Persistence.apk
 
       - name: Upload intermediate APK
         uses: actions/upload-artifact@v4
         with:
-          name: PumpSignal-V5.19-Fast-Shock-Exit-Focus-APK
-          path: PumpSignal-V5.19-Fast-Shock-Exit-Focus.apk
+          name: PumpSignal-V5.20-Background-Persistence-APK
+          path: PumpSignal-V5.20-Background-Persistence.apk
           retention-days: 7
