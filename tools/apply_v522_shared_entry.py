@@ -86,13 +86,19 @@ replace_once(path,
         shockFailed: Boolean,
         shockEntry: Boolean,
         positionAgeMillis: Long,
-        entryObservation: SharedFusionEntryObservation
+        entryObservation: SharedFusionEntryObservation? = null
     ): PumpMachineDecision {
 ''')
 replace_between(path, "object PumpMachinePolicy {", '''        if (!portfolio.inPosition) {
 ''', '''        val tradeNet = tradeNetPercent(portfolio, bid, feeRate)
 ''', '''        if (!portfolio.inPosition) {
-            val shared = SharedFusionEntryPolicy.evaluate(previous, entryObservation, now)
+            val observation = entryObservation ?: SharedFusionEntryObservation(
+                frame = frame,
+                shockReady = shockReady,
+                sampledAt = now,
+                sampleBucket = now / 15_000L
+            )
+            val shared = SharedFusionEntryPolicy.evaluate(previous, observation, now)
             return PumpMachineDecision(shared.action, shared.nextState, shared.reason, 0.0)
         }
 
