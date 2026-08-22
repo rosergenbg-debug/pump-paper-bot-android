@@ -14,6 +14,7 @@ import java.util.Locale
 class PumpMachineActivity : AppCompatActivity() {
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var summary: TextView
+    private lateinit var pairSummary: TextView
     private lateinit var status: TextView
     private lateinit var trades: TextView
 
@@ -32,39 +33,47 @@ class PumpMachineActivity : AppCompatActivity() {
             setBackgroundColor(Color.parseColor("#0D1117"))
         }
         root.addView(TextView(this).apply {
-            text = "PUMP MACHINE • +3% NET / −1,5% NET"
-            textSize = 22f
+            text = "FUSION ↔ PUMP MACHINE • 24H LAB"
+            textSize = 21f
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
             setPadding(dp(6), dp(8), dp(6), dp(8))
             setOnClickListener { finish() }
         }, LinearLayout.LayoutParams(-1, dp(62)))
 
-        summary = TextView(this).apply {
-            textSize = 18f
-            setTextColor(Color.parseColor("#7EE787"))
-            setBackgroundColor(Color.parseColor("#101820"))
-            setPadding(dp(12), dp(12), dp(12), dp(12))
-        }
-        root.addView(summary, LinearLayout.LayoutParams(-1, dp(112)).apply { topMargin = dp(6) })
-
-        status = TextView(this).apply {
+        pairSummary = TextView(this).apply {
             textSize = 14f
-            setTextColor(Color.parseColor("#FFF3BF"))
-            setBackgroundColor(Color.parseColor("#2B2410"))
+            setTextColor(Color.parseColor("#C9D1D9"))
+            setBackgroundColor(Color.parseColor("#111827"))
             setPadding(dp(12), dp(10), dp(12), dp(10))
         }
-        root.addView(status, LinearLayout.LayoutParams(-1, dp(118)).apply { topMargin = dp(7) })
+        root.addView(pairSummary, LinearLayout.LayoutParams(-1, dp(138)).apply { topMargin = dp(6) })
+
+        summary = TextView(this).apply {
+            textSize = 17f
+            setTextColor(Color.parseColor("#7EE787"))
+            setBackgroundColor(Color.parseColor("#101820"))
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+        }
+        root.addView(summary, LinearLayout.LayoutParams(-1, dp(106)).apply { topMargin = dp(6) })
+
+        status = TextView(this).apply {
+            textSize = 13f
+            setTextColor(Color.parseColor("#FFF3BF"))
+            setBackgroundColor(Color.parseColor("#2B2410"))
+            setPadding(dp(12), dp(9), dp(12), dp(9))
+        }
+        root.addView(status, LinearLayout.LayoutParams(-1, dp(104)).apply { topMargin = dp(7) })
 
         root.addView(TextView(this).apply {
-            text = "СДЕЛКИ PUMP MACHINE • новая чистая история V5.21"
+            text = "ПАРНЫЙ ЖУРНАЛ • один входной мозг, разные выходы"
             textSize = 13f
             setTextColor(Color.parseColor("#58A6FF"))
             setPadding(dp(4), dp(10), dp(4), dp(6))
         })
 
         trades = TextView(this).apply {
-            textSize = 13f
+            textSize = 12.5f
             setTextColor(Color.parseColor("#C9D1D9"))
             setBackgroundColor(Color.parseColor("#161B22"))
             setPadding(dp(12), dp(10), dp(12), dp(10))
@@ -88,42 +97,76 @@ class PumpMachineActivity : AppCompatActivity() {
 
     private fun render() {
         val now = System.currentTimeMillis()
-        val portfolio = PumpMachineStore.state(this)
+        val pumpMachine = PumpMachineStore.state(this)
+        val fusion = FusionSimStore.state(this)
         val market = BitpandaFusionStore.state(this)
-        val bid = market.bid.takeIf { market.fresh(now) } ?: portfolio.entryPrice
-        val value = PumpMachinePolicy.netLiquidationValue(portfolio, bid, market.feeRate)
-        val total = (value / FusionSimPortfolio.START_BALANCE - 1.0) * 100.0
-        val tradeNet = PumpMachinePolicy.tradeNetPercent(portfolio, bid, market.feeRate)
-        summary.text = buildString {
-            append(String.format(Locale.GERMANY, "СЧЁТ €%.2f  •  ВСЕГО %+.2f%%", value, total))
+        val bid = market.bid.takeIf { market.fresh(now) }
+            ?: pumpMachine.entryPrice.takeIf { it > 0.0 }
+            ?: fusion.entryPrice
+
+        val pumpValue = PumpMachinePolicy.netLiquidationValue(pumpMachine, bid, market.feeRate)
+        val pumpTotal = (pumpValue / FusionSimPortfolio.START_BALANCE - 1.0) * 100.0
+        val pumpTradeNet = PumpMachinePolicy.tradeNetPercent(pumpMachine, bid, market.feeRate)
+
+        val fusionMetrics = FusionPriorityPolicy.metrics(
+            portfolio = fusion,
+            markPriceEur = bid,
+            feeRate = market.feeRate,
+            venueFresh = market.fresh(now)
+        )
+        val fusionValue = fusionMetrics.netLiquidationValueEur
+        val fusionTotal = fusionMetrics.netPnlPercent
+
+        val pmLast = pumpMachine.trades.lastOrNull()
+        val fusionLast = fusion.trades.lastOrNull()
+        pairSummary.text = buildString {
+            append("ОБЩИЙ ВХОД: Shared Fusion Entry Engine • один 15-секундный снимок\n")
+            append(String.format(Locale.GERMANY, "FUSION   €%.2f  %+.2f%%  • %s", fusionValue, fusionTotal, if (fusion.inPosition) "В PUMP" else "В EUR"))
             append("\n")
-            if (portfolio.inPosition) {
-                append(String.format(Locale.GERMANY, "В PUMP • ТЕКУЩАЯ СДЕЛКА %+.2f%% NET", tradeNet))
-                append("\nЦЕЛЬ +3,00% • STOP −1,50%")
+            append(String.format(Locale.GERMANY, "MACHINE  €%.2f  %+.2f%%  • %s", pumpValue, pumpTotal, if (pumpMachine.inPosition) "В PUMP" else "В EUR"))
+            append("\n")
+            append("Последнее: FUSION ${lastTradeLabel(fusionLast)} • MACHINE ${lastTradeLabel(pmLast)}")
+        }
+
+        summary.text = buildString {
+            append(String.format(Locale.GERMANY, "PUMP MACHINE • СЧЁТ €%.2f • ВСЕГО %+.2f%%", pumpValue, pumpTotal))
+            append("\n")
+            if (pumpMachine.inPosition) {
+                append(String.format(Locale.GERMANY, "ТЕКУЩАЯ СДЕЛКА %+.2f%% NET", pumpTradeNet))
+                append(" • TP +3,00% • SL −1,50%")
             } else {
-                append("В ЕВРО • ждём следующий Fusion-вход")
-                append("\nЦЕЛЬ СДЕЛКИ +3,00% NET • STOP −1,50% NET")
+                append("В EUR • ждём следующий независимый общий Fusion-вход")
             }
         }
-        summary.setTextColor(Color.parseColor(if (total >= 0.0) "#7EE787" else "#FF7B72"))
+        summary.setTextColor(Color.parseColor(if (pumpTotal >= 0.0) "#7EE787" else "#FF7B72"))
 
-        status.text = "ЛОГИКА: тот же вход/системный выход, что у Fusion; максимум сделки +3% net.\n" +
-            PumpMachineStore.lastStatus(this)
+        status.text = "ВХОД У ОБОИХ ФИЗИЧЕСКИ ОДИНАКОВЫЙ; состояния подтверждения и cooldown независимы.\n" +
+            "MACHINE: ${PumpMachineStore.lastStatus(this)}"
 
-        val events = portfolio.trades.takeLast(120).asReversed()
+        data class PairEvent(val source: String, val trade: FusionSimTrade)
+        val events = buildList {
+            pumpMachine.trades.takeLast(60).forEach { add(PairEvent("MACHINE", it)) }
+            fusion.trades.takeLast(60).forEach { add(PairEvent("FUSION", it)) }
+        }.sortedByDescending { it.trade.time }.take(120)
+
         trades.text = if (events.isEmpty()) {
-            "Сделок пока нет. Счёт V5.21 начинается с €1000 и не смешивается со старым DeepSig."
+            "Сделок пока нет. После V5.22 оба участника получают один и тот же входной снимок рынка, но ведут позиции независимо."
         } else {
-            events.joinToString("\n\n") { trade ->
-                val label = if (trade.action == "BUY") "BUY" else "SELL"
+            events.joinToString("\n\n") { event ->
+                val trade = event.trade
                 val pnl = if (trade.action == "SELL") {
                     String.format(Locale.GERMANY, " • PnL %+.2f €", trade.pnlEur)
                 } else ""
-                "${PumpBotEngine.formatDate(trade.time)} • $label • " +
+                "${PumpBotEngine.formatDate(trade.time)} • ${event.source} • ${trade.action} • " +
                     String.format(Locale.GERMANY, "€%.8f", trade.price) + pnl +
                     "\n${trade.reason}"
             }
         }
+    }
+
+    private fun lastTradeLabel(trade: FusionSimTrade?): String {
+        if (trade == null) return "—"
+        return "${trade.action} ${PumpBotEngine.formatDate(trade.time)}"
     }
 
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
