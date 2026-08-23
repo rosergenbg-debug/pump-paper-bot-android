@@ -18,7 +18,7 @@ class PumpMachine2PolicyTest {
     )
 
     @Test
-    fun `pm2 waits below two percent net`() {
+    fun `pm2 waits below two percent net before timeout`() {
         val decision = PumpMachine2Policy.evaluate(
             portfolio = portfolio,
             previous = FusionStabilityState(),
@@ -29,7 +29,7 @@ class PumpMachine2PolicyTest {
             shockReady = false,
             shockFailed = false,
             shockEntry = false,
-            positionAgeMillis = 3_600_000L
+            positionAgeMillis = 10L * 60L * 1000L
         )
 
         assertNull(decision.action)
@@ -48,12 +48,12 @@ class PumpMachine2PolicyTest {
             shockReady = false,
             shockFailed = false,
             shockEntry = false,
-            positionAgeMillis = 3_600_000L
+            positionAgeMillis = 10L * 60L * 1000L
         )
 
         assertEquals(2.0, PumpMachine2Policy.TAKE_PROFIT_NET_PERCENT, 0.0)
         assertEquals("EXIT", decision.action)
         assertTrue(decision.tradeNetPercent >= 2.0)
-        assertTrue(decision.reason.startsWith("TAKE_PROFIT_2_NET"))
+        assertTrue(decision.reason.startsWith("V526_TAKE_PROFIT_PM2"))
     }
 }
