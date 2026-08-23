@@ -27,6 +27,15 @@ jobs:
           python3 tools/apply_v523_clean_lab_reset.py
           python3 tools/apply_v524_pump_machine_2.py
           python3 tools/apply_v525_six_account_comparison.py
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("tools/apply_v526_profit_engine.py")
+          s = p.read_text(encoding="utf-8")
+          needle = '        old_position = old_position.replace("+3.00 / -1.50", "+2.00 / -1.50")\n'
+          if s.count(needle) != 1:
+              raise SystemExit("V5.26 PM2 compatibility fix anchor missing")
+          p.write_text(s.replace(needle, ""), encoding="utf-8")
+          PY
           python3 tools/apply_v526_profit_engine.py
           git diff --check
 
