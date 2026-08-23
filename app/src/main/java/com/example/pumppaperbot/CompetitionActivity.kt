@@ -67,16 +67,21 @@ class CompetitionActivity : AppCompatActivity() {
         root.addView(archiveStatus, LinearLayout.LayoutParams(-1, dp(54)).apply {
             topMargin = dp(3)
         })
+        val chartColumn = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         repeat(CompetitionAccountSpec.COUNT) { index ->
             val chart = CompetitionChartView(this).apply {
                 contentDescription = "Открыть подробный график ${index + 1}"
                 setOnClickListener { showChartDetail(index) }
             }
             charts += chart
-            root.addView(chart, LinearLayout.LayoutParams(-1, 0, 1f).apply {
+            chartColumn.addView(chart, LinearLayout.LayoutParams(-1, dp(230)).apply {
                 topMargin = dp(3)
             })
         }
+        root.addView(ScrollView(this).apply {
+            isFillViewport = true
+            addView(chartColumn)
+        }, LinearLayout.LayoutParams(-1, 0, 1f))
         charts.forEach { source ->
             source.setOnOffsetChanged { offset ->
                 charts.filterNot { it === source }.forEach { it.setSynchronizedOffset(offset) }
@@ -115,6 +120,8 @@ class CompetitionActivity : AppCompatActivity() {
         val app = AppPaperStore.state(this)
         val pumpMachine = PumpMachineStore.state(this)
         val pumpMachine2 = PumpMachine2Store.state(this)
+        val pumpRetest = PumpMachineRetestStore.state(this)
+        val pumpSafe = PumpMachineSafeStore.state(this)
         val geminiExitExperiment = GeminiExitExperimentStore.state(this)?.portfolio
             ?: GeminiPaperPortfolio()
         val user = UserPaperStore.markToMarket(this, price)
@@ -135,25 +142,13 @@ class CompetitionActivity : AppCompatActivity() {
             fusionPrice,
             fusionMarket.feeRate
         )
-        setChart(0, CompetitionDataset(
-            "PUMP 3% NET • V5.28 НЕЗАВИСИМЫЙ ВХОД • TP +3% / SL −1,3%",
-            summary(
-                pumpMachineValue,
-                (pumpMachineValue / FusionSimPortfolio.START_BALANCE - 1.0) * 100.0,
-                pumpMachine.inPosition
-            ),
-            candles,
-            pumpMachine.trades.map { CompetitionMarker(it.time, it.action, it.price, it.pnlEur) },
-            FusionTradingCosts.FEE_RATE
-        ))
-
         val pumpMachine2Value = PumpMachine2Policy.netLiquidationValue(
             pumpMachine2,
             fusionPrice,
             fusionMarket.feeRate
         )
-        setChart(1, CompetitionDataset(
-            "PUMP 2% NET • V5.28 НЕЗАВИСИМЫЙ ВХОД • TP +2% / SL −1,1%",
+        setChart(0, CompetitionDataset(
+            "PUMP MACHINE 1 • +2% NET • НЕЗАВИСИМЫЙ",
             summary(
                 pumpMachine2Value,
                 (pumpMachine2Value / FusionSimPortfolio.START_BALANCE - 1.0) * 100.0,
@@ -163,7 +158,41 @@ class CompetitionActivity : AppCompatActivity() {
             pumpMachine2.trades.map { CompetitionMarker(it.time, it.action, it.price, it.pnlEur) },
             FusionTradingCosts.FEE_RATE
         ))
+        setChart(1, CompetitionDataset(
+            "PUMP MACHINE 2 • +3% NET • НЕЗАВИСИМЫЙ",
+            summary(
+                pumpMachineValue,
+                (pumpMachineValue / FusionSimPortfolio.START_BALANCE - 1.0) * 100.0,
+                pumpMachine.inPosition
+            ),
+            candles,
+            pumpMachine.trades.map { CompetitionMarker(it.time, it.action, it.price, it.pnlEur) },
+            FusionTradingCosts.FEE_RATE
+        ))
+        val retestValue = PumpMachineRetestStore.netValue(this, now)
         setChart(2, CompetitionDataset(
+            "PUMP MACHINE 3 • RETEST • +2% NET",
+            summary(retestValue, (retestValue / 1000.0 - 1.0) * 100.0, pumpRetest.inPosition),
+            candles,
+            pumpRetest.trades.map { CompetitionMarker(it.time, it.action, it.price, it.pnlEur) },
+            FusionTradingCosts.FEE_RATE
+        ))
+        val safeValue = PumpMachineSafeStore.netValue(this, now)
+        setChart(3, CompetitionDataset(
+            "PUMP MACHINE 4 • SAFE + APP • +1,15% NET",
+            summary(safeValue, (safeValue / 1000.0 - 1.0) * 100.0, pumpSafe.inPosition),
+            candles,
+            pumpSafe.trades.map { CompetitionMarker(it.time, it.action, it.price, it.pnlEur) },
+            FusionTradingCosts.FEE_RATE
+        ))
+        setChart(4, CompetitionDataset(
+            "FUSION • ЛОКАЛЬНЫЙ ПОТОК • БЕЗ ОБЯЗАТЕЛЬНОГО PRO",
+            summary(fusion.value(fusionPrice), fusion.profit(fusionPrice) / 10.0, fusion.inPosition),
+            candles,
+            fusion.trades.map { CompetitionMarker(it.time, it.action, it.price, it.pnlEur) },
+            FusionTradingCosts.FEE_RATE
+        ))
+        setChart(5, CompetitionDataset(
             "DEEPSIGX",
             summary(
                 geminiExitExperiment.value(price),
@@ -174,25 +203,14 @@ class CompetitionActivity : AppCompatActivity() {
             geminiExitExperiment.trades.map { CompetitionMarker(it.time, it.action, it.price, it.pnlEur) },
             0.0015
         ))
-        setChart(3, CompetitionDataset(
+        setChart(6, CompetitionDataset(
             "APP",
             summary(app.value(price), app.profitPercent(price), app.inPosition),
             candles,
             app.trades.map { CompetitionMarker(it.candleTime, it.action, it.price, it.pnlEur) },
             0.0015
         ))
-        setChart(4, CompetitionDataset(
-            "DEEPSIG FUSION",
-            summary(
-                fusion.value(fusionPrice),
-                fusion.profit(fusionPrice) / FusionSimPortfolio.START_BALANCE * 100.0,
-                fusion.inPosition
-            ),
-            candles,
-            fusion.trades.map { CompetitionMarker(it.time, it.action, it.price, it.pnlEur) },
-            FusionTradingCosts.FEE_RATE
-        ))
-        setChart(5, CompetitionDataset(
+        setChart(7, CompetitionDataset(
             "СЕРЖ",
             summary(user.value(price), user.profitPercent(price), user.inPosition),
             candles,

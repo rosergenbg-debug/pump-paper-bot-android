@@ -249,4 +249,28 @@ class PumpProfitEngineV526Test {
         assertNull(decision.action)
         assertTrue(decision.nextState.profitDefenseArmed)
     }
+
+    @Test
+    fun `safe variant rejects a setup accepted by ordinary pump gate`() {
+        val ordinary = PumpProfitEngineV526.evaluateEntry(
+            PumpProfitModeV526.PUMP_2, FusionStabilityState(), observation(), 1_000_000L
+        )
+        val safe = PumpProfitEngineV526.evaluateEntry(
+            PumpProfitModeV526.PUMP_SAFE, FusionStabilityState(),
+            observation(instant = 12, score5 = 6, buyer5 = 60.0, activity = 1.12), 1_000_000L
+        )
+        assertEquals(1, ordinary.nextState.entryStreak)
+        assertNull(safe.action)
+        assertEquals(0, safe.nextState.entryStreak)
+    }
+
+    @Test
+    fun `safe variant takes one point fifteen net target`() {
+        val decision = PumpProfitEngineV526.evaluatePosition(
+            PumpProfitModeV526.PUMP_SAFE, portfolio, FusionStabilityState(), observation(),
+            bidForNet(1.16), fee, 5L * 60L * 1000L
+        )
+        assertEquals("EXIT", decision.action)
+        assertTrue(decision.reason!!.contains("TAKE_PROFIT_PM SAFE"))
+    }
 }

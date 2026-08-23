@@ -115,6 +115,12 @@ class PumpBotWorker(
                     0.0
                 )
             }) { PumpMachine2Store.sync(applicationContext) }
+            CycleStageGuard.run(applicationContext, "PUMP_MACHINE_RETEST", {
+                PumpVariantSyncResult(PumpMachineRetestStore.state(applicationContext), "ошибка Pump Retest изолирована", 0.0)
+            }) { PumpMachineRetestStore.sync(applicationContext) }
+            CycleStageGuard.run(applicationContext, "PUMP_MACHINE_SAFE", {
+                PumpVariantSyncResult(PumpMachineSafeStore.state(applicationContext), "ошибка Pump Safe изолирована", 0.0)
+            }) { PumpMachineSafeStore.sync(applicationContext) }
             CycleStageGuard.run(applicationContext, "FUSION_SIM", {
                 FusionSimStore.state(applicationContext)
             }) { FusionSimStore.sync(applicationContext, deepSeek) }

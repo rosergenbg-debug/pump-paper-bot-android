@@ -96,12 +96,15 @@ class PumpSignalService : Service() {
 
                 val pumpMachineFast = PumpMachineStore.state(this)
                 val pumpMachine2Fast = PumpMachine2Store.state(this)
+                val pumpRetestFast = PumpMachineRetestStore.state(this)
+                val pumpSafeFast = PumpMachineSafeStore.state(this)
                 val entryObservationFast = SharedFusionEntryObservationStore.snapshot(this, now)
                 val commonFastCandidate = PumpProfitEngineV526.isFastCandidate(
                     PumpProfitModeV526.PUMP_3,
                     entryObservationFast
                 )
-                if (pumpMachineFast.inPosition || pumpMachine2Fast.inPosition || commonFastCandidate) {
+                if (pumpMachineFast.inPosition || pumpMachine2Fast.inPosition || pumpRetestFast.inPosition ||
+                    pumpSafeFast.inPosition || commonFastCandidate) {
                     val venue = BitpandaFusionStore.state(this)
                     if (!venue.fresh(now) || now - venue.lastSuccess >= 15_000L) {
                         BitpandaFusionClient().sync(this, force = true)
@@ -115,12 +118,21 @@ class PumpSignalService : Service() {
                         runCatching { PumpMachine2Store.sync(this, fastNow) }
                             .onFailure { recordIndependentPumpFailure("PUMP_MACHINE_2_FAST", it) }
                     }
+                    if (pumpRetestFast.inPosition || commonFastCandidate) {
+                        runCatching { PumpMachineRetestStore.sync(this, fastNow) }
+                            .onFailure { recordIndependentPumpFailure("PUMP_MACHINE_RETEST_FAST", it) }
+                    }
+                    if (pumpSafeFast.inPosition || commonFastCandidate) {
+                        runCatching { PumpMachineSafeStore.sync(this, fastNow) }
+                            .onFailure { recordIndependentPumpFailure("PUMP_MACHINE_SAFE_FAST", it) }
+                    }
                 }
 
                 val shock = ShockReboundStore.state(this)
                 if (!shock.active || !shock.fresh(now)) return@execute
                 val fusion = FusionSimStore.state(this)
-                if (!shock.ready && !fusion.inPosition && !pumpMachineFast.inPosition && !pumpMachine2Fast.inPosition) return@execute
+                if (!shock.ready && !fusion.inPosition && !pumpMachineFast.inPosition && !pumpMachine2Fast.inPosition &&
+                    !pumpRetestFast.inPosition && !pumpSafeFast.inPosition) return@execute
 
                 // A fast rebound cannot wait for the 1-3 minute full cycle. Refresh only the
                 // read-only execution book and run the local paper engines; no AI call is made.
@@ -131,6 +143,10 @@ class PumpSignalService : Service() {
                     .onFailure { recordIndependentPumpFailure("PUMP_MACHINE_SHOCK", it) }
                 runCatching { PumpMachine2Store.sync(this, shockNow) }
                     .onFailure { recordIndependentPumpFailure("PUMP_MACHINE_2_SHOCK", it) }
+                runCatching { PumpMachineRetestStore.sync(this, shockNow) }
+                    .onFailure { recordIndependentPumpFailure("PUMP_MACHINE_RETEST_SHOCK", it) }
+                runCatching { PumpMachineSafeStore.sync(this, shockNow) }
+                    .onFailure { recordIndependentPumpFailure("PUMP_MACHINE_SAFE_SHOCK", it) }
             } finally {
                 shockCheckQueuedOrRunning.set(false)
             }
@@ -225,6 +241,12 @@ class PumpSignalService : Service() {
                         PumpMachine2SyncResult(PumpMachine2Store.state(this), "ошибка Pump 2 изолирована", 0.0)
                     }
                 ) { PumpMachine2Store.sync(this) }
+                CycleStageGuard.run(this, "PUMP_MACHINE_RETEST", {
+                    PumpVariantSyncResult(PumpMachineRetestStore.state(this), "ошибка Pump Retest изолирована", 0.0)
+                }) { PumpMachineRetestStore.sync(this) }
+                CycleStageGuard.run(this, "PUMP_MACHINE_SAFE", {
+                    PumpVariantSyncResult(PumpMachineSafeStore.state(this), "ошибка Pump Safe изолирована", 0.0)
+                }) { PumpMachineSafeStore.sync(this) }
                 CycleStageGuard.run(this, "FUSION_SIM", { FusionSimStore.state(this) }) {
                     FusionSimStore.sync(this, deepSeek)
                 }
@@ -295,8 +317,6 @@ class PumpSignalService : Service() {
     }
 
     private fun nextCycleIntervalMillis(): Long {
-        val fusionPriority = FusionPriorityPolicy.plan(FusionSimStore.state(this))
-        if (fusionPriority.active) return fusionPriority.intervalMillis
         val snapshot = PumpBotEngine.snapshot(this)
         if (snapshot.waitMode != "SELL" || snapshot.entryPrice <= 0.0) {
             val level = DeepSeekActionLevelPolicy.fromMarket(

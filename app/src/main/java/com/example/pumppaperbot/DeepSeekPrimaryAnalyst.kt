@@ -312,7 +312,7 @@ class DeepSeekPrimaryAnalyst {
         val snapshot = PumpBotEngine.snapshot(context)
         val previous = DeepSeekPrimaryStore.state(context, now)
         val fusionPriority = FusionPriorityPolicy.plan(FusionSimStore.state(context))
-        val forceProModel = force || fusionPriority.forcePro
+        val forceProModel = force
         val micro = MicroImpulseStore.state(context)
         val breathing = LiveMarketBreathingStore.snapshot(context, now)
         val ecosystem = PumpEcosystemStore.state(context)
@@ -335,9 +335,7 @@ class DeepSeekPrimaryAnalyst {
                 snapshot.buySignal != previous.lastLocalBuySignal ||
                 snapshot.sellSignal != previous.lastLocalSellSignal
             )
-        val adaptiveInterval = if (fusionPriority.active) {
-            fusionPriority.intervalMillis
-        } else if (snapshot.waitMode == "BUY" && (
+        val adaptiveInterval = if (snapshot.waitMode == "BUY" && (
                 previousActionLevel.intensive || kotlin.math.abs(breathing.normalScore ?: 0) >= 20
             )) {
             DeepSeekActionLevelPolicy.INTENSIVE_INTERVAL_MILLIS
@@ -373,7 +371,7 @@ class DeepSeekPrimaryAnalyst {
             model = requestedModel, status = "START", at = started,
             detail = buildString {
                 append(when {
-                fusionPriority.active -> "Fusion-позиция: локальная защита постоянно, DeepSig по экономичному интервалу"
+                fusionPriority.active -> "Fusion-позиция защищается локально; платный DeepSig не ускоряется"
                 force -> "ручная усиленная проверка"
                 materialChange -> "существенно изменился рыночный сигнал"
                 else -> "плановый анализ"

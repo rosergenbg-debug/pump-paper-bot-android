@@ -2,7 +2,7 @@ package com.example.pumppaperbot
 
 import kotlin.math.max
 
-enum class PumpProfitModeV526 { PUMP_2, PUMP_3 }
+enum class PumpProfitModeV526 { PUMP_2, PUMP_3, PUMP_RETEST, PUMP_SAFE }
 
 data class PumpProfitPositionDecisionV526(
     val action: String?,
@@ -97,12 +97,46 @@ object PumpProfitEngineV526 {
         confirmationMillis = 15_000L
     )
 
-    private fun cfg(mode: PumpProfitModeV526): Config = if (mode == PumpProfitModeV526.PUMP_2) PM2 else PM3
+    private val PM_RETEST = PM2.copy(name = "PM RETEST")
+
+    private val PM_SAFE = Config(
+        name = "PM SAFE",
+        takeProfitNet = 1.15,
+        hardStopNet = -0.75,
+        breakevenTriggerNet = 0.55,
+        breakevenLockNet = 0.05,
+        earlyAdverseNet = -0.30,
+        givebackArmNet = 0.80,
+        maxGivebackNet = 0.32,
+        softHoldMillis = 15L * 60L * 1000L,
+        hardHoldMillis = 25L * 60L * 1000L,
+        timeoutKeepNet = 0.18,
+        minInstant = 14,
+        min5m = 8,
+        min15m = 2,
+        min30m = -1,
+        minBuyer5m = 61.0,
+        minActivityRatio = 1.15,
+        maxAbsorptionRisk = 52,
+        minEfficiency = -8,
+        maxEarlyMovePercent = 1.25,
+        confirmationMillis = 30_000L
+    )
+
+    private fun cfg(mode: PumpProfitModeV526): Config = when (mode) {
+        PumpProfitModeV526.PUMP_2 -> PM2
+        PumpProfitModeV526.PUMP_3 -> PM3
+        PumpProfitModeV526.PUMP_RETEST -> PM_RETEST
+        PumpProfitModeV526.PUMP_SAFE -> PM_SAFE
+    }
 
     // V5.28: PM2 and PM3 use the same strict market-quality gate, but each store owns its
     // confirmation, cooldown and execution time. Either flat account may therefore re-enter
     // independently while the other account is still managing an earlier position.
-    private fun entryCfg(): Config = PM3
+    private fun entryCfg(mode: PumpProfitModeV526): Config = when (mode) {
+        PumpProfitModeV526.PUMP_SAFE -> PM_SAFE
+        else -> PM3
+    }
 
     private fun resetEntry(previous: FusionStabilityState, keepCooldown: Boolean = true) = previous.copy(
         entryStreak = 0,
@@ -117,7 +151,7 @@ object PumpProfitEngineV526 {
 
     fun isFastCandidate(mode: PumpProfitModeV526, observation: SharedFusionEntryObservation): Boolean {
         if (observation.shockReady) return shockPermitted(observation)
-        return entryGate(observation).first
+        return entryGate(mode, observation).first
     }
 
     fun evaluateEntry(
@@ -126,7 +160,7 @@ object PumpProfitEngineV526 {
         observation: SharedFusionEntryObservation,
         now: Long
     ): SharedFusionEntryDecision {
-        val c = entryCfg()
+        val c = entryCfg(mode)
         if (previous.cooldownUntil > now) {
             val left = ((previous.cooldownUntil - now + 999L) / 1000L).coerceAtLeast(1L)
             return SharedFusionEntryDecision(null, resetEntry(previous), "V526 ${c.name} COOLDOWN: ещё ${left}с")
@@ -148,7 +182,7 @@ object PumpProfitEngineV526 {
             }
         }
 
-        val (candidate, reason) = entryGate(observation)
+        val (candidate, reason) = entryGate(mode, observation)
         if (!candidate) {
             return SharedFusionEntryDecision(null, resetEntry(previous, keepCooldown = false), reason)
         }
@@ -185,9 +219,10 @@ object PumpProfitEngineV526 {
     }
 
     private fun entryGate(
+        mode: PumpProfitModeV526,
         observation: SharedFusionEntryObservation
     ): Pair<Boolean, String> {
-        val c = entryCfg()
+        val c = entryCfg(mode)
         val breathing = observation.breathing
             ?: return false to "V526_${c.name}_WAIT: нет live breathing snapshot"
         val frame = observation.frame

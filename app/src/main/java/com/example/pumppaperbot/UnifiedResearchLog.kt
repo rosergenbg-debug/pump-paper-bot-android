@@ -37,6 +37,8 @@ object UnifiedResearchLog {
         val deepSeek = DeepSeekPrimaryStore.state(context, now)
         val pumpMachine = PumpMachineStore.state(context)
         val pumpMachine2 = PumpMachine2Store.state(context)
+        val pumpRetest = PumpMachineRetestStore.state(context)
+        val pumpSafe = PumpMachineSafeStore.state(context)
         val deepSigX = GeminiExitExperimentStore.state(context)?.portfolio ?: GeminiPaperPortfolio()
         val fusionMarket = BitpandaFusionStore.state(context)
         val fusionPrice = fusionMarket.bid.takeIf { fusionMarket.fresh(now) } ?: price
@@ -59,6 +61,12 @@ object UnifiedResearchLog {
                 "trades=${pumpMachine.trades.size}; ${PumpMachineStore.lastStatus(context)}",
             now
         )
+        record(context, "PUMP_MACHINE_RETEST", if (pumpRetest.inPosition) "IN_POSITION" else "CYCLE",
+            "$source; value=${PumpMachineRetestStore.netValue(context, now)}; tradeNet=${PumpMachineRetestStore.tradeNetPercent(context, now)}; " +
+                "trades=${pumpRetest.trades.size}; ${PumpMachineRetestStore.lastStatus(context)}", now)
+        record(context, "PUMP_MACHINE_SAFE", if (pumpSafe.inPosition) "IN_POSITION" else "CYCLE",
+            "$source; value=${PumpMachineSafeStore.netValue(context, now)}; tradeNet=${PumpMachineSafeStore.tradeNetPercent(context, now)}; " +
+                "trades=${pumpSafe.trades.size}; ${PumpMachineSafeStore.lastStatus(context)}", now)
         val pumpMachine2Value = PumpMachine2Policy.netLiquidationValue(
             pumpMachine2,
             fusionPrice,
@@ -91,6 +99,8 @@ object UnifiedResearchLog {
         val retiredDeepSig = GeminiPaperStore.state(context, includeActivity = true)
         val pumpMachine = PumpMachineStore.state(context)
         val pumpMachine2 = PumpMachine2Store.state(context)
+        val pumpRetest = PumpMachineRetestStore.state(context)
+        val pumpSafe = PumpMachineSafeStore.state(context)
         val deepSigX = GeminiExitExperimentStore.state(context)
         val fusion = BitpandaFusionStore.state(context)
         val fusionSim = FusionSimStore.state(context)
@@ -131,6 +141,8 @@ object UnifiedResearchLog {
                 .put("APP", appJson(app))
                 .put("PumpMachine", PumpMachineStore.toJson(pumpMachine))
                 .put("PumpMachine2", PumpMachine2Store.toJson(pumpMachine2))
+                .put("PumpMachineRetest", PumpMachineRetestStore.toJson(pumpRetest))
+                .put("PumpMachineSafe", PumpMachineSafeStore.toJson(pumpSafe))
                 .put("DeepSigRetired", geminiJson(retiredDeepSig.portfolio).put("retiredInV521", true))
                 .put("DeepSigX", deepSigX?.let { geminiJson(it.portfolio)
                     .put("lastSignal", it.lastSignal).put("lastReason", it.lastReason) } ?: JSONObject.NULL)

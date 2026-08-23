@@ -61,6 +61,13 @@ data class EntryOpportunityAuditSnapshot(
 }
 
 object EntryGateStatusPolicy {
+    fun pump(participant: String, portfolio: FusionSimPortfolio, status: String): EntryGateStatus =
+        EntryGateStatus(
+            participant,
+            if (portfolio.inPosition) "В ПОЗИЦИИ" else if (status.contains("ARMED") || status.contains("RETEST")) "ПОДТВЕРЖДАЕТ ВХОД" else "НЕ ВОШЁЛ",
+            status.take(600)
+        )
+
     fun app(portfolio: AppPaperPortfolio): EntryGateStatus {
         if (portfolio.inPosition) return EntryGateStatus("APP", "В ПОЗИЦИИ", "Виртуальный вход уже исполнен.")
         val decision = portfolio.decisions.lastOrNull()
@@ -145,6 +152,10 @@ object EntryOpportunityAuditStore {
             flowScore = breathing.flowWave.latest?.composite(),
             capitalFlow = CapitalFlowProxyPolicy.evaluate(impulse, breathing, now),
             participants = listOf(
+                EntryGateStatusPolicy.pump("Pump Machine 1 • 2%", PumpMachine2Store.state(context), PumpMachine2Store.lastStatus(context)),
+                EntryGateStatusPolicy.pump("Pump Machine 2 • 3%", PumpMachineStore.state(context), PumpMachineStore.lastStatus(context)),
+                EntryGateStatusPolicy.pump("Pump Machine 3 • Retest", PumpMachineRetestStore.state(context), PumpMachineRetestStore.lastStatus(context)),
+                EntryGateStatusPolicy.pump("Pump Machine 4 • Safe", PumpMachineSafeStore.state(context), PumpMachineSafeStore.lastStatus(context)),
                 EntryGateStatusPolicy.app(AppPaperStore.state(context)),
                 EntryGateStatusPolicy.deepSig(deepSig, deepSigPaper),
                 EntryGateStatusPolicy.deepSigX(GeminiExitExperimentStore.state(context)),

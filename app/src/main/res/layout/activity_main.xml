@@ -157,7 +157,7 @@
                     android:insetBottom="0dp"
                     android:maxLines="3"
                     android:padding="2dp"
-                    android:text="APP&#10;€1 000,00&#10;+0,00%"
+                    android:text="PUMP MACHINE 1 • 2%&#10;€1 000,00&#10;+0,00%"
                     android:textColor="#FFFFFF"
                     android:textSize="11sp"
                     android:textStyle="bold" />
@@ -174,7 +174,7 @@
                     android:insetBottom="0dp"
                     android:maxLines="3"
                     android:padding="2dp"
-                    android:text="PUMP MACHINE&#10;€1 000,00&#10;+0,00%"
+                    android:text="PUMP MACHINE 2 • 3%&#10;€1 000,00&#10;+0,00%"
                     android:textColor="#FFFFFF"
                     android:textSize="11sp"
                     android:textStyle="bold" />
@@ -197,7 +197,7 @@
                     android:insetBottom="0dp"
                     android:maxLines="3"
                     android:padding="2dp"
-                    android:text="DEEPSIGX&#10;€1 000,00&#10;+0,00%"
+                    android:text="PUMP MACHINE 3 • RETEST&#10;€1 000,00&#10;+0,00%"
                     android:textColor="#FFFFFF"
                     android:textSize="11sp"
                     android:textStyle="bold" />
@@ -214,7 +214,7 @@
                     android:insetBottom="0dp"
                     android:maxLines="3"
                     android:padding="2dp"
-                    android:text="СЕРЖ&#10;€1 000,00&#10;+0,00%"
+                    android:text="PUMP MACHINE 4 • SAFE&#10;€1 000,00&#10;+0,00%"
                     android:textColor="#FFFFFF"
                     android:textSize="11sp"
                     android:textStyle="bold" />
@@ -237,7 +237,7 @@
                     android:insetBottom="0dp"
                     android:maxLines="3"
                     android:padding="2dp"
-                    android:text="DEEPSIG FUSION&#10;€1 000,00&#10;+0,00%"
+                    android:text="FUSION&#10;€1 000,00&#10;+0,00%"
                     android:textColor="#FFFFFF"
                     android:textSize="11sp"
                     android:textStyle="bold" />
@@ -254,7 +254,7 @@
                     android:insetBottom="0dp"
                     android:maxLines="3"
                     android:padding="2dp"
-                    android:text="PUMP 2% NET&#10;€1 000,00&#10;+0,00%"
+                    android:text="ЕЩЁ 3 СЧЁТА&#10;APP • DEEPSIGX • СЕРЖ"
                     android:textColor="#FFFFFF"
                     android:textSize="11sp"
                     android:textStyle="bold" />
@@ -267,7 +267,7 @@
             android:layout_height="50dp"
             android:layout_marginTop="7dp"
             android:backgroundTint="#1F6FEB"
-            android:text="СРАВНИТЬ 6 • PM3 | PM2 | APP | DEEPSIGX | FUSION | СЕРЖ"
+            android:text="ВСЕ 8 СЧЕТОВ • ВЕРТИКАЛЬНАЯ ПРОКРУТКА И ПОЛНАЯ ИСТОРИЯ"
             android:textColor="#FFFFFF"
             android:textSize="13sp"
             android:textStyle="bold" />
