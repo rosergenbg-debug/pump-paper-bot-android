@@ -101,13 +101,20 @@ class PumpBotWorker(
             val appTrade = CycleStageGuard.run(applicationContext, "APP_PAPER", {
                 AppPaperSyncResult(AppPaperStore.state(applicationContext), false)
             }) { AppPaperStore.syncWithAlerts(applicationContext) }
-            val pumpPair = CycleStageGuard.run(applicationContext, "PUMP_MACHINE_PAIR", {
-                PumpMachinePairSyncResult(
-                    PumpMachineSyncResult(PumpMachineStore.state(applicationContext), "ошибка пары Pump изолирована", 0.0),
-                    PumpMachine2SyncResult(PumpMachine2Store.state(applicationContext), "ошибка пары Pump изолирована", 0.0)
+            val pumpMachine = CycleStageGuard.run(applicationContext, "PUMP_MACHINE", {
+                PumpMachineSyncResult(
+                    PumpMachineStore.state(applicationContext),
+                    "ошибка Pump 3 изолирована",
+                    0.0
                 )
-            }) { PumpMachinePairCoordinator.sync(applicationContext) }
-            val pumpMachine = pumpPair.pump3
+            }) { PumpMachineStore.sync(applicationContext) }
+            CycleStageGuard.run(applicationContext, "PUMP_MACHINE_2", {
+                PumpMachine2SyncResult(
+                    PumpMachine2Store.state(applicationContext),
+                    "ошибка Pump 2 изолирована",
+                    0.0
+                )
+            }) { PumpMachine2Store.sync(applicationContext) }
             CycleStageGuard.run(applicationContext, "FUSION_SIM", {
                 FusionSimStore.state(applicationContext)
             }) { FusionSimStore.sync(applicationContext, deepSeek) }

@@ -136,7 +136,7 @@ class CompetitionActivity : AppCompatActivity() {
             fusionMarket.feeRate
         )
         setChart(0, CompetitionDataset(
-            "PUMP 3% NET • V5.27 ОБЩИЙ ВХОД • TP +3% / SL −1,3%",
+            "PUMP 3% NET • V5.28 НЕЗАВИСИМЫЙ ВХОД • TP +3% / SL −1,3%",
             summary(
                 pumpMachineValue,
                 (pumpMachineValue / FusionSimPortfolio.START_BALANCE - 1.0) * 100.0,
@@ -153,7 +153,7 @@ class CompetitionActivity : AppCompatActivity() {
             fusionMarket.feeRate
         )
         setChart(1, CompetitionDataset(
-            "PUMP 2% NET • V5.27 ОБЩИЙ ВХОД • TP +2% / SL −1,1%",
+            "PUMP 2% NET • V5.28 НЕЗАВИСИМЫЙ ВХОД • TP +2% / SL −1,1%",
             summary(
                 pumpMachine2Value,
                 (pumpMachine2Value / FusionSimPortfolio.START_BALANCE - 1.0) * 100.0,

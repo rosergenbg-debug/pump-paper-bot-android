@@ -122,6 +122,32 @@ class PumpProfitEngineV526Test {
     }
 
     @Test
+    fun `pm2 can confirm a new entry while pm3 remains in its own cooldown`() {
+        val firstPm2 = PumpProfitEngineV526.evaluateEntry(
+            PumpProfitModeV526.PUMP_2,
+            FusionStabilityState(),
+            observation(),
+            1_000_000L
+        )
+        val secondPm2 = PumpProfitEngineV526.evaluateEntry(
+            PumpProfitModeV526.PUMP_2,
+            firstPm2.nextState,
+            observation(at = 1_015_000L),
+            1_015_000L
+        )
+        val pm3 = PumpProfitEngineV526.evaluateEntry(
+            PumpProfitModeV526.PUMP_3,
+            FusionStabilityState(cooldownUntil = 1_120_000L),
+            observation(at = 1_015_000L),
+            1_015_000L
+        )
+
+        assertEquals("BUY", secondPm2.action)
+        assertNull(pm3.action)
+        assertTrue(pm3.reason.contains("COOLDOWN"))
+    }
+
+    @Test
     fun `mature pump is rejected as no fomo`() {
         val decision = PumpProfitEngineV526.evaluateEntry(
             PumpProfitModeV526.PUMP_3,

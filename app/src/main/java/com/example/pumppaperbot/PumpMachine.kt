@@ -282,8 +282,7 @@ object PumpMachineStore {
     @Synchronized
     fun sync(
         context: Context,
-        now: Long = System.currentTimeMillis(),
-        pairEntry: PumpPairEntryDirective? = null
+        now: Long = System.currentTimeMillis()
     ): PumpMachineSyncResult {
         val market = BitpandaFusionStore.state(context)
         val current = state(context)
@@ -304,7 +303,7 @@ object PumpMachineStore {
             (now - lastBuy.time).coerceAtLeast(0L)
         } else Long.MAX_VALUE
 
-        val evaluatedPlan = PumpMachinePolicy.evaluate(
+        val plan = PumpMachinePolicy.evaluate(
             portfolio = current,
             previous = previousStability,
             frame = frame,
@@ -317,15 +316,6 @@ object PumpMachineStore {
             positionAgeMillis = positionAge,
             entryObservation = entryObservation
         )
-        val plan = if (!current.inPosition && pairEntry != null) {
-            PumpMachineDecision(
-                pairEntry.decision.action,
-                pairEntry.decision.nextState,
-                pairEntry.decision.reason,
-                0.0
-            )
-        } else evaluatedPlan
-
         val marked = mark(current, market.bid, market.feeRate)
         if (plan.action == null) {
             savePortfolio(context, marked)
@@ -386,7 +376,7 @@ object PumpMachineStore {
                     )
                     savePortfolio(context, next)
                     saveStability(context, entryState)
-                    val status = "BUY V5.27 PAIR: ${plan.reason} • TP +3,00% net • SL −1,30% net • BE/timeout active"
+                    val status = "BUY V5.28 INDEPENDENT: ${plan.reason} • TP +3,00% net • SL −1,30% net • BE/timeout active"
                     saveStatus(context, status)
                     UnifiedResearchLog.record(context, "PUMP_MACHINE", "BUY", status, now)
                     PumpMachineSyncResult(next, status, 0.0)

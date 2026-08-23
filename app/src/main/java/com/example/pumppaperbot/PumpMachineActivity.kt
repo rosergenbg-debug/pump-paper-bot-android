@@ -126,7 +126,7 @@ class PumpMachineActivity : AppCompatActivity() {
         val pm2Last = pumpMachine2.trades.lastOrNull()
         val fusionLast = fusion.trades.lastOrNull()
         pairSummary.text = buildString {
-            append("ОБЩИЙ ВХОД: Shared Fusion Entry Engine • один 15-секундный снимок\n")
+            append("ОДИНАКОВЫЙ КРИТЕРИЙ ВХОДА • СЧЕТА НЕЗАВИСИМЫ\n")
             append(String.format(Locale.GERMANY, "FUSION   €%.2f  %+.2f%%  • %s", fusionValue, fusionTotal, if (fusion.inPosition) "В PUMP" else "В EUR"))
             append("\n")
             append(String.format(Locale.GERMANY, "PUMP 3%%  €%.2f  %+.2f%%  • %s", pumpValue, pumpTotal, if (pumpMachine.inPosition) "В PUMP" else "В EUR"))
@@ -146,7 +146,7 @@ class PumpMachineActivity : AppCompatActivity() {
         }
         summary.setTextColor(Color.parseColor(if (pump2Total >= 0.0) "#7EE787" else "#FF7B72"))
 
-        status.text = "ВХОДНОЙ МОЗГ ОДИН: Shared Fusion Entry. После собственного выхода cooldown независимый.\n" +
+        status.text = "Одинаковые требования к рынку, но у каждого счёта свои подтверждение, cooldown и повторный вход. Никто никого не ждёт.\n" +
             "PM3: ${PumpMachineStore.lastStatus(this)}\nPM2: ${PumpMachine2Store.lastStatus(this)}"
 
         data class PairEvent(val source: String, val trade: FusionSimTrade)
@@ -157,7 +157,7 @@ class PumpMachineActivity : AppCompatActivity() {
         }.sortedByDescending { it.trade.time }.take(120)
 
         trades.text = if (events.isEmpty()) {
-            "Сделок пока нет. Fusion, PM3 и PM2 получают один общий входной снимок рынка, но ведут позиции и выходы независимо."
+            "Сделок пока нет. PM3 и PM2 оценивают рынок одинаково, но подтверждают и исполняют входы независимо."
         } else {
             events.joinToString("\n\n") { event ->
                 val trade = event.trade

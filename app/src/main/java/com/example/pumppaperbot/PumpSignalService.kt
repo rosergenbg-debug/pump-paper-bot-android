@@ -76,6 +76,15 @@ class PumpSignalService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    private fun recordIndependentPumpFailure(stage: String, error: Throwable) {
+        GeminiPaperStore.recordActivity(
+            this,
+            stage,
+            "ERROR",
+            error.message ?: error.javaClass.simpleName
+        )
+    }
+
     private fun requestFastShockCheck() {
         if (!shockCheckQueuedOrRunning.compareAndSet(false, true)) return
         shockExecutor.execute {
@@ -88,15 +97,24 @@ class PumpSignalService : Service() {
                 val pumpMachineFast = PumpMachineStore.state(this)
                 val pumpMachine2Fast = PumpMachine2Store.state(this)
                 val entryObservationFast = SharedFusionEntryObservationStore.snapshot(this, now)
-                val pairFastCandidate = !pumpMachineFast.inPosition && !pumpMachine2Fast.inPosition &&
-                    PumpProfitEngineV526.isFastCandidate(PumpProfitModeV526.PUMP_3, entryObservationFast)
-                if (pumpMachineFast.inPosition || pumpMachine2Fast.inPosition || pairFastCandidate) {
+                val commonFastCandidate = PumpProfitEngineV526.isFastCandidate(
+                    PumpProfitModeV526.PUMP_3,
+                    entryObservationFast
+                )
+                if (pumpMachineFast.inPosition || pumpMachine2Fast.inPosition || commonFastCandidate) {
                     val venue = BitpandaFusionStore.state(this)
                     if (!venue.fresh(now) || now - venue.lastSuccess >= 15_000L) {
                         BitpandaFusionClient().sync(this, force = true)
                     }
                     val fastNow = System.currentTimeMillis()
-                    PumpMachinePairCoordinator.sync(this, fastNow)
+                    if (pumpMachineFast.inPosition || commonFastCandidate) {
+                        runCatching { PumpMachineStore.sync(this, fastNow) }
+                            .onFailure { recordIndependentPumpFailure("PUMP_MACHINE_FAST", it) }
+                    }
+                    if (pumpMachine2Fast.inPosition || commonFastCandidate) {
+                        runCatching { PumpMachine2Store.sync(this, fastNow) }
+                            .onFailure { recordIndependentPumpFailure("PUMP_MACHINE_2_FAST", it) }
+                    }
                 }
 
                 val shock = ShockReboundStore.state(this)
@@ -109,7 +127,10 @@ class PumpSignalService : Service() {
                 BitpandaFusionClient().sync(this, force = true)
                 val shockNow = System.currentTimeMillis()
                 FusionSimStore.sync(this, DeepSeekPrimaryStore.state(this), shockNow)
-                PumpMachinePairCoordinator.sync(this, shockNow)
+                runCatching { PumpMachineStore.sync(this, shockNow) }
+                    .onFailure { recordIndependentPumpFailure("PUMP_MACHINE_SHOCK", it) }
+                runCatching { PumpMachine2Store.sync(this, shockNow) }
+                    .onFailure { recordIndependentPumpFailure("PUMP_MACHINE_2_SHOCK", it) }
             } finally {
                 shockCheckQueuedOrRunning.set(false)
             }
@@ -194,15 +215,16 @@ class PumpSignalService : Service() {
                 val appTrade = CycleStageGuard.run(
                     this, "APP_PAPER", { AppPaperSyncResult(AppPaperStore.state(this), false) }
                 ) { AppPaperStore.syncWithAlerts(this) }
-                val pumpPair = CycleStageGuard.run(
-                    this, "PUMP_MACHINE_PAIR", {
-                        PumpMachinePairSyncResult(
-                            PumpMachineSyncResult(PumpMachineStore.state(this), "ошибка пары Pump изолирована", 0.0),
-                            PumpMachine2SyncResult(PumpMachine2Store.state(this), "ошибка пары Pump изолирована", 0.0)
-                        )
+                val pumpMachine = CycleStageGuard.run(
+                    this, "PUMP_MACHINE", {
+                        PumpMachineSyncResult(PumpMachineStore.state(this), "ошибка Pump 3 изолирована", 0.0)
                     }
-                ) { PumpMachinePairCoordinator.sync(this) }
-                val pumpMachine = pumpPair.pump3
+                ) { PumpMachineStore.sync(this) }
+                CycleStageGuard.run(
+                    this, "PUMP_MACHINE_2", {
+                        PumpMachine2SyncResult(PumpMachine2Store.state(this), "ошибка Pump 2 изолирована", 0.0)
+                    }
+                ) { PumpMachine2Store.sync(this) }
                 CycleStageGuard.run(this, "FUSION_SIM", { FusionSimStore.state(this) }) {
                     FusionSimStore.sync(this, deepSeek)
                 }
