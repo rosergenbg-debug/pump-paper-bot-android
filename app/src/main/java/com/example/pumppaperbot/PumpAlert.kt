@@ -54,6 +54,7 @@ object PumpAlert {
     private const val deepSeekSoundTestNotificationId = 3521
     private const val experimentSoundTestNotificationId = 3522
     private const val sergeSoundTestNotificationId = 3523
+    private const val fastPositionWarningNotificationId = 3524
     private val rapidDropVibration = longArrayOf(0, 1000, 180, 1000, 180, 1600)
 
     fun ensureChannels(context: Context) {
@@ -587,13 +588,48 @@ object PumpAlert {
         )
     }
 
+    fun showFastPositionWarning(context: Context, decision: FastPositionWarningDecision) {
+        ensureChannels(context)
+        if (!ResearchModePolicy.userAlertsAllowed(context)) return
+        val shock = ShockReboundStore.state(context)
+        val title = if (decision.band >= FastPositionWarningPolicy.CRITICAL) {
+            "СЕРЖ: КРИТИЧНО • ПРОВЕРЬ ВЫХОД"
+        } else {
+            "СЕРЖ: БУДЬ ГОТОВ К ВЫХОДУ"
+        }
+        val ratio = decision.pressure.activityRatio60sTo5m?.let {
+            String.format(java.util.Locale.GERMANY, "×%.2f", it)
+        } ?: "ещё без 5м фона"
+        val text = String.format(
+            java.util.Locale.GERMANY,
+            "%s. Провал за локальные 3м %.2f%%, отскок %.2f%%, BUY за 60с %.0f%%, темп денег %s. Это предупреждение, не автоматическая продажа.",
+            decision.reason,
+            shock.drawdown3mPercent,
+            shock.rebound3mPercent,
+            decision.pressure.buyerShare60s,
+            ratio
+        )
+        showTradeNotification(
+            context,
+            positionSupervisorChannelId,
+            fastPositionWarningNotificationId,
+            title,
+            text,
+            if (decision.band >= FastPositionWarningPolicy.CRITICAL) 0xFFDA3633.toInt() else 0xFFFFC107.toInt(),
+            alwaysLoud = true
+        )
+    }
+
     fun showPositionSupervision(context: Context, state: PositionSupervisionState) {
         ensureChannels(context)
         if (!ResearchModePolicy.userAlertsAllowed(context)) return
         requireTradeNotificationsAvailable(context)
         val title = when {
             state.action == "CANCEL_EXIT" -> "ОТМЕНА ВЫХОДА — ПРОДОЛЖАЕМ"
-            state.exitAdvised && state.dangerLevel >= 9 -> "КРИТИЧЕСКАЯ СИТУАЦИЯ ${state.dangerLevel}/10"
+            state.dangerLevel >= PositionAlertPolicy.CRITICAL_LEVEL ->
+                "КРИТИЧНО • ПРОВЕРЬ ВЫХОД ${state.dangerLevel}/10"
+            !state.exitAdvised && state.dangerLevel >= PositionAlertPolicy.PREPARE_LEVEL ->
+                "БУДЬ ГОТОВ К ВЫХОДУ ${state.dangerLevel}/10"
             state.exitAdvised && state.conditionDelta < 0 ->
                 "СИТУАЦИЯ УХУДШАЕТСЯ ${state.conditionDelta}/−10"
             state.exitAdvised && state.conditionDelta > 0 ->
@@ -602,7 +638,7 @@ object PumpAlert {
         }
         val text = PositionSupervisorPolicy.statusText(state) +
             "\nМодель: ${state.model}. Решение о продаже остаётся за вами."
-        val urgentExit = state.exitAdvised || state.dangerLevel >= 8
+        val urgentExit = state.exitAdvised || state.dangerLevel >= PositionAlertPolicy.PREPARE_LEVEL
         val loud = urgentExit
         val notification = NotificationCompat.Builder(
             context,
@@ -681,7 +717,8 @@ object PumpAlert {
             appSoundTestNotificationId,
             deepSeekSoundTestNotificationId,
             experimentSoundTestNotificationId,
-            sergeSoundTestNotificationId
+            sergeSoundTestNotificationId,
+            fastPositionWarningNotificationId
         ).forEach(manager::cancel)
         val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             context.getSystemService(VibratorManager::class.java).defaultVibrator

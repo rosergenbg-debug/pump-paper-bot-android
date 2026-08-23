@@ -8,6 +8,7 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
+import org.json.JSONArray
 import org.json.JSONObject
 import java.util.ArrayDeque
 import java.util.concurrent.TimeUnit
@@ -17,7 +18,10 @@ import kotlin.math.max
  * Shadow-only, second-level market observer. It never creates a BUY or SELL.
  * PUMP/USDT is used for order-flow ratios; the Gemini paper account remains PUMP/EUR.
  */
-class MicroImpulseStream(context: Context) : WebSocketListener() {
+class MicroImpulseStream(
+    context: Context,
+    private val onUrgentMarketEvent: (() -> Unit)? = null
+) : WebSocketListener() {
     private val appContext = context.applicationContext
     private val handler = Handler(Looper.getMainLooper())
     private val client = OkHttpClient.Builder()
@@ -27,8 +31,11 @@ class MicroImpulseStream(context: Context) : WebSocketListener() {
     // Raw trades stay at the proven five-minute retention used by the existing algorithms.
     private val trades = ArrayDeque<MicroTrade>()
     private val bitcoinTrades = ArrayDeque<MicroTrade>()
-    // V5.18 keeps only 16 tiny minute buckets for the new 15m money-mass display.
-    private val moneyMinutes = ArrayDeque<MoneyMinuteBucket>()
+    // V5.20 restores the tiny minute buckets after reconnect/process restart.
+    // This is display/order-flow aggregate state only; no raw trade tape is persisted.
+    private val moneyMinutes = ArrayDeque<MoneyMinuteBucket>().apply {
+        addAll(MoneyFlowHistoryStore.load(appContext))
+    }
     private var socket: WebSocket? = null
     private var stopped = true
     private var bestBid = 0.0
@@ -180,7 +187,29 @@ class MicroImpulseStream(context: Context) : WebSocketListener() {
         val fifteen = trades.filter { it.at >= now - 15_000L }
         val sixty = trades.filter { it.at >= now - 60_000L }
         val fiveMinutes = trades.toList()
-        val fifteenMinuteKey = now / 60_000L - 14L
+        val threeMinutes = fiveMinutes.filter { it.at >= now - 3L * 60L * 1000L }
+        val old15Price = fifteen.firstOrNull()?.price ?: currentPrice
+        val change15 = if (old15Price > 0.0) (currentPrice / old15Price - 1.0) * 100.0 else 0.0
+        var runningPeak3m = threeMinutes.firstOrNull()?.price ?: currentPrice
+        var maxDrawdown3m = 0.0
+        var lowAtMaxDrawdown3m = currentPrice
+        threeMinutes.forEach { trade ->
+            if (trade.price > runningPeak3m) runningPeak3m = trade.price
+            if (runningPeak3m > 0.0) {
+                val drawdown = (1.0 - trade.price / runningPeak3m) * 100.0
+                if (drawdown > maxDrawdown3m) {
+                    maxDrawdown3m = drawdown
+                    lowAtMaxDrawdown3m = trade.price
+                }
+            }
+        }
+        val rebound3m = if (lowAtMaxDrawdown3m > 0.0 && currentPrice >= lowAtMaxDrawdown3m) {
+            (currentPrice / lowAtMaxDrawdown3m - 1.0) * 100.0
+        } else 0.0
+        val currentMinuteKey = now / 60_000L
+        val fiveMinuteKey = currentMinuteKey - 4L
+        val fifteenMinuteKey = currentMinuteKey - 14L
+        val fiveMinuteBuckets = moneyMinutes.filter { it.minuteKey >= fiveMinuteKey }
         val fifteenMinuteBuckets = moneyMinutes.filter { it.minuteKey >= fifteenMinuteKey }
         val buy5 = five.filter { it.aggressiveBuy }.sumOf { it.notional }
         val sell5 = five.filterNot { it.aggressiveBuy }.sumOf { it.notional }
@@ -190,8 +219,19 @@ class MicroImpulseStream(context: Context) : WebSocketListener() {
         val sell60 = sixty.filterNot { it.aggressiveBuy }.sumOf { it.notional }
         val buy5m = fiveMinutes.filter { it.aggressiveBuy }.sumOf { it.notional }
         val sell5m = fiveMinutes.filterNot { it.aggressiveBuy }.sumOf { it.notional }
+        val moneyBuy5m = fiveMinuteBuckets.sumOf { it.buyUsdt }
+        val moneySell5m = fiveMinuteBuckets.sumOf { it.sellUsdt }
         val buy15m = fifteenMinuteBuckets.sumOf { it.buyUsdt }
         val sell15m = fifteenMinuteBuckets.sumOf { it.sellUsdt }
+        val moneyCoverageSeconds = MoneyFlowCoveragePolicy.continuousSeconds(
+            moneyMinutes.map { it.minuteKey },
+            now
+        )
+        val turnover60 = buy60 + sell60
+        val turnover5m = moneyBuy5m + moneySell5m
+        val moneyActivityRatio = if (moneyCoverageSeconds >= 4L * 60L && turnover5m > 0.0) {
+            turnover60 / (turnover5m / 5.0)
+        } else null
         val buyRatio5 = ratio(buy5, sell5)
         val buyRatio15 = ratio(buy15, sell15)
         val buyRatio60 = ratio(buy60, sell60)
@@ -248,9 +288,7 @@ class MicroImpulseStream(context: Context) : WebSocketListener() {
                 ((bookImbalance ?: 0.0).coerceIn(0.0, 0.5) / 0.5 * 10.0)
             ).toInt().coerceIn(0, 100)
         val largeFlow = LargeFlowFingerprintPolicy.evaluate(fiveMinutes, now, currentPrice)
-        val flowHistorySeconds = if (connectedAt > 0L) {
-            ((now - connectedAt).coerceAtLeast(0L) / 1_000L).coerceAtMost(15L * 60L)
-        } else 0L
+        val flowHistorySeconds = moneyCoverageSeconds
 
         val snapshot = MicroImpulseSnapshot(
             connected = true,
@@ -277,14 +315,35 @@ class MicroImpulseStream(context: Context) : WebSocketListener() {
             largeFlow = largeFlow,
             error = "",
             aggressiveBuyPercent15m = buyRatio15m * 100.0,
-            buyNotional5m = buy5m,
-            sellNotional5m = sell5m,
+            buyNotional5m = moneyBuy5m,
+            sellNotional5m = moneySell5m,
             buyNotional15m = buy15m,
             sellNotional15m = sell15m,
             flowHistorySeconds = flowHistorySeconds
         )
+        MoneyFlowHistoryStore.save(appContext, moneyMinutes, now)
         MicroImpulseStore.save(appContext, snapshot)
         LiveMarketBreathingStore.append(appContext, snapshot)
+        ShockReboundStore.observe(
+            appContext,
+            ShockReboundObservation(
+                at = now,
+                price = currentPrice,
+                drawdown3mPercent = maxDrawdown3m,
+                rebound3mPercent = rebound3m,
+                change15sPercent = change15,
+                change60sPercent = change60,
+                buyer5sPercent = buyRatio5 * 100.0,
+                buyer15sPercent = buyRatio15 * 100.0,
+                buyer60sPercent = buyRatio60 * 100.0,
+                tradeAcceleration = tradeAcceleration,
+                moneyActivityRatio = moneyActivityRatio,
+                bookImbalance = bookImbalance
+            )
+        )
+        // Lightweight callback only. No DeepSeek request is made here; the service may refresh
+        // the read-only Bitpanda book only after a real shock/rebound needs execution checking.
+        onUrgentMarketEvent?.invoke()
     }
 
     private fun ratio(buy: Double, sell: Double): Double {
@@ -308,6 +367,73 @@ private data class MoneyMinuteBucket(
     var buyUsdt: Double = 0.0,
     var sellUsdt: Double = 0.0
 )
+
+object MoneyFlowCoveragePolicy {
+    fun continuousSeconds(minuteKeys: Collection<Long>, now: Long): Long {
+        if (minuteKeys.isEmpty()) return 0L
+        val keys = minuteKeys.toHashSet()
+        val current = now / 60_000L
+        val newest = when {
+            keys.contains(current) -> current
+            keys.contains(current - 1L) -> current - 1L
+            else -> return 0L
+        }
+        var oldest = newest
+        while (newest - oldest < 15L && keys.contains(oldest - 1L)) oldest--
+        val tailSeconds = if (newest == current) {
+            ((now % 60_000L) / 1_000L).coerceIn(0L, 59L)
+        } else 60L
+        return (((newest - oldest) * 60L) + tailSeconds).coerceIn(0L, 15L * 60L)
+    }
+}
+
+private object MoneyFlowHistoryStore {
+    private const val PREFS = "money_flow_history_v520"
+    private const val KEY = "minute_buckets"
+
+    fun load(context: Context, now: Long = System.currentTimeMillis()): List<MoneyMinuteBucket> {
+        val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY, null) ?: return emptyList()
+        return runCatching {
+            val array = JSONArray(raw)
+            val cutoff = now / 60_000L - 15L
+            buildList {
+                for (index in 0 until array.length()) {
+                    val item = array.optJSONObject(index) ?: continue
+                    val key = item.optLong("m", Long.MIN_VALUE)
+                    if (key < cutoff) continue
+                    add(
+                        MoneyMinuteBucket(
+                            minuteKey = key,
+                            buyUsdt = item.optDouble("b", 0.0).coerceAtLeast(0.0),
+                            sellUsdt = item.optDouble("s", 0.0).coerceAtLeast(0.0)
+                        )
+                    )
+                }
+            }.sortedBy { it.minuteKey }.takeLast(16)
+        }.getOrDefault(emptyList())
+    }
+
+    fun save(context: Context, buckets: Collection<MoneyMinuteBucket>, now: Long) {
+        val cutoff = now / 60_000L - 15L
+        val array = JSONArray()
+        buckets.asSequence()
+            .filter { it.minuteKey >= cutoff }
+            .sortedBy { it.minuteKey }
+            .toList()
+            .takeLast(16)
+            .forEach { bucket ->
+                array.put(
+                    JSONObject()
+                        .put("m", bucket.minuteKey)
+                        .put("b", bucket.buyUsdt)
+                        .put("s", bucket.sellUsdt)
+                )
+            }
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString(KEY, array.toString())
+            .apply()
+    }
+}
 
 data class MicroTrade(
     val at: Long,

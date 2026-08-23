@@ -58,10 +58,10 @@ class FusionAntiChurnPolicyTest {
     @Test
     fun profitDefenseArmsOnlyWhenProfitExistsAndFlowDeteriorates() {
         val deterioration = FusionFlowFrame(
-            instant = -7,
-            score5m = -3,
-            score15m = -2,
-            score20m = 1,
+            instant = -18,
+            score5m = -14,
+            score15m = -12,
+            score20m = -10,
             score30m = 4
         )
         val armed = FusionStabilityPolicy.evaluate(
@@ -92,6 +92,31 @@ class FusionAntiChurnPolicyTest {
 
         assertEquals("EXIT", stopped.action)
         assertTrue(stopped.reason.startsWith("PROFIT_DEFENSE_STOP"))
+    }
+
+    @Test
+    fun shortDipDoesNotArmProfitDefenseWhileFifteenAndTwentyMinutesStayPositive() {
+        val overnightLikeDip = FusionFlowFrame(
+            instant = -37,
+            score5m = -57,
+            score15m = 22,
+            score20m = 26,
+            score30m = 37
+        )
+        val decision = FusionStabilityPolicy.evaluate(
+            inPosition = true,
+            entryPrice = 100.0,
+            previous = FusionStabilityState(peakBid = 104.0),
+            frame = overnightLikeDip,
+            bid = 103.0,
+            feeRate = 0.0025,
+            now = 3_500_000L,
+            positionAgeMillis = 30L * 60L * 1000L
+        )
+
+        assertNull(decision.action)
+        assertFalse(decision.nextState.profitDefenseArmed)
+        assertTrue(decision.activeStopPrice < 103.0)
     }
 
     @Test

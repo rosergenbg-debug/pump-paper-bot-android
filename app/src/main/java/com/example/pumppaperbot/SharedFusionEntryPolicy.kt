@@ -5,16 +5,16 @@ import android.content.Context
 /**
  * V5.22 single source of truth for entry timing shared by Fusion and Pump Machine.
  *
- * Both paper accounts consume the same short-lived market observation but keep their own
- * FusionStabilityState (confirmations, cooldowns and later exits). This means the entry brain
- * is physically one implementation without forcing the two accounts to remain synchronized
- * after one of them exits earlier.
+ * Fusion consumes the same short-lived observation through its own stability state. Since
+ * V5.27, PM2/PM3 additionally share a persisted pair-entry state and wait for each other
+ * between market episodes; their exit contracts remain independent.
  */
 data class SharedFusionEntryObservation(
     val frame: FusionFlowFrame?,
     val shockReady: Boolean,
     val sampledAt: Long,
-    val sampleBucket: Long
+    val sampleBucket: Long,
+    val breathing: LiveMarketBreathingSnapshot? = null
 )
 
 data class SharedFusionEntryDecision(
@@ -39,7 +39,8 @@ object SharedFusionEntryObservationStore {
             frame = FusionFlowPolicy.frame(breathing),
             shockReady = shock.fresh(now) && shock.ready,
             sampledAt = now,
-            sampleBucket = bucket
+            sampleBucket = bucket,
+            breathing = breathing
         ).also {
             cachedBucket = bucket
             cached = it

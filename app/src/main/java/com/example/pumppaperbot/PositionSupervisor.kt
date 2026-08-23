@@ -133,6 +133,8 @@ data class PositionSupervisionState(
 
 internal object PositionAlertPolicy {
     const val MIN_REPEAT_INTERVAL_MILLIS = 10L * 60L * 1000L
+    const val PREPARE_LEVEL = 7
+    const val CRITICAL_LEVEL = 9
 
     fun shouldAlert(
         previous: PositionSupervisionState,
@@ -142,15 +144,22 @@ internal object PositionAlertPolicy {
         conditionDelta: Int,
         now: Long
     ): Boolean {
-        if (firstExit) return true
-        if (!stillExit) return false
         val notifiedDanger = previous.lastAlertDanger.takeIf { previous.lastAlertAt > 0L }
             ?: previous.dangerLevel
         val notifiedDelta = previous.lastAlertConditionDelta.takeIf { previous.lastAlertAt > 0L }
             ?: previous.conditionDelta
+        if (dangerLevel >= 10 && notifiedDanger < 10) return true
+        if (dangerLevel >= CRITICAL_LEVEL && notifiedDanger < CRITICAL_LEVEL) return true
+        if (firstExit) return true
+        if (!stillExit) {
+            if (dangerLevel < PREPARE_LEVEL) return false
+            val firstPrepare = notifiedDanger < PREPARE_LEVEL
+            val rearmedAfterRecovery = previous.dangerLevel <= 4 &&
+                (previous.lastAlertAt <= 0L || now - previous.lastAlertAt >= MIN_REPEAT_INTERVAL_MILLIS)
+            return firstPrepare || rearmedAfterRecovery
+        }
         val materiallyWorse = dangerLevel > notifiedDanger || conditionDelta <= notifiedDelta - 2
         if (!materiallyWorse) return false
-        if (dangerLevel >= 10 && notifiedDanger < 10) return true
         return previous.lastAlertAt <= 0L || now < previous.lastAlertAt ||
             now - previous.lastAlertAt >= MIN_REPEAT_INTERVAL_MILLIS
     }

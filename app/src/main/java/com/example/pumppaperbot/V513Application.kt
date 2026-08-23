@@ -180,10 +180,10 @@ internal object V513MainUiInjector {
     }
 
     private fun installMoneyFlowStrip(activity: MainActivity) {
-        val root = activity.findViewById<View>(R.id.tvLatestSignal)?.parent as? LinearLayout ?: return
+        val chart = activity.findViewById<StrategyChartView>(R.id.chart) ?: return
+        val root = chart.parent as? LinearLayout ?: return
         if (root.findViewWithTag<MoneyFlowStripView>(MoneyFlowStripView.VIEW_TAG) != null) return
-        val anchor = activity.findViewById<View>(R.id.tvLatestSignal) ?: return
-        val index = root.indexOfChild(anchor)
+        val index = root.indexOfChild(chart)
         if (index < 0) return
         val strip = MoneyFlowStripView(activity).apply {
             minimumHeight = dp(activity, 104)
@@ -195,7 +195,10 @@ internal object V513MainUiInjector {
             LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 dp(activity, 104)
-            ).apply { topMargin = dp(activity, 7) }
+            ).apply {
+                topMargin = dp(activity, 8)
+                bottomMargin = dp(activity, 2)
+            }
         )
     }
 
@@ -289,3 +292,29 @@ internal object V518BigOverviewInjector {
 
 // Compatibility alias for the compact V5.13 presentation helper.
 typealias MicroImpulseState = MicroImpulseSnapshot
+
+
+/** V5.23 one-shot reset implementation retained but intentionally dormant in V5.24. */
+internal object CleanFusionLabResetV523 {
+    private const val MARKER_PREFS = "v523_clean_fusion_lab_reset"
+    private const val DONE = "done"
+    private const val PUMP_MACHINE_PREFS = "pump_machine_paper_v521"
+
+    @Synchronized
+    fun ensure(context: android.content.Context) {
+        val marker = context.getSharedPreferences(MARKER_PREFS, android.content.Context.MODE_PRIVATE)
+        if (marker.getBoolean(DONE, false)) return
+
+        FusionSimStore.reset(context)
+        context.getSharedPreferences(PUMP_MACHINE_PREFS, android.content.Context.MODE_PRIVATE)
+            .edit().clear().commit()
+
+        marker.edit().putBoolean(DONE, true).commit()
+        UnifiedResearchLog.record(
+            context,
+            "V523_LAB",
+            "START",
+            "Fusion и Pump Machine сброшены один раз: €1000 / 0 сделок / чистые entry-cooldown состояния"
+        )
+    }
+}

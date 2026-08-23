@@ -6,10 +6,13 @@ import android.content.Intent
 import android.content.res.ColorStateList
 import android.content.pm.PackageManager
 import android.graphics.Color
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
+import android.provider.Settings
 import android.view.View
 import android.widget.Button
 import android.widget.TextView
@@ -84,6 +87,7 @@ class MainActivity : AppCompatActivity() {
     private var btnGeminiExitExperiment: Button? = null
     private var btnUserPaper: Button? = null
     private var btnFusionSim: Button? = null
+    private var btnPumpMachine2: Button? = null
     private var btnCompetition: Button? = null
     private var btnCriticalOverview: Button? = null
     private var btnDeepSeekApi: Button? = null
@@ -91,6 +95,7 @@ class MainActivity : AppCompatActivity() {
     private var btnBitpandaFusion: Button? = null
     private var btnUnifiedLog: Button? = null
     private var evidenceMemoryDialogVisible = false
+    private var backgroundPersistencePromptVisible = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -138,6 +143,7 @@ class MainActivity : AppCompatActivity() {
         btnGeminiExitExperiment = findViewById(R.id.btnGeminiExitExperiment)
         btnUserPaper = findViewById(R.id.btnUserPaper)
         btnFusionSim = findViewById(R.id.btnFusionSim)
+        btnPumpMachine2 = findViewById(R.id.btnPumpMachine2)
         btnCompetition = findViewById(R.id.btnCompetition)
         btnCriticalOverview = findViewById(R.id.btnCriticalOverview)
         btnDeepSeekApi = findViewById(R.id.btnDeepSeekApi)
@@ -150,6 +156,7 @@ class MainActivity : AppCompatActivity() {
         if (PumpBotEngine.snapshot(this).running) {
             ContextCompat.startForegroundService(this, Intent(this, PumpSignalService::class.java))
             schedulePeriodicMonitor()
+            handler.postDelayed({ maybeEnsureBackgroundPersistence() }, 1200L)
         }
 
         btnRisk30?.setOnClickListener {
@@ -184,7 +191,7 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, AppPaperActivity::class.java))
         }
         btnGeminiExperiment?.setOnClickListener {
-            startActivity(Intent(this, GeminiExperimentActivity::class.java))
+            startActivity(Intent(this, PumpMachineActivity::class.java))
         }
         btnGeminiExitExperiment?.setOnClickListener {
             startActivity(Intent(this, GeminiExitExperimentActivity::class.java))
@@ -194,6 +201,9 @@ class MainActivity : AppCompatActivity() {
         }
         btnFusionSim?.setOnClickListener {
             startActivity(Intent(this, BitpandaFusionActivity::class.java))
+        }
+        btnPumpMachine2?.setOnClickListener {
+            startActivity(Intent(this, PumpMachineActivity::class.java))
         }
         btnCompetition?.setOnClickListener {
             startActivity(Intent(this, CompetitionActivity::class.java))
@@ -251,6 +261,7 @@ class MainActivity : AppCompatActivity() {
         PumpAlert.ensureChannels(this)
         ContextCompat.startForegroundService(this, Intent(this, PumpSignalService::class.java))
         schedulePeriodicMonitor()
+        handler.postDelayed({ maybeEnsureBackgroundPersistence() }, 500L)
         updateUi()
     }
 
@@ -474,7 +485,8 @@ class MainActivity : AppCompatActivity() {
         }
         val accountPrice = PaperExecutionPolicy.displayPrice(snapshot, now)
         val appAccount = AppPaperStore.state(this)
-        val geminiAccount = GeminiPaperStore.state(this).portfolio
+        val pumpMachineAccount = PumpMachineStore.state(this)
+        val pumpMachine2Account = PumpMachine2Store.state(this)
         val geminiExitExperiment = GeminiExitExperimentStore.state(this)?.portfolio
             ?: GeminiPaperPortfolio()
         val sergeAccount = UserPaperStore.markToMarket(this, accountPrice)
@@ -487,10 +499,25 @@ class MainActivity : AppCompatActivity() {
             appAccount.value(accountPrice),
             appAccount.profitPercent(accountPrice)
         )
+        val pumpMachineValue = PumpMachinePolicy.netLiquidationValue(
+            pumpMachineAccount,
+            fusionMarket.bid.takeIf { fusionMarket.fresh(now) } ?: accountPrice,
+            fusionMarket.feeRate
+        )
         btnGeminiExperiment?.text = accountButtonText(
-            "DEEPSIG",
-            geminiAccount.value(accountPrice),
-            geminiAccount.profitPercent(accountPrice)
+            "PUMP 3% NET",
+            pumpMachineValue,
+            (pumpMachineValue / FusionSimPortfolio.START_BALANCE - 1.0) * 100.0
+        )
+        val pumpMachine2Value = PumpMachine2Policy.netLiquidationValue(
+            pumpMachine2Account,
+            fusionMarket.bid.takeIf { fusionMarket.fresh(now) } ?: accountPrice,
+            fusionMarket.feeRate
+        )
+        btnPumpMachine2?.text = accountButtonText(
+            "PUMP 2% NET",
+            pumpMachine2Value,
+            (pumpMachine2Value / FusionSimPortfolio.START_BALANCE - 1.0) * 100.0
         )
         btnGeminiExitExperiment?.text = accountButtonText(
             "DEEPSIGX",
@@ -789,7 +816,7 @@ class MainActivity : AppCompatActivity() {
         now: Long
     ) {
         if (ResearchModePolicy.ENABLED) {
-            val inPosition = GeminiPaperStore.state(this).portfolio.inPosition
+            val inPosition = PumpMachineStore.state(this).inPosition
             val fresh = DeepSeekPrimaryPolicy.isFreshSignal(primary, now)
             val card = DeepSeekResearchCardPolicy.render(primary, inPosition, fresh)
             tvDeepSeekActionLevel?.text = card.text
@@ -863,8 +890,8 @@ class MainActivity : AppCompatActivity() {
                 AppPaperStore.state(this@MainActivity).trades.lastOrNull()?.let {
                     add(PaperEvent("APP", it.action, it.time, it.reason))
                 }
-                GeminiPaperStore.state(this@MainActivity).portfolio.trades.lastOrNull()?.let {
-                    add(PaperEvent("DEEPSIG", it.action, it.time, it.reason))
+                PumpMachineStore.state(this@MainActivity).trades.lastOrNull()?.let {
+                    add(PaperEvent("PUMP MACHINE", it.action, it.time, it.reason))
                 }
                 GeminiExitExperimentStore.state(this@MainActivity)?.portfolio?.trades?.lastOrNull()?.let {
                     add(PaperEvent("DEEPSIGX", it.action, it.time, it.reason))
@@ -1084,6 +1111,40 @@ class MainActivity : AppCompatActivity() {
                 (if (fusionPriority.active) "MAX CONTROL • PRO • 1 МИН" else "FUSIONSIM РАБОТАЕТ")
             else -> "BITPANDA • READ-ONLY\nНЕТ СВЕЖИХ ДАННЫХ\nпроверить соединение"
         }
+    }
+
+    private fun maybeEnsureBackgroundPersistence() {
+        if (backgroundPersistencePromptVisible || !PumpBotEngine.snapshot(this).running) return
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return
+        val power = getSystemService(PowerManager::class.java)
+        if (power.isIgnoringBatteryOptimizations(packageName)) return
+
+        backgroundPersistencePromptVisible = true
+        AlertDialog.Builder(this)
+            .setTitle("PUMP • РАБОТА В ФОНЕ")
+            .setMessage(
+                "Чтобы поток 1/5/15 минут, Fusion и предупреждения продолжали работать, когда открыт YouTube или другое приложение, " +
+                    "разрешите PUMP работать без оптимизации батареи. Постоянное уведомление монитора останется в шторке, пока монитор включён."
+            )
+            .setPositiveButton("РАЗРЕШИТЬ ВСЕГДА") { _, _ ->
+                backgroundPersistencePromptVisible = false
+                requestBatteryOptimizationExemption()
+            }
+            .setNegativeButton("ПОЗЖЕ") { _, _ -> backgroundPersistencePromptVisible = false }
+            .setOnCancelListener { backgroundPersistencePromptVisible = false }
+            .show()
+    }
+
+    private fun requestBatteryOptimizationExemption() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return
+        val direct = Intent(
+            Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+            Uri.parse("package:$packageName")
+        )
+        runCatching { startActivity(direct) }
+            .onFailure {
+                runCatching { startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
+            }
     }
 
     private fun requestNotificationPermission() {

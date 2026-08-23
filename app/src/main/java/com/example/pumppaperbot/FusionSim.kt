@@ -146,9 +146,9 @@ data class FusionFlowFrame(
 
     /** Earlier warning: the medium horizons are no longer just noisy around zero. */
     val deteriorationSignal: Boolean get() {
-        val mediumNegative = listOf(score5m, score15m, score20m).count { it <= -2 } >= 2
-        val fastBreak = instant <= -6 && score5m <= -2
-        return mediumNegative || fastBreak
+        val mediumNegative = listOf(score5m, score15m, score20m).count { it <= -8 } >= 2
+        val mediumCoreWeak = score15m <= -8 || score20m <= -8
+        return mediumNegative && mediumCoreWeak
     }
 
     /** Full system exit still uses current/5/15/20, but ignores tiny -1/-1/-1/-1 chatter. */
@@ -309,6 +309,8 @@ object FusionStabilityPolicy {
     const val ENTRY_CONFIRMATIONS = 2
     const val ENTRY_CONFIRM_MIN_MILLIS = 60L * 1000L
     const val MIN_HOLD_MILLIS = 10L * 60L * 1000L
+    const val SHOCK_MIN_HOLD_MILLIS = 2L * 60L * 1000L
+    const val SHOCK_FAILURE_MIN_AGE_MILLIS = 15_000L
     const val EXIT_ARM_TTL_MILLIS = 8L * 60L * 1000L
     const val REQUIRED_DOWN_FROM_ARM_PERCENT = 0.20
     const val REQUIRED_PULLBACK_FROM_PEAK_PERCENT = 0.50
@@ -325,78 +327,23 @@ object FusionStabilityPolicy {
         bid: Double,
         feeRate: Double,
         now: Long,
-        positionAgeMillis: Long = Long.MAX_VALUE
+        positionAgeMillis: Long = Long.MAX_VALUE,
+        shockReady: Boolean = false,
+        shockFailed: Boolean = false,
+        shockEntry: Boolean = false,
+        entryObservation: SharedFusionEntryObservation? = null
     ): FusionStabilityDecision {
         if (bid <= 0.0) return FusionStabilityDecision(null, previous, 0.0, "Нет свежего bid")
 
         if (!inPosition) {
-            if (previous.cooldownUntil > now) {
-                val leftSeconds = ((previous.cooldownUntil - now + 999L) / 1000L).coerceAtLeast(1L)
-                return FusionStabilityDecision(
-                    null,
-                    previous.copy(
-                        entryStreak = 0,
-                        entryCandidateAt = 0L,
-                        exitStreak = 0,
-                        exitArmedAt = 0L,
-                        exitArmedBid = 0.0,
-                        peakBid = 0.0,
-                        profitDefenseArmed = false
-                    ),
-                    0.0,
-                    "COOLDOWN: повторный вход заблокирован ещё ${leftSeconds}с после предыдущего выхода"
-                )
-            }
-
-            val buy = frame?.buySignal == true
-            if (!buy) {
-                return FusionStabilityDecision(
-                    null,
-                    previous.copy(
-                        entryStreak = 0,
-                        entryCandidateAt = 0L,
-                        exitStreak = 0,
-                        exitArmedAt = 0L,
-                        exitArmedBid = 0.0,
-                        peakBid = 0.0,
-                        profitDefenseArmed = false,
-                        cooldownUntil = 0L
-                    ),
-                    0.0,
-                    "Условия BUY ещё не собраны"
-                )
-            }
-
-            val candidateAt = if (previous.entryStreak > 0 && previous.entryCandidateAt > 0L) {
-                previous.entryCandidateAt
-            } else now
-            val streak = (previous.entryStreak + 1).coerceAtMost(ENTRY_CONFIRMATIONS)
-            val confirmedByTime = now - candidateAt >= ENTRY_CONFIRM_MIN_MILLIS
-            val next = previous.copy(
-                entryStreak = streak,
-                entryCandidateAt = candidateAt,
-                exitStreak = 0,
-                exitArmedAt = 0L,
-                exitArmedBid = 0.0,
-                peakBid = 0.0,
-                profitDefenseArmed = false,
-                cooldownUntil = 0L
+            val observation = entryObservation ?: SharedFusionEntryObservation(
+                frame = frame,
+                shockReady = shockReady,
+                sampledAt = now,
+                sampleBucket = now / 15_000L
             )
-            return if (streak >= ENTRY_CONFIRMATIONS && confirmedByTime) {
-                FusionStabilityDecision(
-                    "BUY", next, 0.0,
-                    "ENTRY_CONFIRMED: согласование сейчас/5/15/30 пережило минимум два наблюдения и 60с; импульс не ловим одним тиком"
-                )
-            } else {
-                FusionStabilityDecision(
-                    null, next, 0.0,
-                    if (frame?.strongBuy == true) {
-                        "ENTRY_ARMED_STRONG: сигнал сильный, но V5.16 всё равно ждёт устойчивое подтверждение"
-                    } else {
-                        "ENTRY_ARMED: положительный поток подтверждаем во времени перед BUY"
-                    }
-                )
-            }
+            val shared = SharedFusionEntryPolicy.evaluate(previous, observation, now)
+            return FusionStabilityDecision(shared.action, shared.nextState, 0.0, shared.reason)
         }
 
         val peak = max(max(previous.peakBid, bid), entryPrice)
@@ -417,6 +364,13 @@ object FusionStabilityPolicy {
             profitDefenseArmed = defenseArmed,
             cooldownUntil = 0L
         )
+
+        if (shockEntry && shockFailed && positionAgeMillis >= SHOCK_FAILURE_MIN_AGE_MILLIS) {
+            return FusionStabilityDecision(
+                "EXIT", basePositionState, activeStop,
+                "SHOCK_REBOUND_FAILED: быстрый отскок после провала сорвался; продавцы вернули контроль, paper-позицию закрываем без ожидания медленных горизонтов"
+            )
+        }
 
         if (activeStop > 0.0 && bid <= activeStop) {
             val tag = if (defenseArmed) "PROFIT_DEFENSE_STOP" else "HARD_TRAILING_STOP"
@@ -478,7 +432,8 @@ object FusionStabilityPolicy {
         val actualDecline = downFromArm >= REQUIRED_DOWN_FROM_ARM_PERCENT ||
             pullbackFromPeak >= REQUIRED_PULLBACK_FROM_PEAK_PERCENT
         val exitConfirmed = severeExit || streak >= 2
-        val holdLockActive = positionAgeMillis < MIN_HOLD_MILLIS
+        val holdLimit = if (shockEntry) SHOCK_MIN_HOLD_MILLIS else MIN_HOLD_MILLIS
+        val holdLockActive = positionAgeMillis < holdLimit
 
         if (armed && actualDecline && exitConfirmed && (!holdLockActive || severeExit)) {
             return FusionStabilityDecision(
@@ -488,7 +443,7 @@ object FusionStabilityPolicy {
             )
         }
         if (rawExit && holdLockActive && !severeExit) {
-            val left = ((MIN_HOLD_MILLIS - positionAgeMillis).coerceAtLeast(0L) / 1000L)
+            val left = ((holdLimit - positionAgeMillis).coerceAtLeast(0L) / 1000L)
             return FusionStabilityDecision(
                 null, next, activeStop,
                 "HOLD_LOCK: обычный системный EXIT пока не исполняем; минимальное удержание ещё ${left}с, аварийный stop остаётся активным"
@@ -654,8 +609,8 @@ object FusionSimStore {
         val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         if (!p.getBoolean(ACTIVATED, false)) activate(context, deepSeek.lastSuccess)
         val current = state(context)
-        val breathing = LiveMarketBreathingStore.snapshot(context, now)
-        val frame = FusionFlowPolicy.frame(breathing)
+        val entryObservation = SharedFusionEntryObservationStore.snapshot(context, now)
+        val frame = entryObservation.frame
         val market = BitpandaFusionStore.state(context)
         if (!market.fresh(now)) {
             if (frame != null && (frame.buySignal || frame.exitSignal)) {
@@ -675,6 +630,10 @@ object FusionSimStore {
         val positionAgeMillis = if (tracked.inPosition && lastBuyAt > 0L) {
             (now - lastBuyAt).coerceAtLeast(0L)
         } else Long.MAX_VALUE
+        val shock = ShockReboundStore.state(context)
+        val shockFresh = shock.fresh(now)
+        val lastBuyReason = tracked.trades.asReversed().firstOrNull { it.action == "BUY" }?.reason.orEmpty()
+        val shockEntry = tracked.inPosition && lastBuyReason.contains("SHOCK_REBOUND_ENTRY")
         val plan = FusionStabilityPolicy.evaluate(
             inPosition = tracked.inPosition,
             entryPrice = tracked.entryPrice,
@@ -683,7 +642,11 @@ object FusionSimStore {
             bid = market.bid,
             feeRate = market.feeRate,
             now = now,
-            positionAgeMillis = positionAgeMillis
+            positionAgeMillis = positionAgeMillis,
+            shockReady = !tracked.inPosition && shockFresh && shock.ready,
+            shockFailed = shockFresh && shock.failed,
+            shockEntry = shockEntry,
+            entryObservation = entryObservation
         )
         if (plan.nextState != previousStability) saveStability(context, plan.nextState)
         val action = plan.action ?: return tracked
@@ -731,7 +694,11 @@ object FusionSimStore {
                     context,
                     "FUSION_PRIORITY",
                     "START",
-                    "Виртуальный BUY исполнен по ask; комиссия 0,25% учтена; V5.16 подтверждает вход во времени и не ловит один зелёный тик"
+                    if (reason.contains("SHOCK_REBOUND_ENTRY")) {
+                        "Виртуальный BUY исполнен по ask после подтверждённого быстрого отскока; комиссия 0,25% учтена; реальных ордеров нет"
+                    } else {
+                        "Виртуальный BUY исполнен по ask; комиссия 0,25% учтена; обычный вход подтверждён во времени и не ловит один зелёный тик"
+                    }
                 )
                 tracked.inPosition && !next.inPosition -> {
                     val cooldownSeconds = ((afterTradeState.cooldownUntil - now).coerceAtLeast(0L) / 1000L)

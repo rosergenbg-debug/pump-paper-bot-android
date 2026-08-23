@@ -114,11 +114,15 @@ object AppLedHybridPolicy {
             abs(evidence.bitcoinChange60sPercent) <= 0.10 &&
             evidence.bitcoinBuyerPercent60s in 44.0..56.0
 
+        val strongLocalContinuation = evidence.aiFresh &&
+            evidence.aiAction in setOf("WATCH", "HOLD") &&
+            evidence.aiReadiness >= 6 && evidence.aiDirection >= 25 && evidence.aiConfidence >= 60 &&
+            microBuyers && five >= 30 && fifteen >= 18 && thirty >= 5
         val moderateWatchPromotion = evidence.aiFresh &&
             evidence.aiAction in setOf("WATCH", "HOLD") &&
             evidence.aiReadiness >= 8 && evidence.aiDirection >= 50 && evidence.aiConfidence >= 65 &&
             localEntryConfirmed && mediumSupport
-        val effectiveAiAction = if (moderateWatchPromotion) {
+        val effectiveAiAction = if (moderateWatchPromotion || strongLocalContinuation) {
             "BUY"
         } else if (evidence.aiFresh) {
             DeepSeekTradeIntentPolicy.normalize(
@@ -165,7 +169,7 @@ object AppLedHybridPolicy {
         val promotedDeepSeekEntry = evidence.aiAction in setOf("WATCH", "HOLD") &&
             evidence.aiReadiness >= 8 && evidence.aiDirection >= 50 && evidence.aiConfidence >= 65
         val independentDeepSeekSetup = evidence.aiFresh && effectiveAiAction == "BUY" &&
-            (explicitDeepSeekEntry || promotedDeepSeekEntry) &&
+            (explicitDeepSeekEntry || promotedDeepSeekEntry || strongLocalContinuation) &&
             localEntryConfirmed && mediumSupport && !structuralWeakness &&
             !bitcoinSystemicWeak && !evidence.appSellSignal
 
@@ -179,6 +183,8 @@ object AppLedHybridPolicy {
         val reason = when {
             tradeAction == "BUY" && appConfirmedEntry ->
                 "APP подтвердил вход, а поток покупателей и движение 5–15 минут согласуются."
+            independentDeepSeekSetup && strongLocalContinuation ->
+                "DeepSig осторожен, но сильный 5/15/30-минутный поток и свежие покупатели подтвердили продолжение; запускается независимая проверка BUY."
             independentDeepSeekSetup && moderateWatchPromotion ->
                 "DeepSig дал сильный 8/10 WATCH/HOLD, 5–15 минут подтвердили покупателей, а 30 минут не разваливается; запускается проверка BUY."
             independentDeepSeekSetup ->

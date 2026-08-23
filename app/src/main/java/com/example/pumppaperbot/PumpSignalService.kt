@@ -13,6 +13,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 class PumpSignalService : Service() {
     private val handler = Handler(Looper.getMainLooper())
     private val executor: ExecutorService = Executors.newSingleThreadExecutor()
+    private val shockExecutor: ExecutorService = Executors.newSingleThreadExecutor()
+    private val shockCheckQueuedOrRunning = AtomicBoolean(false)
     private val market = MarketSyncClient()
     private val eventRadar = EventRadarClient()
     private val pumpEcosystem = PumpEcosystemClient()
@@ -32,7 +34,7 @@ class PumpSignalService : Service() {
         super.onCreate()
         destroyed = false
         PumpAlert.ensureChannels(this)
-        microImpulse = MicroImpulseStream(this)
+        microImpulse = MicroImpulseStream(this) { requestFastShockCheck() }
         startForeground(
             PumpAlert.monitorId(),
             PumpAlert.monitorNotification(
@@ -51,15 +53,68 @@ class PumpSignalService : Service() {
         return START_STICKY
     }
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        // android:stopWithTask=false + START_STICKY: removing the UI task must not be
+        // interpreted as turning the monitor off. A real user Stop still calls stopService().
+        GeminiPaperStore.recordActivity(
+            this,
+            "ФОН",
+            "HOLD",
+            "Окно приложения закрыто/смахнуто; foreground-монитор продолжает работу"
+        )
+        super.onTaskRemoved(rootIntent)
+    }
+
     override fun onDestroy() {
         destroyed = true
         handler.removeCallbacks(loop)
         microImpulse.stop()
         executor.shutdownNow()
+        shockExecutor.shutdownNow()
         super.onDestroy()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    private fun requestFastShockCheck() {
+        if (!shockCheckQueuedOrRunning.compareAndSet(false, true)) return
+        shockExecutor.execute {
+            try {
+                val now = System.currentTimeMillis()
+                // When Serge owns a position, this produces only evidence-based exit warnings;
+                // entry chatter and virtual-agent trade sounds are handled separately below.
+                FastPositionWarningStore.sync(this, now)
+
+                val pumpMachineFast = PumpMachineStore.state(this)
+                val pumpMachine2Fast = PumpMachine2Store.state(this)
+                val entryObservationFast = SharedFusionEntryObservationStore.snapshot(this, now)
+                val pairFastCandidate = !pumpMachineFast.inPosition && !pumpMachine2Fast.inPosition &&
+                    PumpProfitEngineV526.isFastCandidate(PumpProfitModeV526.PUMP_3, entryObservationFast)
+                if (pumpMachineFast.inPosition || pumpMachine2Fast.inPosition || pairFastCandidate) {
+                    val venue = BitpandaFusionStore.state(this)
+                    if (!venue.fresh(now) || now - venue.lastSuccess >= 15_000L) {
+                        BitpandaFusionClient().sync(this, force = true)
+                    }
+                    val fastNow = System.currentTimeMillis()
+                    PumpMachinePairCoordinator.sync(this, fastNow)
+                }
+
+                val shock = ShockReboundStore.state(this)
+                if (!shock.active || !shock.fresh(now)) return@execute
+                val fusion = FusionSimStore.state(this)
+                if (!shock.ready && !fusion.inPosition && !pumpMachineFast.inPosition && !pumpMachine2Fast.inPosition) return@execute
+
+                // A fast rebound cannot wait for the 1-3 minute full cycle. Refresh only the
+                // read-only execution book and run the local paper engines; no AI call is made.
+                BitpandaFusionClient().sync(this, force = true)
+                val shockNow = System.currentTimeMillis()
+                FusionSimStore.sync(this, DeepSeekPrimaryStore.state(this), shockNow)
+                PumpMachinePairCoordinator.sync(this, shockNow)
+            } finally {
+                shockCheckQueuedOrRunning.set(false)
+            }
+        }
+    }
 
     private fun checkNow() {
         if (!cycleQueuedOrRunning.compareAndSet(false, true)) {
@@ -135,12 +190,19 @@ class PumpSignalService : Service() {
                     GeminiPaperStore.markDataReady(this, source, startedAt)
                 }
                 val snapshot = PumpBotEngine.snapshot(this)
+                val userPositionOpen = snapshot.waitMode == "SELL" && snapshot.entryPrice > 0.0
                 val appTrade = CycleStageGuard.run(
                     this, "APP_PAPER", { AppPaperSyncResult(AppPaperStore.state(this), false) }
                 ) { AppPaperStore.syncWithAlerts(this) }
-                val deepSeekPaper = CycleStageGuard.run(
-                    this, "DEEPSIG_PAPER", { DeepSeekPaperOutcome("ошибка модуля изолирована") }
-                ) { DeepSeekPaperCoordinator().sync(this, deepSeek, source) }
+                val pumpPair = CycleStageGuard.run(
+                    this, "PUMP_MACHINE_PAIR", {
+                        PumpMachinePairSyncResult(
+                            PumpMachineSyncResult(PumpMachineStore.state(this), "ошибка пары Pump изолирована", 0.0),
+                            PumpMachine2SyncResult(PumpMachine2Store.state(this), "ошибка пары Pump изолирована", 0.0)
+                        )
+                    }
+                ) { PumpMachinePairCoordinator.sync(this) }
+                val pumpMachine = pumpPair.pump3
                 CycleStageGuard.run(this, "FUSION_SIM", { FusionSimStore.state(this) }) {
                     FusionSimStore.sync(this, deepSeek)
                 }
@@ -155,13 +217,15 @@ class PumpSignalService : Service() {
                     } else false
                 }
                 val signalAlerted = CycleStageGuard.run(this, "SIGNAL_ALERT", { false }) {
-                    if (!rapidDropAlerted && !appTrade.tradeAlerted && PumpBotEngine.shouldAlert(this, snapshot)) {
+                    if (!rapidDropAlerted && !appTrade.tradeAlerted &&
+                        (!userPositionOpen || snapshot.sellSignal) && PumpBotEngine.shouldAlert(this, snapshot)
+                    ) {
                         PumpAlert.showSignal(this, snapshot)
                         PumpBotEngine.markAlerted(this, snapshot)
                         true
                     } else false
                 }
-                if (!rapidDropAlerted && !appTrade.tradeAlerted && !signalAlerted &&
+                if (!userPositionOpen && !rapidDropAlerted && !appTrade.tradeAlerted && !signalAlerted &&
                     EventRadarStore.shouldAlert(this, eventState)
                 ) {
                     CycleStageGuard.run(this, "EVENT_ALERT", { Unit }) {
@@ -184,7 +248,7 @@ class PumpSignalService : Service() {
                     source,
                     startedAt,
                     finishedAt + cycleIntervalMillis,
-                    "проверка завершена; DeepSig: ${deepSeek.action}; виртуальный счёт: ${deepSeekPaper.status}; Gemini контролирует только открытую позицию Сержа",
+                    "проверка завершена; DeepSeek аналитик: ${deepSeek.action}; Pump Machine: ${pumpMachine.status}; Gemini контролирует только открытую позицию Сержа",
                     finishedAt
                 )
             } catch (error: Exception) {

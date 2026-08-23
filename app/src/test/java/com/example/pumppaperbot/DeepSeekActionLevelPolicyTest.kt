@@ -139,10 +139,10 @@ class DeepSeekActionLevelPolicyTest {
         assertEquals(DeepSeekActionBand.YELLOW, result.band)
     }
 
-    @Test fun `executed exits always notify while user is in position`() {
-        assertTrue(VirtualTradeAlertPolicy.shouldNotify("SELL", userPositionOpen = true))
-        assertTrue(VirtualTradeAlertPolicy.shouldNotify(StrategyV2.ACTION_SELL_HALF, userPositionOpen = true))
-        assertTrue(VirtualTradeAlertPolicy.shouldNotify("BUY", userPositionOpen = true))
+    @Test fun `virtual agent trade sounds are muted while Serge is in position`() {
+        assertFalse(VirtualTradeAlertPolicy.shouldNotify("SELL", userPositionOpen = true))
+        assertFalse(VirtualTradeAlertPolicy.shouldNotify(StrategyV2.ACTION_SELL_HALF, userPositionOpen = true))
+        assertFalse(VirtualTradeAlertPolicy.shouldNotify("BUY", userPositionOpen = true))
         assertTrue(VirtualTradeAlertPolicy.shouldNotify("BUY", userPositionOpen = false))
     }
 

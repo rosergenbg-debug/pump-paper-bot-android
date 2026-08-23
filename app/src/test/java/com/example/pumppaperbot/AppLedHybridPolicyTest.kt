@@ -100,6 +100,23 @@ class AppLedHybridPolicyTest {
         assertTrue(result.reason.contains("8/10 WATCH/HOLD"))
     }
 
+    @Test fun `V519 strong local continuation can wake cautious DeepSig before eight of ten`() {
+        val result = AppLedHybridPolicy.entry(entryEvidence(
+            aiAction = "HOLD",
+            aiDirection = 30,
+            aiConfidence = 62,
+            aiReadiness = 6,
+            appReadiness = 10,
+            breathing5m = 34,
+            breathing15m = 22,
+            breathing30m = 8
+        ))
+
+        assertTrue(result.independentDeepSeekSetup)
+        assertTrue(result.level >= 8)
+        assertTrue(result.reason.contains("5/15/30"))
+    }
+
     @Test fun `V517 medium background breakdown still blocks promoted DeepSig entry`() {
         val result = AppLedHybridPolicy.entry(entryEvidence(
             aiAction = "WATCH",

@@ -5,6 +5,7 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <application
         android:name=".V513Application"
@@ -31,6 +32,7 @@
         <service
             android:name=".PumpSignalService"
             android:exported="false"
+            android:stopWithTask="false"
             android:foregroundServiceType="dataSync" />
         <activity
             android:name=".BacktestResultActivity"
@@ -71,6 +73,10 @@
             android:screenOrientation="portrait" />
         <activity
             android:name=".CompetitionActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+        <activity
+            android:name=".PumpMachineActivity"
             android:exported="false"
             android:screenOrientation="portrait" />
         <activity

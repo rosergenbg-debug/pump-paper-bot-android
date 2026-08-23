@@ -1,72 +1,4 @@
-from pathlib import Path
-
-
-def read(path: str) -> str:
-    return Path(path).read_text(encoding="utf-8")
-
-
-def write(path: str, text: str) -> None:
-    Path(path).write_text(text, encoding="utf-8")
-
-
-def replace_once(path: str, old: str, new: str) -> None:
-    text = read(path)
-    count = text.count(old)
-    if count != 1:
-        raise SystemExit(f"{path}: expected exactly one anchor, found {count}: {old[:180]!r}")
-    write(path, text.replace(old, new, 1))
-
-
-# ---------------------------------------------------------------------------
-# V5.26: profit-first PM2/PM3 execution experiment.
-#
-# This deliberately does NOT copy the Gemini proposal literally. The live app already has
-# a causal 15-second observer, executable Bitpanda bid/ask accounting and BuyerBreath phases.
-# We therefore use those existing causal signals instead of adding a second slow RSI/EMA loop.
-# Fusion/DeepSeek behavior is left untouched; only PM2 and PM3 get the fast entry/exit policy.
-# Existing preference stores are preserved exactly, so account histories survive the update.
-# ---------------------------------------------------------------------------
-
-shared = "app/src/main/java/com/example/pumppaperbot/SharedFusionEntryPolicy.kt"
-replace_once(
-    shared,
-    '''data class SharedFusionEntryObservation(
-    val frame: FusionFlowFrame?,
-    val shockReady: Boolean,
-    val sampledAt: Long,
-    val sampleBucket: Long
-)
-''',
-    '''data class SharedFusionEntryObservation(
-    val frame: FusionFlowFrame?,
-    val shockReady: Boolean,
-    val sampledAt: Long,
-    val sampleBucket: Long,
-    val breathing: LiveMarketBreathingSnapshot? = null
-)
-'''
-)
-replace_once(
-    shared,
-    '''        return SharedFusionEntryObservation(
-            frame = FusionFlowPolicy.frame(breathing),
-            shockReady = shock.fresh(now) && shock.ready,
-            sampledAt = now,
-            sampleBucket = bucket
-        ).also {
-''',
-    '''        return SharedFusionEntryObservation(
-            frame = FusionFlowPolicy.frame(breathing),
-            shockReady = shock.fresh(now) && shock.ready,
-            sampledAt = now,
-            sampleBucket = bucket,
-            breathing = breathing
-        ).also {
-'''
-)
-
-engine_path = "app/src/main/java/com/example/pumppaperbot/PumpProfitEngineV526.kt"
-engine_source = r'''package com.example.pumppaperbot
+package com.example.pumppaperbot
 
 import kotlin.math.max
 
@@ -167,6 +99,11 @@ object PumpProfitEngineV526 {
 
     private fun cfg(mode: PumpProfitModeV526): Config = if (mode == PumpProfitModeV526.PUMP_2) PM2 else PM3
 
+    // V5.27 audit: PM2 and PM3 are one controlled experiment. They must enter on the
+    // same evidence and at the same executable ask; only their exit/risk contracts differ.
+    // Use the stricter PM3 gate as the single pair gate so PM2 cannot enter a weaker setup.
+    private fun entryCfg(): Config = PM3
+
     private fun resetEntry(previous: FusionStabilityState, keepCooldown: Boolean = true) = previous.copy(
         entryStreak = 0,
         entryCandidateAt = 0L,
@@ -180,7 +117,7 @@ object PumpProfitEngineV526 {
 
     fun isFastCandidate(mode: PumpProfitModeV526, observation: SharedFusionEntryObservation): Boolean {
         if (observation.shockReady) return shockPermitted(observation)
-        return entryGate(mode, observation).first
+        return entryGate(observation).first
     }
 
     fun evaluateEntry(
@@ -189,7 +126,7 @@ object PumpProfitEngineV526 {
         observation: SharedFusionEntryObservation,
         now: Long
     ): SharedFusionEntryDecision {
-        val c = cfg(mode)
+        val c = entryCfg()
         if (previous.cooldownUntil > now) {
             val left = ((previous.cooldownUntil - now + 999L) / 1000L).coerceAtLeast(1L)
             return SharedFusionEntryDecision(null, resetEntry(previous), "V526 ${c.name} COOLDOWN: ещё ${left}с")
@@ -211,7 +148,7 @@ object PumpProfitEngineV526 {
             }
         }
 
-        val (candidate, reason) = entryGate(mode, observation)
+        val (candidate, reason) = entryGate(observation)
         if (!candidate) {
             return SharedFusionEntryDecision(null, resetEntry(previous, keepCooldown = false), reason)
         }
@@ -248,10 +185,9 @@ object PumpProfitEngineV526 {
     }
 
     private fun entryGate(
-        mode: PumpProfitModeV526,
         observation: SharedFusionEntryObservation
     ): Pair<Boolean, String> {
-        val c = cfg(mode)
+        val c = entryCfg()
         val breathing = observation.breathing
             ?: return false to "V526_${c.name}_WAIT: нет live breathing snapshot"
         val frame = observation.frame
@@ -392,129 +328,3 @@ object PumpProfitEngineV526 {
     private fun fmt(value: Double): String = String.format(java.util.Locale.GERMANY, "%.2f", value)
     private fun fmtSigned(value: Double): String = String.format(java.util.Locale.GERMANY, "%+.2f", value)
 }
-'''
-write(engine_path, engine_source)
-
-
-def patch_machine(path: str, decision_type: str, mode: str, tp_text: str, sl_text: str) -> None:
-    replace_once(
-        path,
-        f'''            val shared = SharedFusionEntryPolicy.evaluate(previous, observation, now)\n            return {decision_type}(shared.action, shared.nextState, shared.reason, 0.0)\n''',
-        f'''            val shared = PumpProfitEngineV526.evaluateEntry(\n                PumpProfitModeV526.{mode}, previous, observation, now\n            )\n            return {decision_type}(shared.action, shared.nextState, shared.reason, 0.0)\n'''
-    )
-    old_position = '''        val tradeNet = tradeNetPercent(portfolio, bid, feeRate)
-        val peak = max(max(previous.peakBid, bid), portfolio.entryPrice)
-        val base = previous.copy(
-            entryStreak = 0,
-            entryCandidateAt = 0L,
-            peakBid = peak,
-            // Pump Machine deliberately has no Fusion trailing/profit-defense.
-            // Its hard risk limits are the net +3.00 / -1.50 contract below.
-            profitDefenseArmed = false,
-            cooldownUntil = 0L
-        )
-'''
-    if mode == "PUMP_2":
-        old_position = old_position.replace("Pump Machine deliberately", "Pump Machine 2 deliberately")
-    new_position = f'''        val tradeNet = tradeNetPercent(portfolio, bid, feeRate)
-        val v526 = PumpProfitEngineV526.evaluatePosition(
-            mode = PumpProfitModeV526.{mode},
-            portfolio = portfolio,
-            previous = previous,
-            observation = entryObservation,
-            bid = bid,
-            feeRate = feeRate,
-            positionAgeMillis = positionAgeMillis
-        )
-        val peak = v526.nextState.peakBid
-        val base = v526.nextState
-        if (v526.action == "EXIT") {{
-            return {decision_type}(
-                "EXIT", base, v526.reason ?: "V526 risk exit", tradeNet
-            )
-        }}
-'''
-    replace_once(path, old_position, new_position)
-
-    # Treat V5.26 risk exits as protective for the existing anti-churn cooldown.
-    replace_once(
-        path,
-        '                    val protectiveStop = plan.reason.startsWith("STOP_LOSS_1_5_NET")\n',
-        '                    val protectiveStop = plan.reason.startsWith("STOP_LOSS_1_5_NET") ||\n                        plan.reason.startsWith("V526_HARD_STOP") ||\n                        plan.reason.startsWith("V526_EARLY_RISK_EXIT")\n'
-    )
-
-    # Visible execution contract. NET values already include both fees and executable spread.
-    old_buy_status = f'''                    val status = "BUY: ${{plan.reason}} • TP {tp_text} net • SL −1,50% net"\n'''
-    new_buy_status = f'''                    val status = "BUY V5.26: ${{plan.reason}} • TP {tp_text} net • SL {sl_text} net • BE/timeout active"\n'''
-    replace_once(path, old_buy_status, new_buy_status)
-
-
-patch_machine(
-    "app/src/main/java/com/example/pumppaperbot/PumpMachine.kt",
-    "PumpMachineDecision",
-    "PUMP_3",
-    "+3,00%",
-    "−1,30%"
-)
-patch_machine(
-    "app/src/main/java/com/example/pumppaperbot/PumpMachine2.kt",
-    "PumpMachine2Decision",
-    "PUMP_2",
-    "+2,00%",
-    "−1,10%"
-)
-
-# ---------------------------------------------------------------------------
-# The MicroImpulse websocket already invokes this callback about every 15 seconds.
-# V5.26 lets it evaluate PM candidates locally; DeepSeek/LLM is not called here.
-# Bitpanda execution quotes are refreshed only when a PM candidate/position actually exists.
-# ---------------------------------------------------------------------------
-service = "app/src/main/java/com/example/pumppaperbot/PumpSignalService.kt"
-replace_once(
-    service,
-    '''                val pumpMachineFast = PumpMachineStore.state(this)
-                val pumpMachine2Fast = PumpMachine2Store.state(this)
-                if (pumpMachineFast.inPosition || pumpMachine2Fast.inPosition) {
-''',
-    '''                val pumpMachineFast = PumpMachineStore.state(this)
-                val pumpMachine2Fast = PumpMachine2Store.state(this)
-                val entryObservationFast = SharedFusionEntryObservationStore.snapshot(this, now)
-                val pm3FastCandidate = !pumpMachineFast.inPosition &&
-                    PumpProfitEngineV526.isFastCandidate(PumpProfitModeV526.PUMP_3, entryObservationFast)
-                val pm2FastCandidate = !pumpMachine2Fast.inPosition &&
-                    PumpProfitEngineV526.isFastCandidate(PumpProfitModeV526.PUMP_2, entryObservationFast)
-                if (pumpMachineFast.inPosition || pumpMachine2Fast.inPosition || pm3FastCandidate || pm2FastCandidate) {
-'''
-)
-replace_once(
-    service,
-    '''                    if (!venue.fresh(now) || now - venue.lastSuccess >= 30_000L) {
-''',
-    '''                    if (!venue.fresh(now) || now - venue.lastSuccess >= 15_000L) {
-'''
-)
-replace_once(
-    service,
-    '''                    if (pumpMachineFast.inPosition) PumpMachineStore.sync(this, fastNow)
-                    if (pumpMachine2Fast.inPosition) PumpMachine2Store.sync(this, fastNow)
-''',
-    '''                    if (pumpMachineFast.inPosition || pm3FastCandidate) PumpMachineStore.sync(this, fastNow)
-                    if (pumpMachine2Fast.inPosition || pm2FastCandidate) PumpMachine2Store.sync(this, fastNow)
-'''
-)
-
-# UI labels: make the changed risk contracts explicit without resetting any account.
-activity = "app/src/main/java/com/example/pumppaperbot/CompetitionActivity.kt"
-replace_once(activity,
-             '            "PUMP 3% NET • TP +3% / SL −1,5%",\n',
-             '            "PUMP 3% NET • V5.26 FAST • TP +3% / SL −1,3%",\n')
-replace_once(activity,
-             '            "PUMP 2% NET • TP +2% / SL −1,5%",\n',
-             '            "PUMP 2% NET • V5.26 FAST • TP +2% / SL −1,1%",\n')
-
-# Sequential installable version. Package and all existing preference keys remain unchanged.
-gradle = "app/build.gradle"
-replace_once(gradle, "        versionCode 105\n", "        versionCode 106\n")
-replace_once(gradle, '        versionName "5.25"\n', '        versionName "5.26"\n')
-
-print("V5.26 profit engine applied: fast PM2/PM3 entry, anti-FOMO, BE, tighter risk and bounded hold; histories preserved")

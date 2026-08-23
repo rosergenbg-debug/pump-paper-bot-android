@@ -171,6 +171,7 @@ class StrategyChartView @JvmOverloads constructor(
     private var dragStartVerticalShift = 0f
     private var draggingHorizontally = false
     private var draggingVertically = false
+    private var verticalGestureArmed = false
     private var movedGesture = false
     private var mainViewportMode = false
     private var verticalShiftFraction = 0f
@@ -189,7 +190,7 @@ class StrategyChartView @JvmOverloads constructor(
 
     init {
         isClickable = true
-        contentDescription = "График PUMP/EUR. На главном экране тяните вверх или вниз для вертикального просмотра; нажмите для большого графика."
+        contentDescription = "График PUMP/EUR. Вертикальный сдвиг цены доступен только жестом у самого левого края; остальная область листает экран."
     }
 
     fun setMainViewportMode(enabled: Boolean) {
@@ -279,6 +280,7 @@ class StrategyChartView @JvmOverloads constructor(
                 dragStartVerticalShift = verticalShiftFraction
                 draggingHorizontally = false
                 draggingVertically = false
+                verticalGestureArmed = mainViewportMode && event.x <= dp(32f)
                 movedGesture = false
                 selectCandleAt(event.x, event.y)
                 return true
@@ -289,7 +291,7 @@ class StrategyChartView @JvmOverloads constructor(
                 if (abs(dx) > dp(8f) || abs(dy) > dp(8f)) movedGesture = true
 
                 if (mainViewportMode) {
-                    if (!draggingVertically && abs(dy) > dp(5f) && abs(dy) > abs(dx)) {
+                    if (verticalGestureArmed && !draggingVertically && abs(dy) > dp(5f) && abs(dy) > abs(dx)) {
                         draggingVertically = true
                         parent?.requestDisallowInterceptTouchEvent(true)
                         clearCandleSelection()
@@ -326,6 +328,7 @@ class StrategyChartView @JvmOverloads constructor(
                 if (!movedGesture && !draggingHorizontally && !draggingVertically) performClick()
                 draggingHorizontally = false
                 draggingVertically = false
+                verticalGestureArmed = false
                 return true
             }
             MotionEvent.ACTION_CANCEL -> {
@@ -333,6 +336,7 @@ class StrategyChartView @JvmOverloads constructor(
                 clearCandleSelection()
                 draggingHorizontally = false
                 draggingVertically = false
+                verticalGestureArmed = false
                 return true
             }
         }

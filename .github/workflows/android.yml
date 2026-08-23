@@ -17,27 +17,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Apply guarded V5.19 to V5.26 source patches
-        run: |
-          python3 tools/apply_v519_sources.py
-          python3 tools/apply_v520_persistence.py
-          python3 tools/apply_v520_compile_fix.py
-          python3 tools/apply_v521_pump_machine.py
-          python3 tools/apply_v522_shared_entry.py
-          python3 tools/apply_v523_clean_lab_reset.py
-          python3 tools/apply_v524_pump_machine_2.py
-          python3 tools/apply_v525_six_account_comparison.py
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path("tools/apply_v526_profit_engine.py")
-          s = p.read_text(encoding="utf-8")
-          needle = '        old_position = old_position.replace("+3.00 / -1.50", "+2.00 / -1.50")\n'
-          if s.count(needle) != 1:
-              raise SystemExit("V5.26 PM2 compatibility fix anchor missing")
-          p.write_text(s.replace(needle, ""), encoding="utf-8")
-          PY
-          python3 tools/apply_v526_profit_engine.py
-          git diff --check
+      - name: Verify canonical checked-in source
+        run: git diff --check
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -45,7 +26,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Validate and build V5.26
+      - name: Validate and build V5.27
         run: |
           chmod +x gradlew
           ./gradlew testDebugUnitTest lintDebug assembleDebug
@@ -57,7 +38,7 @@ jobs:
           grep -F "Verified using v2 scheme (APK Signature Scheme v2): true" "$RUNNER_TEMP/signature.txt"
           "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging \
             app/build/outputs/apk/debug/app-debug.apk | tee "$RUNNER_TEMP/badging.txt"
-          grep -F "package: name='com.example.pumppaperbot.v8' versionCode='106' versionName='5.26'" \
+          grep -F "package: name='com.example.pumppaperbot.v8' versionCode='107' versionName='5.27'" \
             "$RUNNER_TEMP/badging.txt"
           grep -F "launchable-activity: name='com.example.pumppaperbot.MainActivity'" \
             "$RUNNER_TEMP/badging.txt"
@@ -66,11 +47,11 @@ jobs:
           test "$(stat -c%s app/build/outputs/apk/debug/app-debug.apk)" -gt 6000000
 
       - name: Prepare named APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk PumpSignal-V5.26-Profit-Engine.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk PumpSignal-V5.27-Audit-Intermediate.apk
 
       - name: Upload intermediate APK
         uses: actions/upload-artifact@v4
         with:
-          name: PumpSignal-V5.26-Profit-Engine-APK
-          path: PumpSignal-V5.26-Profit-Engine.apk
+          name: PumpSignal-V5.27-Audit-Intermediate-APK
+          path: PumpSignal-V5.27-Audit-Intermediate.apk
           retention-days: 7

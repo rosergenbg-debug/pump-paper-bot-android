@@ -563,8 +563,9 @@ internal object GeminiExitExperimentEngine {
             evidence.currentReturnPercent
         }
         val profitProtection = peakReturnPercent >= 1.60 &&
+            evidence.currentReturnPercent >= 0.75 &&
             evidence.pullbackPercent >= maxOf(0.90, evidence.adaptivePullbackPercent) &&
-            mediumWeakCount >= 2 && sellerConfirmation
+            mediumTurningWeak && (twenty <= -8 || slowContextWeak) && sellerConfirmation
         val dangerous = (
             evidence.score >= 4 && evidence.groups >= 3 && structuralWeakness &&
                 (mediumTurningWeak || evidence.appExitSignal)

@@ -28,7 +28,7 @@ private data class CompetitionDataset(
 class CompetitionActivity : AppCompatActivity() {
     private val handler = Handler(Looper.getMainLooper())
     private val charts = ArrayList<CompetitionChartView>()
-    private val datasets = arrayOfNulls<CompetitionDataset>(5)
+    private val datasets = arrayOfNulls<CompetitionDataset>(CompetitionAccountSpec.COUNT)
     private val executor = Executors.newSingleThreadExecutor()
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
@@ -51,7 +51,7 @@ class CompetitionActivity : AppCompatActivity() {
             setPadding(dp(8), dp(6), dp(8), dp(8))
         }
         val back = Button(this).apply {
-            text = "←  СРАВНЕНИЕ ПЯТИ СЧЕТОВ"
+            text = CompetitionAccountSpec.SCREEN_TITLE
             setTextColor(Color.WHITE)
             setBackgroundColor(Color.parseColor("#30363D"))
             gravity = Gravity.CENTER
@@ -67,7 +67,7 @@ class CompetitionActivity : AppCompatActivity() {
         root.addView(archiveStatus, LinearLayout.LayoutParams(-1, dp(54)).apply {
             topMargin = dp(3)
         })
-        repeat(5) { index ->
+        repeat(CompetitionAccountSpec.COUNT) { index ->
             val chart = CompetitionChartView(this).apply {
                 contentDescription = "Открыть подробный график ${index + 1}"
                 setOnClickListener { showChartDetail(index) }
@@ -113,7 +113,8 @@ class CompetitionActivity : AppCompatActivity() {
         val snapshot = PumpBotEngine.snapshot(this)
         val price = PaperExecutionPolicy.displayPrice(snapshot, now)
         val app = AppPaperStore.state(this)
-        val gemini = GeminiPaperStore.state(this).portfolio
+        val pumpMachine = PumpMachineStore.state(this)
+        val pumpMachine2 = PumpMachine2Store.state(this)
         val geminiExitExperiment = GeminiExitExperimentStore.state(this)?.portfolio
             ?: GeminiPaperPortfolio()
         val user = UserPaperStore.markToMarket(this, price)
@@ -129,14 +130,40 @@ class CompetitionActivity : AppCompatActivity() {
         }
         val candles = CompetitionChartPresentation.withLiveEdge(closedCandles, price, now)
 
+        val pumpMachineValue = PumpMachinePolicy.netLiquidationValue(
+            pumpMachine,
+            fusionPrice,
+            fusionMarket.feeRate
+        )
         setChart(0, CompetitionDataset(
-            "DEEPSIG",
-            summary(gemini.value(price), gemini.profitPercent(price), gemini.inPosition),
+            "PUMP 3% NET • V5.27 ОБЩИЙ ВХОД • TP +3% / SL −1,3%",
+            summary(
+                pumpMachineValue,
+                (pumpMachineValue / FusionSimPortfolio.START_BALANCE - 1.0) * 100.0,
+                pumpMachine.inPosition
+            ),
             candles,
-            gemini.trades.map { CompetitionMarker(it.time, it.action, it.price, it.pnlEur) },
-            0.0015
+            pumpMachine.trades.map { CompetitionMarker(it.time, it.action, it.price, it.pnlEur) },
+            FusionTradingCosts.FEE_RATE
         ))
+
+        val pumpMachine2Value = PumpMachine2Policy.netLiquidationValue(
+            pumpMachine2,
+            fusionPrice,
+            fusionMarket.feeRate
+        )
         setChart(1, CompetitionDataset(
+            "PUMP 2% NET • V5.27 ОБЩИЙ ВХОД • TP +2% / SL −1,1%",
+            summary(
+                pumpMachine2Value,
+                (pumpMachine2Value / FusionSimPortfolio.START_BALANCE - 1.0) * 100.0,
+                pumpMachine2.inPosition
+            ),
+            candles,
+            pumpMachine2.trades.map { CompetitionMarker(it.time, it.action, it.price, it.pnlEur) },
+            FusionTradingCosts.FEE_RATE
+        ))
+        setChart(2, CompetitionDataset(
             "DEEPSIGX",
             summary(
                 geminiExitExperiment.value(price),
@@ -147,14 +174,14 @@ class CompetitionActivity : AppCompatActivity() {
             geminiExitExperiment.trades.map { CompetitionMarker(it.time, it.action, it.price, it.pnlEur) },
             0.0015
         ))
-        setChart(2, CompetitionDataset(
+        setChart(3, CompetitionDataset(
             "APP",
             summary(app.value(price), app.profitPercent(price), app.inPosition),
             candles,
             app.trades.map { CompetitionMarker(it.candleTime, it.action, it.price, it.pnlEur) },
             0.0015
         ))
-        setChart(3, CompetitionDataset(
+        setChart(4, CompetitionDataset(
             "DEEPSIG FUSION",
             summary(
                 fusion.value(fusionPrice),
@@ -165,7 +192,7 @@ class CompetitionActivity : AppCompatActivity() {
             fusion.trades.map { CompetitionMarker(it.time, it.action, it.price, it.pnlEur) },
             FusionTradingCosts.FEE_RATE
         ))
-        setChart(4, CompetitionDataset(
+        setChart(5, CompetitionDataset(
             "СЕРЖ",
             summary(user.value(price), user.profitPercent(price), user.inPosition),
             candles,

@@ -66,10 +66,13 @@ internal object PersonalPositionGuardPolicy {
             now,
             DeepSeekFreshMarketContext.MICRO_MAX_AGE
         )
-        val microWeak = microFresh && (
-            micro.aggressiveBuyPercent15s < 48.0 || micro.priceChange60sPercent <= -0.20 ||
-                (micro.topBookImbalance ?: 0.0) <= -0.10
-        )
+        val moneyPressure = FastMoneyPressurePolicy.evaluate(micro)
+        val microWeak = microFresh && !moneyPressure.absorptionPossible && (
+            moneyPressure.heavySelling ||
+                (micro.aggressiveBuyPercent15s <= 45.0 && micro.aggressiveBuyPercent60s <= 48.0 &&
+                    micro.priceChange60sPercent <= -0.12) ||
+                ((micro.topBookImbalance ?: 0.0) <= -0.15 && micro.priceChange60sPercent <= -0.20)
+            )
         val broadWeak = snapshot.directionScore <= -35
         val strongLiveRecovery = microFresh &&
             micro.aggressiveBuyPercent15s >= 60.0 &&

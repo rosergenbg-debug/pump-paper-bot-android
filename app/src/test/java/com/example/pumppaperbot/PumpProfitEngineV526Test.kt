@@ -91,6 +91,37 @@ class PumpProfitEngineV526Test {
     }
 
     @Test
+    fun `pm2 and pm3 use the same strict entry gate`() {
+        val weakerSetup = observation(
+            instant = 9,
+            score5 = 3,
+            score15 = -3,
+            score30 = -7,
+            buyer5 = 57.0,
+            absorption = 60,
+            efficiency = -20,
+            activity = 1.06
+        )
+        val pm2 = PumpProfitEngineV526.evaluateEntry(
+            PumpProfitModeV526.PUMP_2,
+            FusionStabilityState(),
+            weakerSetup,
+            1_000_000L
+        )
+        val pm3 = PumpProfitEngineV526.evaluateEntry(
+            PumpProfitModeV526.PUMP_3,
+            FusionStabilityState(),
+            weakerSetup,
+            1_000_000L
+        )
+
+        assertEquals(pm3.action, pm2.action)
+        assertEquals(pm3.nextState, pm2.nextState)
+        assertEquals(pm3.reason, pm2.reason)
+        assertNull(pm2.action)
+    }
+
+    @Test
     fun `mature pump is rejected as no fomo`() {
         val decision = PumpProfitEngineV526.evaluateEntry(
             PumpProfitModeV526.PUMP_3,

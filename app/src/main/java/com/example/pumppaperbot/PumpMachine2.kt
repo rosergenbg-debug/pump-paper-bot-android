@@ -6,34 +6,34 @@ import org.json.JSONObject
 import kotlin.math.max
 
 /**
- * V5.21 Pump Machine.
+ * V5.24 Pump Machine 2.
  *
  * Paper-only participant replacing the old DEEPSIG paper execution slot.
- * Entry is coordinated with PM2; exits remain independent.
+ * Entry is coordinated with PM3; exits remain independent.
  * Risk contract is intentionally different and simple:
- *   - hard +3.00% NET per-trade take profit;
- *   - hard -1.30% NET per-trade stop loss;
+ *   - hard +2.00% NET per-trade take profit;
+ *   - hard -1.10% NET per-trade stop loss;
  *   - a confirmed Fusion system exit or failed shock rebound may exit earlier.
  *
  * Net means after the simulated buy fee, sell fee and executable Bitpanda bid/ask spread.
  * No real order path exists in this class.
  */
-data class PumpMachineSyncResult(
+data class PumpMachine2SyncResult(
     val portfolio: FusionSimPortfolio,
     val status: String,
     val tradeNetPercent: Double
 )
 
-data class PumpMachineDecision(
+data class PumpMachine2Decision(
     val action: String?,
     val nextState: FusionStabilityState,
     val reason: String,
     val tradeNetPercent: Double
 )
 
-object PumpMachinePolicy {
-    const val TAKE_PROFIT_NET_PERCENT = 3.00
-    const val STOP_LOSS_NET_PERCENT = -1.30
+object PumpMachine2Policy {
+    const val TAKE_PROFIT_NET_PERCENT = 2.00
+    const val STOP_LOSS_NET_PERCENT = -1.10
 
     fun tradeNetPercent(
         portfolio: FusionSimPortfolio,
@@ -69,9 +69,9 @@ object PumpMachinePolicy {
         shockEntry: Boolean,
         positionAgeMillis: Long,
         entryObservation: SharedFusionEntryObservation? = null
-    ): PumpMachineDecision {
+    ): PumpMachine2Decision {
         if (bid <= 0.0) {
-            return PumpMachineDecision(null, previous, "Нет свежего bid для Pump Machine", 0.0)
+            return PumpMachine2Decision(null, previous, "Нет свежего bid для Pump Machine 2", 0.0)
         }
 
         if (!portfolio.inPosition) {
@@ -82,14 +82,14 @@ object PumpMachinePolicy {
                 sampleBucket = now / 15_000L
             )
             val shared = PumpProfitEngineV526.evaluateEntry(
-                PumpProfitModeV526.PUMP_3, previous, observation, now
+                PumpProfitModeV526.PUMP_2, previous, observation, now
             )
-            return PumpMachineDecision(shared.action, shared.nextState, shared.reason, 0.0)
+            return PumpMachine2Decision(shared.action, shared.nextState, shared.reason, 0.0)
         }
 
         val tradeNet = tradeNetPercent(portfolio, bid, feeRate)
         val v526 = PumpProfitEngineV526.evaluatePosition(
-            mode = PumpProfitModeV526.PUMP_3,
+            mode = PumpProfitModeV526.PUMP_2,
             portfolio = portfolio,
             previous = previous,
             observation = entryObservation,
@@ -100,25 +100,25 @@ object PumpMachinePolicy {
         val peak = v526.nextState.peakBid
         val base = v526.nextState
         if (v526.action == "EXIT") {
-            return PumpMachineDecision(
+            return PumpMachine2Decision(
                 "EXIT", base, v526.reason ?: "V526 risk exit", tradeNet
             )
         }
 
         if (tradeNet >= TAKE_PROFIT_NET_PERCENT) {
-            return PumpMachineDecision(
+            return PumpMachine2Decision(
                 "EXIT",
                 base,
-                "TAKE_PROFIT_3_NET: чистая прибыль сделки достигла ${fmt(tradeNet)}%; цель Pump Machine +3,00% выполнена",
+                "TAKE_PROFIT_2_NET: чистая прибыль сделки достигла ${fmt(tradeNet)}%; цель Pump Machine 2 +2,00% выполнена",
                 tradeNet
             )
         }
 
         if (tradeNet <= STOP_LOSS_NET_PERCENT) {
-            return PumpMachineDecision(
+            return PumpMachine2Decision(
                 "EXIT",
                 base,
-                "STOP_LOSS_1_3_NET: чистый результат сделки ${fmt(tradeNet)}%; жёсткий лимит Pump Machine −1,30%",
+                "STOP_LOSS_1_1_NET: чистый результат сделки ${fmt(tradeNet)}%; жёсткий лимит Pump Machine 2 −1,10%",
                 tradeNet
             )
         }
@@ -127,7 +127,7 @@ object PumpMachinePolicy {
             shockEntry && shockFailed &&
             positionAgeMillis >= FusionStabilityPolicy.SHOCK_FAILURE_MIN_AGE_MILLIS
         ) {
-            return PumpMachineDecision(
+            return PumpMachine2Decision(
                 "EXIT",
                 base,
                 "SHOCK_REBOUND_FAILED: быстрый отскок сорвался; выходим по тому же аварийному правилу Fusion",
@@ -136,7 +136,7 @@ object PumpMachinePolicy {
         }
 
         // From here down this is the Fusion SYSTEM_EXIT state machine without Fusion's
-        // 1.75%/1.00% trailing. The user's +3 / -1.5 contract replaces those two stops.
+        // 1.75%/1.00% trailing. The user's +2 / -1.5 contract replaces those two stops.
         val rawExit = frame?.meaningfulExitSignal == true
         val severeExit = frame?.severeExitSignal == true
         val recovered = frame?.exitRecovery == true
@@ -144,7 +144,7 @@ object PumpMachinePolicy {
             now - previous.exitArmedAt in 0..FusionStabilityPolicy.EXIT_ARM_TTL_MILLIS
 
         if (recovered) {
-            return PumpMachineDecision(
+            return PumpMachine2Decision(
                 null,
                 base.copy(exitStreak = 0, exitArmedAt = 0L, exitArmedBid = 0.0),
                 "HOLD: 5/15/20 восстановились; системный EXIT снят",
@@ -192,7 +192,7 @@ object PumpMachinePolicy {
         val holdLockActive = positionAgeMillis < holdLimit
 
         if (armed && actualDecline && exitConfirmed && (!holdLockActive || severeExit)) {
-            return PumpMachineDecision(
+            return PumpMachine2Decision(
                 "EXIT",
                 next,
                 "SYSTEM_EXIT: Fusion сейчас/5/15/20 подтвердили давление вниз и bid реально пошёл вниз " +
@@ -202,15 +202,15 @@ object PumpMachinePolicy {
         }
         if (rawExit && holdLockActive && !severeExit) {
             val left = ((holdLimit - positionAgeMillis).coerceAtLeast(0L) / 1000L)
-            return PumpMachineDecision(
+            return PumpMachine2Decision(
                 null,
                 next,
-                "HOLD_LOCK: системный EXIT пока ждёт; минимальное удержание ещё ${left}с; +3% TP и −1,5% SL действуют сразу",
+                "HOLD_LOCK: системный EXIT пока ждёт; минимальное удержание ещё ${left}с; +2% TP и −1,5% SL действуют сразу",
                 tradeNet
             )
         }
         if (rawExit) {
-            return PumpMachineDecision(
+            return PumpMachine2Decision(
                 null,
                 next,
                 if (exitConfirmed) {
@@ -222,7 +222,7 @@ object PumpMachinePolicy {
             )
         }
         if (armedStillFresh) {
-            return PumpMachineDecision(
+            return PumpMachine2Decision(
                 null,
                 next,
                 "EXIT_ARMED: окно выхода остаётся активным; боковик сам по себе продажу не запускает",
@@ -230,10 +230,10 @@ object PumpMachinePolicy {
             )
         }
 
-        return PumpMachineDecision(
+        return PumpMachine2Decision(
             null,
             base.copy(exitStreak = 0, exitArmedAt = 0L, exitArmedBid = 0.0),
-            "HOLD: Pump Machine ждёт либо Fusion EXIT, либо +3,00% net TP, либо −1,30% net SL",
+            "HOLD: Pump Machine 2 ждёт либо Fusion EXIT, либо +2,00% net TP, либо −1,10% net SL",
             tradeNet
         )
     }
@@ -242,8 +242,8 @@ object PumpMachinePolicy {
         String.format(java.util.Locale.GERMANY, "%+.2f", value)
 }
 
-object PumpMachineStore {
-    private const val PREFS = "pump_machine_paper_v521"
+object PumpMachine2Store {
+    private const val PREFS = "pump_machine_2_paper_v524"
     private const val PORTFOLIO = "portfolio"
     private const val STABILITY = "stability"
     private const val LAST_STATUS = "last_status"
@@ -259,7 +259,7 @@ object PumpMachineStore {
 
     fun lastStatus(context: Context): String =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getString(LAST_STATUS, "PUMP MACHINE • ждём первый Fusion-сигнал")
+            .getString(LAST_STATUS, "PUMP MACHINE 2 • ждём первый Fusion-сигнал")
             .orEmpty()
 
     fun toJson(value: FusionSimPortfolio): JSONObject = portfolioToJson(value)
@@ -268,7 +268,7 @@ object PumpMachineStore {
         val portfolio = state(context)
         val market = BitpandaFusionStore.state(context)
         val bid = market.bid.takeIf { market.fresh(now) } ?: portfolio.entryPrice
-        return PumpMachinePolicy.netLiquidationValue(portfolio, bid, market.feeRate)
+        return PumpMachine2Policy.netLiquidationValue(portfolio, bid, market.feeRate)
     }
 
     fun tradeNetPercent(context: Context, now: Long = System.currentTimeMillis()): Double {
@@ -276,7 +276,7 @@ object PumpMachineStore {
         if (!portfolio.inPosition) return 0.0
         val market = BitpandaFusionStore.state(context)
         val bid = market.bid.takeIf { market.fresh(now) } ?: return 0.0
-        return PumpMachinePolicy.tradeNetPercent(portfolio, bid, market.feeRate)
+        return PumpMachine2Policy.tradeNetPercent(portfolio, bid, market.feeRate)
     }
 
     @Synchronized
@@ -284,14 +284,14 @@ object PumpMachineStore {
         context: Context,
         now: Long = System.currentTimeMillis(),
         pairEntry: PumpPairEntryDirective? = null
-    ): PumpMachineSyncResult {
+    ): PumpMachine2SyncResult {
         val market = BitpandaFusionStore.state(context)
         val current = state(context)
         val previousStability = stability(context)
         if (!market.fresh(now) || market.bid <= 0.0 || market.ask <= 0.0) {
-            val status = "WAIT: Pump Machine ждёт свежий read-only Bitpanda bid/ask"
+            val status = "WAIT: Pump Machine 2 ждёт свежий read-only Bitpanda bid/ask"
             saveStatus(context, status)
-            return PumpMachineSyncResult(current, status, 0.0)
+            return PumpMachine2SyncResult(current, status, 0.0)
         }
 
         val entryObservation = SharedFusionEntryObservationStore.snapshot(context, now)
@@ -304,7 +304,7 @@ object PumpMachineStore {
             (now - lastBuy.time).coerceAtLeast(0L)
         } else Long.MAX_VALUE
 
-        val evaluatedPlan = PumpMachinePolicy.evaluate(
+        val evaluatedPlan = PumpMachine2Policy.evaluate(
             portfolio = current,
             previous = previousStability,
             frame = frame,
@@ -318,7 +318,7 @@ object PumpMachineStore {
             entryObservation = entryObservation
         )
         val plan = if (!current.inPosition && pairEntry != null) {
-            PumpMachineDecision(
+            PumpMachine2Decision(
                 pairEntry.decision.action,
                 pairEntry.decision.nextState,
                 pairEntry.decision.reason,
@@ -331,7 +331,7 @@ object PumpMachineStore {
             savePortfolio(context, marked)
             saveStability(context, plan.nextState)
             saveStatus(context, plan.reason)
-            return PumpMachineSyncResult(marked, plan.reason, plan.tradeNetPercent)
+            return PumpMachine2SyncResult(marked, plan.reason, plan.tradeNetPercent)
         }
 
         val decisionId = now
@@ -339,9 +339,9 @@ object PumpMachineStore {
             "BUY" -> {
                 if (marked.inPosition || marked.cashEur <= 0.01) {
                     saveStability(context, plan.nextState)
-                    val status = "WAIT: Pump Machine уже находится в позиции"
+                    val status = "WAIT: Pump Machine 2 уже находится в позиции"
                     saveStatus(context, status)
-                    PumpMachineSyncResult(marked, status, 0.0)
+                    PumpMachine2SyncResult(marked, status, 0.0)
                 } else {
                     val allocation = marked.cashEur
                     val buyFee = allocation * market.feeRate
@@ -360,7 +360,7 @@ object PumpMachineStore {
                         time = now,
                         decisionId = decisionId,
                         requestedAction = "BUY",
-                        result = "PUMP MACHINE BUY • paper-only",
+                        result = "PUMP MACHINE 2 BUY • paper-only",
                         venuePrice = market.ask,
                         reason = plan.reason
                     )
@@ -386,18 +386,18 @@ object PumpMachineStore {
                     )
                     savePortfolio(context, next)
                     saveStability(context, entryState)
-                    val status = "BUY V5.27 PAIR: ${plan.reason} • TP +3,00% net • SL −1,30% net • BE/timeout active"
+                    val status = "BUY V5.27 PAIR: ${plan.reason} • TP +2,00% net • SL −1,10% net • BE/timeout active"
                     saveStatus(context, status)
-                    UnifiedResearchLog.record(context, "PUMP_MACHINE", "BUY", status, now)
-                    PumpMachineSyncResult(next, status, 0.0)
+                    UnifiedResearchLog.record(context, "PUMP_MACHINE_2", "BUY", status, now)
+                    PumpMachine2SyncResult(next, status, 0.0)
                 }
             }
             "EXIT" -> {
                 if (!marked.inPosition) {
                     saveStability(context, plan.nextState)
-                    val status = "WAIT: Pump Machine уже вне позиции"
+                    val status = "WAIT: Pump Machine 2 уже вне позиции"
                     saveStatus(context, status)
-                    PumpMachineSyncResult(marked, status, 0.0)
+                    PumpMachine2SyncResult(marked, status, 0.0)
                 } else {
                     val soldAmount = marked.pumpAmount
                     val gross = soldAmount * market.bid
@@ -421,7 +421,7 @@ object PumpMachineStore {
                         time = now,
                         decisionId = decisionId,
                         requestedAction = "EXIT",
-                        result = "PUMP MACHINE SELL • ${String.format(java.util.Locale.GERMANY, "%+.2f%% net", tradeNet)}",
+                        result = "PUMP MACHINE 2 SELL • ${String.format(java.util.Locale.GERMANY, "%+.2f%% net", tradeNet)}",
                         venuePrice = market.bid,
                         reason = plan.reason
                     )
@@ -442,7 +442,7 @@ object PumpMachineStore {
                         trades = (marked.trades + trade).takeLast(MAX_TRADES),
                         decisions = (marked.decisions + decision).takeLast(MAX_DECISIONS)
                     )
-                    val protectiveStop = plan.reason.startsWith("STOP_LOSS_1_3_NET") ||
+                    val protectiveStop = plan.reason.startsWith("STOP_LOSS_1_1_NET") ||
                         plan.reason.startsWith("V526_HARD_STOP") ||
                         plan.reason.startsWith("V526_EARLY_RISK_EXIT")
                     val exitState = FusionStabilityPolicy.cooldownAfterExit(
@@ -455,11 +455,11 @@ object PumpMachineStore {
                     saveStability(context, exitState)
                     val status = "SELL ${String.format(java.util.Locale.GERMANY, "%+.2f%% net", tradeNet)}: ${plan.reason}"
                     saveStatus(context, status)
-                    UnifiedResearchLog.record(context, "PUMP_MACHINE", "SELL", status, now)
-                    PumpMachineSyncResult(next, status, tradeNet)
+                    UnifiedResearchLog.record(context, "PUMP_MACHINE_2", "SELL", status, now)
+                    PumpMachine2SyncResult(next, status, tradeNet)
                 }
             }
-            else -> PumpMachineSyncResult(marked, plan.reason, plan.tradeNetPercent)
+            else -> PumpMachine2SyncResult(marked, plan.reason, plan.tradeNetPercent)
         }
     }
 
@@ -468,7 +468,7 @@ object PumpMachineStore {
         bid: Double,
         feeRate: Double
     ): FusionSimPortfolio {
-        val liquidation = PumpMachinePolicy.netLiquidationValue(value, bid, feeRate)
+        val liquidation = PumpMachine2Policy.netLiquidationValue(value, bid, feeRate)
         val peak = max(value.peakValueEur, liquidation)
         val drawdown = if (peak > 0.0) {
             ((peak - liquidation) / peak * 100.0).coerceAtLeast(0.0)

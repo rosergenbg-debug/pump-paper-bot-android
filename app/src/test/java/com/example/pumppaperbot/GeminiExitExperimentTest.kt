@@ -394,6 +394,37 @@ class GeminiExitExperimentTest {
         assertTrue(result.state.lastReason.contains("ЗАЩИТА ПРИБЫЛИ"))
     }
 
+    @Test fun `profit protection ignores shallow fast fade while 20 30 60 stay supportive`() {
+        val result = GeminiExitExperimentEngine.evaluate(
+            GeminiExitExperimentState(
+                initializedAt = 1L,
+                portfolio = bought().copy(positionPeakPrice = 1.0182)
+            ),
+            evidence(
+                score = 3,
+                groups = 2,
+                spotWeak = false,
+                futuresWeak = true,
+                cvdWeak = false,
+                currentReturn = 0.36,
+                pullback = 1.43,
+                microWeak = false,
+                breathing5m = -13,
+                breathing15m = -11,
+                breathing20m = 0,
+                breathing30m = 43,
+                breathing60m = 29
+            ),
+            price = 1.0036,
+            decisionId = 11L,
+            now = 700_000L
+        )
+
+        assertTrue(result.state.portfolio.inPosition)
+        assertEquals(null, result.executedTrade)
+        assertFalse(result.state.lastReason.contains("ЗАЩИТА ПРИБЫЛИ"))
+    }
+
     @Test fun `one isolated indicator cannot close the experiment`() {
         val result = GeminiExitExperimentEngine.evaluate(
             GeminiExitExperimentState(initializedAt = 1L, portfolio = bought()),
