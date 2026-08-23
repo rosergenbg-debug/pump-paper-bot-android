@@ -45,6 +45,9 @@ object PumpProfitEngineV526 {
         val minActivityRatio: Double,
         val maxAbsorptionRisk: Int,
         val minEfficiency: Int,
+        val minCapitalActivityRatio: Double,
+        val minFiveMinuteNotionalUsdt: Double,
+        val minBuySellNotionalRatio: Double,
         val maxEarlyMovePercent: Double,
         val confirmationMillis: Long
     )
@@ -69,6 +72,9 @@ object PumpProfitEngineV526 {
         minActivityRatio = 1.05,
         maxAbsorptionRisk = 62,
         minEfficiency = -25,
+        minCapitalActivityRatio = 1.15,
+        minFiveMinuteNotionalUsdt = 250_000.0,
+        minBuySellNotionalRatio = 1.12,
         maxEarlyMovePercent = 1.45,
         confirmationMillis = 12_000L
     )
@@ -87,12 +93,15 @@ object PumpProfitEngineV526 {
         timeoutKeepNet = 0.45,
         minInstant = 10,
         min5m = 4,
-        min15m = -1,
-        min30m = -5,
+        min15m = 4,
+        min30m = 2,
         minBuyer5m = 59.0,
         minActivityRatio = 1.10,
         maxAbsorptionRisk = 58,
         minEfficiency = -15,
+        minCapitalActivityRatio = 1.15,
+        minFiveMinuteNotionalUsdt = 250_000.0,
+        minBuySellNotionalRatio = 1.12,
         maxEarlyMovePercent = 1.60,
         confirmationMillis = 15_000L
     )
@@ -119,6 +128,9 @@ object PumpProfitEngineV526 {
         minActivityRatio = 1.15,
         maxAbsorptionRisk = 52,
         minEfficiency = -8,
+        minCapitalActivityRatio = 1.20,
+        minFiveMinuteNotionalUsdt = 350_000.0,
+        minBuySellNotionalRatio = 1.18,
         maxEarlyMovePercent = 1.25,
         confirmationMillis = 30_000L
     )
@@ -260,9 +272,14 @@ object PumpProfitEngineV526 {
         if (buyer5 < c.minBuyer5m) {
             return false to "V526_${c.name}_WAIT: buyer5=${fmt(buyer5)}% < ${fmt(c.minBuyer5m)}%"
         }
-        if (activity != null && activity < c.minActivityRatio) {
+        if (activity == null) {
+            return false to "V526_${c.name}_CAPITAL_WAIT: ещё нет надёжной базы активности; в пустой рынок не входим"
+        }
+        if (activity < c.minActivityRatio) {
             return false to "V526_${c.name}_WAIT: активность ${fmt(activity)}x < ${fmt(c.minActivityRatio)}x"
         }
+        val capital = capitalGate(observation.micro, c)
+        if (!capital.first) return false to "V526_${c.name}_CAPITAL_WAIT: ${capital.second}"
         if (frame.instant < c.minInstant || frame.score5m < c.min5m) {
             return false to "V526_${c.name}_WAIT: instant/5m ${frame.instant}/${frame.score5m} ещё недостаточны"
         }
@@ -270,18 +287,59 @@ object PumpProfitEngineV526 {
             return false to "V526_${c.name}_WAIT: старший поток ещё падает слишком быстро (${frame.score15m}/${frame.score30m})"
         }
 
-        return true to "phase=$phase instant/5/15/30=${frame.instant}/${frame.score5m}/${frame.score15m}/${frame.score30m}, buyer5=${fmt(buyer5)}%, move=${fmt(move)}%, absorption=${breath.absorptionRisk}"
+        return true to "phase=$phase instant/5/15/30=${frame.instant}/${frame.score5m}/${frame.score15m}/${frame.score30m}, buyer5=${fmt(buyer5)}%, activity=${fmt(activity)}x, ${capital.second}, move=${fmt(move)}%, absorption=${breath.absorptionRisk}"
+    }
+
+    private fun capitalGate(micro: MicroImpulseSnapshot?, c: Config): Pair<Boolean, String> {
+        if (micro == null || micro.flowHistorySeconds < 15L * 60L) {
+            return false to "ждём свежую 15-минутную ленту реальных сделок"
+        }
+        val buy5 = micro.buyNotional5m.coerceAtLeast(0.0)
+        val sell5 = micro.sellNotional5m.coerceAtLeast(0.0)
+        val total5 = buy5 + sell5
+        val total15 = (micro.buyNotional15m + micro.sellNotional15m).coerceAtLeast(total5)
+        val priorTenPerFive = ((total15 - total5).coerceAtLeast(0.0) / 2.0)
+        if (total5 < c.minFiveMinuteNotionalUsdt) {
+            return false to "за 5м прошло лишь ${money(total5)} < ${money(c.minFiveMinuteNotionalUsdt)}"
+        }
+        if (priorTenPerFive <= 0.0) return false to "нет базы предыдущих 10 минут для проверки притока"
+        val acceleration = total5 / priorTenPerFive
+        if (acceleration < c.minCapitalActivityRatio) {
+            return false to "масса 5м не ускорилась: ${fmt(acceleration)}x < ${fmt(c.minCapitalActivityRatio)}x"
+        }
+        val sideRatio = buy5 / sell5.coerceAtLeast(1.0)
+        if (sideRatio < c.minBuySellNotionalRatio) {
+            return false to "деньги не на стороне покупателей: BUY/SELL ${fmt(sideRatio)}x"
+        }
+        val large = micro.largeFlow
+        if (large.mode == LargeFlowMode.SELL_SERIES || large.mode == LargeFlowMode.BUY_ABSORBED) {
+            return false to "крупный поток против входа: ${large.mode}"
+        }
+        val dynamicFloor = max(c.minFiveMinuteNotionalUsdt, large.thresholdUsdt * 8.0)
+        val broadCapital = total5 >= dynamicFloor && micro.trades60s >= 40
+        val largeBuySeries = large.mode == LargeFlowMode.BUY_SERIES && large.confidence >= 50 &&
+            large.largeBuyUsdt > large.largeSellUsdt * 1.20
+        if (!broadCapital && !largeBuySeries) {
+            return false to "нет подтверждения широкой активностью или серией крупных BUY"
+        }
+        return true to "капитал 5м ${money(total5)}, ускорение ${fmt(acceleration)}x, BUY/SELL ${fmt(sideRatio)}x"
     }
 
     private fun shockPermitted(observation: SharedFusionEntryObservation): Boolean {
         val frame = observation.frame
-        val breath = observation.breathing?.buyerBreath
+        val breath = observation.breathing?.buyerBreath ?: return false
         if (frame != null && frame.instant < 4) return false
-        if (breath == null) return true
         if (!breath.fresh) return false
         if (breath.phase == BuyerBreathPhase.SELLER_TAKEOVER || breath.phase == BuyerBreathPhase.EXHAUSTION) return false
         if (breath.absorptionRisk >= 72) return false
+        if (!capitalGate(observation.micro, PM3).first) return false
         return true
+    }
+
+    private fun money(value: Double): String = when {
+        value >= 1_000_000.0 -> String.format(java.util.Locale.US, "$%.2fm", value / 1_000_000.0)
+        value >= 1_000.0 -> String.format(java.util.Locale.US, "$%.0fk", value / 1_000.0)
+        else -> String.format(java.util.Locale.US, "$%.0f", value)
     }
 
     fun evaluatePosition(
