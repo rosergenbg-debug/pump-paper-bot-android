@@ -637,21 +637,9 @@
             android:orientation="horizontal">
 
             <Button
-                android:id="@+id/btnStop"
-                android:layout_width="0dp"
-                android:layout_height="54dp"
-                android:layout_weight="1"
-                android:backgroundTint="#6E7681"
-                android:text="СТОП"
-                android:textColor="#FFFFFF"
-                android:textStyle="bold" />
-
-            <Button
                 android:id="@+id/btnReset"
-                android:layout_width="0dp"
+                android:layout_width="match_parent"
                 android:layout_height="54dp"
-                android:layout_marginStart="8dp"
-                android:layout_weight="1"
                 android:backgroundTint="#DA3633"
                 android:text="СБРОС"
                 android:textColor="#FFFFFF"

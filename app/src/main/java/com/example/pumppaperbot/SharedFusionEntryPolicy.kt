@@ -14,7 +14,8 @@ data class SharedFusionEntryObservation(
     val shockReady: Boolean,
     val sampledAt: Long,
     val sampleBucket: Long,
-    val breathing: LiveMarketBreathingSnapshot? = null
+    val breathing: LiveMarketBreathingSnapshot? = null,
+    val micro: MicroImpulseSnapshot? = null
 )
 
 data class SharedFusionEntryDecision(
@@ -35,12 +36,18 @@ object SharedFusionEntryObservationStore {
 
         val breathing = LiveMarketBreathingStore.snapshot(context, now)
         val shock = ShockReboundStore.state(context)
+        val micro = MicroImpulseStore.state(context).takeIf {
+            it.connected && DeepSeekFreshMarketContext.isFresh(
+                it.updatedAt, now, DeepSeekFreshMarketContext.MICRO_MAX_AGE
+            )
+        }
         return SharedFusionEntryObservation(
             frame = FusionFlowPolicy.frame(breathing),
             shockReady = shock.fresh(now) && shock.ready,
             sampledAt = now,
             sampleBucket = bucket,
-            breathing = breathing
+            breathing = breathing,
+            micro = micro
         ).also {
             cachedBucket = bucket
             cached = it

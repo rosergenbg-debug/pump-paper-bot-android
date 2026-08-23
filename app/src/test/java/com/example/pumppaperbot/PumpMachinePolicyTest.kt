@@ -96,7 +96,7 @@ class PumpMachinePolicyTest {
     }
 
     @Test
-    fun `confirmed shock rebound remains an immediate local entry lane`() {
+    fun `shock rebound without real capital tape is rejected`() {
         val decision = PumpMachinePolicy.evaluate(
             portfolio = FusionSimPortfolio(),
             previous = FusionStabilityState(),
@@ -109,8 +109,8 @@ class PumpMachinePolicyTest {
             shockEntry = false,
             positionAgeMillis = Long.MAX_VALUE
         )
-        assertEquals("BUY", decision.action)
-        assertTrue(decision.reason.startsWith("V526_PM3_SHOCK_ENTRY"))
+        assertNull(decision.action)
+        assertTrue(decision.reason.startsWith("V526_PM3_NO_FOMO"))
     }
 
     @Test

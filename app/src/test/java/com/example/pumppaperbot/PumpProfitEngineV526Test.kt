@@ -20,13 +20,17 @@ class PumpProfitEngineV526Test {
         phase: BuyerBreathPhase = BuyerBreathPhase.IGNITION,
         instant: Int = 16,
         score5: Int = 9,
-        score15: Int = 1,
-        score30: Int = -2,
+        score15: Int = 8,
+        score30: Int = 5,
         buyer5: Double = 66.0,
         absorption: Int = 20,
         efficiency: Int = 45,
         activity: Double = 1.8,
         move: Double = 0.45,
+        fiveMinuteBuy: Double = 420_000.0,
+        fiveMinuteSell: Double = 180_000.0,
+        fifteenMinuteTotal: Double = 1_400_000.0,
+        microAvailable: Boolean = true,
         at: Long = 1_000_000L
     ): SharedFusionEntryObservation {
         val breath = BuyerBreathSnapshot(
@@ -57,12 +61,30 @@ class PumpProfitEngineV526Test {
             ),
             buyerBreath = breath
         )
+        val micro = if (microAvailable) MicroImpulseSnapshot(
+            connected = true,
+            updatedAt = at,
+            trades60s = 120,
+            buyNotional5m = fiveMinuteBuy,
+            sellNotional5m = fiveMinuteSell,
+            buyNotional15m = fiveMinuteBuy + (fifteenMinuteTotal - fiveMinuteBuy - fiveMinuteSell) * 0.58,
+            sellNotional15m = fiveMinuteSell + (fifteenMinuteTotal - fiveMinuteBuy - fiveMinuteSell) * 0.42,
+            flowHistorySeconds = 3_600L,
+            largeFlow = LargeFlowFingerprint(
+                mode = LargeFlowMode.BUY_SERIES,
+                confidence = 70,
+                thresholdUsdt = 15_000.0,
+                largeBuyUsdt = 150_000.0,
+                largeSellUsdt = 40_000.0
+            )
+        ) else null
         return SharedFusionEntryObservation(
             frame = FusionFlowFrame(instant, score5, score15, score15, score30),
             shockReady = false,
             sampledAt = at,
             sampleBucket = at / 15_000L,
-            breathing = breathing
+            breathing = breathing,
+            micro = micro
         )
     }
 
@@ -169,6 +191,33 @@ class PumpProfitEngineV526Test {
         )
         assertNull(decision.action)
         assertTrue(decision.reason.contains("ABSORPTION"))
+    }
+
+    @Test
+    fun `quiet low capital tape cannot arm pm2 or pm3`() {
+        val empty = observation(
+            fiveMinuteBuy = 38_000.0,
+            fiveMinuteSell = 31_000.0,
+            fifteenMinuteTotal = 220_000.0
+        )
+        listOf(PumpProfitModeV526.PUMP_2, PumpProfitModeV526.PUMP_3).forEach { mode ->
+            val decision = PumpProfitEngineV526.evaluateEntry(
+                mode, FusionStabilityState(), empty, 1_000_000L
+            )
+            assertNull(decision.action)
+            assertEquals(0, decision.nextState.entryStreak)
+            assertTrue(decision.reason.contains("CAPITAL_WAIT"))
+        }
+    }
+
+    @Test
+    fun `missing real trade tape fails closed`() {
+        val decision = PumpProfitEngineV526.evaluateEntry(
+            PumpProfitModeV526.PUMP_2, FusionStabilityState(),
+            observation(microAvailable = false), 1_000_000L
+        )
+        assertNull(decision.action)
+        assertTrue(decision.reason.contains("CAPITAL_WAIT"))
     }
 
     @Test
