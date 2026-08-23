@@ -1,0 +1,29 @@
+name: Export Android Signer Tools
+
+on:
+  push:
+    branches: [ "chatgpt/v5-26-profit-engine" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Package Android build signing tools
+        run: |
+          set -e
+          mkdir -p signer-tools/lib
+          cp "$ANDROID_HOME/build-tools/34.0.0/apksigner" signer-tools/apksigner
+          cp "$ANDROID_HOME/build-tools/34.0.0/lib/apksigner.jar" signer-tools/lib/apksigner.jar
+          cp "$ANDROID_HOME/build-tools/34.0.0/zipalign" signer-tools/zipalign
+          cp "$ANDROID_HOME/build-tools/34.0.0/aapt" signer-tools/aapt
+          chmod +x signer-tools/apksigner signer-tools/zipalign signer-tools/aapt
+      - name: Upload signer tools
+        uses: actions/upload-artifact@v4
+        with:
+          name: Android-Build-Tools-34-Signer
+          path: signer-tools
+          retention-days: 1
