@@ -3,6 +3,8 @@ name: Export Android Signer Tools
 on:
   push:
     branches: [ "chatgpt/v5-26-profit-engine" ]
+  pull_request:
+    branches: [ "chatgpt/v5-25-six-account-comparison" ]
   workflow_dispatch:
 
 permissions:
