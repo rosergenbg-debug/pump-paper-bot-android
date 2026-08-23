@@ -35,7 +35,6 @@ class PumpMachinePolicyTest {
     @Test
     fun `three percent net target exits immediately`() {
         val p = openPortfolio()
-        // Choose bid so liquidation after both simulated fees is just above +3% net.
         val bid = 1.036
         val net = PumpMachinePolicy.tradeNetPercent(p, bid, fee)
         assertTrue(net >= 3.0)
@@ -52,15 +51,15 @@ class PumpMachinePolicyTest {
             positionAgeMillis = 699_000L
         )
         assertEquals("EXIT", decision.action)
-        assertTrue(decision.reason.startsWith("TAKE_PROFIT_3_NET"))
+        assertTrue(decision.reason.startsWith("V526_TAKE_PROFIT_PM3"))
     }
 
     @Test
-    fun `minus one point five percent net stop exits immediately`() {
+    fun `v526 minus one point three percent net stop exits immediately`() {
         val p = openPortfolio()
         val bid = 0.989
         val net = PumpMachinePolicy.tradeNetPercent(p, bid, fee)
-        assertTrue(net <= -1.5)
+        assertTrue(net <= -1.3)
         val decision = PumpMachinePolicy.evaluate(
             portfolio = p,
             previous = FusionStabilityState(peakBid = 1.0),
@@ -74,11 +73,11 @@ class PumpMachinePolicyTest {
             positionAgeMillis = 79_000L
         )
         assertEquals("EXIT", decision.action)
-        assertTrue(decision.reason.startsWith("STOP_LOSS_1_5_NET"))
+        assertTrue(decision.reason.startsWith("V526_HARD_STOP_PM3"))
     }
 
     @Test
-    fun `ordinary fusion entry still needs two observations and sixty seconds`() {
+    fun `legacy fusion frame alone no longer opens pm3`() {
         val frame = FusionFlowFrame(instant = 20, score5m = 18, score15m = 15, score20m = 12, score30m = 10)
         val first = PumpMachinePolicy.evaluate(
             portfolio = FusionSimPortfolio(),
@@ -93,36 +92,11 @@ class PumpMachinePolicyTest {
             positionAgeMillis = Long.MAX_VALUE
         )
         assertNull(first.action)
-        val secondTooSoon = PumpMachinePolicy.evaluate(
-            portfolio = FusionSimPortfolio(),
-            previous = first.nextState,
-            frame = frame,
-            bid = 1.0,
-            feeRate = fee,
-            now = 30_000L,
-            shockReady = false,
-            shockFailed = false,
-            shockEntry = false,
-            positionAgeMillis = Long.MAX_VALUE
-        )
-        assertNull(secondTooSoon.action)
-        val confirmed = PumpMachinePolicy.evaluate(
-            portfolio = FusionSimPortfolio(),
-            previous = secondTooSoon.nextState,
-            frame = frame,
-            bid = 1.0,
-            feeRate = fee,
-            now = 62_000L,
-            shockReady = false,
-            shockFailed = false,
-            shockEntry = false,
-            positionAgeMillis = Long.MAX_VALUE
-        )
-        assertEquals("BUY", confirmed.action)
+        assertTrue(first.reason.contains("live breathing snapshot"))
     }
 
     @Test
-    fun `confirmed shock rebound can use the same fusion fast entry lane`() {
+    fun `confirmed shock rebound remains an immediate local entry lane`() {
         val decision = PumpMachinePolicy.evaluate(
             portfolio = FusionSimPortfolio(),
             previous = FusionStabilityState(),
@@ -136,7 +110,7 @@ class PumpMachinePolicyTest {
             positionAgeMillis = Long.MAX_VALUE
         )
         assertEquals("BUY", decision.action)
-        assertTrue(decision.reason.startsWith("SHOCK_REBOUND_ENTRY"))
+        assertTrue(decision.reason.startsWith("V526_PM3_SHOCK_ENTRY"))
     }
 
     @Test
