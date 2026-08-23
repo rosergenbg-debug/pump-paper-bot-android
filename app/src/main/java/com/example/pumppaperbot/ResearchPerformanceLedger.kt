@@ -27,9 +27,15 @@ object ResearchPerformanceLedger {
         try {
             captureLegacy(db, ResearchHistoryArchive.exportJson(context))
             captureApp(db, "V5+", AppPaperStore.state(context), !hasEpoch(db, "APP", "V5+"))
-            captureGemini(
-                db, "DeepSig", "V5+", GeminiPaperStore.state(context).portfolio,
-                !hasEpoch(db, "DeepSig", "V5+")
+            capturePumpMachine(
+                db,
+                PumpMachineStore.state(context),
+                !hasEpoch(db, "PumpMachine", "V5.21+")
+            )
+            capturePumpMachine2(
+                db,
+                PumpMachine2Store.state(context),
+                !hasEpoch(db, "PumpMachine2", "V5.24+")
             )
             GeminiExitExperimentStore.state(context)?.portfolio?.let {
                 captureGemini(db, "DeepSigX", "V5+", it, !hasEpoch(db, "DeepSigX", "V5+"))
@@ -161,6 +167,36 @@ object ResearchPerformanceLedger {
         }
         (if (fullImport) value.decisions else value.decisions.takeLast(50)).forEach {
             insert(db, "FusionSim", "V5+", "DECISION", "${it.time}:${it.decisionId}",
+                it.requestedAction, it.time, it.venuePrice, 0.0, "${it.result}; ${it.reason}")
+        }
+    }
+
+    private fun capturePumpMachine(
+        db: SQLiteDatabase,
+        value: FusionSimPortfolio,
+        fullImport: Boolean
+    ) {
+        (if (fullImport) value.trades else value.trades.takeLast(20)).forEach {
+            insert(db, "PumpMachine", "V5.21+", "TRADE", "${it.time}:${it.decisionId}:${it.action}",
+                it.action, it.time, it.price, it.pnlEur, it.reason)
+        }
+        (if (fullImport) value.decisions else value.decisions.takeLast(50)).forEach {
+            insert(db, "PumpMachine", "V5.21+", "DECISION", "${it.time}:${it.decisionId}",
+                it.requestedAction, it.time, it.venuePrice, 0.0, "${it.result}; ${it.reason}")
+        }
+    }
+
+    private fun capturePumpMachine2(
+        db: SQLiteDatabase,
+        value: FusionSimPortfolio,
+        fullImport: Boolean
+    ) {
+        (if (fullImport) value.trades else value.trades.takeLast(20)).forEach {
+            insert(db, "PumpMachine2", "V5.24+", "TRADE", "${it.time}:${it.decisionId}:${it.action}",
+                it.action, it.time, it.price, it.pnlEur, it.reason)
+        }
+        (if (fullImport) value.decisions else value.decisions.takeLast(50)).forEach {
+            insert(db, "PumpMachine2", "V5.24+", "DECISION", "${it.time}:${it.decisionId}",
                 it.requestedAction, it.time, it.venuePrice, 0.0, "${it.result}; ${it.reason}")
         }
     }

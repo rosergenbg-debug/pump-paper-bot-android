@@ -14,7 +14,11 @@ import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
-import kotlin.math.abs
+
+object FusionTradingCosts {
+    const val FEE_RATE = 0.0025
+    const val FEE_TIER = "симуляция 0,25% за сторону"
+}
 
 /** Keystore-backed storage. The plaintext key is never written to SharedPreferences or logs. */
 object BitpandaFusionSecureKeyStore {
@@ -89,8 +93,8 @@ data class FusionMarketSnapshot(
     val spreadPercent: Double = 0.0,
     val bidDepthEur: Double = 0.0,
     val askDepthEur: Double = 0.0,
-    val feeRate: Double = GeminiPaperTrader.FEE_RATE,
-    val feeTier: String = "резерв 0,15%",
+    val feeRate: Double = FusionTradingCosts.FEE_RATE,
+    val feeTier: String = FusionTradingCosts.FEE_TIER,
     val lastAttempt: Long = 0L,
     val lastSuccess: Long = 0L,
     val error: String = ""
@@ -103,7 +107,7 @@ data class FusionMarketSnapshot(
         .put("bid", bid).put("ask", ask).put("mid", mid)
         .put("spreadPercent", spreadPercent)
         .put("bidDepthEur", bidDepthEur).put("askDepthEur", askDepthEur)
-        .put("feeRate", feeRate).put("feeTier", feeTier)
+        .put("feeRate", FusionTradingCosts.FEE_RATE).put("feeTier", FusionTradingCosts.FEE_TIER)
         .put("lastAttempt", lastAttempt).put("lastSuccess", lastSuccess).put("error", error)
 
     companion object { const val MAX_AGE = 5L * 60L * 1000L }
@@ -126,12 +130,18 @@ object BitpandaFusionStore {
                 bid = j.optDouble("bid"), ask = j.optDouble("ask"), mid = j.optDouble("mid"),
                 spreadPercent = j.optDouble("spreadPercent"),
                 bidDepthEur = j.optDouble("bidDepthEur"), askDepthEur = j.optDouble("askDepthEur"),
-                feeRate = j.optDouble("feeRate", GeminiPaperTrader.FEE_RATE),
-                feeTier = j.optString("feeTier", "резерв 0,15%"),
+                feeRate = FusionTradingCosts.FEE_RATE,
+                feeTier = FusionTradingCosts.FEE_TIER,
                 lastAttempt = j.optLong("lastAttempt"), lastSuccess = j.optLong("lastSuccess"),
                 error = j.optString("error")
             )
-        }.getOrElse { FusionMarketSnapshot(configured = configured) }
+        }.getOrElse {
+            FusionMarketSnapshot(
+                configured = configured,
+                feeRate = FusionTradingCosts.FEE_RATE,
+                feeTier = FusionTradingCosts.FEE_TIER
+            )
+        }
     }
 
     fun canSync(context: Context, now: Long): Boolean {
@@ -144,7 +154,10 @@ object BitpandaFusionStore {
 
     fun save(context: Context, value: FusionMarketSnapshot) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putString(SNAPSHOT, value.toJson().toString()).apply()
+            .putString(SNAPSHOT, value.copy(
+                feeRate = FusionTradingCosts.FEE_RATE,
+                feeTier = FusionTradingCosts.FEE_TIER
+            ).toJson().toString()).apply()
     }
 
     fun clear(context: Context) {
@@ -168,14 +181,21 @@ class BitpandaFusionClient {
             parseOrderbook(book, now, previous)
         }.getOrElse { error ->
             previous.copy(
-                configured = true, connected = false, lastAttempt = now,
+                configured = true, connected = false,
+                feeRate = FusionTradingCosts.FEE_RATE,
+                feeTier = FusionTradingCosts.FEE_TIER,
+                lastAttempt = now,
                 error = safeError(error)
             )
         }
         BitpandaFusionStore.save(context, next)
-        UnifiedResearchLog.record(context, "BITPANDA_FUSION", if (next.connected) "OK" else "ERROR",
+        UnifiedResearchLog.record(
+            context,
+            "BITPANDA_FUSION",
+            if (next.connected) "OK" else "ERROR",
             if (next.connected) "Получен read-only стакан ${next.pair}; торговые команды отключены"
-            else next.error)
+            else next.error
+        )
         return next
     }
 
@@ -218,11 +238,20 @@ class BitpandaFusionClient {
             }
             val mid = (bid + ask) / 2.0
             return previous.copy(
-                configured = true, connected = true,
-                pair = json.optString("pair", PAIR), bid = bid, ask = ask, mid = mid,
+                configured = true,
+                connected = true,
+                pair = json.optString("pair", PAIR),
+                bid = bid,
+                ask = ask,
+                mid = mid,
                 spreadPercent = if (mid > 0.0) (ask - bid) / mid * 100.0 else 0.0,
-                bidDepthEur = depth(bids), askDepthEur = depth(asks),
-                lastAttempt = now, lastSuccess = now, error = ""
+                bidDepthEur = depth(bids),
+                askDepthEur = depth(asks),
+                feeRate = FusionTradingCosts.FEE_RATE,
+                feeTier = FusionTradingCosts.FEE_TIER,
+                lastAttempt = now,
+                lastSuccess = now,
+                error = ""
             )
         }
 

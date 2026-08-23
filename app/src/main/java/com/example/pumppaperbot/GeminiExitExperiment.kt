@@ -190,6 +190,7 @@ data class GeminiExitEvidence(
     val appExitSignal: Boolean = false,
     val breathing5m: Int? = null,
     val breathing15m: Int? = null,
+    val breathing20m: Int? = null,
     val breathing30m: Int? = null,
     val breathing60m: Int? = null
 ) {
@@ -311,6 +312,7 @@ data class GeminiExitEvidence(
                         appEvaluation?.action == StrategyV2.ACTION_SELL_HALF),
                 breathing5m = horizon(5),
                 breathing15m = horizon(15),
+                breathing20m = horizon(20),
                 breathing30m = horizon(30),
                 breathing60m = horizon(60)
             )
@@ -342,10 +344,9 @@ data class GeminiExitEvaluationResult(
 
 internal object GeminiExitExperimentEngine {
     private const val MIN_EVALUATION_GAP_MILLIS = 2L * 60L * 1000L
-    private const val EMERGENCY_LOSS_PERCENT = 5.0
     private const val ENTRY_CONFIRMATIONS_REQUIRED = 3
-    private const val EXIT_CONFIRMATIONS_REQUIRED = 3
-    private const val MIN_ORDINARY_HOLD_MILLIS = 30L * 60L * 1000L
+    private const val EXIT_CONFIRMATIONS_REQUIRED = 2
+    private const val MIN_ORDINARY_HOLD_MILLIS = 10L * 60L * 1000L
     private const val REENTRY_COOLDOWN_MILLIS = 30L * 60L * 1000L
 
     fun bootstrap(
@@ -542,37 +543,71 @@ internal object GeminiExitExperimentEngine {
         }
         val openedAt = marked.trades.lastOrNull { it.action == "BUY" }?.time ?: now
         val positionAge = (now - openedAt).coerceAtLeast(0L)
+        val five = evidence.breathing5m ?: 0
+        val fifteen = evidence.breathing15m ?: 0
+        val twenty = evidence.breathing20m ?: 0
+        val thirty = evidence.breathing30m ?: 0
+        val sixty = evidence.breathing60m ?: 0
         val structuralWeakness = evidence.priceWeak ||
             (evidence.spotFlowWeak && evidence.futuresFlowWeak) || evidence.cvdWeak || evidence.microWeak
-        val mediumHorizonWeak = (evidence.breathing15m ?: 0) <= -20 &&
-            (evidence.breathing30m ?: 0) <= -15 &&
-            ((evidence.breathing5m ?: 0) <= -15 || (evidence.breathing60m ?: 0) <= -10)
-        val profitProtection = evidence.currentReturnPercent >= 4.0 &&
-            evidence.pullbackPercent >= maxOf(1.0, evidence.adaptivePullbackPercent) &&
-            evidence.microWeak && evidence.groups >= 3 && mediumHorizonWeak
-        val dangerous = (evidence.score >= 4 && evidence.groups >= 3 && structuralWeakness &&
-            (mediumHorizonWeak || evidence.appExitSignal)) || profitProtection
+        val mediumWeakCount = listOf(five, fifteen, twenty).count { it <= -8 }
+        val mediumTurningWeak = mediumWeakCount >= 2 && (five <= -12 || fifteen <= -10)
+        val strongMediumReversal = five <= -18 && fifteen <= -15 && twenty <= -12
+        val slowContextWeak = thirty <= -10 || sixty <= -8
+        val sellerConfirmation = evidence.microWeak || evidence.cvdWeak ||
+            (evidence.spotFlowWeak && evidence.futuresFlowWeak) || evidence.priceWeak
+        val peakReturnPercent = if (evidence.pullbackPercent < 99.0) {
+            ((1.0 + evidence.currentReturnPercent / 100.0) /
+                (1.0 - evidence.pullbackPercent / 100.0).coerceAtLeast(0.0001) - 1.0) * 100.0
+        } else {
+            evidence.currentReturnPercent
+        }
+        val profitProtection = peakReturnPercent >= 1.60 &&
+            evidence.currentReturnPercent >= 0.75 &&
+            evidence.pullbackPercent >= maxOf(0.90, evidence.adaptivePullbackPercent) &&
+            mediumTurningWeak && (twenty <= -8 || slowContextWeak) && sellerConfirmation
+        val dangerous = (
+            evidence.score >= 4 && evidence.groups >= 3 && structuralWeakness &&
+                (mediumTurningWeak || evidence.appExitSignal)
+            ) || profitProtection
         val streak = if (dangerous) state.dangerStreak + 1 else 0
-        val emergency = evidence.currentReturnPercent <= -EMERGENCY_LOSS_PERCENT
-        // There is deliberately no +8% ceiling or automatic exit trigger. A profitable
-        // position is managed by the same multi-group reversal evidence at every return.
+        val emergencyLossPercent = (evidence.adaptivePullbackPercent * 1.8).coerceIn(2.5, 3.0)
+        val emergency = evidence.currentReturnPercent <= -emergencyLossPercent
         val ordinaryHoldComplete = positionAge >= MIN_ORDINARY_HOLD_MILLIS
+        val profitProtectedExit = ordinaryHoldComplete && profitProtection
         val appConfirmedReversal = ordinaryHoldComplete && evidence.appExitSignal &&
             dangerous && streak >= 2
-        val strongConfirmedReversal = ordinaryHoldComplete && mediumHorizonWeak &&
-            evidence.score >= 8 && evidence.groups >= 5 && streak >= 2
-        val confirmedReversal = ordinaryHoldComplete && streak >= EXIT_CONFIRMATIONS_REQUIRED
-        val shouldExit = emergency || appConfirmedReversal || strongConfirmedReversal || confirmedReversal
+        val strongConfirmedReversal = ordinaryHoldComplete && strongMediumReversal &&
+            evidence.score >= 6 && evidence.groups >= 4 && sellerConfirmation
+        val confirmedReversal = ordinaryHoldComplete && dangerous && streak >= EXIT_CONFIRMATIONS_REQUIRED
+        val shouldExit = emergency || profitProtectedExit || strongConfirmedReversal ||
+            appConfirmedReversal || confirmedReversal
+        val horizonText = "5/15/20=$five/$fifteen/$twenty; 30/60=$thirty/$sixty"
         val prefix = when {
-            emergency -> "АВАРИЙНАЯ СТРАХОВКА −5%"
+            emergency -> String.format(
+                Locale.GERMANY,
+                "АВАРИЙНАЯ СТРАХОВКА −%.1f%%",
+                emergencyLossPercent
+            )
+            profitProtectedExit -> "ЗАЩИТА ПРИБЫЛИ: ОТКАТ ОТ ДОСТИГНУТОГО ПИКА"
+            strongConfirmedReversal -> "СИЛЬНЫЙ РАЗВОРОТ 5/15/20 ПОДТВЕРЖДЁН"
             appConfirmedReversal -> "APP И РЫНОК ПОДТВЕРДИЛИ РАЗВОРОТ"
-            strongConfirmedReversal -> "СИЛЬНЫЙ РАЗВОРОТ ПОДТВЕРЖДЁН ДВУМЯ ПРОВЕРКАМИ"
-            confirmedReversal -> "РАЗВОРОТ ПОДТВЕРЖДЁН ТРЕМЯ ПРОВЕРКАМИ"
-            dangerous && !ordinaryHoldComplete -> "РИСК ЕСТЬ, НО ПОЗИЦИЯ СЛИШКОМ НОВАЯ"
-            dangerous -> "ОПАСНОСТЬ ${streak.coerceAtMost(EXIT_CONFIRMATIONS_REQUIRED)}/$EXIT_CONFIRMATIONS_REQUIRED"
+            confirmedReversal -> "РАЗВОРОТ 5/15/20 ПОДТВЕРЖДЁН ДВУМЯ ПРОВЕРКАМИ"
+            dangerous && !ordinaryHoldComplete -> "РИСК ЕСТЬ, НО ПОЗИЦИЯ МОЛОЖЕ 10 МИНУТ"
+            dangerous -> "ВЕРШИНА ПОД УГРОЗОЙ ${streak.coerceAtMost(EXIT_CONFIRMATIONS_REQUIRED)}/$EXIT_CONFIRMATIONS_REQUIRED"
             else -> "ПОЗИЦИЯ УДЕРЖИВАЕТСЯ"
         }
-        val reason = "$prefix: ${evidence.reason}. Оценка ${evidence.score}, групп ${evidence.groups}."
+        val slowText = if (slowContextWeak) "медленный фон тоже слабеет" else "30/60 пока только фон и не блокируют выход"
+        val reason = "$prefix: ${evidence.reason}. $horizonText; $slowText. " +
+            String.format(
+                Locale.GERMANY,
+                "Пик ≈ %.2f%%, текущий результат %.2f%%, откат %.2f%%. Оценка %d, групп %d.",
+                peakReturnPercent,
+                evidence.currentReturnPercent,
+                evidence.pullbackPercent,
+                evidence.score,
+                evidence.groups
+            )
         if (!shouldExit) {
             return GeminiExitEvaluationResult(
                 state.copy(

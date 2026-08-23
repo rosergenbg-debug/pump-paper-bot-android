@@ -11,7 +11,7 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
-/** One sanitized journal for APP, DeepSig, DeepSigX and FusionSim. */
+/** One sanitized journal for APP, Pump Machine, DeepSigX and FusionSim. */
 object UnifiedResearchLog {
     private const val DIRECTORY = "research_logs"
     private const val RETENTION_DAYS = 30
@@ -35,7 +35,8 @@ object UnifiedResearchLog {
         val price = PaperExecutionPolicy.displayPrice(market, now)
         val app = AppPaperStore.state(context)
         val deepSeek = DeepSeekPrimaryStore.state(context, now)
-        val deepSig = GeminiPaperStore.state(context).portfolio
+        val pumpMachine = PumpMachineStore.state(context)
+        val pumpMachine2 = PumpMachine2Store.state(context)
         val deepSigX = GeminiExitExperimentStore.state(context)?.portfolio ?: GeminiPaperPortfolio()
         val fusionMarket = BitpandaFusionStore.state(context)
         val fusionPrice = fusionMarket.bid.takeIf { fusionMarket.fresh(now) } ?: price
@@ -45,7 +46,32 @@ object UnifiedResearchLog {
             fusion, fusionPrice, fusionMarket.feeRate, fusionMarket.fresh(now)
         )
         record(context, "APP", "CYCLE", "$source; value=${app.value(price)}; trades=${app.trades.size}", now)
-        record(context, "DEEPSIG", deepSeek.action, "$source; value=${deepSig.value(price)}; ${deepSeek.summary}", now)
+        val pumpMachineValue = PumpMachinePolicy.netLiquidationValue(
+            pumpMachine,
+            fusionPrice,
+            fusionMarket.feeRate
+        )
+        record(
+            context,
+            "PUMP_MACHINE",
+            if (pumpMachine.inPosition) "IN_POSITION" else "CYCLE",
+            "$source; value=$pumpMachineValue; tradeNet=${PumpMachinePolicy.tradeNetPercent(pumpMachine, fusionPrice, fusionMarket.feeRate)}; " +
+                "trades=${pumpMachine.trades.size}; ${PumpMachineStore.lastStatus(context)}",
+            now
+        )
+        val pumpMachine2Value = PumpMachine2Policy.netLiquidationValue(
+            pumpMachine2,
+            fusionPrice,
+            fusionMarket.feeRate
+        )
+        record(
+            context,
+            "PUMP_MACHINE_2",
+            if (pumpMachine2.inPosition) "IN_POSITION" else "CYCLE",
+            "$source; value=$pumpMachine2Value; tradeNet=${PumpMachine2Policy.tradeNetPercent(pumpMachine2, fusionPrice, fusionMarket.feeRate)}; " +
+                "trades=${pumpMachine2.trades.size}; ${PumpMachine2Store.lastStatus(context)}",
+            now
+        )
         record(context, "DEEPSIGX", "CYCLE", "$source; value=${deepSigX.value(price)}; trades=${deepSigX.trades.size}", now)
         record(
             context,
@@ -62,7 +88,9 @@ object UnifiedResearchLog {
         val market = PumpBotEngine.snapshot(context)
         val displayPrice = PaperExecutionPolicy.displayPrice(market)
         val app = AppPaperStore.state(context)
-        val deepSig = GeminiPaperStore.state(context, includeActivity = true)
+        val retiredDeepSig = GeminiPaperStore.state(context, includeActivity = true)
+        val pumpMachine = PumpMachineStore.state(context)
+        val pumpMachine2 = PumpMachine2Store.state(context)
         val deepSigX = GeminiExitExperimentStore.state(context)
         val fusion = BitpandaFusionStore.state(context)
         val fusionSim = FusionSimStore.state(context)
@@ -101,11 +129,13 @@ object UnifiedResearchLog {
             .put("entryOpportunityAudit", EntryOpportunityAuditStore.exportJson(context))
             .put("accounts", JSONObject()
                 .put("APP", appJson(app))
-                .put("DeepSig", geminiJson(deepSig.portfolio))
+                .put("PumpMachine", PumpMachineStore.toJson(pumpMachine))
+                .put("PumpMachine2", PumpMachine2Store.toJson(pumpMachine2))
+                .put("DeepSigRetired", geminiJson(retiredDeepSig.portfolio).put("retiredInV521", true))
                 .put("DeepSigX", deepSigX?.let { geminiJson(it.portfolio)
                     .put("lastSignal", it.lastSignal).put("lastReason", it.lastReason) } ?: JSONObject.NULL)
                 .put("FusionSim", FusionSimStore.toJson(fusionSim)))
-            .put("deepSigActivity", JSONArray(deepSig.activity.map { it.toJson() }))
+            .put("deepSigRetiredActivity", JSONArray(retiredDeepSig.activity.map { it.toJson() }))
             .put("journal", journal)
         val dir = File(context.cacheDir, "reports").apply { mkdirs() }
         return File(dir, "PumpSignal-V${BuildConfig.VERSION_NAME}-Log-${stamp(now)}.json").apply {

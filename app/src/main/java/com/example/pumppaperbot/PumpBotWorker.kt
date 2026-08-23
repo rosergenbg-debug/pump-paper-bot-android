@@ -97,12 +97,17 @@ class PumpBotWorker(
                 GeminiPaperStore.markDataReady(applicationContext, source, startedAt)
             }
             val snapshot = PumpBotEngine.snapshot(applicationContext)
+            val userPositionOpen = snapshot.waitMode == "SELL" && snapshot.entryPrice > 0.0
             val appTrade = CycleStageGuard.run(applicationContext, "APP_PAPER", {
                 AppPaperSyncResult(AppPaperStore.state(applicationContext), false)
             }) { AppPaperStore.syncWithAlerts(applicationContext) }
-            val deepSeekPaper = CycleStageGuard.run(applicationContext, "DEEPSIG_PAPER", {
-                DeepSeekPaperOutcome("ошибка модуля изолирована")
-            }) { DeepSeekPaperCoordinator().sync(applicationContext, deepSeek, source) }
+            val pumpPair = CycleStageGuard.run(applicationContext, "PUMP_MACHINE_PAIR", {
+                PumpMachinePairSyncResult(
+                    PumpMachineSyncResult(PumpMachineStore.state(applicationContext), "ошибка пары Pump изолирована", 0.0),
+                    PumpMachine2SyncResult(PumpMachine2Store.state(applicationContext), "ошибка пары Pump изолирована", 0.0)
+                )
+            }) { PumpMachinePairCoordinator.sync(applicationContext) }
+            val pumpMachine = pumpPair.pump3
             CycleStageGuard.run(applicationContext, "FUSION_SIM", {
                 FusionSimStore.state(applicationContext)
             }) { FusionSimStore.sync(applicationContext, deepSeek) }
@@ -117,13 +122,15 @@ class PumpBotWorker(
                 } else false
             }
             val signalAlerted = CycleStageGuard.run(applicationContext, "SIGNAL_ALERT", { false }) {
-                if (!rapidDropAlerted && !appTrade.tradeAlerted && PumpBotEngine.shouldAlert(applicationContext, snapshot)) {
+                if (!rapidDropAlerted && !appTrade.tradeAlerted &&
+                    (!userPositionOpen || snapshot.sellSignal) && PumpBotEngine.shouldAlert(applicationContext, snapshot)
+                ) {
                     PumpAlert.showSignal(applicationContext, snapshot)
                     PumpBotEngine.markAlerted(applicationContext, snapshot)
                     true
                 } else false
             }
-            if (!rapidDropAlerted && !appTrade.tradeAlerted && !signalAlerted &&
+            if (!userPositionOpen && !rapidDropAlerted && !appTrade.tradeAlerted && !signalAlerted &&
                 EventRadarStore.shouldAlert(applicationContext, eventState)
             ) {
                 CycleStageGuard.run(applicationContext, "EVENT_ALERT", { Unit }) {
@@ -146,7 +153,7 @@ class PumpBotWorker(
                 source,
                 startedAt,
                 finishedAt + interval,
-                "проверка завершена; DeepSeek: ${deepSeek.action}; виртуальный счёт: ${deepSeekPaper.status}; Gemini контролирует только открытую позицию Сержа",
+                "проверка завершена; DeepSeek аналитик: ${deepSeek.action}; Pump Machine: ${pumpMachine.status}; Gemini контролирует только открытую позицию Сержа",
                 finishedAt
             )
             Result.success()

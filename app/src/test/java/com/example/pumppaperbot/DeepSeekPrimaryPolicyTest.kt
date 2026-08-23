@@ -39,7 +39,8 @@ class DeepSeekPrimaryPolicyTest {
         ))
     }
 
-    @Test fun `primary DeepSeek waits two minutes between paid calls`() {
+    @Test fun `primary DeepSeek waits five minutes between routine paid calls`() {
+        assertEquals(300_000L, DeepSeekPrimaryPolicy.INTERVAL)
         val state = DeepSeekPrimaryState(lastAttempt = 1_000L)
         assertFalse(DeepSeekPrimaryPolicy.shouldRun(
             state, hasMarketData = true, force = false,
@@ -111,7 +112,8 @@ class DeepSeekPrimaryPolicyTest {
         )
     }
 
-    @Test fun `yellow entry support permits a one minute paid cadence`() {
+    @Test fun `yellow entry support permits a two minute paid cadence`() {
+        assertEquals(120_000L, DeepSeekActionLevelPolicy.INTENSIVE_INTERVAL_MILLIS)
         val state = DeepSeekPrimaryState(lastAttempt = 1_000L)
         assertFalse(DeepSeekPrimaryPolicy.shouldRun(
             state,

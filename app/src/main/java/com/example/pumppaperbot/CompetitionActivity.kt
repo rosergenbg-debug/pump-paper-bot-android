@@ -1,5 +1,6 @@
 package com.example.pumppaperbot
 
+import android.app.AlertDialog
 import android.graphics.Color
 import android.os.Bundle
 import android.os.Handler
@@ -7,6 +8,7 @@ import android.os.Looper
 import android.view.Gravity
 import android.widget.Button
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import okhttp3.OkHttpClient
@@ -15,9 +17,18 @@ import java.util.Locale
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
+private data class CompetitionDataset(
+    val title: String,
+    val subtitle: String,
+    val candles: List<PumpCandle>,
+    val markers: List<CompetitionMarker>,
+    val feeRate: Double
+)
+
 class CompetitionActivity : AppCompatActivity() {
     private val handler = Handler(Looper.getMainLooper())
     private val charts = ArrayList<CompetitionChartView>()
+    private val datasets = arrayOfNulls<CompetitionDataset>(CompetitionAccountSpec.COUNT)
     private val executor = Executors.newSingleThreadExecutor()
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
@@ -40,7 +51,7 @@ class CompetitionActivity : AppCompatActivity() {
             setPadding(dp(8), dp(6), dp(8), dp(8))
         }
         val back = Button(this).apply {
-            text = "←  СРАВНЕНИЕ ПЯТИ СЧЕТОВ"
+            text = CompetitionAccountSpec.SCREEN_TITLE
             setTextColor(Color.WHITE)
             setBackgroundColor(Color.parseColor("#30363D"))
             gravity = Gravity.CENTER
@@ -56,8 +67,11 @@ class CompetitionActivity : AppCompatActivity() {
         root.addView(archiveStatus, LinearLayout.LayoutParams(-1, dp(54)).apply {
             topMargin = dp(3)
         })
-        repeat(5) {
-            val chart = CompetitionChartView(this)
+        repeat(CompetitionAccountSpec.COUNT) { index ->
+            val chart = CompetitionChartView(this).apply {
+                contentDescription = "Открыть подробный график ${index + 1}"
+                setOnClickListener { showChartDetail(index) }
+            }
             charts += chart
             root.addView(chart, LinearLayout.LayoutParams(-1, 0, 1f).apply {
                 topMargin = dp(3)
@@ -94,12 +108,13 @@ class CompetitionActivity : AppCompatActivity() {
         val ledger = runCatching { ResearchPerformanceLedger.summary(this) }
             .getOrDefault(ResearchLedgerSummary(0, 0, 0))
         archiveStatus.text = archive.compactText() +
-            "\nНЕПРЕРЫВНЫЙ ЖУРНАЛ V4→V5+: ${ledger.trades} сделок, ${ledger.decisions} решений."
+            "\nНЕПРЕРЫВНЫЙ ЖУРНАЛ V4→V5+: ${ledger.trades} сделок, ${ledger.decisions} решений. • Нажмите график для деталей"
         val now = System.currentTimeMillis()
         val snapshot = PumpBotEngine.snapshot(this)
         val price = PaperExecutionPolicy.displayPrice(snapshot, now)
         val app = AppPaperStore.state(this)
-        val gemini = GeminiPaperStore.state(this).portfolio
+        val pumpMachine = PumpMachineStore.state(this)
+        val pumpMachine2 = PumpMachine2Store.state(this)
         val geminiExitExperiment = GeminiExitExperimentStore.state(this)?.portfolio
             ?: GeminiPaperPortfolio()
         val user = UserPaperStore.markToMarket(this, price)
@@ -113,19 +128,42 @@ class CompetitionActivity : AppCompatActivity() {
         } else {
             snapshot.chart.candles
         }
-        val candles = CompetitionChartPresentation.withLiveEdge(
-            closedCandles,
-            price,
-            now
-        )
+        val candles = CompetitionChartPresentation.withLiveEdge(closedCandles, price, now)
 
-        charts[0].setData(
-            "DEEPSIG",
-            summary(gemini.value(price), gemini.profitPercent(price), gemini.inPosition),
-            candles,
-            gemini.trades.map { CompetitionMarker(it.time, it.action, it.price, it.pnlEur) }
+        val pumpMachineValue = PumpMachinePolicy.netLiquidationValue(
+            pumpMachine,
+            fusionPrice,
+            fusionMarket.feeRate
         )
-        charts[1].setData(
+        setChart(0, CompetitionDataset(
+            "PUMP 3% NET • V5.27 ОБЩИЙ ВХОД • TP +3% / SL −1,3%",
+            summary(
+                pumpMachineValue,
+                (pumpMachineValue / FusionSimPortfolio.START_BALANCE - 1.0) * 100.0,
+                pumpMachine.inPosition
+            ),
+            candles,
+            pumpMachine.trades.map { CompetitionMarker(it.time, it.action, it.price, it.pnlEur) },
+            FusionTradingCosts.FEE_RATE
+        ))
+
+        val pumpMachine2Value = PumpMachine2Policy.netLiquidationValue(
+            pumpMachine2,
+            fusionPrice,
+            fusionMarket.feeRate
+        )
+        setChart(1, CompetitionDataset(
+            "PUMP 2% NET • V5.27 ОБЩИЙ ВХОД • TP +2% / SL −1,1%",
+            summary(
+                pumpMachine2Value,
+                (pumpMachine2Value / FusionSimPortfolio.START_BALANCE - 1.0) * 100.0,
+                pumpMachine2.inPosition
+            ),
+            candles,
+            pumpMachine2.trades.map { CompetitionMarker(it.time, it.action, it.price, it.pnlEur) },
+            FusionTradingCosts.FEE_RATE
+        ))
+        setChart(2, CompetitionDataset(
             "DEEPSIGX",
             summary(
                 geminiExitExperiment.value(price),
@@ -133,17 +171,17 @@ class CompetitionActivity : AppCompatActivity() {
                 geminiExitExperiment.inPosition
             ),
             candles,
-            geminiExitExperiment.trades.map {
-                CompetitionMarker(it.time, it.action, it.price, it.pnlEur)
-            }
-        )
-        charts[2].setData(
+            geminiExitExperiment.trades.map { CompetitionMarker(it.time, it.action, it.price, it.pnlEur) },
+            0.0015
+        ))
+        setChart(3, CompetitionDataset(
             "APP",
             summary(app.value(price), app.profitPercent(price), app.inPosition),
             candles,
-            app.trades.map { CompetitionMarker(it.candleTime, it.action, it.price, it.pnlEur) }
-        )
-        charts[3].setData(
+            app.trades.map { CompetitionMarker(it.candleTime, it.action, it.price, it.pnlEur) },
+            0.0015
+        ))
+        setChart(4, CompetitionDataset(
             "DEEPSIG FUSION",
             summary(
                 fusion.value(fusionPrice),
@@ -151,14 +189,86 @@ class CompetitionActivity : AppCompatActivity() {
                 fusion.inPosition
             ),
             candles,
-            fusion.trades.map { CompetitionMarker(it.time, it.action, it.price, it.pnlEur) }
-        )
-        charts[4].setData(
+            fusion.trades.map { CompetitionMarker(it.time, it.action, it.price, it.pnlEur) },
+            FusionTradingCosts.FEE_RATE
+        ))
+        setChart(5, CompetitionDataset(
             "СЕРЖ",
             summary(user.value(price), user.profitPercent(price), user.inPosition),
             candles,
-            user.trades.map { CompetitionMarker(it.time, it.action, it.price) }
+            user.trades.map { CompetitionMarker(it.time, it.action, it.price) },
+            0.0015
+        ))
+    }
+
+    private fun setChart(index: Int, dataset: CompetitionDataset) {
+        datasets[index] = dataset
+        charts[index].setData(
+            dataset.title,
+            dataset.subtitle,
+            dataset.candles,
+            dataset.markers,
+            dataset.feeRate
         )
+    }
+
+    private fun showChartDetail(index: Int) {
+        val dataset = datasets.getOrNull(index) ?: return
+        val body = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(8), dp(8), dp(8), dp(8))
+            setBackgroundColor(Color.parseColor("#0D1117"))
+        }
+        body.addView(TextView(this).apply {
+            text = "${dataset.title}\n${dataset.subtitle}"
+            setTextColor(Color.WHITE)
+            textSize = 18f
+            setPadding(dp(8), dp(4), dp(8), dp(6))
+        })
+        val detailChart = CompetitionChartView(this).apply {
+            setVisibleBars(48)
+            setData(dataset.title, dataset.subtitle, dataset.candles, dataset.markers, dataset.feeRate)
+        }
+        body.addView(detailChart, LinearLayout.LayoutParams(-1, dp(330)))
+        body.addView(TextView(this).apply {
+            text = "Проведите пальцем по графику для просмотра прошлого. Ниже — точные события, чтобы метки не перекрывали друг друга."
+            setTextColor(Color.parseColor("#8B949E"))
+            textSize = 12f
+            setPadding(dp(8), dp(6), dp(8), dp(6))
+        })
+        val tradeText = TextView(this).apply {
+            setTextColor(Color.parseColor("#C9D1D9"))
+            setBackgroundColor(Color.parseColor("#161B22"))
+            textSize = 13f
+            setPadding(dp(10), dp(8), dp(10), dp(8))
+            text = detailTradeText(dataset)
+        }
+        val tradeScroll = ScrollView(this).apply { addView(tradeText) }
+        body.addView(tradeScroll, LinearLayout.LayoutParams(-1, dp(220)).apply { topMargin = dp(6) })
+
+        AlertDialog.Builder(this)
+            .setView(body)
+            .setPositiveButton("Закрыть", null)
+            .show()
+    }
+
+    private fun detailTradeText(dataset: CompetitionDataset): String {
+        if (dataset.markers.isEmpty()) return "Сделок пока нет."
+        return dataset.markers.takeLast(120).asReversed().joinToString("\n\n") { marker ->
+            buildString {
+                append(PumpBotEngine.formatDate(marker.time))
+                append("  •  ")
+                append(when {
+                    marker.action.startsWith("BUY") -> "ВХОД"
+                    marker.action == "SELL_HALF" -> "½ ВЫХОД"
+                    else -> "ВЫХОД"
+                })
+                append(String.format(Locale.US, "  •  €%.8f", marker.price))
+                if (kotlin.math.abs(marker.pnlEur) >= 0.005) {
+                    append(String.format(Locale.GERMANY, "  •  %+.2f €", marker.pnlEur))
+                }
+            }
+        }
     }
 
     private fun summary(value: Double, percent: Double, inPosition: Boolean): String =

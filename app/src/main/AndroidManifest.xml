@@ -5,8 +5,10 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <application
+        android:name=".V513Application"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -30,6 +32,7 @@
         <service
             android:name=".PumpSignalService"
             android:exported="false"
+            android:stopWithTask="false"
             android:foregroundServiceType="dataSync" />
         <activity
             android:name=".BacktestResultActivity"
@@ -37,6 +40,10 @@
         <activity
             android:name=".BacktestActivity"
             android:exported="false" />
+        <activity
+            android:name=".BigOverviewActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
         <activity
             android:name=".ChartDetailActivity"
             android:exported="false"
@@ -66,6 +73,10 @@
             android:screenOrientation="portrait" />
         <activity
             android:name=".CompetitionActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+        <activity
+            android:name=".PumpMachineActivity"
             android:exported="false"
             android:screenOrientation="portrait" />
         <activity

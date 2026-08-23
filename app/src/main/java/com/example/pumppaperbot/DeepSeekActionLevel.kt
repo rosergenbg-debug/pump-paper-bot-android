@@ -54,7 +54,7 @@ data class DeepSeekExitLevelEvidence(
  * A display and scheduling layer only. It combines already available evidence but never executes a trade.
  */
 object DeepSeekActionLevelPolicy {
-    const val INTENSIVE_INTERVAL_MILLIS = 60_000L
+    const val INTENSIVE_INTERVAL_MILLIS = 2L * 60L * 1000L
     const val APPROACHING_LEVEL = 7
     const val READY_LEVEL = 9
 
@@ -86,7 +86,7 @@ object DeepSeekActionLevelPolicy {
             fused.level,
             fused.reason,
             intensive = fused.level >= APPROACHING_LEVEL || microPressure || evidence.appReadiness >= 70,
-            proPreferred = fused.level >= READY_LEVEL
+            proPreferred = fused.level >= READY_LEVEL && evidence.aiAction.uppercase() == "BUY"
         )
     }
 
@@ -262,7 +262,7 @@ object DeepSeekActionLevelAlertStore {
 
 internal object VirtualTradeAlertPolicy {
     @Suppress("UNUSED_PARAMETER")
-    fun shouldNotify(action: String, userPositionOpen: Boolean): Boolean = true
+    fun shouldNotify(action: String, userPositionOpen: Boolean): Boolean = !userPositionOpen
 }
 
 internal object AlertDeliveryPolicy {

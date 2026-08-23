@@ -64,10 +64,13 @@ class CompetitionChartView @JvmOverloads constructor(
     private var subtitle = ""
     private var candles: List<PumpCandle> = emptyList()
     private var markers: List<CompetitionMarker> = emptyList()
+    private var feeRate = 0.0015
     private var offset = 0
     private var visibleBars = 96
     private var downX = 0f
+    private var downY = 0f
     private var dragStartOffset = 0
+    private var dragged = false
     private var step = 1f
     private var offsetListener: ((Int) -> Unit)? = null
 
@@ -75,12 +78,20 @@ class CompetitionChartView @JvmOverloads constructor(
         title: String,
         subtitle: String,
         candles: List<PumpCandle>,
-        markers: List<CompetitionMarker>
+        markers: List<CompetitionMarker>,
+        feeRate: Double = 0.0015
     ) {
         this.title = title
         this.subtitle = subtitle
         this.candles = candles
         this.markers = markers
+        this.feeRate = feeRate.coerceIn(0.0, 0.02)
+        offset = offset.coerceIn(0, maxOffset())
+        invalidate()
+    }
+
+    fun setVisibleBars(value: Int) {
+        visibleBars = value.coerceIn(12, 240)
         offset = offset.coerceIn(0, maxOffset())
         invalidate()
     }
@@ -102,13 +113,17 @@ class CompetitionChartView @JvmOverloads constructor(
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 downX = event.x
+                downY = event.y
                 dragStartOffset = offset
+                dragged = false
                 parent?.requestDisallowInterceptTouchEvent(true)
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
                 val dx = event.x - downX
+                val dy = event.y - downY
                 if (abs(dx) >= dp(3f)) {
+                    dragged = true
                     val moved = (dx / max(step, 1f)).toInt()
                     val next = (dragStartOffset + moved).coerceIn(0, maxOffset())
                     if (next != offset) {
@@ -116,15 +131,29 @@ class CompetitionChartView @JvmOverloads constructor(
                         invalidate()
                         offsetListener?.invoke(offset)
                     }
+                } else if (abs(dy) >= dp(8f)) {
+                    dragged = true
                 }
                 return true
             }
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+            MotionEvent.ACTION_UP -> {
+                parent?.requestDisallowInterceptTouchEvent(false)
+                if (!dragged && abs(event.x - downX) < dp(8f) && abs(event.y - downY) < dp(8f)) {
+                    performClick()
+                }
+                return true
+            }
+            MotionEvent.ACTION_CANCEL -> {
                 parent?.requestDisallowInterceptTouchEvent(false)
                 return true
             }
         }
         return super.onTouchEvent(event)
+    }
+
+    override fun performClick(): Boolean {
+        super.performClick()
+        return true
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -180,8 +209,7 @@ class CompetitionChartView @JvmOverloads constructor(
             return x(index) to y(marker.price).coerceIn(top, bottom)
         }
 
-        val completedTrades =
-            ArrayList<Triple<CompetitionMarker, CompetitionMarker, Double>>()
+        val completedTrades = ArrayList<Triple<CompetitionMarker, CompetitionMarker, Double>>()
         var openBuy: CompetitionMarker? = null
         var realizedEur = 0.0
         visibleMarkers.forEach { marker ->
@@ -205,10 +233,8 @@ class CompetitionChartView @JvmOverloads constructor(
         completedTrades.forEach { (entry, exit, pnlEur) ->
             val (entryX, entryY) = markerPoint(entry)
             val (exitX, exitY) = markerPoint(exit)
-            val netPercent =
-                ((exit.price / entry.price) *
-                    (1.0 - 0.0015) *
-                    (1.0 - 0.0015) - 1.0) * 100.0
+            val netPercent = ((exit.price / entry.price) *
+                (1.0 - feeRate) * (1.0 - feeRate) - 1.0) * 100.0
             val positive = netPercent >= 0.0
             val connector = if (positive) tradeWin else tradeLoss
             val laneY = competitionConnectorLaneY(
@@ -228,30 +254,22 @@ class CompetitionChartView @JvmOverloads constructor(
             canvas.drawPath(tradePath, connector)
 
             val result = if (abs(pnlEur) >= 0.005) {
-                String.format(
-                    java.util.Locale.GERMANY,
-                    "%+.2f%%  %+.2f €",
-                    netPercent,
-                    pnlEur
-                )
+                String.format(java.util.Locale.GERMANY, "%+.2f%%  %+.2f €", netPercent, pnlEur)
             } else {
                 String.format(java.util.Locale.GERMANY, "%+.2f%%", netPercent)
             }
             resultText.color = if (positive) tradeWin.color else tradeLoss.color
-            resultText.textAlign =
-                if (exitX > width * 0.68f) Paint.Align.RIGHT else Paint.Align.LEFT
-            val labelX =
-                if (resultText.textAlign == Paint.Align.RIGHT) exitX - dp(4f) else exitX + dp(4f)
+            resultText.textAlign = if (exitX > width * 0.68f) Paint.Align.RIGHT else Paint.Align.LEFT
+            val labelX = if (resultText.textAlign == Paint.Align.RIGHT) exitX - dp(4f) else exitX + dp(4f)
             val labelY = if (positive) (laneY - dp(4f)).coerceAtLeast(top + dp(9f))
             else (laneY + dp(11f)).coerceAtMost(bottom)
             canvas.drawText(result, labelX, labelY, resultText)
         }
 
-        visibleMarkers.forEach { marker ->
+        visibleMarkers.forEachIndexed { markerIndex, marker ->
             val (px, py) = markerPoint(marker)
             val isBuy = marker.action.startsWith("BUY")
             val paint = if (isBuy) buy else sell
-            // BUY points upward from below; SELL points downward from above.
             val baseDirection = if (isBuy) 1f else -1f
             val markerPath = Path().apply {
                 moveTo(px, py)
@@ -267,10 +285,11 @@ class CompetitionChartView @JvmOverloads constructor(
                 isBuy -> "ВХОД"
                 else -> "ВЫХОД"
             }
+            val stagger = if (markerIndex % 2 == 0) 0f else dp(8f)
             val labelY = if (isBuy) {
-                (py + dp(23f)).coerceAtMost(bottom)
+                (py + dp(23f) + stagger).coerceAtMost(bottom)
             } else {
-                (py - dp(15f)).coerceAtLeast(top + dp(8f))
+                (py - dp(15f) - stagger).coerceAtLeast(top + dp(8f))
             }
             canvas.drawText(label, px, labelY, resultText)
         }

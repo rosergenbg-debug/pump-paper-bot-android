@@ -48,12 +48,20 @@ class GeminiExitExperimentTest {
         futuresWeak: Boolean = true,
         cvdWeak: Boolean = true,
         priceWeak: Boolean = false,
-        currentReturn: Double = 1.0
+        currentReturn: Double = 1.0,
+        pullback: Double = if (priceWeak) 1.0 else 0.1,
+        adaptivePullback: Double = 0.7,
+        microWeak: Boolean = false,
+        breathing5m: Int? = -20,
+        breathing15m: Int? = -25,
+        breathing20m: Int? = -18,
+        breathing30m: Int? = -20,
+        breathing60m: Int? = -15
     ) = GeminiExitEvidence(
         score = score,
         groups = groups,
-        pullbackPercent = if (priceWeak) 1.0 else 0.1,
-        adaptivePullbackPercent = 0.7,
+        pullbackPercent = pullback,
+        adaptivePullbackPercent = adaptivePullback,
         currentReturnPercent = currentReturn,
         spotFlowWeak = spotWeak,
         futuresFlowWeak = futuresWeak,
@@ -63,16 +71,17 @@ class GeminiExitExperimentTest {
         bookWeak = false,
         directionWeak = score >= 7,
         priceWeak = priceWeak,
-        microWeak = false,
+        microWeak = microWeak,
         reason = "тестовые независимые признаки",
         appExitSignal = false,
-        breathing5m = -20,
-        breathing15m = -25,
-        breathing30m = -20,
-        breathing60m = -15
+        breathing5m = breathing5m,
+        breathing15m = breathing15m,
+        breathing20m = breathing20m,
+        breathing30m = breathing30m,
+        breathing60m = breathing60m
     )
 
-    @Test fun `eight percent profit is never an automatic experiment exit`() {
+    @Test fun `large profit alone is never an automatic experiment exit`() {
         val state = GeminiExitExperimentState(portfolio = bought().copy(positionPeakPrice = 1.10))
         val evidence = evidence(
             score = 6,
@@ -81,14 +90,21 @@ class GeminiExitExperimentTest {
             futuresWeak = false,
             cvdWeak = false,
             priceWeak = true,
-            currentReturn = 9.0
-        ).copy(pullbackPercent = 0.9, microWeak = true)
+            currentReturn = 9.0,
+            pullback = 0.9,
+            microWeak = false,
+            breathing5m = 15,
+            breathing15m = 12,
+            breathing20m = 10,
+            breathing30m = 5,
+            breathing60m = 3
+        )
 
         val result = GeminiExitExperimentEngine.evaluate(state, evidence, 1.09, 20L, 1_000_000L)
 
         assertEquals(null, result.executedTrade)
         assertTrue(result.state.portfolio.inPosition)
-        assertEquals(1, result.state.dangerStreak)
+        assertEquals(0, result.state.dangerStreak)
     }
 
     private fun entryEvidence(
@@ -276,14 +292,14 @@ class GeminiExitExperimentTest {
         assertTrue(result.state.lastReason.contains("30-минутная защита"))
     }
 
-    @Test fun `moderate reversal must survive three separate checks after minimum hold`() {
+    @Test fun `moderate 5 15 20 reversal exits after two separate checks`() {
         val state = GeminiExitExperimentState(initializedAt = 1L, portfolio = bought())
         val first = GeminiExitExperimentEngine.evaluate(
             state,
             evidence(score = 5, groups = 3),
             price = 1.01,
             decisionId = 11L,
-            now = 2_000_000L
+            now = 1_000_000L
         )
         assertTrue(first.state.portfolio.inPosition)
         assertEquals(1, first.state.dangerStreak)
@@ -294,20 +310,119 @@ class GeminiExitExperimentTest {
             evidence(score = 5, groups = 3),
             price = 1.005,
             decisionId = 11L,
-            now = 2_120_000L
+            now = 1_120_000L
         )
-        assertTrue(second.state.portfolio.inPosition)
-        assertEquals(2, second.state.dangerStreak)
+        assertFalse(second.state.portfolio.inPosition)
+        assertEquals("SELL", second.executedTrade?.action)
+        assertTrue(second.state.lastReason.contains("ДВУМЯ ПРОВЕРКАМИ"))
+    }
 
-        val third = GeminiExitExperimentEngine.evaluate(
-            second.state,
-            evidence(score = 5, groups = 3),
-            price = 1.002,
+    @Test fun `strong 5 15 20 reversal can exit on first check after ten minute hold`() {
+        val result = GeminiExitExperimentEngine.evaluate(
+            GeminiExitExperimentState(initializedAt = 1L, portfolio = bought()),
+            evidence(
+                score = 6,
+                groups = 4,
+                priceWeak = true,
+                currentReturn = 0.2,
+                breathing5m = -24,
+                breathing15m = -20,
+                breathing20m = -16,
+                breathing30m = 8,
+                breathing60m = 10
+            ),
+            price = 0.995,
             decisionId = 11L,
-            now = 2_240_000L
+            now = 700_000L
         )
-        assertFalse(third.state.portfolio.inPosition)
-        assertEquals("SELL", third.executedTrade?.action)
+
+        assertFalse(result.state.portfolio.inPosition)
+        assertEquals("SELL", result.executedTrade?.action)
+        assertTrue(result.state.lastReason.contains("СИЛЬНЫЙ РАЗВОРОТ 5/15/20"))
+    }
+
+    @Test fun `positive 30 and 60 do not block confirmed 5 15 20 exit`() {
+        val result = GeminiExitExperimentEngine.evaluate(
+            GeminiExitExperimentState(initializedAt = 1L, portfolio = bought()),
+            evidence(
+                score = 7,
+                groups = 4,
+                priceWeak = true,
+                breathing5m = -22,
+                breathing15m = -18,
+                breathing20m = -14,
+                breathing30m = 25,
+                breathing60m = 30
+            ),
+            price = 0.996,
+            decisionId = 11L,
+            now = 700_000L
+        )
+
+        assertFalse(result.state.portfolio.inPosition)
+        assertTrue(result.state.lastReason.contains("30/60 пока только фон"))
+    }
+
+    @Test fun `profit protection exits after roughly one percent pullback when 5 15 20 deteriorate`() {
+        val result = GeminiExitExperimentEngine.evaluate(
+            GeminiExitExperimentState(
+                initializedAt = 1L,
+                portfolio = bought().copy(positionPeakPrice = 1.04)
+            ),
+            evidence(
+                score = 4,
+                groups = 3,
+                spotWeak = true,
+                futuresWeak = true,
+                cvdWeak = false,
+                currentReturn = 2.9,
+                pullback = 1.05,
+                microWeak = false,
+                breathing5m = -14,
+                breathing15m = -12,
+                breathing20m = -10,
+                breathing30m = 5,
+                breathing60m = 8
+            ),
+            price = 1.029,
+            decisionId = 11L,
+            now = 700_000L
+        )
+
+        assertFalse(result.state.portfolio.inPosition)
+        assertEquals("SELL", result.executedTrade?.action)
+        assertTrue(result.state.lastReason.contains("ЗАЩИТА ПРИБЫЛИ"))
+    }
+
+    @Test fun `profit protection ignores shallow fast fade while 20 30 60 stay supportive`() {
+        val result = GeminiExitExperimentEngine.evaluate(
+            GeminiExitExperimentState(
+                initializedAt = 1L,
+                portfolio = bought().copy(positionPeakPrice = 1.0182)
+            ),
+            evidence(
+                score = 3,
+                groups = 2,
+                spotWeak = false,
+                futuresWeak = true,
+                cvdWeak = false,
+                currentReturn = 0.36,
+                pullback = 1.43,
+                microWeak = false,
+                breathing5m = -13,
+                breathing15m = -11,
+                breathing20m = 0,
+                breathing30m = 43,
+                breathing60m = 29
+            ),
+            price = 1.0036,
+            decisionId = 11L,
+            now = 700_000L
+        )
+
+        assertTrue(result.state.portfolio.inPosition)
+        assertEquals(null, result.executedTrade)
+        assertFalse(result.state.lastReason.contains("ЗАЩИТА ПРИБЫЛИ"))
     }
 
     @Test fun `one isolated indicator cannot close the experiment`() {
@@ -319,17 +434,20 @@ class GeminiExitExperimentTest {
                 spotWeak = false,
                 futuresWeak = false,
                 cvdWeak = false,
-                priceWeak = true
+                priceWeak = true,
+                breathing5m = 5,
+                breathing15m = 4,
+                breathing20m = 3
             ),
             price = 1.01,
             decisionId = 11L,
-            now = 120_000L
+            now = 700_000L
         )
         assertTrue(result.state.portfolio.inPosition)
         assertEquals(null, result.executedTrade)
     }
 
-    @Test fun `five percent loss remains only an emergency backstop`() {
+    @Test fun `adaptive two point five to three percent loss is emergency backstop`() {
         val result = GeminiExitExperimentEngine.evaluate(
             GeminiExitExperimentState(initializedAt = 1L, portfolio = bought()),
             evidence(
@@ -338,9 +456,13 @@ class GeminiExitExperimentTest {
                 spotWeak = false,
                 futuresWeak = false,
                 cvdWeak = false,
-                currentReturn = -5.1
+                currentReturn = -2.6,
+                adaptivePullback = 0.7,
+                breathing5m = 0,
+                breathing15m = 0,
+                breathing20m = 0
             ),
-            price = 0.949,
+            price = 0.974,
             decisionId = 11L,
             now = 120_000L
         )
