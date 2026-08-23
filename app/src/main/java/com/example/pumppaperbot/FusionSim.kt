@@ -85,7 +85,7 @@ data class FusionPriorityMetrics(
 )
 
 object FusionPriorityPolicy {
-    const val PRIORITY_INTERVAL_MILLIS = 3L * 60L * 1000L
+    const val PRIORITY_INTERVAL_MILLIS = 5L * 60L * 1000L
     const val NORMAL_INTERVAL_MILLIS = 120_000L
 
     fun plan(portfolio: FusionSimPortfolio): FusionPriorityPlan = if (portfolio.inPosition) {
@@ -93,7 +93,7 @@ object FusionPriorityPolicy {
             active = true,
             forcePro = false,
             intervalMillis = PRIORITY_INTERVAL_MILLIS,
-            label = "FUSION POSITION • ЛОКАЛЬНЫЙ КОНТРОЛЬ • DEEPSIG FLASH • 3 МИН"
+            label = "FUSION POSITION • ЛОКАЛЬНЫЙ КОНТРОЛЬ • ПЛАТНЫЙ DEEPSIG НЕ УСКОРЯЕТСЯ"
         )
     } else {
         FusionPriorityPlan(

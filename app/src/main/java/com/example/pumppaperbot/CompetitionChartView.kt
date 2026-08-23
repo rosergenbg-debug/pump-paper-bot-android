@@ -116,13 +116,13 @@ class CompetitionChartView @JvmOverloads constructor(
                 downY = event.y
                 dragStartOffset = offset
                 dragged = false
-                parent?.requestDisallowInterceptTouchEvent(true)
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
                 val dx = event.x - downX
                 val dy = event.y - downY
                 if (abs(dx) >= dp(3f)) {
+                    if (abs(dx) > abs(dy)) parent?.requestDisallowInterceptTouchEvent(true)
                     dragged = true
                     val moved = (dx / max(step, 1f)).toInt()
                     val next = (dragStartOffset + moved).coerceIn(0, maxOffset())
@@ -132,7 +132,8 @@ class CompetitionChartView @JvmOverloads constructor(
                         offsetListener?.invoke(offset)
                     }
                 } else if (abs(dy) >= dp(8f)) {
-                    dragged = true
+                    parent?.requestDisallowInterceptTouchEvent(false)
+                    return false
                 }
                 return true
             }

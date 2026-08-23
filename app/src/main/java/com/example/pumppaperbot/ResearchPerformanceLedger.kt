@@ -37,6 +37,10 @@ object ResearchPerformanceLedger {
                 PumpMachine2Store.state(context),
                 !hasEpoch(db, "PumpMachine2", "V5.24+")
             )
+            capturePumpVariant(db, "PumpMachineRetest", "V5.29+", PumpMachineRetestStore.state(context),
+                !hasEpoch(db, "PumpMachineRetest", "V5.29+"))
+            capturePumpVariant(db, "PumpMachineSafe", "V5.29+", PumpMachineSafeStore.state(context),
+                !hasEpoch(db, "PumpMachineSafe", "V5.29+"))
             GeminiExitExperimentStore.state(context)?.portfolio?.let {
                 captureGemini(db, "DeepSigX", "V5+", it, !hasEpoch(db, "DeepSigX", "V5+"))
             }
@@ -197,6 +201,23 @@ object ResearchPerformanceLedger {
         }
         (if (fullImport) value.decisions else value.decisions.takeLast(50)).forEach {
             insert(db, "PumpMachine2", "V5.24+", "DECISION", "${it.time}:${it.decisionId}",
+                it.requestedAction, it.time, it.venuePrice, 0.0, "${it.result}; ${it.reason}")
+        }
+    }
+
+    private fun capturePumpVariant(
+        db: SQLiteDatabase,
+        account: String,
+        epoch: String,
+        value: FusionSimPortfolio,
+        fullImport: Boolean
+    ) {
+        (if (fullImport) value.trades else value.trades.takeLast(20)).forEach {
+            insert(db, account, epoch, "TRADE", "${it.time}:${it.decisionId}:${it.action}",
+                it.action, it.time, it.price, it.pnlEur, it.reason)
+        }
+        (if (fullImport) value.decisions else value.decisions.takeLast(50)).forEach {
+            insert(db, account, epoch, "DECISION", "${it.time}:${it.decisionId}",
                 it.requestedAction, it.time, it.venuePrice, 0.0, "${it.result}; ${it.reason}")
         }
     }

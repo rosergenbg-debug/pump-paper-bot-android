@@ -188,22 +188,22 @@ class MainActivity : AppCompatActivity() {
         btnBacktest?.setOnClickListener { startActivity(Intent(this, BacktestActivity::class.java)) }
         btnAlertSettings?.setOnClickListener { startActivity(Intent(this, AlertSettingsActivity::class.java)) }
         btnAppPaper?.setOnClickListener {
-            startActivity(Intent(this, AppPaperActivity::class.java))
+            startActivity(Intent(this, PumpMachineActivity::class.java))
         }
         btnGeminiExperiment?.setOnClickListener {
             startActivity(Intent(this, PumpMachineActivity::class.java))
         }
         btnGeminiExitExperiment?.setOnClickListener {
-            startActivity(Intent(this, GeminiExitExperimentActivity::class.java))
+            startActivity(Intent(this, PumpMachineActivity::class.java))
         }
         btnUserPaper?.setOnClickListener {
-            startActivity(Intent(this, AppPaperActivity::class.java))
+            startActivity(Intent(this, PumpMachineActivity::class.java))
         }
         btnFusionSim?.setOnClickListener {
             startActivity(Intent(this, BitpandaFusionActivity::class.java))
         }
         btnPumpMachine2?.setOnClickListener {
-            startActivity(Intent(this, PumpMachineActivity::class.java))
+            startActivity(Intent(this, CompetitionActivity::class.java))
         }
         btnCompetition?.setOnClickListener {
             startActivity(Intent(this, CompetitionActivity::class.java))
@@ -494,10 +494,15 @@ class MainActivity : AppCompatActivity() {
         val fusionAccount = FusionSimStore.state(this)
         val fusionPriority = FusionPriorityPolicy.plan(fusionAccount)
         val fusionMark = fusionMarket.bid.takeIf { fusionMarket.fresh(now) } ?: accountPrice
+        val pumpMachine2Value = PumpMachine2Policy.netLiquidationValue(
+            pumpMachine2Account,
+            fusionMarket.bid.takeIf { fusionMarket.fresh(now) } ?: accountPrice,
+            fusionMarket.feeRate
+        )
         btnAppPaper?.text = accountButtonText(
-            "APP",
-            appAccount.value(accountPrice),
-            appAccount.profitPercent(accountPrice)
+            "PUMP MACHINE 1 • 2%",
+            pumpMachine2Value,
+            (pumpMachine2Value / FusionSimPortfolio.START_BALANCE - 1.0) * 100.0
         )
         val pumpMachineValue = PumpMachinePolicy.netLiquidationValue(
             pumpMachineAccount,
@@ -505,38 +510,31 @@ class MainActivity : AppCompatActivity() {
             fusionMarket.feeRate
         )
         btnGeminiExperiment?.text = accountButtonText(
-            "PUMP 3% NET",
+            "PUMP MACHINE 2 • 3%",
             pumpMachineValue,
             (pumpMachineValue / FusionSimPortfolio.START_BALANCE - 1.0) * 100.0
         )
-        val pumpMachine2Value = PumpMachine2Policy.netLiquidationValue(
-            pumpMachine2Account,
-            fusionMarket.bid.takeIf { fusionMarket.fresh(now) } ?: accountPrice,
-            fusionMarket.feeRate
-        )
-        btnPumpMachine2?.text = accountButtonText(
-            "PUMP 2% NET",
-            pumpMachine2Value,
-            (pumpMachine2Value / FusionSimPortfolio.START_BALANCE - 1.0) * 100.0
-        )
+        val retestValue = PumpMachineRetestStore.netValue(this, now)
         btnGeminiExitExperiment?.text = accountButtonText(
-            "DEEPSIGX",
-            geminiExitExperiment.value(accountPrice),
-            geminiExitExperiment.profitPercent(accountPrice)
+            "PUMP MACHINE 3 • RETEST",
+            retestValue,
+            (retestValue / FusionSimPortfolio.START_BALANCE - 1.0) * 100.0
         )
+        val safeValue = PumpMachineSafeStore.netValue(this, now)
         btnUserPaper?.text = accountButtonText(
-            "СЕРЖ",
-            sergeAccount.value(accountPrice),
-            sergeAccount.profitPercent(accountPrice)
+            "PUMP MACHINE 4 • SAFE",
+            safeValue,
+            (safeValue / FusionSimPortfolio.START_BALANCE - 1.0) * 100.0
         )
         btnFusionSim?.text = accountButtonText(
-            if (fusionPriority.active) "DEEPSIG FUSION • MAX CONTROL" else "DEEPSIG FUSION",
+            "FUSION • ЛОКАЛЬНЫЙ ПОТОК",
             fusionAccount.value(fusionMark),
             fusionAccount.profit(fusionMark) / FusionSimPortfolio.START_BALANCE * 100.0
         )
+        btnPumpMachine2?.text = "ЕЩЁ 3 СЧЁТА\nAPP • DEEPSIGX • СЕРЖ\nоткрыть сравнение"
         tvStatus?.text = if (snapshot.running) {
             "V${BuildConfig.VERSION_NAME} PAPER‑ТЕСТ • монитор включён" +
-                (if (fusionPriority.active) " • FUSION: DEEPSIG PRO КАЖДУЮ МИНУТУ" else "") +
+                (if (fusionPriority.active) " • FUSION: локальная защита" else "") +
                 " • обновлено ${PumpBotEngine.formatTime(snapshot.lastSync)}"
         } else {
             "V${BuildConfig.VERSION_NAME} PAPER‑ТЕСТ • монитор остановлен • последнее обновление ${PumpBotEngine.formatTime(snapshot.lastSync)}"
@@ -1108,7 +1106,7 @@ class MainActivity : AppCompatActivity() {
         btnBitpandaFusion?.text = when {
             !fusion.configured -> "BITPANDA FUSION\nКЛЮЧ READ НЕ ВВЕДЁН\nоткрыть центр"
             fusion.fresh() -> "BITPANDA • READ-ONLY\n${fusion.pair} • СПРЕД ${String.format(Locale.US, "%.3f", fusion.spreadPercent)}%\n" +
-                (if (fusionPriority.active) "MAX CONTROL • PRO • 1 МИН" else "FUSIONSIM РАБОТАЕТ")
+                (if (fusionPriority.active) "ЛОКАЛЬНАЯ ЗАЩИТА • БЕЗ УСКОРЕНИЯ PRO" else "FUSIONSIM РАБОТАЕТ")
             else -> "BITPANDA • READ-ONLY\nНЕТ СВЕЖИХ ДАННЫХ\nпроверить соединение"
         }
     }
