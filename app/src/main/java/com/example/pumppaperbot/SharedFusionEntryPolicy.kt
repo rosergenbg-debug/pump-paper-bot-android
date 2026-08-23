@@ -5,9 +5,9 @@ import android.content.Context
 /**
  * V5.22 single source of truth for entry timing shared by Fusion and Pump Machine.
  *
- * Fusion consumes the same short-lived observation through its own stability state. Since
- * V5.27, PM2/PM3 additionally share a persisted pair-entry state and wait for each other
- * between market episodes; their exit contracts remain independent.
+ * Fusion, PM2 and PM3 consume the same short-lived market observation through separate
+ * persisted stability states. Since V5.28, PM2 and PM3 use the same strict eligibility
+ * criteria but independently confirm, execute, cool down and re-enter.
  */
 data class SharedFusionEntryObservation(
     val frame: FusionFlowFrame?,

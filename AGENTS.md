@@ -116,6 +116,8 @@ V5 has one persistent master switch for user signal notifications, sound and vib
 - V5.7: continuous 15m/30m/1h/3h/6h flow map, 30-day entry-blocker audit and anonymous capital-mechanism proxy, code 86.
 - V5.8: human-readable 5m/15m/30m/60m flow clock, anonymous large-taker/metaorder fingerprint and isolated FusionSim flow strategy, code 87, current work. FusionSim BUY requires positive instant/5m/15m/30m flow; EXIT requires negative instant/5m/15m/20m flow while 30m may remain positive. Preserve every V5 preference name, V4 archive, SQLite ledger and breathing CSV across all compatible upgrades; no release may silently start a new research epoch. Public CEX flow must never be presented as a known person, firm or country.
 - V5.9: FusionSim reads the exact retrospective instant/5m/15m/20m/30m values rendered by the upper critical-overview bars, code 88. The lower exponentially-decayed flow clock is diagnostic only and cannot execute Fusion trades. Storage names, research epoch, package id and compatible signing line remain unchanged.
+- V5.27: canonical checked-in source and a common strict PM2/PM3 entry-quality gate, code 107. Its synchronized pair coordinator was rejected because it forced an exited account to wait for the other.
+- V5.28: PM2 and PM3 retain the same strict entry eligibility but own separate persisted confirmation, cooldown, execution and re-entry state, code 108. Never reintroduce cross-account waiting: either flat account may re-enter while the other still holds a position. Preserve both existing portfolio/stability stores and all history.
 
 ## Accumulated next-release backlog
 

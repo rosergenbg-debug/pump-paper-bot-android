@@ -99,9 +99,9 @@ object PumpProfitEngineV526 {
 
     private fun cfg(mode: PumpProfitModeV526): Config = if (mode == PumpProfitModeV526.PUMP_2) PM2 else PM3
 
-    // V5.27 audit: PM2 and PM3 are one controlled experiment. They must enter on the
-    // same evidence and at the same executable ask; only their exit/risk contracts differ.
-    // Use the stricter PM3 gate as the single pair gate so PM2 cannot enter a weaker setup.
+    // V5.28: PM2 and PM3 use the same strict market-quality gate, but each store owns its
+    // confirmation, cooldown and execution time. Either flat account may therefore re-enter
+    // independently while the other account is still managing an earlier position.
     private fun entryCfg(): Config = PM3
 
     private fun resetEntry(previous: FusionStabilityState, keepCooldown: Boolean = true) = previous.copy(
