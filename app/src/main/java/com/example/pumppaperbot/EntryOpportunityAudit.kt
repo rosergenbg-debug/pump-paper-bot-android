@@ -133,7 +133,7 @@ object EntryOpportunityAuditStore {
     private const val LATEST = "latest.json"
     private const val PREFS = "entry_opportunity_audit_v57"
     private const val LAST_CAPTURE = "last_capture"
-    private const val MIN_GAP = 60_000L
+    private const val MIN_GAP = 5L * 60L * 1000L
     private const val RETENTION = 30L * 24L * 60L * 60L * 1_000L
 
     @Synchronized
@@ -182,15 +182,32 @@ object EntryOpportunityAuditStore {
 
     fun exportJson(context: Context): JSONObject {
         val dir = File(context.filesDir, DIRECTORY)
-        val history = JSONArray()
+        val raw = ArrayList<EntryOpportunityAuditSnapshot>()
         dir.listFiles()?.filter { it.name.endsWith(".ndjson") }?.sortedBy { it.name }?.forEach { file ->
             file.useLines(Charsets.UTF_8) { lines -> lines.forEach { line ->
-                runCatching { history.put(JSONObject(line)) }
+                runCatching { EntryOpportunityAuditSnapshot.fromJson(JSONObject(line)) }
+                    .getOrNull()?.let(raw::add)
             } }
+        }
+        val compact = ArrayList<EntryOpportunityAuditSnapshot>()
+        var lastSignature = ""
+        var lastKeptAt = 0L
+        raw.sortedBy { it.at }.forEach { snapshot ->
+            val signature = snapshot.participants.joinToString("|") {
+                "${it.participant}:${it.state}:${ResearchLogCompactionPolicy.semantic(it.reason)}"
+            }
+            if (signature != lastSignature || snapshot.at - lastKeptAt >= 15L * 60L * 1000L) {
+                compact += snapshot
+                lastSignature = signature
+                lastKeptAt = snapshot.at
+            }
         }
         return JSONObject()
             .put("retention_days", 30)
+            .put("cleared_after_export", false)
+            .put("raw_snapshot_count", raw.size)
+            .put("exported_compact_snapshot_count", compact.size)
             .put("latest", latest(context).toJson())
-            .put("history", history)
+            .put("history", JSONArray(compact.map { it.toJson() }))
     }
 }

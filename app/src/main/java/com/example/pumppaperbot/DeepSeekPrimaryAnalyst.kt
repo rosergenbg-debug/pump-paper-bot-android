@@ -307,12 +307,15 @@ class DeepSeekPrimaryAnalyst {
     fun sync(
         context: Context,
         force: Boolean = false,
+        forcePro: Boolean = false,
         now: Long = System.currentTimeMillis()
     ): DeepSeekPrimaryState {
         val snapshot = PumpBotEngine.snapshot(context)
         val previous = DeepSeekPrimaryStore.state(context, now)
         val fusionPriority = FusionPriorityPolicy.plan(FusionSimStore.state(context))
-        val forceProModel = force
+        // `force` means "run now", not "buy the expensive model". Pro is chosen only
+        // by critical market/position evidence or an explicit forcePro request.
+        val forceProModel = forcePro
         val micro = MicroImpulseStore.state(context)
         val breathing = LiveMarketBreathingStore.snapshot(context, now)
         val ecosystem = PumpEcosystemStore.state(context)
@@ -372,7 +375,8 @@ class DeepSeekPrimaryAnalyst {
             detail = buildString {
                 append(when {
                 fusionPriority.active -> "Fusion-позиция защищается локально; платный DeepSig не ускоряется"
-                force -> "ручная усиленная проверка"
+                forcePro -> "ручная критическая Pro-проверка"
+                force -> "ручное обновление без принудительного Pro"
                 materialChange -> "существенно изменился рыночный сигнал"
                 else -> "плановый анализ"
                 })

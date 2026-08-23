@@ -74,7 +74,6 @@ class MainActivity : AppCompatActivity() {
     private var btnRisk35: Button? = null
     private var btnStart: Button? = null
     private var btnCheck: Button? = null
-    private var btnStop: Button? = null
     private var btnReset: Button? = null
     private var btnManualBuy: Button? = null
     private var btnManualSell: Button? = null
@@ -130,7 +129,6 @@ class MainActivity : AppCompatActivity() {
         btnRisk35 = findViewById(R.id.btnRisk35)
         btnStart = findViewById(R.id.btnStart)
         btnCheck = findViewById(R.id.btnCheck)
-        btnStop = findViewById(R.id.btnStop)
         btnReset = findViewById(R.id.btnReset)
         btnManualBuy = findViewById(R.id.btnManualBuy)
         btnManualSell = findViewById(R.id.btnManualSell)
@@ -153,11 +151,9 @@ class MainActivity : AppCompatActivity() {
 
         PumpBotEngine.ensureInitialized(this)
         requestNotificationPermission()
-        if (PumpBotEngine.snapshot(this).running) {
-            ContextCompat.startForegroundService(this, Intent(this, PumpSignalService::class.java))
-            schedulePeriodicMonitor()
-            handler.postDelayed({ maybeEnsureBackgroundPersistence() }, 1200L)
-        }
+        // V5.30 is an always-on paper monitor. Opening the app repairs an accidental
+        // previous STOP state without touching any account or historical record.
+        startMonitor()
 
         btnRisk30?.setOnClickListener {
             PumpBotEngine.setAggressive(this, false)
@@ -171,11 +167,6 @@ class MainActivity : AppCompatActivity() {
         }
         btnStart?.setOnClickListener { startMonitor() }
         btnCheck?.setOnClickListener { checkNow() }
-        btnStop?.setOnClickListener {
-            confirm("Остановить монитор?", "Проверка PUMP и звуковые сигналы будут остановлены.") {
-                stopMonitor()
-            }
-        }
         btnReset?.setOnClickListener {
             confirm("Сбросить состояние?", "Очистится режим ожидания, цена входа и сохраненные данные графика.") {
                 resetAll()
@@ -278,13 +269,6 @@ class MainActivity : AppCompatActivity() {
             ExistingPeriodicWorkPolicy.UPDATE,
             request
         )
-    }
-
-    private fun stopMonitor() {
-        PumpBotEngine.setRunning(this, false)
-        stopService(Intent(this, PumpSignalService::class.java))
-        WorkManager.getInstance(this).cancelUniqueWork(PumpBotEngine.uniqueWorkName)
-        updateUi()
     }
 
     private fun resetAll() {
@@ -516,13 +500,13 @@ class MainActivity : AppCompatActivity() {
         )
         val retestValue = PumpMachineRetestStore.netValue(this, now)
         btnGeminiExitExperiment?.text = accountButtonText(
-            "PUMP MACHINE 3 • RETEST",
+            "PUMP MACHINE 3 • RETEST ${PumpBotEngine.formatTime(PumpMachineRetestStore.lastStatusAt(this))}",
             retestValue,
             (retestValue / FusionSimPortfolio.START_BALANCE - 1.0) * 100.0
         )
         val safeValue = PumpMachineSafeStore.netValue(this, now)
         btnUserPaper?.text = accountButtonText(
-            "PUMP MACHINE 4 • SAFE",
+            "PUMP MACHINE 4 • SAFE ${PumpBotEngine.formatTime(PumpMachineSafeStore.lastStatusAt(this))}",
             safeValue,
             (safeValue / FusionSimPortfolio.START_BALANCE - 1.0) * 100.0
         )
@@ -646,8 +630,6 @@ class MainActivity : AppCompatActivity() {
 
         btnStart?.isEnabled = !snapshot.running
         btnStart?.alpha = if (snapshot.running) 0.45f else 1f
-        btnStop?.isEnabled = snapshot.running
-        btnStop?.alpha = if (snapshot.running) 1f else 0.65f
         val controls = ManualPositionControlPolicy.forWaitMode(snapshot.waitMode)
         btnManualBuy?.isEnabled = controls.buyEnabled
         btnManualBuy?.alpha = if (controls.buyEnabled) 1f else 0.35f

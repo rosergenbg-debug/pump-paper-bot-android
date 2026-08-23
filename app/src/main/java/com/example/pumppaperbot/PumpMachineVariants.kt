@@ -44,6 +44,7 @@ private class PumpVariantStore(private val config: PumpVariantConfig) {
     private val backupKey = "portfolio_backup"
     private val stabilityKey = "stability"
     private val statusKey = "last_status"
+    private val statusAtKey = "last_status_at"
     private val retestKey = "retest_state"
 
     fun state(context: Context): FusionSimPortfolio {
@@ -55,6 +56,8 @@ private class PumpVariantStore(private val config: PumpVariantConfig) {
 
     fun status(context: Context): String = prefs(context)
         .getString(statusKey, "${config.label} • ждём первый подтверждённый вход").orEmpty()
+
+    fun statusAt(context: Context): Long = prefs(context).getLong(statusAtKey, 0L)
 
     fun toJson(value: FusionSimPortfolio): JSONObject = FusionSimStore.toJson(value)
 
@@ -247,7 +250,8 @@ private class PumpVariantStore(private val config: PumpVariantConfig) {
     private fun save(context: Context, value: FusionSimPortfolio, state: FusionStabilityState, status: String) {
         val raw = FusionSimStore.toJson(value).toString()
         prefs(context).edit().putString(portfolioKey, raw).putString(backupKey, raw)
-            .putString(stabilityKey, state.toJson().toString()).putString(statusKey, status.take(1200)).commit()
+            .putString(stabilityKey, state.toJson().toString()).putString(statusKey, status.take(1200))
+            .putLong(statusAtKey, System.currentTimeMillis()).commit()
     }
 
     private fun parse(raw: String?): FusionSimPortfolio? = if (raw.isNullOrBlank()) null else runCatching {
@@ -276,6 +280,7 @@ object PumpMachineRetestStore {
     ))
     fun state(c: Context) = store.state(c)
     fun lastStatus(c: Context) = store.status(c)
+    fun lastStatusAt(c: Context) = store.statusAt(c)
     fun sync(c: Context, now: Long = System.currentTimeMillis()) = store.sync(c, now)
     fun netValue(c: Context, now: Long = System.currentTimeMillis()) = store.netValue(c, now)
     fun tradeNetPercent(c: Context, now: Long = System.currentTimeMillis()) = store.tradeNet(c, now)
@@ -289,6 +294,7 @@ object PumpMachineSafeStore {
     ))
     fun state(c: Context) = store.state(c)
     fun lastStatus(c: Context) = store.status(c)
+    fun lastStatusAt(c: Context) = store.statusAt(c)
     fun sync(c: Context, now: Long = System.currentTimeMillis()) = store.sync(c, now)
     fun netValue(c: Context, now: Long = System.currentTimeMillis()) = store.netValue(c, now)
     fun tradeNetPercent(c: Context, now: Long = System.currentTimeMillis()) = store.tradeNet(c, now)

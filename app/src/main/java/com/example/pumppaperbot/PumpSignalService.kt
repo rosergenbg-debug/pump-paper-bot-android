@@ -39,7 +39,7 @@ class PumpSignalService : Service() {
             PumpAlert.monitorId(),
             PumpAlert.monitorNotification(
                 this,
-                "V${BuildConfig.VERSION_NAME}: APP, DeepSig и DeepSigX ведут отдельные виртуальные счета; " +
+                "V${BuildConfig.VERSION_NAME}: четыре Pump Machine и Fusion работают независимо; " +
                     (if (ResearchModePolicy.alertsEnabled(this)) "звонки включены." else "звонки выключены.")
             )
         )

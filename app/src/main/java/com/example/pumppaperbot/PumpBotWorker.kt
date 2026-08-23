@@ -74,7 +74,8 @@ class PumpBotWorker(
             }) {
                 DeepSeekPrimaryAnalyst().sync(
                     applicationContext,
-                    force = forcePositionPro || forcePrimaryDeepSeek
+                    force = forcePositionPro || forcePrimaryDeepSeek,
+                    forcePro = forcePositionPro
                 )
             }
             CycleStageGuard.run(applicationContext, "POSITION_SUPERVISOR", {

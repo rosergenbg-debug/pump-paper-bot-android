@@ -119,6 +119,7 @@ V5 has one persistent master switch for user signal notifications, sound and vib
 - V5.27: canonical checked-in source and a common strict PM2/PM3 entry-quality gate, code 107. Its synchronized pair coordinator was rejected because it forced an exited account to wait for the other.
 - V5.28: PM2 and PM3 retain the same strict entry eligibility but own separate persisted confirmation, cooldown, execution and re-entry state, code 108. Never reintroduce cross-account waiting: either flat account may re-enter while the other still holds a position. Preserve both existing portfolio/stability stores and all history.
 - V5.29: add independent Retest and Safe Pump stores without resetting PM2/PM3. Retest changes entry only; Safe combines stricter local flow with causal APP evidence and targets +1.15% NET. All four Pump accounts plus Fusion must be recorded in the durable ledger/export. Virtual Pump/Fusion positions must not force or accelerate paid DeepSeek; preserve Pro escalation for Serge/manual-position danger and genuinely critical analysis.
+- V5.30: the paper monitor is always-on from MainActivity and has no user STOP button. Opening the app repairs a prior stopped flag without resetting accounts. Manual `ПРОВЕРИТЬ` forces timing only, never Pro by itself. Raw diagnostic history rolls for 30 days, export never clears it, duplicate heartbeats are compacted, while trades/errors and the append-only performance ledger remain durable.
 
 ## Accumulated next-release backlog
 
