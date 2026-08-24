@@ -78,27 +78,31 @@ class BitpandaFusionTest {
         val weak = FusionFlowFrame(1, 1, 1, 1, 1)
         val first = FusionStabilityPolicy.evaluate(
             false, 0.0, FusionStabilityState(), weak, bid = 1.0,
-            feeRate = FusionTradingCosts.FEE_RATE, now = 1_000L
+            feeRate = FusionTradingCosts.FEE_RATE, now = 1_000L,
+            entryObservation = capitalReadyObservation(weak, 1_000L)
         )
         assertNull(first.action)
         assertEquals(1, first.nextState.entryStreak)
 
         val second = FusionStabilityPolicy.evaluate(
             false, 0.0, first.nextState, weak, bid = 1.0,
-            feeRate = FusionTradingCosts.FEE_RATE, now = 61_000L
+            feeRate = FusionTradingCosts.FEE_RATE, now = 61_000L,
+            entryObservation = capitalReadyObservation(weak, 61_000L, ask = 1.0015)
         )
         assertEquals("BUY", second.action)
 
         val strongFirst = FusionStabilityPolicy.evaluate(
             false, 0.0, FusionStabilityState(), FusionFlowFrame(12, 9, 8, 0, 6),
-            bid = 1.0, feeRate = FusionTradingCosts.FEE_RATE, now = 100_000L
+            bid = 1.0, feeRate = FusionTradingCosts.FEE_RATE, now = 100_000L,
+            entryObservation = capitalReadyObservation(FusionFlowFrame(12, 9, 8, 0, 6), 100_000L)
         )
         assertNull(strongFirst.action)
         assertTrue(strongFirst.reason.contains("STRONG"))
 
         val strongConfirmed = FusionStabilityPolicy.evaluate(
             false, 0.0, strongFirst.nextState, FusionFlowFrame(12, 9, 8, 0, 6),
-            bid = 1.0, feeRate = FusionTradingCosts.FEE_RATE, now = 160_000L
+            bid = 1.0, feeRate = FusionTradingCosts.FEE_RATE, now = 160_000L,
+            entryObservation = capitalReadyObservation(FusionFlowFrame(12, 9, 8, 0, 6), 160_000L, ask = 1.0015)
         )
         assertEquals("BUY", strongConfirmed.action)
     }

@@ -102,11 +102,11 @@ object PumpProfitEngineV526 {
         minCapitalActivityRatio = 1.15,
         minFiveMinuteNotionalUsdt = 250_000.0,
         minBuySellNotionalRatio = 1.12,
-        maxEarlyMovePercent = 1.60,
-        confirmationMillis = 15_000L
+        maxEarlyMovePercent = 0.90,
+        confirmationMillis = 90_000L
     )
 
-    private val PM_RETEST = PM2.copy(name = "PM RETEST")
+    private val PM_RETEST = PM3.copy(name = "PM RETEST", confirmationMillis = 15_000L)
 
     private val PM_SAFE = Config(
         name = "PM SAFE",
@@ -146,6 +146,7 @@ object PumpProfitEngineV526 {
     // confirmation, cooldown and execution time. Either flat account may therefore re-enter
     // independently while the other account is still managing an earlier position.
     private fun entryCfg(mode: PumpProfitModeV526): Config = when (mode) {
+        PumpProfitModeV526.PUMP_RETEST -> PM_RETEST
         PumpProfitModeV526.PUMP_SAFE -> PM_SAFE
         else -> PM3
     }
@@ -153,6 +154,7 @@ object PumpProfitEngineV526 {
     private fun resetEntry(previous: FusionStabilityState, keepCooldown: Boolean = true) = previous.copy(
         entryStreak = 0,
         entryCandidateAt = 0L,
+        entryAnchorAsk = 0.0,
         exitStreak = 0,
         exitArmedAt = 0L,
         exitArmedBid = 0.0,
@@ -202,10 +204,14 @@ object PumpProfitEngineV526 {
         val candidateAt = if (previous.entryStreak > 0 && previous.entryCandidateAt > 0L) {
             previous.entryCandidateAt
         } else now
+        val anchorAsk = if (previous.entryStreak > 0 && previous.entryAnchorAsk > 0.0) {
+            previous.entryAnchorAsk
+        } else observation.executionAsk
         val streak = (previous.entryStreak + 1).coerceAtMost(2)
         val next = previous.copy(
             entryStreak = streak,
             entryCandidateAt = candidateAt,
+            entryAnchorAsk = anchorAsk,
             exitStreak = 0,
             exitArmedAt = 0L,
             exitArmedBid = 0.0,
@@ -214,18 +220,19 @@ object PumpProfitEngineV526 {
             cooldownUntil = 0L
         )
         val elapsed = (now - candidateAt).coerceAtLeast(0L)
-        return if (streak >= 2 && elapsed >= c.confirmationMillis) {
+        val acceptance = CapitalParticipationGate.priceAcceptance(anchorAsk, observation.executionAsk)
+        return if (streak >= 2 && elapsed >= c.confirmationMillis && acceptance.allowed) {
             SharedFusionEntryDecision(
                 "BUY",
                 next,
-                "V526_${c.name}_EARLY_ENTRY: ранний импульс подтверждён двумя 15с наблюдениями; $reason"
+                "V531_${c.name}_CAPITAL_ACCEPTED: капитал и продолжение цены подтверждены; ${acceptance.reason}; $reason"
             )
         } else {
             val left = ((c.confirmationMillis - elapsed).coerceAtLeast(0L) + 999L) / 1000L
             SharedFusionEntryDecision(
                 null,
                 next,
-                "V526_${c.name}_ARMED ${streak}/2: ранний импульс есть; защита от одиночного тика ещё ${left}с; $reason"
+                "V531_${c.name}_CAPITAL_ARMED ${streak}/2: капитал виден, ждём принятие цены ещё ${left}с; ${acceptance.reason}; $reason"
             )
         }
     }
@@ -278,8 +285,13 @@ object PumpProfitEngineV526 {
         if (activity < c.minActivityRatio) {
             return false to "V526_${c.name}_WAIT: активность ${fmt(activity)}x < ${fmt(c.minActivityRatio)}x"
         }
-        val capital = capitalGate(observation.micro, c)
-        if (!capital.first) return false to "V526_${c.name}_CAPITAL_WAIT: ${capital.second}"
+        val capital = CapitalParticipationGate.evaluate(
+            observation,
+            minFiveMinuteNotional = c.minFiveMinuteNotionalUsdt,
+            minAcceleration = c.minCapitalActivityRatio,
+            minBuySellRatio = c.minBuySellNotionalRatio
+        )
+        if (!capital.allowed) return false to "V531_${c.name}_CAPITAL_WAIT: ${capital.reason}"
         if (frame.instant < c.minInstant || frame.score5m < c.min5m) {
             return false to "V526_${c.name}_WAIT: instant/5m ${frame.instant}/${frame.score5m} ещё недостаточны"
         }
@@ -287,42 +299,7 @@ object PumpProfitEngineV526 {
             return false to "V526_${c.name}_WAIT: старший поток ещё падает слишком быстро (${frame.score15m}/${frame.score30m})"
         }
 
-        return true to "phase=$phase instant/5/15/30=${frame.instant}/${frame.score5m}/${frame.score15m}/${frame.score30m}, buyer5=${fmt(buyer5)}%, activity=${fmt(activity)}x, ${capital.second}, move=${fmt(move)}%, absorption=${breath.absorptionRisk}"
-    }
-
-    private fun capitalGate(micro: MicroImpulseSnapshot?, c: Config): Pair<Boolean, String> {
-        if (micro == null || micro.flowHistorySeconds < 15L * 60L) {
-            return false to "ждём свежую 15-минутную ленту реальных сделок"
-        }
-        val buy5 = micro.buyNotional5m.coerceAtLeast(0.0)
-        val sell5 = micro.sellNotional5m.coerceAtLeast(0.0)
-        val total5 = buy5 + sell5
-        val total15 = (micro.buyNotional15m + micro.sellNotional15m).coerceAtLeast(total5)
-        val priorTenPerFive = ((total15 - total5).coerceAtLeast(0.0) / 2.0)
-        if (total5 < c.minFiveMinuteNotionalUsdt) {
-            return false to "за 5м прошло лишь ${money(total5)} < ${money(c.minFiveMinuteNotionalUsdt)}"
-        }
-        if (priorTenPerFive <= 0.0) return false to "нет базы предыдущих 10 минут для проверки притока"
-        val acceleration = total5 / priorTenPerFive
-        if (acceleration < c.minCapitalActivityRatio) {
-            return false to "масса 5м не ускорилась: ${fmt(acceleration)}x < ${fmt(c.minCapitalActivityRatio)}x"
-        }
-        val sideRatio = buy5 / sell5.coerceAtLeast(1.0)
-        if (sideRatio < c.minBuySellNotionalRatio) {
-            return false to "деньги не на стороне покупателей: BUY/SELL ${fmt(sideRatio)}x"
-        }
-        val large = micro.largeFlow
-        if (large.mode == LargeFlowMode.SELL_SERIES || large.mode == LargeFlowMode.BUY_ABSORBED) {
-            return false to "крупный поток против входа: ${large.mode}"
-        }
-        val dynamicFloor = max(c.minFiveMinuteNotionalUsdt, large.thresholdUsdt * 8.0)
-        val broadCapital = total5 >= dynamicFloor && micro.trades60s >= 40
-        val largeBuySeries = large.mode == LargeFlowMode.BUY_SERIES && large.confidence >= 50 &&
-            large.largeBuyUsdt > large.largeSellUsdt * 1.20
-        if (!broadCapital && !largeBuySeries) {
-            return false to "нет подтверждения широкой активностью или серией крупных BUY"
-        }
-        return true to "капитал 5м ${money(total5)}, ускорение ${fmt(acceleration)}x, BUY/SELL ${fmt(sideRatio)}x"
+        return true to "phase=$phase instant/5/15/30=${frame.instant}/${frame.score5m}/${frame.score15m}/${frame.score30m}, buyer5=${fmt(buyer5)}%, activity=${fmt(activity)}x, ${capital.reason}, move=${fmt(move)}%, absorption=${breath.absorptionRisk}"
     }
 
     private fun shockPermitted(observation: SharedFusionEntryObservation): Boolean {
@@ -332,14 +309,13 @@ object PumpProfitEngineV526 {
         if (!breath.fresh) return false
         if (breath.phase == BuyerBreathPhase.SELLER_TAKEOVER || breath.phase == BuyerBreathPhase.EXHAUSTION) return false
         if (breath.absorptionRisk >= 72) return false
-        if (!capitalGate(observation.micro, PM3).first) return false
+        if (!CapitalParticipationGate.evaluate(
+                observation,
+                PM3.minFiveMinuteNotionalUsdt,
+                PM3.minCapitalActivityRatio,
+                PM3.minBuySellNotionalRatio
+            ).allowed) return false
         return true
-    }
-
-    private fun money(value: Double): String = when {
-        value >= 1_000_000.0 -> String.format(java.util.Locale.US, "$%.2fm", value / 1_000_000.0)
-        value >= 1_000.0 -> String.format(java.util.Locale.US, "$%.0fk", value / 1_000.0)
-        else -> String.format(java.util.Locale.US, "$%.0f", value)
     }
 
     fun evaluatePosition(
@@ -359,6 +335,7 @@ object PumpProfitEngineV526 {
         val next = previous.copy(
             entryStreak = 0,
             entryCandidateAt = 0L,
+            entryAnchorAsk = 0.0,
             peakBid = peakBid,
             profitDefenseArmed = armed,
             cooldownUntil = 0L

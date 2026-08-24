@@ -15,7 +15,12 @@ data class SharedFusionEntryObservation(
     val sampledAt: Long,
     val sampleBucket: Long,
     val breathing: LiveMarketBreathingSnapshot? = null,
-    val micro: MicroImpulseSnapshot? = null
+    val micro: MicroImpulseSnapshot? = null,
+    val executionAsk: Double = 0.0,
+    val bookBidNotional: Double? = null,
+    val bookAskNotional: Double? = null,
+    val bookSpreadPercent: Double? = null,
+    val capitalFlow: CapitalFlowProxy = CapitalFlowProxy()
 )
 
 data class SharedFusionEntryDecision(
@@ -41,13 +46,21 @@ object SharedFusionEntryObservationStore {
                 it.updatedAt, now, DeepSeekFreshMarketContext.MICRO_MAX_AGE
             )
         }
+        val market = PumpBotEngine.snapshot(context)
+        val fusionMarket = BitpandaFusionStore.state(context)
+        val impulse = ImpulseRadarStore.state(context)
         return SharedFusionEntryObservation(
             frame = FusionFlowPolicy.frame(breathing),
             shockReady = shock.fresh(now) && shock.ready,
             sampledAt = now,
             sampleBucket = bucket,
             breathing = breathing,
-            micro = micro
+            micro = micro,
+            executionAsk = fusionMarket.ask.takeIf { fusionMarket.fresh(now) } ?: 0.0,
+            bookBidNotional = market.bookBidNotional,
+            bookAskNotional = market.bookAskNotional,
+            bookSpreadPercent = market.spreadPercent,
+            capitalFlow = CapitalFlowProxyPolicy.evaluate(impulse, breathing, now)
         ).also {
             cachedBucket = bucket
             cached = it
@@ -68,6 +81,7 @@ object SharedFusionEntryPolicy {
                 previous.copy(
                     entryStreak = 0,
                     entryCandidateAt = 0L,
+                    entryAnchorAsk = 0.0,
                     exitStreak = 0,
                     exitArmedAt = 0L,
                     exitArmedBid = 0.0,
@@ -79,11 +93,20 @@ object SharedFusionEntryPolicy {
         }
 
         if (observation.shockReady) {
+            val capital = CapitalParticipationGate.evaluate(observation)
+            if (!capital.allowed) {
+                return SharedFusionEntryDecision(
+                    null,
+                    previous.copy(entryStreak = 0, entryCandidateAt = 0L, entryAnchorAsk = 0.0),
+                    "SHOCK_CAPITAL_WAIT: ${capital.reason}"
+                )
+            }
             return SharedFusionEntryDecision(
                 "BUY",
                 previous.copy(
                     entryStreak = 0,
                     entryCandidateAt = 0L,
+                    entryAnchorAsk = 0.0,
                     exitStreak = 0,
                     exitArmedAt = 0L,
                     exitArmedBid = 0.0,
@@ -103,6 +126,7 @@ object SharedFusionEntryPolicy {
                 previous.copy(
                     entryStreak = 0,
                     entryCandidateAt = 0L,
+                    entryAnchorAsk = 0.0,
                     exitStreak = 0,
                     exitArmedAt = 0L,
                     exitArmedBid = 0.0,
@@ -114,14 +138,27 @@ object SharedFusionEntryPolicy {
             )
         }
 
+        val capital = CapitalParticipationGate.evaluate(observation)
+        if (!capital.allowed) {
+            return SharedFusionEntryDecision(
+                null,
+                previous.copy(entryStreak = 0, entryCandidateAt = 0L, entryAnchorAsk = 0.0),
+                "CAPITAL_WAIT: ${capital.reason}"
+            )
+        }
+
         val candidateAt = if (previous.entryStreak > 0 && previous.entryCandidateAt > 0L) {
             previous.entryCandidateAt
         } else now
+        val anchorAsk = if (previous.entryStreak > 0 && previous.entryAnchorAsk > 0.0) {
+            previous.entryAnchorAsk
+        } else observation.executionAsk
         val streak = (previous.entryStreak + 1).coerceAtMost(FusionStabilityPolicy.ENTRY_CONFIRMATIONS)
         val confirmedByTime = now - candidateAt >= FusionStabilityPolicy.ENTRY_CONFIRM_MIN_MILLIS
         val next = previous.copy(
             entryStreak = streak,
             entryCandidateAt = candidateAt,
+            entryAnchorAsk = anchorAsk,
             exitStreak = 0,
             exitArmedAt = 0L,
             exitArmedBid = 0.0,
@@ -130,11 +167,12 @@ object SharedFusionEntryPolicy {
             cooldownUntil = 0L
         )
 
-        return if (streak >= FusionStabilityPolicy.ENTRY_CONFIRMATIONS && confirmedByTime) {
+        val acceptance = CapitalParticipationGate.priceAcceptance(anchorAsk, observation.executionAsk)
+        return if (streak >= FusionStabilityPolicy.ENTRY_CONFIRMATIONS && confirmedByTime && acceptance.allowed) {
             SharedFusionEntryDecision(
                 "BUY",
                 next,
-                "ENTRY_CONFIRMED: общий Fusion-entry engine — сейчас/5/15/30 подтверждены минимум двумя наблюдениями и 60с"
+                "ENTRY_CONFIRMED: сейчас/5/15/30, крупные BUY, стакан и принятие цены подтверждены; ${capital.reason}; ${acceptance.reason}"
             )
         } else {
             val elapsed = (now - candidateAt).coerceAtLeast(0L)
@@ -143,9 +181,9 @@ object SharedFusionEntryPolicy {
                 null,
                 next,
                 if (frame?.strongBuy == true) {
-                    "ENTRY_ARMED_STRONG ${streak}/${FusionStabilityPolicy.ENTRY_CONFIRMATIONS}: общий сильный BUY; подтверждаем ещё ${left}с"
+                    "ENTRY_ARMED_STRONG ${streak}/${FusionStabilityPolicy.ENTRY_CONFIRMATIONS}: сильный BUY и капитал есть; ещё ${left}с; ${acceptance.reason}"
                 } else {
-                    "ENTRY_ARMED ${streak}/${FusionStabilityPolicy.ENTRY_CONFIRMATIONS}: общий BUY подтверждается; ещё ${left}с"
+                    "ENTRY_ARMED ${streak}/${FusionStabilityPolicy.ENTRY_CONFIRMATIONS}: BUY и капитал подтверждаются; ещё ${left}с; ${acceptance.reason}"
                 }
             )
         }
