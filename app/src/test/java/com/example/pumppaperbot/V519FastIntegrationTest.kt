@@ -85,7 +85,8 @@ class V519FastIntegrationTest {
             bid = 100.0,
             feeRate = 0.0025,
             now = now,
-            shockReady = true
+            shockReady = true,
+            entryObservation = capitalReadyObservation(null, now, ask = 1.0, shock = true)
         )
         assertEquals("BUY", buy.action)
         assertTrue(buy.reason.startsWith("SHOCK_REBOUND_ENTRY"))
@@ -98,7 +99,8 @@ class V519FastIntegrationTest {
             bid = 100.0,
             feeRate = 0.0025,
             now = now,
-            shockReady = true
+            shockReady = true,
+            entryObservation = capitalReadyObservation(null, now, ask = 1.0, shock = true)
         )
         assertNull(blocked.action)
         assertTrue(blocked.reason.startsWith("COOLDOWN"))

@@ -31,6 +31,12 @@ class PumpProfitEngineV526Test {
         fiveMinuteSell: Double = 180_000.0,
         fifteenMinuteTotal: Double = 1_400_000.0,
         microAvailable: Boolean = true,
+        largeMode: LargeFlowMode = LargeFlowMode.BUY_SERIES,
+        largeConfidence: Int = 70,
+        ask: Double = 1.0,
+        bookBid: Double = 90_000.0,
+        bookAsk: Double = 60_000.0,
+        capitalMode: CapitalFlowMode = CapitalFlowMode.MIXED,
         at: Long = 1_000_000L
     ): SharedFusionEntryObservation {
         val breath = BuyerBreathSnapshot(
@@ -71,8 +77,8 @@ class PumpProfitEngineV526Test {
             sellNotional15m = fiveMinuteSell + (fifteenMinuteTotal - fiveMinuteBuy - fiveMinuteSell) * 0.42,
             flowHistorySeconds = 3_600L,
             largeFlow = LargeFlowFingerprint(
-                mode = LargeFlowMode.BUY_SERIES,
-                confidence = 70,
+                mode = largeMode,
+                confidence = largeConfidence,
                 thresholdUsdt = 15_000.0,
                 largeBuyUsdt = 150_000.0,
                 largeSellUsdt = 40_000.0
@@ -84,7 +90,12 @@ class PumpProfitEngineV526Test {
             sampledAt = at,
             sampleBucket = at / 15_000L,
             breathing = breathing,
-            micro = micro
+            micro = micro,
+            executionAsk = ask,
+            bookBidNotional = bookBid,
+            bookAskNotional = bookAsk,
+            bookSpreadPercent = 0.08,
+            capitalFlow = CapitalFlowProxy(mode = capitalMode, score = 20, confidence = 90)
         )
     }
 
@@ -92,7 +103,7 @@ class PumpProfitEngineV526Test {
         (1.0 + netPercent / 100.0) * entryCost / (amount * (1.0 - fee))
 
     @Test
-    fun `pm2 enters early ignition after short causal confirmation`() {
+    fun `pm2 enters only after ninety second price acceptance`() {
         val first = PumpProfitEngineV526.evaluateEntry(
             PumpProfitModeV526.PUMP_2,
             FusionStabilityState(),
@@ -105,11 +116,11 @@ class PumpProfitEngineV526Test {
         val second = PumpProfitEngineV526.evaluateEntry(
             PumpProfitModeV526.PUMP_2,
             first.nextState,
-            observation(at = 1_015_000L),
-            1_015_000L
+            observation(at = 1_090_000L, ask = 1.0015),
+            1_090_000L
         )
         assertEquals("BUY", second.action)
-        assertTrue(second.reason.contains("EARLY_ENTRY"))
+        assertTrue(second.reason.contains("CAPITAL_ACCEPTED"))
     }
 
     @Test
@@ -154,14 +165,14 @@ class PumpProfitEngineV526Test {
         val secondPm2 = PumpProfitEngineV526.evaluateEntry(
             PumpProfitModeV526.PUMP_2,
             firstPm2.nextState,
-            observation(at = 1_015_000L),
-            1_015_000L
+            observation(at = 1_090_000L, ask = 1.0015),
+            1_090_000L
         )
         val pm3 = PumpProfitEngineV526.evaluateEntry(
             PumpProfitModeV526.PUMP_3,
             FusionStabilityState(cooldownUntil = 1_120_000L),
-            observation(at = 1_015_000L),
-            1_015_000L
+            observation(at = 1_090_000L, ask = 1.0015),
+            1_090_000L
         )
 
         assertEquals("BUY", secondPm2.action)
@@ -218,6 +229,59 @@ class PumpProfitEngineV526Test {
         )
         assertNull(decision.action)
         assertTrue(decision.reason.contains("CAPITAL_WAIT"))
+    }
+
+    @Test
+    fun `broad turnover without a large buy series cannot arm`() {
+        val decision = PumpProfitEngineV526.evaluateEntry(
+            PumpProfitModeV526.PUMP_2,
+            FusionStabilityState(),
+            observation(
+                fiveMinuteBuy = 250_000.0,
+                fiveMinuteSell = 110_000.0,
+                largeMode = LargeFlowMode.MIXED,
+                largeConfidence = 100
+            ),
+            1_000_000L
+        )
+        assertNull(decision.action)
+        assertEquals(0, decision.nextState.entryStreak)
+        assertTrue(decision.reason.contains("крупных BUY"))
+    }
+
+    @Test
+    fun `ask heavy book blocks an otherwise strong capital setup`() {
+        val decision = PumpProfitEngineV526.evaluateEntry(
+            PumpProfitModeV526.PUMP_3,
+            FusionStabilityState(),
+            observation(bookBid = 45_000.0, bookAsk = 90_000.0),
+            1_000_000L
+        )
+        assertNull(decision.action)
+        assertEquals(0, decision.nextState.entryStreak)
+        assertTrue(decision.reason.contains("стакан"))
+    }
+
+    @Test
+    fun `capital that does not lift price remains armed but cannot buy`() {
+        val first = PumpProfitEngineV526.evaluateEntry(
+            PumpProfitModeV526.PUMP_2, FusionStabilityState(), observation(), 1_000_000L
+        )
+        val later = PumpProfitEngineV526.evaluateEntry(
+            PumpProfitModeV526.PUMP_2, first.nextState,
+            observation(at = 1_090_000L, ask = 0.9995), 1_090_000L
+        )
+        assertNull(later.action)
+        assertTrue(later.reason.contains("не приняла капитал"))
+    }
+
+    @Test
+    fun `late one point twenty five move is rejected`() {
+        val decision = PumpProfitEngineV526.evaluateEntry(
+            PumpProfitModeV526.PUMP_3, FusionStabilityState(), observation(move = 1.25), 1_000_000L
+        )
+        assertNull(decision.action)
+        assertTrue(decision.reason.contains("NO_FOMO"))
     }
 
     @Test

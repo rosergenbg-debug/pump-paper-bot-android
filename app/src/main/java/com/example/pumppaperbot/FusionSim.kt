@@ -209,6 +209,7 @@ object FusionFlowPolicy {
 data class FusionStabilityState(
     val entryStreak: Int = 0,
     val entryCandidateAt: Long = 0L,
+    val entryAnchorAsk: Double = 0.0,
     val exitStreak: Int = 0,
     val exitArmedAt: Long = 0L,
     val exitArmedBid: Double = 0.0,
@@ -224,6 +225,7 @@ data class FusionStabilityState(
     fun toJson(): JSONObject = JSONObject()
         .put("entryStreak", entryStreak)
         .put("entryCandidateAt", entryCandidateAt)
+        .put("entryAnchorAsk", entryAnchorAsk)
         .put("exitStreak", exitStreak)
         .put("exitArmedAt", exitArmedAt)
         .put("exitArmedBid", exitArmedBid)
@@ -238,6 +240,7 @@ data class FusionStabilityState(
         fun fromJson(j: JSONObject) = FusionStabilityState(
             entryStreak = j.optInt("entryStreak"),
             entryCandidateAt = j.optLong("entryCandidateAt"),
+            entryAnchorAsk = j.optDouble("entryAnchorAsk"),
             exitStreak = j.optInt("exitStreak"),
             exitArmedAt = j.optLong("exitArmedAt"),
             exitArmedBid = j.optDouble("exitArmedBid"),
@@ -360,6 +363,7 @@ object FusionStabilityPolicy {
         val basePositionState = previous.copy(
             entryStreak = 0,
             entryCandidateAt = 0L,
+            entryAnchorAsk = 0.0,
             peakBid = peak,
             profitDefenseArmed = defenseArmed,
             cooldownUntil = 0L

@@ -35,6 +35,7 @@ data class EntryOpportunityAuditSnapshot(
     val priceEur: Double = 0.0,
     val flowScore: Int? = null,
     val capitalFlow: CapitalFlowProxy = CapitalFlowProxy(),
+    val capitalEvidence: CapitalEvidenceSnapshot = CapitalEvidenceSnapshot(),
     val participants: List<EntryGateStatus> = emptyList()
 ) {
     fun toJson() = JSONObject()
@@ -42,6 +43,7 @@ data class EntryOpportunityAuditSnapshot(
         .put("price_eur", priceEur)
         .put("flow_score", flowScore ?: JSONObject.NULL)
         .put("capital_flow", capitalFlow.toJson())
+        .put("capital_evidence", capitalEvidence.toJson())
         .put("participants", JSONArray(participants.map { it.toJson() }))
 
     companion object {
@@ -52,9 +54,47 @@ data class EntryOpportunityAuditSnapshot(
                 priceEur = value.optDouble("price_eur"),
                 flowScore = if (value.isNull("flow_score")) null else value.optInt("flow_score"),
                 capitalFlow = CapitalFlowProxy.fromJson(value.optJSONObject("capital_flow")),
+                capitalEvidence = CapitalEvidenceSnapshot.fromJson(value.optJSONObject("capital_evidence")),
                 participants = (0 until items.length()).mapNotNull {
                     items.optJSONObject(it)?.let(EntryGateStatus::fromJson)
                 }
+            )
+        }
+    }
+}
+
+data class CapitalEvidenceSnapshot(
+    val total5mUsdt: Double = 0.0,
+    val buy5mUsdt: Double = 0.0,
+    val sell5mUsdt: Double = 0.0,
+    val priorFiveMinuteUsdt: Double = 0.0,
+    val largeFlow: LargeFlowFingerprint = LargeFlowFingerprint(),
+    val bookBidUsdt: Double? = null,
+    val bookAskUsdt: Double? = null,
+    val executableAskEur: Double = 0.0
+) {
+    fun toJson() = JSONObject()
+        .put("total_5m_usdt", total5mUsdt)
+        .put("buy_5m_usdt", buy5mUsdt)
+        .put("sell_5m_usdt", sell5mUsdt)
+        .put("prior_5m_average_usdt", priorFiveMinuteUsdt)
+        .put("large_flow", largeFlow.toJson())
+        .put("book_bid_usdt", bookBidUsdt ?: JSONObject.NULL)
+        .put("book_ask_usdt", bookAskUsdt ?: JSONObject.NULL)
+        .put("executable_ask_eur", executableAskEur)
+
+    companion object {
+        fun fromJson(value: JSONObject?): CapitalEvidenceSnapshot {
+            if (value == null) return CapitalEvidenceSnapshot()
+            return CapitalEvidenceSnapshot(
+                total5mUsdt = value.optDouble("total_5m_usdt"),
+                buy5mUsdt = value.optDouble("buy_5m_usdt"),
+                sell5mUsdt = value.optDouble("sell_5m_usdt"),
+                priorFiveMinuteUsdt = value.optDouble("prior_5m_average_usdt"),
+                largeFlow = LargeFlowFingerprint.fromJson(value.optJSONObject("large_flow")),
+                bookBidUsdt = if (value.isNull("book_bid_usdt")) null else value.optDouble("book_bid_usdt"),
+                bookAskUsdt = if (value.isNull("book_ask_usdt")) null else value.optDouble("book_ask_usdt"),
+                executableAskEur = value.optDouble("executable_ask_eur")
             )
         }
     }
@@ -143,14 +183,27 @@ object EntryOpportunityAuditStore {
         val market = PumpBotEngine.snapshot(context)
         val breathing = LiveMarketBreathingStore.snapshot(context, now)
         val impulse = ImpulseRadarStore.state(context)
+        val micro = MicroImpulseStore.state(context)
         val deepSig = DeepSeekPrimaryStore.state(context, now)
         val deepSigPaper = GeminiPaperStore.state(context).portfolio
         val fusionMarket = BitpandaFusionStore.state(context)
+        val total5 = micro.buyNotional5m + micro.sellNotional5m
+        val total15 = micro.buyNotional15m + micro.sellNotional15m
         val result = EntryOpportunityAuditSnapshot(
             at = now,
             priceEur = PaperExecutionPolicy.displayPrice(market, now),
             flowScore = breathing.flowWave.latest?.composite(),
             capitalFlow = CapitalFlowProxyPolicy.evaluate(impulse, breathing, now),
+            capitalEvidence = CapitalEvidenceSnapshot(
+                total5mUsdt = total5,
+                buy5mUsdt = micro.buyNotional5m,
+                sell5mUsdt = micro.sellNotional5m,
+                priorFiveMinuteUsdt = (total15 - total5).coerceAtLeast(0.0) / 2.0,
+                largeFlow = micro.largeFlow,
+                bookBidUsdt = market.bookBidNotional,
+                bookAskUsdt = market.bookAskNotional,
+                executableAskEur = fusionMarket.ask.takeIf { fusionMarket.fresh(now) } ?: 0.0
+            ),
             participants = listOf(
                 EntryGateStatusPolicy.pump("Pump Machine 1 • 2%", PumpMachine2Store.state(context), PumpMachine2Store.lastStatus(context)),
                 EntryGateStatusPolicy.pump("Pump Machine 2 • 3%", PumpMachineStore.state(context), PumpMachineStore.lastStatus(context)),

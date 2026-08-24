@@ -129,7 +129,8 @@ class FusionAntiChurnPolicyTest {
             frame = positive,
             bid = 100.0,
             feeRate = 0.0025,
-            now = t0
+            now = t0,
+            entryObservation = capitalReadyObservation(positive, t0)
         )
         assertNull(first.action)
         assertEquals(1, first.nextState.entryStreak)
@@ -141,7 +142,8 @@ class FusionAntiChurnPolicyTest {
             frame = positive,
             bid = 100.1,
             feeRate = 0.0025,
-            now = t0 + 30_000L
+            now = t0 + 30_000L,
+            entryObservation = capitalReadyObservation(positive, t0 + 30_000L, ask = 1.0005)
         )
         assertNull(tooSoon.action)
         assertEquals(2, tooSoon.nextState.entryStreak)
@@ -153,7 +155,8 @@ class FusionAntiChurnPolicyTest {
             frame = positive,
             bid = 100.2,
             feeRate = 0.0025,
-            now = t0 + 61_000L
+            now = t0 + 61_000L,
+            entryObservation = capitalReadyObservation(positive, t0 + 61_000L, ask = 1.0015)
         )
         assertEquals("BUY", confirmed.action)
     }
