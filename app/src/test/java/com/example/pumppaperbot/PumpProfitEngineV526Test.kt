@@ -239,6 +239,7 @@ class PumpProfitEngineV526Test {
             observation(
                 fiveMinuteBuy = 250_000.0,
                 fiveMinuteSell = 110_000.0,
+                fifteenMinuteTotal = 900_000.0,
                 largeMode = LargeFlowMode.MIXED,
                 largeConfidence = 100
             ),
