@@ -160,6 +160,7 @@ object UnifiedResearchLog {
             .put("legacyV4Archive", legacyArchive)
             .put("performanceLedger", performanceLedger)
             .put("entryOpportunityAudit", EntryOpportunityAuditStore.exportJson(context))
+            .put("liquidityReleaseShadow", LiquidityReleaseShadowStore.exportJson(context, now))
             .put("accounts", JSONObject()
                 .put("APP", appJson(app))
                 .put("PumpMachine", PumpMachineStore.toJson(pumpMachine))

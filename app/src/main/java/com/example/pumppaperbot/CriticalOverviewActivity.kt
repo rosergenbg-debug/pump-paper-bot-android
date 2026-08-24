@@ -33,6 +33,7 @@ class CriticalOverviewActivity : AppCompatActivity() {
     private lateinit var breathingChart: MarketBreathingChartView
     private lateinit var flowWaveChart: FlowClockView
     private lateinit var largeFlow: TextView
+    private lateinit var liquidityRelease: TextView
     private lateinit var breathTiming: TextView
     private lateinit var entryAudit: TextView
     private lateinit var facts: TextView
@@ -90,6 +91,8 @@ class CriticalOverviewActivity : AppCompatActivity() {
         content.addView(breathTiming, params(-2, dp(6)))
         largeFlow = panel(14, true)
         content.addView(largeFlow, params(-2, dp(6)))
+        liquidityRelease = panel(14, true)
+        content.addView(liquidityRelease, params(-2, dp(6)))
         entryAudit = panel(14, false)
         content.addView(entryAudit, params(-2, dp(6)))
         facts = panel(14, false)
@@ -180,6 +183,7 @@ class CriticalOverviewActivity : AppCompatActivity() {
         flowWaveChart.setData(breathing)
         breathTiming.text = ContinuousFlowWaveText.describe(breathing)
         largeFlow.text = LargeFlowFingerprintText.describe(micro.largeFlow)
+        liquidityRelease.text = LiquidityReleaseShadowText.describe(LiquidityReleaseShadowStore.latest(this))
         entryAudit.text = buildString {
             append("ПОЧЕМУ СИСТЕМЫ ВОШЛИ ИЛИ НЕ ВОШЛИ")
             if (audit.at <= 0L || audit.participants.isEmpty()) {
