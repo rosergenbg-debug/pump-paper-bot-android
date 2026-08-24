@@ -62,6 +62,18 @@ object SharedFusionEntryObservationStore {
             bookSpreadPercent = market.spreadPercent,
             capitalFlow = CapitalFlowProxyPolicy.evaluate(impulse, breathing, now)
         ).also {
+            runCatching { LiquidityReleaseShadowStore.observe(context, it, now) }
+                .onFailure { error ->
+                    runCatching {
+                        UnifiedResearchLog.record(
+                            context,
+                            "LIQUIDITY_SHADOW",
+                            "ERROR",
+                            "Теневой наблюдатель изолирован: ${error.javaClass.simpleName}",
+                            now
+                        )
+                    }
+                }
             cachedBucket = bucket
             cached = it
         }
