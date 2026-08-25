@@ -34,7 +34,13 @@ object AdaptiveBreathEntryPolicy {
     }
 
     fun evaluate(mode: PumpProfitModeV526, observation: SharedFusionEntryObservation): Result {
-        val p = profile(mode)
+        val base = profile(mode)
+        val tuning = observation.entryTuning
+        val p = base.copy(
+            threshold = (base.threshold + tuning.scoreOffset(mode)).coerceIn(18, 60),
+            maxMovePercent = (base.maxMovePercent - tuning.chaseTighteningBps / 100.0)
+                .coerceAtLeast(0.45)
+        )
         val breathing = observation.breathing
             ?: return veto(p, "нет live breathing snapshot")
         val frame = observation.frame
@@ -52,9 +58,18 @@ object AdaptiveBreathEntryPolicy {
         val breath = breathing.buyerBreath
         val move = max(0.0, max(breath.moveSincePhaseStartPercent ?: 0.0, breath.priceChange5mPercent ?: 0.0))
         if (move > p.maxMovePercent) return veto(p, "движение уже ${fmt(move)}%: поздно догонять")
-        if (breath.absorptionRisk >= 90) return veto(p, "поглощение ${breath.absorptionRisk}/100")
-        if ((breath.phase == BuyerBreathPhase.SELLER_TAKEOVER || breath.phase == BuyerBreathPhase.EXHAUSTION) && frame.instant <= 0) {
-            return veto(p, "продавцы перехватывают поток")
+        val absorptionLimit = (90 - tuning.absorptionTightening).coerceAtLeast(76)
+        if (breath.absorptionRisk >= absorptionLimit) return veto(p, "поглощение ${breath.absorptionRisk}/100")
+        if (breath.phase !in setOf(BuyerBreathPhase.IGNITION, BuyerBreathPhase.EXPANSION, BuyerBreathPhase.SHOCK)) {
+            return veto(p, "новый вход запрещён в фазе ${breath.phase}: нужен новый разгон, а не зрелая/тихая волна")
+        }
+        val fastDecelerating = frame.instant + tuning.decelerationGap < frame.score5m
+        val mediumDecelerating = frame.score5m + tuning.decelerationGap < frame.score15m
+        if (fastDecelerating || mediumDecelerating) {
+            return veto(
+                p,
+                "поток тормозит: мгн/5/15=${frame.instant}/${frame.score5m}/${frame.score15m}, допустимый разрыв ${tuning.decelerationGap}"
+            )
         }
 
         val total5 = micro.buyNotional5m + micro.sellNotional5m
@@ -64,14 +79,14 @@ object AdaptiveBreathEntryPolicy {
         val bid = observation.bookBidNotional
         val ask = observation.bookAskNotional
         val bookImbalance = if (bid != null && ask != null && bid + ask > 0.0) (bid - ask) / (bid + ask) else 0.0
-        val activity = breath.activityRatio?.let { ((it - 1.0) * 8.0).coerceIn(-6.0, 10.0) } ?: 0.0
+        val activity = breath.activityRatio?.let { ((it - 1.0) * 6.0).coerceIn(-5.0, 8.0) } ?: 0.0
         val efficiency = ((breath.efficiencyScore ?: 0) / 10.0).coerceIn(-7.0, 7.0)
-        val curvature = ((frame.instant - frame.score5m) * 0.40).coerceIn(-8.0, 8.0)
+        val curvature = ((frame.instant - frame.score5m) * 0.55).coerceIn(-10.0, 10.0)
         val phase = when (breath.phase) {
             BuyerBreathPhase.IGNITION -> 7.0
             BuyerBreathPhase.EXPANSION -> 5.0
-            BuyerBreathPhase.MATURE -> 1.0
-            BuyerBreathPhase.QUIET -> -4.0
+            BuyerBreathPhase.MATURE -> -10.0
+            BuyerBreathPhase.QUIET -> -12.0
             BuyerBreathPhase.SHOCK -> 2.0
             BuyerBreathPhase.EXHAUSTION -> -8.0
             BuyerBreathPhase.SELLER_TAKEOVER -> -12.0
@@ -79,12 +94,12 @@ object AdaptiveBreathEntryPolicy {
         }
         val absorptionPenalty = ((breath.absorptionRisk - 45).coerceAtLeast(0) * 0.22)
         val score = (
-            frame.instant.coerceIn(-20, 20) * 0.70 +
-                frame.score5m.coerceIn(-20, 20) * 0.60 +
-                frame.score15m.coerceIn(-20, 20) * 0.25 +
-                frame.score30m.coerceIn(-20, 20) * 0.15 +
-                curvature + tradeImbalance.coerceIn(-1.0, 1.0) * 22.0 +
-                bookImbalance.coerceIn(-1.0, 1.0) * 10.0 + activity + efficiency + phase - absorptionPenalty
+            frame.instant.coerceIn(-20, 20) * 0.62 +
+                frame.score5m.coerceIn(-20, 20) * 0.42 +
+                frame.score15m.coerceIn(-20, 20) * 0.18 +
+                frame.score30m.coerceIn(-20, 20) * 0.08 +
+                curvature + tradeImbalance.coerceIn(-1.0, 1.0) * 18.0 +
+                bookImbalance.coerceIn(-1.0, 1.0) * 8.0 + activity + efficiency + phase - absorptionPenalty
             ).toInt().coerceIn(-100, 100)
 
         val sellerDominance = tradeImbalance < -0.28 && frame.instant < 4 && frame.score5m < 2
@@ -93,7 +108,10 @@ object AdaptiveBreathEntryPolicy {
         val near = score >= p.threshold - p.hysteresis
         val direction = "мгн/5/15/30=${frame.instant}/${frame.score5m}/${frame.score15m}/${frame.score30m}"
         val evidence = "дисбаланс сделок=${fmtSigned(tradeImbalance * 100)}%, стакан=${fmtSigned(bookImbalance * 100)}%, активность=${breath.activityRatio?.let(::fmt) ?: "нет базы"}"
-        return Result(score, p.threshold, allowed, near, false, "$direction; $evidence; фаза=${breath.phase}; поглощение=${breath.absorptionRisk}")
+        return Result(
+            score, p.threshold, allowed, near, false,
+            "$direction; $evidence; фаза=${breath.phase}; поглощение=${breath.absorptionRisk}; tuning r${tuning.revision}"
+        )
     }
 
     private fun veto(profile: Profile, reason: String, score: Int = -100) =

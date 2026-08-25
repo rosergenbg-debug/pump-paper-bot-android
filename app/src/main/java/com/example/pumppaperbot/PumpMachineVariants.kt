@@ -103,8 +103,19 @@ private class PumpVariantStore(private val config: PumpVariantConfig) {
                 val decision = evaluateRetest(context, observation, market.ask, now)
                 if (!decision.first) return finish(context, marked, entry.nextState, decision.second, 0.0)
             }
+            val localGate = PumpProfitEngineV526.entryGateResult(config.mode, observation)
+            val aiGate = DeepSeekEntryCoach.review(
+                context, config.mode, observation, localGate.score, localGate.threshold, now
+            )
+            if (!aiGate.allowed) {
+                return finish(
+                    context, marked, entry.nextState,
+                    "${aiGate.reason} • ${config.label} остаётся вне позиции", 0.0
+                )
+            }
+            val approvedReason = "${entry.reason}; ${aiGate.reason}"
             return buy(context, marked, entry.nextState, market, now,
-                if (config.retest) "RETEST BUY: откат и возврат покупателей подтверждены; ${entry.reason}" else entry.reason)
+                if (config.retest) "RETEST BUY: откат и возврат покупателей подтверждены; $approvedReason" else approvedReason)
         }
 
         val lastBuy = marked.trades.asReversed().firstOrNull { it.action == "BUY" }

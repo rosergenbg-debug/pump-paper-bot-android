@@ -20,7 +20,8 @@ data class SharedFusionEntryObservation(
     val bookBidNotional: Double? = null,
     val bookAskNotional: Double? = null,
     val bookSpreadPercent: Double? = null,
-    val capitalFlow: CapitalFlowProxy = CapitalFlowProxy()
+    val capitalFlow: CapitalFlowProxy = CapitalFlowProxy(),
+    val entryTuning: DeepSeekEntryTuning = DeepSeekEntryTuning()
 )
 
 data class SharedFusionEntryDecision(
@@ -60,7 +61,8 @@ object SharedFusionEntryObservationStore {
             bookBidNotional = market.bookBidNotional,
             bookAskNotional = market.bookAskNotional,
             bookSpreadPercent = market.spreadPercent,
-            capitalFlow = CapitalFlowProxyPolicy.evaluate(impulse, breathing, now)
+            capitalFlow = CapitalFlowProxyPolicy.evaluate(impulse, breathing, now),
+            entryTuning = DeepSeekEntryCoachStore.tuning(context)
         ).also {
             runCatching { LiquidityReleaseShadowStore.observe(context, it, now) }
                 .onFailure { error ->
