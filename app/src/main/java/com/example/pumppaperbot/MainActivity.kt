@@ -168,7 +168,7 @@ class MainActivity : AppCompatActivity() {
             checkNow()
         }
         btnStart?.setOnClickListener { startMonitor() }
-        btnCheck?.setOnClickListener { checkNow() }
+        btnCheck?.setOnClickListener { checkNow(forceDeepSeek = true) }
         btnReset?.setOnClickListener {
             confirm("Сбросить состояние?", "Очистится режим ожидания, цена входа и сохраненные данные графика.") {
                 resetAll()
@@ -225,8 +225,8 @@ class MainActivity : AppCompatActivity() {
                 .onFailure { Toast.makeText(this, it.message ?: "Ошибка экспорта лога", Toast.LENGTH_LONG).show() }
         }
         btnRecentLog?.setOnClickListener {
-            runCatching { UnifiedResearchLog.shareRecent48h(this) }
-                .onFailure { Toast.makeText(this, it.message ?: "Ошибка экспорта 48-часового лога", Toast.LENGTH_LONG).show() }
+            runCatching { UnifiedResearchLog.shareRecent24h(this) }
+                .onFailure { Toast.makeText(this, it.message ?: "Ошибка экспорта 24-часового лога", Toast.LENGTH_LONG).show() }
         }
         chart?.setOnClickListener { startActivity(Intent(this, ChartDetailActivity::class.java)) }
         chart?.setVisibleBarLimit(mainChartVisibleBarLimit())
@@ -292,7 +292,7 @@ class MainActivity : AppCompatActivity() {
         checkNow()
     }
 
-    private fun checkNow() {
+    private fun checkNow(forceDeepSeek: Boolean = false) {
         val interval = if (PumpBotEngine.snapshot(this).running) {
             TimeUnit.MINUTES.toMillis(2)
         } else {
@@ -303,7 +303,7 @@ class MainActivity : AppCompatActivity() {
             .setInputData(workDataOf(
                 PumpBotWorker.INPUT_CYCLE_SOURCE to "РУЧНАЯ ПРОВЕРКА",
                 PumpBotWorker.INPUT_CYCLE_INTERVAL to interval,
-                PumpBotWorker.INPUT_FORCE_PRIMARY_DEEPSEEK to true
+                PumpBotWorker.INPUT_FORCE_PRIMARY_DEEPSEEK to forceDeepSeek
             ))
             .build()
         WorkManager.getInstance(this).enqueue(request)

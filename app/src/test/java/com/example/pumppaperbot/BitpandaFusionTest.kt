@@ -230,8 +230,15 @@ class BitpandaFusionTest {
             DeepSeekPrimaryState(lastAttempt = now - 299_999L), true, false, now,
             intervalMillis = active.intervalMillis
         ))
-        assertTrue(DeepSeekPrimaryPolicy.shouldRun(
+        assertFalse(DeepSeekPrimaryPolicy.shouldRun(
             DeepSeekPrimaryState(lastAttempt = now - 300_000L), true, false, now,
+            intervalMillis = active.intervalMillis
+        ))
+        assertTrue(DeepSeekPrimaryPolicy.shouldRun(
+            DeepSeekPrimaryState(lastAttempt = now - DeepSeekPrimaryPolicy.MIN_MATERIAL_INTERVAL),
+            true,
+            false,
+            now,
             intervalMillis = active.intervalMillis
         ))
     }

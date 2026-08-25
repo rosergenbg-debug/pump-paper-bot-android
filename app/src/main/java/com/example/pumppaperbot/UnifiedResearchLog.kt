@@ -16,7 +16,8 @@ object UnifiedResearchLog {
     private const val DIRECTORY = "research_logs"
     private const val RETENTION_DAYS = 30
     private const val HEARTBEAT_MILLIS = 15L * 60L * 1000L
-    private const val RECENT_WINDOW_MILLIS = 48L * 60L * 60L * 1000L
+    private const val RECENT_WINDOW_MILLIS = 24L * 60L * 60L * 1000L
+    private const val MAX_SUPPORT_FILE_BYTES = 1_900_000
     private const val CONTROL_PREFS = "unified_log_control_v530"
     private val lock = Any()
     private val utc = TimeZone.getTimeZone("UTC")
@@ -203,8 +204,8 @@ object UnifiedResearchLog {
         context.startActivity(Intent.createChooser(send, "Отправить единый лог"))
     }
 
-    /** Lightweight support export: current state plus only the last 48 hours of decisions. */
-    fun exportRecent48h(context: Context, now: Long = System.currentTimeMillis()): File {
+    /** Lightweight support export: 24 hours, minified and split below the upload limit. */
+    fun exportRecent24h(context: Context, now: Long = System.currentTimeMillis()): List<File> {
         val cutoff = now - RECENT_WINDOW_MILLIS
         val market = PumpBotEngine.snapshot(context)
         val breathing = LiveMarketBreathingStore.snapshot(context, now)
@@ -218,10 +219,10 @@ object UnifiedResearchLog {
             .put("PumpMachineSafe", recentJson(PumpMachineSafeStore.toJson(PumpMachineSafeStore.state(context)), cutoff))
             .put("FusionSim", recentJson(FusionSimStore.toJson(FusionSimStore.state(context)), cutoff))
         val report = JSONObject()
-            .put("schema", "pump-signal-support-log-48h-v534")
+            .put("schema", "pump-signal-support-log-24h-v535")
             .put("appVersion", BuildConfig.VERSION_NAME)
             .put("generatedAt", now)
-            .put("windowHours", 48)
+            .put("windowHours", 24)
             .put("cutoffAt", cutoff)
             .put("clearedAfterExport", false)
             .put("safety", JSONObject()
@@ -240,26 +241,45 @@ object UnifiedResearchLog {
             .put("deepSeekEntryCoach", DeepSeekEntryCoachStore.exportJson(context))
             .put("accounts", accounts)
             .put("journalPolicy", JSONObject()
-                .put("rawRecords48h", rawJournal.size)
-                .put("compactedRecords48h", compactJournal.size)
-                .put("fullArchiveStillRetainedDays", RETENTION_DAYS))
-            .put("journal", JSONArray(compactJournal))
+                .put("rawRecords24h", rawJournal.size)
+                .put("compactedRecords24h", compactJournal.size)
+                .put("fullArchiveStillRetainedDays", RETENTION_DAYS)
+                .put("maximumFileBytes", MAX_SUPPORT_FILE_BYTES)
+                .put("format", "MINIFIED_JSON_SPLIT_IF_NEEDED"))
         val dir = File(context.cacheDir, "reports").apply { mkdirs() }
-        return File(dir, "PumpSignal-V${BuildConfig.VERSION_NAME}-Log-48h-${stamp(now)}.json").apply {
-            writeText(report.toString(2), Charsets.UTF_8)
+        dir.listFiles()?.filter {
+            "-Log-24h-" in it.name || "-Log-48h-" in it.name
+        }?.forEach { it.delete() }
+        val payloads = SupportLogSplitPolicy.split(
+            base = report,
+            journal = compactJournal,
+            maxBytes = MAX_SUPPORT_FILE_BYTES
+        )
+        return payloads.mapIndexed { index, payload ->
+            File(
+                dir,
+                "PumpSignal-V${BuildConfig.VERSION_NAME}-Log-24h-${stamp(now)}-part" +
+                    "%02d-of-%02d.json".format(Locale.US, index + 1, payloads.size)
+            ).apply { writeText(payload, Charsets.UTF_8) }
         }
     }
 
-    fun shareRecent48h(context: Context) {
-        val file = exportRecent48h(context)
-        val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", file)
-        val send = Intent(Intent.ACTION_SEND).apply {
+    fun shareRecent24h(context: Context) {
+        val files = exportRecent24h(context)
+        val uris = ArrayList(files.map {
+            FileProvider.getUriForFile(context, "${context.packageName}.files", it)
+        })
+        val send = Intent(if (uris.size == 1) Intent.ACTION_SEND else Intent.ACTION_SEND_MULTIPLE).apply {
             type = "application/json"
-            putExtra(Intent.EXTRA_STREAM, uri)
-            putExtra(Intent.EXTRA_SUBJECT, "PumpSignal V${BuildConfig.VERSION_NAME} — лёгкий лог за 48 часов")
+            if (uris.size == 1) putExtra(Intent.EXTRA_STREAM, uris.single())
+            else putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+            putExtra(
+                Intent.EXTRA_SUBJECT,
+                "PumpSignal V${BuildConfig.VERSION_NAME} — лог за 24 часа (${uris.size} файл.)"
+            )
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        context.startActivity(Intent.createChooser(send, "Отправить лог за 48 часов"))
+        context.startActivity(Intent.createChooser(send, "Отправить лог за 24 часа"))
     }
 
     private fun readJournal(context: Context, cutoff: Long): List<JSONObject> {
@@ -312,6 +332,49 @@ object UnifiedResearchLog {
     private fun day(now: Long) = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { timeZone = utc }.format(Date(now))
     private fun stamp(now: Long) = SimpleDateFormat("yyyyMMdd-HHmm", Locale.US).apply { timeZone = utc }.format(Date(now))
 
+}
+
+internal object SupportLogSplitPolicy {
+    fun split(base: JSONObject, journal: List<JSONObject>, maxBytes: Int): List<String> {
+        require(maxBytes > 1_024) { "Слишком маленький предел файла" }
+        val chunks = ArrayList<List<JSONObject>>()
+        var current = ArrayList<JSONObject>()
+        journal.forEach { event ->
+            val candidate = ArrayList(current).apply { add(event) }
+            if (payload(base, candidate, 9_999, 9_999, journal.size).utf8Size() <= maxBytes) {
+                current = candidate
+            } else {
+                require(current.isNotEmpty()) { "Одна запись журнала превышает предел файла" }
+                chunks += current
+                current = arrayListOf(event)
+            }
+        }
+        if (current.isNotEmpty() || chunks.isEmpty()) chunks += current
+        val count = chunks.size
+        return chunks.mapIndexed { index, events ->
+            payload(base, events, index + 1, count, journal.size).also {
+                require(it.utf8Size() <= maxBytes) { "Часть журнала превысила предел файла" }
+            }
+        }
+    }
+
+    private fun payload(
+        base: JSONObject,
+        events: List<JSONObject>,
+        part: Int,
+        partCount: Int,
+        totalJournalRecords: Int
+    ): String = JSONObject(base.toString())
+        .put("parts", JSONObject()
+            .put("part", part)
+            .put("partCount", partCount)
+            .put("journalRecordsInPart", events.size)
+            .put("totalJournalRecords", totalJournalRecords)
+            .put("uploadAllPartsTogether", partCount > 1))
+        .put("journal", JSONArray().apply { events.forEach { put(it) } })
+        .toString()
+
+    private fun String.utf8Size(): Int = toByteArray(Charsets.UTF_8).size
 }
 
 internal object ResearchLogCompactionPolicy {

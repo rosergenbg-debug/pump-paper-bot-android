@@ -389,7 +389,7 @@ object PumpMachineStore {
                     )
                     savePortfolio(context, next)
                     saveStability(context, entryState)
-                    val status = "BUY V5.34 INDEPENDENT + AI COACH: $approvedReason • TP +3,00% net • SL −1,30% net • BE/timeout active"
+                    val status = "BUY V${BuildConfig.VERSION_NAME} INDEPENDENT + AI COACH: $approvedReason • TP +3,00% net • SL −1,30% net • BE/timeout active"
                     saveStatus(context, status)
                     UnifiedResearchLog.record(context, "PUMP_MACHINE", "BUY", status, now)
                     PumpMachineSyncResult(next, status, 0.0)
