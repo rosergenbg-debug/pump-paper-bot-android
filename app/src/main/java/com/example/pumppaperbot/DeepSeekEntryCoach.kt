@@ -52,7 +52,7 @@ data class DeepSeekEntryTuning(
     fun compact(): String =
         "PM2=$pm2ScoreOffset PM3=$pm3ScoreOffset RETEST=$retestScoreOffset SAFE=$safeScoreOffset; " +
             "торможение=$decelerationGap; погоня=−$chaseTighteningBps б.п.; " +
-            "подтверждение=+$confirmationExtraSecondsс; поглощение=−$absorptionTightening"
+            "подтверждение=+${confirmationExtraSeconds}с; поглощение=−$absorptionTightening"
 
     companion object {
         fun fromJson(json: JSONObject) = DeepSeekEntryTuning(
