@@ -44,4 +44,24 @@ class DeepSeekEntryCoachTest {
         assertFalse(outcome.applied)
         assertEquals(6, outcome.tuning.pm2ScoreOffset)
     }
+
+    @Test
+    fun `insufficient balance receives long retry pause`() {
+        assertTrue(DeepSeekEntryCoachPolicy.isBalanceError("Insufficient Balance"))
+        assertEquals(
+            6L * 60L * 60L * 1000L,
+            DeepSeekEntryCoachPolicy.errorBackoff("Insufficient Balance")
+        )
+        assertEquals(
+            30L * 60L * 1000L,
+            DeepSeekEntryCoachPolicy.errorBackoff("HTTP 503")
+        )
+    }
+
+    @Test
+    fun `coach has a small daily budget and reusable verdict`() {
+        assertEquals(6, DeepSeekEntryCoach.MAX_REQUESTS_PER_UTC_DAY)
+        assertEquals(15L * 60L * 1000L, DeepSeekEntryCoach.MIN_REQUEST_INTERVAL)
+        assertEquals(10L * 60L * 1000L, DeepSeekEntryCoachPolicy.VERDICT_TTL)
+    }
 }

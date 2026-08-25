@@ -427,7 +427,7 @@
             android:gravity="center"
             android:maxLines="3"
             android:padding="3dp"
-            android:text="ЛЁГКИЙ ЛОГ ЗА 48 ЧАСОВ • ДЛЯ ОТПРАВКИ И АНАЛИЗА"
+            android:text="ЛОГ ЗА 24 ЧАСА • КАЖДЫЙ ФАЙЛ МЕНЬШЕ 2 МБ"
             android:textColor="#FFFFFF"
             android:textSize="12sp"
             android:textStyle="bold" />

@@ -167,7 +167,9 @@ object DeepSeekPrimaryStore {
 }
 
 object DeepSeekPrimaryPolicy {
-    const val INTERVAL = 5L * 60L * 1000L
+    const val INTERVAL = 60L * 60L * 1000L
+    const val MIN_MATERIAL_INTERVAL = 15L * 60L * 1000L
+    const val MAX_ROUTINE_REQUESTS_PER_DAY = 24
     const val SIGNAL_MAX_AGE = 12L * 60L * 1000L
 
     fun isFreshSignal(state: DeepSeekPrimaryState, now: Long = System.currentTimeMillis()): Boolean =
@@ -203,9 +205,18 @@ object DeepSeekPrimaryPolicy {
         now: Long,
         materialChange: Boolean = false,
         intervalMillis: Long = INTERVAL
-    ): Boolean = hasMarketData && (
-        force || state.lastAttempt <= 0L || materialChange || now - state.lastAttempt >= intervalMillis
-    )
+    ): Boolean {
+        if (!hasMarketData) return false
+        if (force) return true
+        if (state.successfulToday + state.failedToday >= MAX_ROUTINE_REQUESTS_PER_DAY) return false
+        if (state.lastAttempt <= 0L) return true
+        val elapsed = now - state.lastAttempt
+        if (DeepSeekEntryCoachPolicy.isBalanceError(state.error) &&
+            elapsed < DeepSeekEntryCoachPolicy.BALANCE_ERROR_BACKOFF
+        ) return false
+        if (materialChange && elapsed >= MIN_MATERIAL_INTERVAL) return true
+        return elapsed >= intervalMillis.coerceAtLeast(MIN_MATERIAL_INTERVAL)
+    }
 
     fun compactStatus(
         state: DeepSeekPrimaryState,

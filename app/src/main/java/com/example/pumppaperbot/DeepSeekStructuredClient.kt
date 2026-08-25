@@ -94,7 +94,8 @@ class DeepSeekStructuredClient(private val http: OkHttpClient) {
         reasoningEffort: String,
         maxTokens: Int,
         validate: (JSONObject) -> String? = { null },
-        onRepairStart: (String) -> Unit = {}
+        onRepairStart: (String) -> Unit = {},
+        allowRepair: Boolean = true
     ): DeepSeekStructuredResult {
         val first = try {
             validateEnvelope(executeOnce(
@@ -106,7 +107,7 @@ class DeepSeekStructuredClient(private val http: OkHttpClient) {
                 maxTokens = maxTokens
             ), validate)
         } catch (error: DeepSeekStructuredException) {
-            if (!DeepSeekRepairPolicy.shouldRetry(error)) throw error
+            if (!allowRepair || !DeepSeekRepairPolicy.shouldRetry(error)) throw error
             onRepairStart(error.message.orEmpty())
             val repaired = try {
                 validateEnvelope(executeOnce(

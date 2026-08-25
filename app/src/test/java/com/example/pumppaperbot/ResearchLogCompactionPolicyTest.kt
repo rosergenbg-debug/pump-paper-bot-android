@@ -3,6 +3,7 @@ package com.example.pumppaperbot
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ResearchLogCompactionPolicyTest {
@@ -43,5 +44,25 @@ class ResearchLogCompactionPolicyTest {
                 .put("detail", "SELL +2.00% NET")
         )
         assertEquals(2, ResearchLogCompactionPolicy.compact(trades, 15L * 60L * 1000L).size)
+    }
+
+    @Test
+    fun `support log is split into complete valid json parts below byte limit`() {
+        val base = JSONObject().put("schema", "test").put("state", "свежий рынок")
+        val events = (1..40).map { index ->
+            JSONObject().put("time", index).put("agent", "PM")
+                .put("result", "CYCLE").put("detail", "данные-$index-" + "я".repeat(60))
+        }
+        val limit = 1_400
+        val parts = SupportLogSplitPolicy.split(base, events, limit)
+
+        assertTrue(parts.size > 1)
+        assertTrue(parts.all { it.toByteArray(Charsets.UTF_8).size <= limit })
+        assertEquals(events.size, parts.sumOf { JSONObject(it).getJSONArray("journal").length() })
+        parts.forEachIndexed { index, payload ->
+            val meta = JSONObject(payload).getJSONObject("parts")
+            assertEquals(index + 1, meta.getInt("part"))
+            assertEquals(parts.size, meta.getInt("partCount"))
+        }
     }
 }

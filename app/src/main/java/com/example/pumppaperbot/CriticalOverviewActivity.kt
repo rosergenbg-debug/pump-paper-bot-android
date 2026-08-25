@@ -251,6 +251,10 @@ class CriticalOverviewActivity : AppCompatActivity() {
             append("\n\nПРЕДВХОДНЫЙ AI-КОНТРОЛЬ: ${entryCoach.status} • ${entryCoach.verdict}")
             append(" • ${entryCoach.confidence}/100 • ${entryCoach.stage}")
             append("\n${entryCoach.reason}")
+            if (entryCoach.status == "PAUSED_BALANCE") {
+                append("\nDEEPSEEK НЕ ТРАТИТ ЗАПРОСЫ: API сообщил о недостатке средств; следующая проба не раньше паузы.")
+            }
+            append("\nЭкономный режим: до 6 предвходных запросов/сутки, не чаще одного за 15 минут, без платного автоповтора.")
             append("\n8 мягких регуляторов, ревизия ${entryTuning.revision}: ${entryTuning.compact()}")
             append("\nDeepSeek не может отменять запрет по устаревшим данным, спреду, поздней фазе или давлению продавцов.")
             if (positionOpen) {
@@ -265,7 +269,7 @@ class CriticalOverviewActivity : AppCompatActivity() {
         val estimated = DeepSeekDailyBudgetStore.costUsd(this, now)
         cost.text = String.format(
             Locale.GERMANY,
-            "РАСХОД DEEPSEEK СЕГОДНЯ: $%.4f\nБлокировки нет. После примерно €5 приложение один раз предупредит, но продолжит анализ.",
+            "РАСХОД DEEPSEEK СЕГОДНЯ: $%.4f\nЭкономный режим V5.35: обычный обзор ограничен, предвходный контролёр вызывается только для готового кандидата.",
             estimated
         )
         cost.setTextColor(Color.parseColor(

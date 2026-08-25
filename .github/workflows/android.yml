@@ -26,7 +26,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Validate and build V5.34
+      - name: Validate and build V5.35
         run: |
           chmod +x gradlew
           ./gradlew testDebugUnitTest lintDebug assembleDebug
@@ -38,7 +38,7 @@ jobs:
           grep -F "Verified using v2 scheme (APK Signature Scheme v2): true" "$RUNNER_TEMP/signature.txt"
           "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging \
             app/build/outputs/apk/debug/app-debug.apk | tee "$RUNNER_TEMP/badging.txt"
-          grep -F "package: name='com.example.pumppaperbot.v8' versionCode='114' versionName='5.34'" \
+          grep -F "package: name='com.example.pumppaperbot.v8' versionCode='115' versionName='5.35'" \
             "$RUNNER_TEMP/badging.txt"
           grep -F "launchable-activity: name='com.example.pumppaperbot.MainActivity'" \
             "$RUNNER_TEMP/badging.txt"
@@ -47,11 +47,11 @@ jobs:
           test "$(stat -c%s app/build/outputs/apk/debug/app-debug.apk)" -gt 6000000
 
       - name: Prepare named APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk PumpSignal-V5.34-DeepSeek-Entry-Coach-Intermediate.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk PumpSignal-V5.35-Economical-Logs-Intermediate.apk
 
       - name: Upload intermediate APK
         uses: actions/upload-artifact@v4
         with:
-          name: PumpSignal-V5.34-DeepSeek-Entry-Coach-Intermediate-APK
-          path: PumpSignal-V5.34-DeepSeek-Entry-Coach-Intermediate.apk
+          name: PumpSignal-V5.35-Economical-Logs-Intermediate-APK
+          path: PumpSignal-V5.35-Economical-Logs-Intermediate.apk
           retention-days: 7

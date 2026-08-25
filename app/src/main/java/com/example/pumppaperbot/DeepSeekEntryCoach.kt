@@ -86,6 +86,7 @@ data class DeepSeekEntryCoachState(
     val proposalKey: String = "none",
     val proposalDelta: Int = 0,
     val proposalApplied: Boolean = false,
+    val retryAfterAt: Long = 0L,
     val error: String = ""
 ) {
     fun toJson() = JSONObject()
@@ -94,7 +95,8 @@ data class DeepSeekEntryCoachState(
         .put("requestedAt", requestedAt).put("completedAt", completedAt).put("expiresAt", expiresAt)
         .put("referencePrice", referencePrice).put("referenceInstant", referenceInstant)
         .put("referencePhase", referencePhase).put("proposalKey", proposalKey)
-        .put("proposalDelta", proposalDelta).put("proposalApplied", proposalApplied).put("error", error)
+        .put("proposalDelta", proposalDelta).put("proposalApplied", proposalApplied)
+        .put("retryAfterAt", retryAfterAt).put("error", error)
 
     companion object {
         fun fromJson(json: JSONObject) = DeepSeekEntryCoachState(
@@ -109,6 +111,7 @@ data class DeepSeekEntryCoachState(
             proposalKey = json.optString("proposalKey", "none"),
             proposalDelta = json.optInt("proposalDelta").coerceIn(-1, 1),
             proposalApplied = json.optBoolean("proposalApplied"),
+            retryAfterAt = json.optLong("retryAfterAt").coerceAtLeast(0L),
             error = RussianOutputPolicy.visible(json.optString("error")).take(300)
         )
     }
@@ -157,6 +160,11 @@ object DeepSeekEntryCoachStore {
     fun exportJson(context: Context) = JSONObject()
         .put("state", state(context).toJson())
         .put("tuning", tuning(context).toJson())
+        .put("coachBudget", JSONObject()
+            .put("maxRequestsPerUtcDay", DeepSeekEntryCoach.MAX_REQUESTS_PER_UTC_DAY)
+            .put("minimumIntervalMinutes", DeepSeekEntryCoach.MIN_REQUEST_INTERVAL / 60_000L)
+            .put("compatibleVerdictMinutes", DeepSeekEntryCoachPolicy.VERDICT_TTL / 60_000L)
+            .put("automaticRepairRequest", false))
         .put("automaticAuthority", "ONE_BOUNDED_SOFT_STEP_PER_UTC_DAY")
         .put("canOverrideHardVeto", false)
 }
@@ -212,8 +220,19 @@ object DeepSeekEntryTuningPolicy {
 data class DeepSeekEntryCoachGate(val allowed: Boolean, val reason: String)
 
 object DeepSeekEntryCoachPolicy {
-    const val VERDICT_TTL = 120_000L
+    const val VERDICT_TTL = 10L * 60L * 1000L
     const val PENDING_TTL = 90_000L
+    const val ORDINARY_ERROR_BACKOFF = 30L * 60L * 1000L
+    const val BALANCE_ERROR_BACKOFF = 6L * 60L * 60L * 1000L
+
+    fun isBalanceError(message: String): Boolean {
+        val value = message.lowercase()
+        return "insufficient balance" in value || "недостаточно средств" in value ||
+            "balance is insufficient" in value
+    }
+
+    fun errorBackoff(message: String): Long =
+        if (isBalanceError(message)) BALANCE_ERROR_BACKOFF else ORDINARY_ERROR_BACKOFF
 
     fun strictFallback(
         mode: PumpProfitModeV526,
@@ -245,8 +264,8 @@ object DeepSeekEntryCoachPolicy {
 
 object DeepSeekEntryCoach {
     private const val CIRCUIT = "ПРЕДВХОДНЫЙ КОНТРОЛЬ"
-    private const val MAX_REQUESTS_PER_UTC_DAY = 18
-    private const val MIN_REQUEST_INTERVAL = 4L * 60L * 1000L
+    const val MAX_REQUESTS_PER_UTC_DAY = 6
+    const val MIN_REQUEST_INTERVAL = 15L * 60L * 1000L
     private val running = AtomicBoolean(false)
     private val executor = Executors.newSingleThreadExecutor()
     private val http = OkHttpClient.Builder()
@@ -299,6 +318,14 @@ object DeepSeekEntryCoach {
         if (state.status == "PENDING" && now - state.requestedAt < DeepSeekEntryCoachPolicy.PENDING_TTL) {
             return DeepSeekEntryCoachGate(false, "AI WAIT: DeepSeek сейчас проверяет последние 5 минут")
         }
+        if (state.retryAfterAt > now) {
+            val minutes = ((state.retryAfterAt - now + 59_999L) / 60_000L).coerceAtLeast(1L)
+            return DeepSeekEntryCoachGate(
+                strict,
+                if (strict) "DeepSeek на паузе после ошибки ещё ~$minutes мин.; разрешён усиленный локальный резерв"
+                else "AI WAIT: после ошибки DeepSeek не повторяет платные запросы ещё ~$minutes мин."
+            )
+        }
         val acquired = running.compareAndSet(false, true)
         if (acquired && DeepSeekEntryCoachStore.tryConsumeRequest(
                 context, now, MAX_REQUESTS_PER_UTC_DAY, MIN_REQUEST_INTERVAL
@@ -306,7 +333,7 @@ object DeepSeekEntryCoach {
             val pending = state.copy(
                 status = "PENDING", verdict = "NONE", confidence = 0,
                 reason = "Проверяем, начинается ли движение или локальный импульс уже выдохся.",
-                requestedAt = now, expiresAt = 0L, error = ""
+                requestedAt = now, expiresAt = 0L, retryAfterAt = 0L, error = ""
             )
             DeepSeekEntryCoachStore.saveState(context, pending)
             executor.execute {
@@ -350,14 +377,15 @@ object DeepSeekEntryCoach {
                 system = systemPrompt(),
                 frame = frame,
                 reasoningEffort = "low",
-                maxTokens = 520,
+                maxTokens = 360,
                 validate = ::validate,
                 onRepairStart = { detail ->
                     ApiUsageLogStore.record(context, ApiUsageEvent(
                         provider = "DEEPSEEK", circuit = CIRCUIT, model = model,
                         status = "RETRY", at = System.currentTimeMillis(), detail = detail.take(240)
                     ))
-                }
+                },
+                allowRepair = false
             )
         }.fold(onSuccess = { result ->
             val now = System.currentTimeMillis()
@@ -386,7 +414,7 @@ object DeepSeekEntryCoach {
                 requestedAt = requestedAt, completedAt = now, expiresAt = now + DeepSeekEntryCoachPolicy.VERDICT_TTL,
                 referencePrice = observation.executionAsk, referenceInstant = observation.frame?.instant ?: micro.score,
                 referencePhase = phase, proposalKey = proposalKey, proposalDelta = proposalDelta,
-                proposalApplied = tuningResult.applied
+                proposalApplied = tuningResult.applied, retryAfterAt = 0L
             )
             DeepSeekEntryCoachStore.saveState(context, state)
             ApiUsageLogStore.record(context, ApiUsageEvent(
@@ -403,9 +431,17 @@ object DeepSeekEntryCoach {
             val now = System.currentTimeMillis()
             val structured = error as? DeepSeekStructuredException
             val detail = error.message.orEmpty().ifBlank { error.javaClass.simpleName }.take(300)
+            val balanceError = DeepSeekEntryCoachPolicy.isBalanceError(detail)
+            val retryAfterAt = now + DeepSeekEntryCoachPolicy.errorBackoff(detail)
             DeepSeekEntryCoachStore.saveState(context, DeepSeekEntryCoachStore.state(context).copy(
-                status = "ERROR", verdict = "NONE", completedAt = now, expiresAt = 0L, error = detail,
-                reason = "DeepSeek-проверка не завершилась; действует только усиленный локальный резерв."
+                status = if (balanceError) "PAUSED_BALANCE" else "ERROR",
+                verdict = "NONE", completedAt = now, expiresAt = 0L,
+                retryAfterAt = retryAfterAt, error = detail,
+                reason = if (balanceError) {
+                    "DeepSeek остановлен на 6 часов: API сообщил о недостатке средств. Локальный резерв продолжает работать."
+                } else {
+                    "DeepSeek-проверка не завершилась; повтор отложен на 30 минут, действует усиленный локальный резерв."
+                }
             ))
             ApiUsageLogStore.record(context, ApiUsageEvent(
                 provider = "DEEPSEEK", circuit = CIRCUIT, model = model, status = "ERROR", at = now,
@@ -487,12 +523,12 @@ object DeepSeekEntryCoach {
                 }
             }
         }
-            .sortedBy { it.trade.time }.takeLast(10)
+            .sortedBy { it.trade.time }.takeLast(6)
         return JSONArray(rows.map { row ->
             JSONObject().put("agent", row.agent).put("time", row.trade.time)
                 .put("pnl_eur", row.trade.pnlEur)
-                .put("entry_reason", row.entryReason.take(260))
-                .put("exit_reason", row.trade.reason.take(180))
+                .put("entry_reason", row.entryReason.take(140))
+                .put("exit_reason", row.trade.reason.take(120))
         })
     }
 

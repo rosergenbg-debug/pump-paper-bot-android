@@ -39,8 +39,8 @@ class DeepSeekPrimaryPolicyTest {
         ))
     }
 
-    @Test fun `primary DeepSeek waits five minutes between routine paid calls`() {
-        assertEquals(300_000L, DeepSeekPrimaryPolicy.INTERVAL)
+    @Test fun `primary DeepSeek waits one hour between routine paid calls`() {
+        assertEquals(3_600_000L, DeepSeekPrimaryPolicy.INTERVAL)
         val state = DeepSeekPrimaryState(lastAttempt = 1_000L)
         assertFalse(DeepSeekPrimaryPolicy.shouldRun(
             state, hasMarketData = true, force = false,
@@ -68,10 +68,17 @@ class DeepSeekPrimaryPolicyTest {
         assertTrue(DeepSeekTradeVerificationPolicy.acceptedDirection("EXIT", false, -74) == -74)
     }
 
-    @Test fun `material signal change starts primary DeepSeek before interval`() {
+    @Test fun `material signal change respects fifteen minute economy floor`() {
         val state = DeepSeekPrimaryState(lastAttempt = 1_000L)
+        assertFalse(DeepSeekPrimaryPolicy.shouldRun(
+            state, hasMarketData = true, force = false,
+            now = 1_000L + DeepSeekPrimaryPolicy.MIN_MATERIAL_INTERVAL - 1L,
+            materialChange = true
+        ))
         assertTrue(DeepSeekPrimaryPolicy.shouldRun(
-            state, hasMarketData = true, force = false, now = 2_000L, materialChange = true
+            state, hasMarketData = true, force = false,
+            now = 1_000L + DeepSeekPrimaryPolicy.MIN_MATERIAL_INTERVAL,
+            materialChange = true
         ))
     }
 
@@ -112,7 +119,7 @@ class DeepSeekPrimaryPolicyTest {
         )
     }
 
-    @Test fun `yellow entry support permits a two minute paid cadence`() {
+    @Test fun `yellow entry support cannot bypass fifteen minute economy floor`() {
         assertEquals(120_000L, DeepSeekActionLevelPolicy.INTENSIVE_INTERVAL_MILLIS)
         val state = DeepSeekPrimaryState(lastAttempt = 1_000L)
         assertFalse(DeepSeekPrimaryPolicy.shouldRun(
@@ -122,12 +129,32 @@ class DeepSeekPrimaryPolicyTest {
             now = 1_000L + DeepSeekActionLevelPolicy.INTENSIVE_INTERVAL_MILLIS - 1L,
             intervalMillis = DeepSeekActionLevelPolicy.INTENSIVE_INTERVAL_MILLIS
         ))
-        assertTrue(DeepSeekPrimaryPolicy.shouldRun(
+        assertFalse(DeepSeekPrimaryPolicy.shouldRun(
             state,
             hasMarketData = true,
             force = false,
             now = 1_000L + DeepSeekActionLevelPolicy.INTENSIVE_INTERVAL_MILLIS,
             intervalMillis = DeepSeekActionLevelPolicy.INTENSIVE_INTERVAL_MILLIS
+        ))
+        assertTrue(DeepSeekPrimaryPolicy.shouldRun(
+            state,
+            hasMarketData = true,
+            force = false,
+            now = 1_000L + DeepSeekPrimaryPolicy.MIN_MATERIAL_INTERVAL,
+            intervalMillis = DeepSeekActionLevelPolicy.INTENSIVE_INTERVAL_MILLIS
+        ))
+    }
+
+    @Test fun `routine daily cap blocks automatic calls but not explicit manual check`() {
+        val capped = DeepSeekPrimaryState(
+            lastAttempt = 1_000L,
+            successfulToday = DeepSeekPrimaryPolicy.MAX_ROUTINE_REQUESTS_PER_DAY
+        )
+        assertFalse(DeepSeekPrimaryPolicy.shouldRun(
+            capped, hasMarketData = true, force = false, now = 10_000_000L
+        ))
+        assertTrue(DeepSeekPrimaryPolicy.shouldRun(
+            capped, hasMarketData = true, force = true, now = 10_000_000L
         ))
     }
 

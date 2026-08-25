@@ -287,7 +287,7 @@ class ApiCenterActivity : AppCompatActivity() {
                 val projected = budgetCost * 30.0
                 append("\nОценка без скидки кэша: $${budgetCost.format(4)} сегодня")
                 append(" • $${projected.format(2)} за 30 таких дней")
-                append("\nОстановка по стоимости отключена: DeepSeek продолжает анализ.")
+                append("\nV5.35 экономит запросы: основной обзор обычно раз в час, до 24 плановых вызовов/сутки; предвходный контролёр — до 6.")
                 append(" Предупреждение один раз в сутки после ≈€${DeepSeekCostWarningPolicy.DAILY_WARNING_USD.format(0)}")
             }
             if (olderRequests > 0 || olderErrors > 0) {
