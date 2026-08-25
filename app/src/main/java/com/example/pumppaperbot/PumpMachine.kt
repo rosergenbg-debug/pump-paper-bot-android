@@ -333,6 +333,19 @@ object PumpMachineStore {
                     saveStatus(context, status)
                     PumpMachineSyncResult(marked, status, 0.0)
                 } else {
+                    val localGate = PumpProfitEngineV526.entryGateResult(PumpProfitModeV526.PUMP_3, entryObservation)
+                    val aiGate = DeepSeekEntryCoach.review(
+                        context, PumpProfitModeV526.PUMP_3, entryObservation,
+                        localGate.score, localGate.threshold, now
+                    )
+                    if (!aiGate.allowed) {
+                        val status = "${aiGate.reason} • PM3 остаётся вне позиции"
+                        savePortfolio(context, marked)
+                        saveStability(context, plan.nextState)
+                        saveStatus(context, status)
+                        return PumpMachineSyncResult(marked, status, 0.0)
+                    }
+                    val approvedReason = "${plan.reason}; ${aiGate.reason}"
                     val allocation = marked.cashEur
                     val buyFee = allocation * market.feeRate
                     val amount = (allocation - buyFee) / market.ask
@@ -344,7 +357,7 @@ object PumpMachineStore {
                         amount = amount,
                         feeEur = buyFee,
                         pnlEur = 0.0,
-                        reason = plan.reason
+                        reason = approvedReason
                     )
                     val decision = FusionSimDecision(
                         time = now,
@@ -352,7 +365,7 @@ object PumpMachineStore {
                         requestedAction = "BUY",
                         result = "PUMP MACHINE BUY • paper-only",
                         venuePrice = market.ask,
-                        reason = plan.reason
+                        reason = approvedReason
                     )
                     val next = marked.copy(
                         cashEur = 0.0,
@@ -376,7 +389,7 @@ object PumpMachineStore {
                     )
                     savePortfolio(context, next)
                     saveStability(context, entryState)
-                    val status = "BUY V5.28 INDEPENDENT: ${plan.reason} • TP +3,00% net • SL −1,30% net • BE/timeout active"
+                    val status = "BUY V5.34 INDEPENDENT + AI COACH: $approvedReason • TP +3,00% net • SL −1,30% net • BE/timeout active"
                     saveStatus(context, status)
                     UnifiedResearchLog.record(context, "PUMP_MACHINE", "BUY", status, now)
                     PumpMachineSyncResult(next, status, 0.0)

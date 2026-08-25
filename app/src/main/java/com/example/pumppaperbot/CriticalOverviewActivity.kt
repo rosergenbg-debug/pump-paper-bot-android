@@ -239,6 +239,8 @@ class CriticalOverviewActivity : AppCompatActivity() {
             if (!microFresh) append("\nВнимание: живой поток сейчас устарел или переподключается.")
         }
         deepSeek.text = buildString {
+            val entryCoach = DeepSeekEntryCoachStore.state(this@CriticalOverviewActivity)
+            val entryTuning = DeepSeekEntryCoachStore.tuning(this@CriticalOverviewActivity)
             append("DEEPSEEK • ${level.level}/10 • ${level.label}\n${level.detail}")
             append("\n\nПредложение: ${primary.proposedAction} • итог: ${primary.action}")
             append("\nИсполнение: ${primary.executionStatus}")
@@ -246,6 +248,11 @@ class CriticalOverviewActivity : AppCompatActivity() {
             append("\n\n${primary.summary}")
             if (primary.evidence.isNotEmpty()) append("\nФакты: ${primary.evidence.joinToString("; ")}")
             if (primary.risks.isNotEmpty()) append("\nРиски: ${primary.risks.joinToString("; ")}")
+            append("\n\nПРЕДВХОДНЫЙ AI-КОНТРОЛЬ: ${entryCoach.status} • ${entryCoach.verdict}")
+            append(" • ${entryCoach.confidence}/100 • ${entryCoach.stage}")
+            append("\n${entryCoach.reason}")
+            append("\n8 мягких регуляторов, ревизия ${entryTuning.revision}: ${entryTuning.compact()}")
+            append("\nDeepSeek не может отменять запрет по устаревшим данным, спреду, поздней фазе или давлению продавцов.")
             if (positionOpen) {
                 val supervisor = PositionSupervisorStore.state(this@CriticalOverviewActivity)
                 append("\n\nСопровождение позиции: ${supervisor.summary}")

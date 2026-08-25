@@ -104,6 +104,16 @@ object UnifiedResearchLog {
                 "venueFresh=${fusionMarket.fresh(now)}; ${fusionPriority.label}",
             now
         )
+        val coach = DeepSeekEntryCoachStore.state(context)
+        val tuning = DeepSeekEntryCoachStore.tuning(context)
+        record(
+            context,
+            "DEEPSEEK_ENTRY_COACH",
+            coach.status,
+            "$source; verdict=${coach.verdict}; stage=${coach.stage}; confidence=${coach.confidence}; " +
+                "reason=${coach.reason}; tuningRevision=${tuning.revision}; ${tuning.compact()}",
+            now
+        )
     }
 
     fun export(context: Context, now: Long = System.currentTimeMillis()): File {
@@ -136,7 +146,7 @@ object UnifiedResearchLog {
             }
         val compactJournal = ResearchLogCompactionPolicy.compact(rawJournal, HEARTBEAT_MILLIS)
         val report = JSONObject()
-            .put("schema", "pump-signal-unified-log-v530")
+            .put("schema", "pump-signal-unified-log-v534")
             .put("appVersion", BuildConfig.VERSION_NAME)
             .put("generatedAt", now)
             .put("logPolicy", JSONObject()
@@ -158,6 +168,7 @@ object UnifiedResearchLog {
                 .put("intervalSeconds", FusionPriorityPolicy.plan(fusionSim).intervalMillis / 1000L)
                 .put("separateFromSerge", true))
             .put("deepSeekAnalysis", deepSeek.toJson())
+            .put("deepSeekEntryCoach", DeepSeekEntryCoachStore.exportJson(context))
             .put("legacyV4Archive", legacyArchive)
             .put("performanceLedger", performanceLedger)
             .put("entryOpportunityAudit", EntryOpportunityAuditStore.exportJson(context))
@@ -207,7 +218,7 @@ object UnifiedResearchLog {
             .put("PumpMachineSafe", recentJson(PumpMachineSafeStore.toJson(PumpMachineSafeStore.state(context)), cutoff))
             .put("FusionSim", recentJson(FusionSimStore.toJson(FusionSimStore.state(context)), cutoff))
         val report = JSONObject()
-            .put("schema", "pump-signal-support-log-48h-v533")
+            .put("schema", "pump-signal-support-log-48h-v534")
             .put("appVersion", BuildConfig.VERSION_NAME)
             .put("generatedAt", now)
             .put("windowHours", 48)
@@ -226,6 +237,7 @@ object UnifiedResearchLog {
             .put("bitpandaFusion", fusionMarket.toJson().apply { put("error", sanitize(fusionMarket.error)) })
             .put("latestEntryAudit", EntryOpportunityAuditStore.latest(context).toJson())
             .put("latestLiquidityShadow", LiquidityReleaseShadowStore.latest(context).toJson())
+            .put("deepSeekEntryCoach", DeepSeekEntryCoachStore.exportJson(context))
             .put("accounts", accounts)
             .put("journalPolicy", JSONObject()
                 .put("rawRecords48h", rawJournal.size)

@@ -49,7 +49,8 @@ object PumpProfitEngineV526 {
         val minFiveMinuteNotionalUsdt: Double,
         val minBuySellNotionalRatio: Double,
         val maxEarlyMovePercent: Double,
-        val confirmationMillis: Long
+        val confirmationMillis: Long,
+        val maxConfirmationRisePercent: Double
     )
 
     private val PM2 = Config(
@@ -76,7 +77,8 @@ object PumpProfitEngineV526 {
         minFiveMinuteNotionalUsdt = 250_000.0,
         minBuySellNotionalRatio = 1.12,
         maxEarlyMovePercent = 1.45,
-        confirmationMillis = 15_000L
+        confirmationMillis = 15_000L,
+        maxConfirmationRisePercent = 0.40
     )
 
     private val PM3 = Config(
@@ -103,7 +105,8 @@ object PumpProfitEngineV526 {
         minFiveMinuteNotionalUsdt = 250_000.0,
         minBuySellNotionalRatio = 1.12,
         maxEarlyMovePercent = 0.90,
-        confirmationMillis = 30_000L
+        confirmationMillis = 30_000L,
+        maxConfirmationRisePercent = 0.35
     )
 
     private val PM_RETEST = PM3.copy(name = "PM RETEST", confirmationMillis = 15_000L)
@@ -132,7 +135,8 @@ object PumpProfitEngineV526 {
         minFiveMinuteNotionalUsdt = 350_000.0,
         minBuySellNotionalRatio = 1.18,
         maxEarlyMovePercent = 1.25,
-        confirmationMillis = 30_000L
+        confirmationMillis = 30_000L,
+        maxConfirmationRisePercent = 0.30
     )
 
     private fun cfg(mode: PumpProfitModeV526): Config = when (mode) {
@@ -162,6 +166,11 @@ object PumpProfitEngineV526 {
         if (observation.shockReady) return shockPermitted(observation)
         return entryGate(mode, observation).first
     }
+
+    fun entryGateResult(
+        mode: PumpProfitModeV526,
+        observation: SharedFusionEntryObservation
+    ): AdaptiveBreathEntryPolicy.Result = AdaptiveBreathEntryPolicy.evaluate(mode, observation)
 
     fun evaluateEntry(
         mode: PumpProfitModeV526,
@@ -197,13 +206,13 @@ object PumpProfitEngineV526 {
                 return SharedFusionEntryDecision(
                     null,
                     previous.copy(exitStreak = 0, exitArmedAt = 0L, exitArmedBid = 0.0),
-                    "V533_${c.name}_BREATH_HOLD: оценка ${gate.score}/${gate.threshold}; один мягкий откат не обнуляет кандидат; ${gate.reason}"
+                    "V534_${c.name}_BREATH_HOLD: оценка ${gate.score}/${gate.threshold}; один мягкий откат не обнуляет кандидат; ${gate.reason}"
                 )
             }
             return SharedFusionEntryDecision(
                 null,
                 resetEntry(previous, keepCooldown = false),
-                "V533_${c.name}_${if (gate.hardVeto) "SAFETY_WAIT" else "SOFT_WAIT"}: оценка ${gate.score}/${gate.threshold}; ${gate.reason}"
+                "V534_${c.name}_${if (gate.hardVeto) "SAFETY_WAIT" else "SOFT_WAIT"}: оценка ${gate.score}/${gate.threshold}; ${gate.reason}"
             )
         }
 
@@ -227,19 +236,22 @@ object PumpProfitEngineV526 {
         )
         val elapsed = (now - candidateAt).coerceAtLeast(0L)
         val priceMove = if (anchorAsk > 0.0) (observation.executionAsk / anchorAsk - 1.0) * 100.0 else 0.0
-        val priceAccepted = priceMove in -0.20..0.85
-        return if (streak >= 2 && elapsed >= c.confirmationMillis && priceAccepted) {
+        val confirmationMillis = c.confirmationMillis + observation.entryTuning.confirmationExtraSeconds * 1_000L
+        val maxRise = (c.maxConfirmationRisePercent - observation.entryTuning.chaseTighteningBps / 100.0)
+            .coerceAtLeast(0.15)
+        val priceAccepted = priceMove in -0.20..maxRise
+        return if (streak >= 2 && elapsed >= confirmationMillis && priceAccepted) {
             SharedFusionEntryDecision(
                 "BUY",
                 next,
-                "V533_${c.name}_ADAPTIVE_ENTRY: дыхание подтверждено ${gate.score}/${gate.threshold}; цена от якоря ${fmtSigned(priceMove)}%; ${gate.reason}"
+                "V534_${c.name}_ADAPTIVE_ENTRY: дыхание подтверждено ${gate.score}/${gate.threshold}; цена от якоря ${fmtSigned(priceMove)}%; ${gate.reason}"
             )
         } else {
-            val left = ((c.confirmationMillis - elapsed).coerceAtLeast(0L) + 999L) / 1000L
+            val left = ((confirmationMillis - elapsed).coerceAtLeast(0L) + 999L) / 1000L
             SharedFusionEntryDecision(
                 null,
                 next,
-                "V533_${c.name}_BREATH_ARMED ${streak}/2: оценка ${gate.score}/${gate.threshold}, ещё ${left}с; цена от якоря ${fmtSigned(priceMove)}% ${if (priceAccepted) "допустима" else "вне диапазона"}; ${gate.reason}"
+                "V534_${c.name}_BREATH_ARMED ${streak}/2: оценка ${gate.score}/${gate.threshold}, ещё ${left}с; цена от якоря ${fmtSigned(priceMove)}% ${if (priceAccepted) "допустима" else "вне диапазона −0,20…+${fmt(maxRise)}%"}; ${gate.reason}"
             )
         }
     }
@@ -249,7 +261,7 @@ object PumpProfitEngineV526 {
         observation: SharedFusionEntryObservation
     ): Pair<Boolean, String> {
         val result = AdaptiveBreathEntryPolicy.evaluate(mode, observation)
-        return result.allowed to "V533 score=${result.score}/${result.threshold}; ${result.reason}"
+        return result.allowed to "V534 score=${result.score}/${result.threshold}; ${result.reason}"
     }
 
     private fun shockPermitted(observation: SharedFusionEntryObservation): Boolean {

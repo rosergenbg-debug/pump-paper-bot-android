@@ -185,7 +185,7 @@ class PumpProfitEngineV526Test {
     }
 
     @Test
-    fun `mature phase is evidence not an automatic veto`() {
+    fun `mature phase is a hard late entry veto`() {
         val decision = PumpProfitEngineV526.evaluateEntry(
             PumpProfitModeV526.PUMP_2,
             FusionStabilityState(),
@@ -193,8 +193,22 @@ class PumpProfitEngineV526Test {
             1_000_000L
         )
         assertNull(decision.action)
-        assertEquals(1, decision.nextState.entryStreak)
-        assertTrue(decision.reason.contains("BREATH_ARMED"))
+        assertEquals(0, decision.nextState.entryStreak)
+        assertTrue(decision.reason.contains("SAFETY_WAIT"))
+        assertTrue(decision.reason.contains("MATURE"))
+    }
+
+    @Test
+    fun `cross horizon deceleration blocks a late local candidate`() {
+        val decision = PumpProfitEngineV526.evaluateEntry(
+            PumpProfitModeV526.PUMP_2,
+            FusionStabilityState(),
+            observation(instant = 5, score5 = 19, score15 = 8),
+            1_000_000L
+        )
+        assertNull(decision.action)
+        assertEquals(0, decision.nextState.entryStreak)
+        assertTrue(decision.reason.contains("поток тормозит"))
     }
 
     @Test
