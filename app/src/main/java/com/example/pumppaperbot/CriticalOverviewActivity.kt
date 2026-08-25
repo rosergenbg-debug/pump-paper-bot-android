@@ -256,6 +256,9 @@ class CriticalOverviewActivity : AppCompatActivity() {
             }
             append("\nЭкономный режим: до 6 предвходных запросов/сутки, не чаще одного за 15 минут, без платного автоповтора.")
             append("\n8 мягких регуляторов, ревизия ${entryTuning.revision}: ${entryTuning.compact()}")
+            val tuningTrial = DeepSeekTuningTrialStore.state(this@CriticalOverviewActivity)
+            append("\nАВТОЮСТИРОВКА V5.36: ${tuningTrial.status} • ${tuningTrial.observedTrades}/${DeepSeekAdaptiveTuningPolicy.STANDARD_TRIAL_TRADES} сделок")
+            append("\n${tuningTrial.reason}")
             append("\nDeepSeek не может отменять запрет по устаревшим данным, спреду, поздней фазе или давлению продавцов.")
             if (positionOpen) {
                 val supervisor = PositionSupervisorStore.state(this@CriticalOverviewActivity)
