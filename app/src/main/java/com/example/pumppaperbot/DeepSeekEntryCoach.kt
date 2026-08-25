@@ -165,12 +165,13 @@ object DeepSeekEntryCoachStore {
             .put("minimumIntervalMinutes", DeepSeekEntryCoach.MIN_REQUEST_INTERVAL / 60_000L)
             .put("compatibleVerdictMinutes", DeepSeekEntryCoachPolicy.VERDICT_TTL / 60_000L)
             .put("automaticRepairRequest", false))
-        .put("automaticAuthority", "ONE_BOUNDED_SOFT_STEP_PER_UTC_DAY")
+        .put("automaticAuthority", "ONE_BOUNDED_SOFT_STEP_PER_UTC_DAY_WITH_TRIAL_AND_ROLLBACK")
+        .put("adaptiveTrial", DeepSeekTuningTrialStore.state(context).toJson())
         .put("canOverrideHardVeto", false)
 }
 
 object DeepSeekEntryTuningPolicy {
-    const val MIN_COMPLETED_TRADES = 6
+    const val MIN_COMPLETED_TRADES = 8
     const val ADJUSTMENT_INTERVAL = 24L * 60L * 60L * 1000L
     val keys = setOf(
         "pm2_score_offset", "pm3_score_offset", "retest_score_offset", "safe_score_offset",
@@ -280,6 +281,9 @@ object DeepSeekEntryCoach {
         localThreshold: Int,
         now: Long
     ): DeepSeekEntryCoachGate {
+        DeepSeekAdaptiveTuningGuard.reconcile(context, recentClosedOutcomes(context), now)?.let { reason ->
+            UnifiedResearchLog.record(context, "DEEPSEEK_ENTRY_TUNING", "TRIAL", reason, now)
+        }
         val strict = DeepSeekEntryCoachPolicy.strictFallback(mode, observation, localScore, localThreshold)
         val key = DeepSeekSecureKeyStore.read(context)
         if (key.isBlank()) return DeepSeekEntryCoachGate(
@@ -397,13 +401,24 @@ object DeepSeekEntryCoach {
             val proposalKey = json.optString("adjust_key", "none")
             val proposalDelta = json.optInt("adjust_delta").coerceIn(-1, 1)
             val outcomes = recentClosedOutcomes(context)
-            val tuningResult = DeepSeekEntryTuningPolicy.apply(
-                DeepSeekEntryCoachStore.tuning(context), proposalKey, proposalDelta, confidence,
-                outcomes.length(), now, RussianOutputPolicy.visible(json.optString("adjust_reason_ru"))
-            )
+            val currentTuning = DeepSeekEntryCoachStore.tuning(context)
+            val tuningResult = if (DeepSeekTuningTrialStore.state(context).active) {
+                DeepSeekEntryTuningPolicy.Outcome(
+                    currentTuning, false,
+                    "предыдущая юстировка ещё проверяется; второе изменение запрещено"
+                )
+            } else {
+                DeepSeekEntryTuningPolicy.apply(
+                    currentTuning, proposalKey, proposalDelta, confidence,
+                    outcomes.length(), now, RussianOutputPolicy.visible(json.optString("adjust_reason_ru"))
+                )
+            }
             if (tuningResult.applied) {
                 DeepSeekEntryCoachStore.saveTuning(context, tuningResult.tuning)
-                UnifiedResearchLog.record(context, "DEEPSEEK_ENTRY_TUNING", "ADJUST", tuningResult.reason, now)
+                DeepSeekAdaptiveTuningGuard.startTrial(
+                    context, currentTuning, proposalKey, outcomes, now
+                )
+                UnifiedResearchLog.record(context, "DEEPSEEK_ENTRY_TUNING", "ADJUST_TRIAL", tuningResult.reason, now)
             } else if (proposalKey != "none") {
                 UnifiedResearchLog.record(context, "DEEPSEEK_ENTRY_TUNING", "PROPOSAL", tuningResult.reason, now)
             }
@@ -523,7 +538,7 @@ object DeepSeekEntryCoach {
                 }
             }
         }
-            .sortedBy { it.trade.time }.takeLast(6)
+            .sortedBy { it.trade.time }.takeLast(24)
         return JSONArray(rows.map { row ->
             JSONObject().put("agent", row.agent).put("time", row.trade.time)
                 .put("pnl_eur", row.trade.pnlEur)
@@ -558,7 +573,7 @@ object DeepSeekEntryCoach {
         {"verdict":"APPROVE|WAIT|REJECT","confidence":0,"stage":"STARTING|CONTINUING|LATE|NOISE",
         "reason_ru":"одно проверяемое объяснение","adjust_key":"none или один разрешённый ключ",
         "adjust_delta":-1,"adjust_reason_ru":"кратко"}.
-        Юстировку предлагай только если recent_closed_paper_trades содержит минимум 6 сделок и видна
+        Юстировку предлагай только если recent_closed_paper_trades содержит минимум 8 сделок и видна
         повторяющаяся ошибка; иначе adjust_key=none и adjust_delta=0. Не обещай прибыль.
     """.trimIndent()
 }
