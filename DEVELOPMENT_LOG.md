@@ -2,6 +2,14 @@
 
 This is the agent's chronological external memory. Append every material change; do not rewrite history to match an assumption.
 
+## V5.36 — guarded self-tuning (2026-08-25, Codex Work Mode)
+
+- Serge requested the next build after replenishing DeepSeek balance. V5.35 was already canonical, so this release is V5.36/code 116.
+- The previous micro-tuning could apply a soft step but could not prove improvement or restore the exact previous state after deterioration.
+- Added one-trial-at-a-time tuning, baseline statistics, fee-inclusive closed-paper PnL, emergency rollback after three severe losses, ordinary evaluation after six closes and a ten-trade/seven-day maximum.
+- Raised new-proposal evidence to eight closes, expanded DeepSeek context to 24 outcomes, blocked stacked changes and exposed trial state. Hard vetoes, exits, portfolios, keys, histories, package id and paper-only safety are unchanged.
+- Branch `chatgpt/v5-36-guarded-self-tuning`; CI, compatible signing and final verification remain required.
+
 ## V5.35 — bounded 24-hour support logs and DeepSeek economy (2026-08-25, Codex Work Mode)
 
 - Serge reported that a 2 MB text log uploads successfully while larger JSON/ZIP files fail, and asked to stop wasting his newly replenished DeepSeek balance. The V5.34 lightweight export was one pretty-printed 48-hour JSON with no size ceiling; opening MainActivity also forced a paid primary DeepSeek request, routine primary analysis could run every five minutes, and the pre-entry coach allowed 18 calls/day, four minutes apart, with an automatic paid repair attempt.
