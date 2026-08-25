@@ -93,6 +93,7 @@ class MainActivity : AppCompatActivity() {
     private var btnGeminiApi: Button? = null
     private var btnBitpandaFusion: Button? = null
     private var btnUnifiedLog: Button? = null
+    private var btnRecentLog: Button? = null
     private var evidenceMemoryDialogVisible = false
     private var backgroundPersistencePromptVisible = false
 
@@ -148,6 +149,7 @@ class MainActivity : AppCompatActivity() {
         btnGeminiApi = findViewById(R.id.btnGeminiApi)
         btnBitpandaFusion = findViewById(R.id.btnBitpandaFusion)
         btnUnifiedLog = findViewById(R.id.btnUnifiedLog)
+        btnRecentLog = findViewById(R.id.btnRecentLog)
 
         PumpBotEngine.ensureInitialized(this)
         requestNotificationPermission()
@@ -221,6 +223,10 @@ class MainActivity : AppCompatActivity() {
         btnUnifiedLog?.setOnClickListener {
             runCatching { UnifiedResearchLog.share(this) }
                 .onFailure { Toast.makeText(this, it.message ?: "Ошибка экспорта лога", Toast.LENGTH_LONG).show() }
+        }
+        btnRecentLog?.setOnClickListener {
+            runCatching { UnifiedResearchLog.shareRecent48h(this) }
+                .onFailure { Toast.makeText(this, it.message ?: "Ошибка экспорта 48-часового лога", Toast.LENGTH_LONG).show() }
         }
         chart?.setOnClickListener { startActivity(Intent(this, ChartDetailActivity::class.java)) }
         chart?.setVisibleBarLimit(mainChartVisibleBarLimit())

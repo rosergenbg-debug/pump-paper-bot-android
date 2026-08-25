@@ -418,6 +418,20 @@
                 android:textStyle="bold" />
         </LinearLayout>
 
+        <Button
+            android:id="@+id/btnRecentLog"
+            android:layout_width="match_parent"
+            android:layout_height="58dp"
+            android:layout_marginTop="6dp"
+            android:backgroundTint="#34515E"
+            android:gravity="center"
+            android:maxLines="3"
+            android:padding="3dp"
+            android:text="ЛЁГКИЙ ЛОГ ЗА 48 ЧАСОВ • ДЛЯ ОТПРАВКИ И АНАЛИЗА"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
         <TextView
             android:id="@+id/tvBreathingState"
             android:layout_width="match_parent"

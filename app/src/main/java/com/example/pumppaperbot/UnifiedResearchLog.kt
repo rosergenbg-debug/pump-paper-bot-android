@@ -16,6 +16,7 @@ object UnifiedResearchLog {
     private const val DIRECTORY = "research_logs"
     private const val RETENTION_DAYS = 30
     private const val HEARTBEAT_MILLIS = 15L * 60L * 1000L
+    private const val RECENT_WINDOW_MILLIS = 48L * 60L * 60L * 1000L
     private const val CONTROL_PREFS = "unified_log_control_v530"
     private val lock = Any()
     private val utc = TimeZone.getTimeZone("UTC")
@@ -189,6 +190,99 @@ object UnifiedResearchLog {
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         context.startActivity(Intent.createChooser(send, "Отправить единый лог"))
+    }
+
+    /** Lightweight support export: current state plus only the last 48 hours of decisions. */
+    fun exportRecent48h(context: Context, now: Long = System.currentTimeMillis()): File {
+        val cutoff = now - RECENT_WINDOW_MILLIS
+        val market = PumpBotEngine.snapshot(context)
+        val breathing = LiveMarketBreathingStore.snapshot(context, now)
+        val fusionMarket = BitpandaFusionStore.state(context)
+        val rawJournal = readJournal(context, cutoff)
+        val compactJournal = ResearchLogCompactionPolicy.compact(rawJournal, HEARTBEAT_MILLIS)
+        val accounts = JSONObject()
+            .put("PumpMachine", recentJson(PumpMachineStore.toJson(PumpMachineStore.state(context)), cutoff))
+            .put("PumpMachine2", recentJson(PumpMachine2Store.toJson(PumpMachine2Store.state(context)), cutoff))
+            .put("PumpMachineRetest", recentJson(PumpMachineRetestStore.toJson(PumpMachineRetestStore.state(context)), cutoff))
+            .put("PumpMachineSafe", recentJson(PumpMachineSafeStore.toJson(PumpMachineSafeStore.state(context)), cutoff))
+            .put("FusionSim", recentJson(FusionSimStore.toJson(FusionSimStore.state(context)), cutoff))
+        val report = JSONObject()
+            .put("schema", "pump-signal-support-log-48h-v533")
+            .put("appVersion", BuildConfig.VERSION_NAME)
+            .put("generatedAt", now)
+            .put("windowHours", 48)
+            .put("cutoffAt", cutoff)
+            .put("clearedAfterExport", false)
+            .put("safety", JSONObject()
+                .put("realOrdersImplemented", false)
+                .put("containsApiKeys", false))
+            .put("market", JSONObject()
+                .put("pumpEur", PaperExecutionPolicy.displayPrice(market, now))
+                .put("lastSync", market.lastSync)
+                .put("bookBidNotional", market.bookBidNotional ?: JSONObject.NULL)
+                .put("bookAskNotional", market.bookAskNotional ?: JSONObject.NULL)
+                .put("spreadPercent", market.spreadPercent ?: JSONObject.NULL))
+            .put("flow", breathing.toJson())
+            .put("bitpandaFusion", fusionMarket.toJson().apply { put("error", sanitize(fusionMarket.error)) })
+            .put("latestEntryAudit", EntryOpportunityAuditStore.latest(context).toJson())
+            .put("latestLiquidityShadow", LiquidityReleaseShadowStore.latest(context).toJson())
+            .put("accounts", accounts)
+            .put("journalPolicy", JSONObject()
+                .put("rawRecords48h", rawJournal.size)
+                .put("compactedRecords48h", compactJournal.size)
+                .put("fullArchiveStillRetainedDays", RETENTION_DAYS))
+            .put("journal", JSONArray(compactJournal))
+        val dir = File(context.cacheDir, "reports").apply { mkdirs() }
+        return File(dir, "PumpSignal-V${BuildConfig.VERSION_NAME}-Log-48h-${stamp(now)}.json").apply {
+            writeText(report.toString(2), Charsets.UTF_8)
+        }
+    }
+
+    fun shareRecent48h(context: Context) {
+        val file = exportRecent48h(context)
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", file)
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = "application/json"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            putExtra(Intent.EXTRA_SUBJECT, "PumpSignal V${BuildConfig.VERSION_NAME} — лёгкий лог за 48 часов")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(Intent.createChooser(send, "Отправить лог за 48 часов"))
+    }
+
+    private fun readJournal(context: Context, cutoff: Long): List<JSONObject> {
+        val result = ArrayList<JSONObject>()
+        File(context.filesDir, DIRECTORY).listFiles()
+            ?.filter { it.name.endsWith(".ndjson") && it.lastModified() >= cutoff }
+            ?.sortedBy { it.name }
+            ?.forEach { file -> file.useLines { lines -> lines.forEach { raw ->
+                runCatching { JSONObject(raw) }.getOrNull()?.takeIf { it.optLong("time") >= cutoff }
+                    ?.let(result::add)
+            } } }
+        return result
+    }
+
+    /** Keeps balances/state but trims any nested time-based history array to the support window. */
+    private fun recentJson(source: JSONObject, cutoff: Long): JSONObject {
+        val result = JSONObject()
+        source.keys().forEach { key ->
+            when (val value = source.opt(key)) {
+                is JSONObject -> result.put(key, recentJson(value, cutoff))
+                is JSONArray -> {
+                    val kept = JSONArray()
+                    for (i in 0 until value.length()) {
+                        val item = value.opt(i)
+                        if (item is JSONObject) {
+                            val time = item.optLong("time", item.optLong("at", Long.MAX_VALUE))
+                            if (time >= cutoff) kept.put(recentJson(item, cutoff))
+                        } else if (value.length() <= 100) kept.put(item)
+                    }
+                    result.put(key, kept)
+                }
+                else -> result.put(key, value)
+            }
+        }
+        return result
     }
 
     private fun appJson(p: AppPaperPortfolio) = JSONObject()

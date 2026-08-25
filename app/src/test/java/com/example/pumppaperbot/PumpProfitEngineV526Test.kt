@@ -103,7 +103,7 @@ class PumpProfitEngineV526Test {
         (1.0 + netPercent / 100.0) * entryCost / (amount * (1.0 - fee))
 
     @Test
-    fun `pm2 enters only after ninety second price acceptance`() {
+    fun `pm2 confirms adaptive breath after fifteen seconds`() {
         val first = PumpProfitEngineV526.evaluateEntry(
             PumpProfitModeV526.PUMP_2,
             FusionStabilityState(),
@@ -116,42 +116,46 @@ class PumpProfitEngineV526Test {
         val second = PumpProfitEngineV526.evaluateEntry(
             PumpProfitModeV526.PUMP_2,
             first.nextState,
-            observation(at = 1_090_000L, ask = 1.0015),
-            1_090_000L
+            observation(at = 1_015_000L, ask = 1.0003),
+            1_015_000L
         )
         assertEquals("BUY", second.action)
-        assertTrue(second.reason.contains("CAPITAL_ACCEPTED"))
+        assertTrue(second.reason.contains("ADAPTIVE_ENTRY"))
     }
 
     @Test
-    fun `pm2 and pm3 use the same strict entry gate`() {
-        val weakerSetup = observation(
-            instant = 9,
-            score5 = 3,
-            score15 = -3,
-            score30 = -7,
-            buyer5 = 57.0,
-            absorption = 60,
-            efficiency = -20,
-            activity = 1.06
+    fun `pm2 is responsive while pm3 requires stronger agreement`() {
+        val earlySetup = observation(
+            instant = 12,
+            score5 = 6,
+            score15 = -1,
+            score30 = -3,
+            buyer5 = 60.0,
+            absorption = 35,
+            efficiency = 10,
+            activity = 1.20,
+            fiveMinuteBuy = 60_000.0,
+            fiveMinuteSell = 40_000.0,
+            bookBid = 50_000.0,
+            bookAsk = 50_000.0
         )
         val pm2 = PumpProfitEngineV526.evaluateEntry(
             PumpProfitModeV526.PUMP_2,
             FusionStabilityState(),
-            weakerSetup,
+            earlySetup,
             1_000_000L
         )
         val pm3 = PumpProfitEngineV526.evaluateEntry(
             PumpProfitModeV526.PUMP_3,
             FusionStabilityState(),
-            weakerSetup,
+            earlySetup,
             1_000_000L
         )
 
-        assertEquals(pm3.action, pm2.action)
-        assertEquals(pm3.nextState, pm2.nextState)
-        assertEquals(pm3.reason, pm2.reason)
         assertNull(pm2.action)
+        assertEquals(1, pm2.nextState.entryStreak)
+        assertNull(pm3.action)
+        assertEquals(0, pm3.nextState.entryStreak)
     }
 
     @Test
@@ -165,14 +169,14 @@ class PumpProfitEngineV526Test {
         val secondPm2 = PumpProfitEngineV526.evaluateEntry(
             PumpProfitModeV526.PUMP_2,
             firstPm2.nextState,
-            observation(at = 1_090_000L, ask = 1.0015),
-            1_090_000L
+            observation(at = 1_015_000L, ask = 1.0003),
+            1_015_000L
         )
         val pm3 = PumpProfitEngineV526.evaluateEntry(
             PumpProfitModeV526.PUMP_3,
             FusionStabilityState(cooldownUntil = 1_120_000L),
-            observation(at = 1_090_000L, ask = 1.0015),
-            1_090_000L
+            observation(at = 1_015_000L, ask = 1.0003),
+            1_015_000L
         )
 
         assertEquals("BUY", secondPm2.action)
@@ -181,15 +185,16 @@ class PumpProfitEngineV526Test {
     }
 
     @Test
-    fun `mature pump is rejected as no fomo`() {
+    fun `mature phase is evidence not an automatic veto`() {
         val decision = PumpProfitEngineV526.evaluateEntry(
-            PumpProfitModeV526.PUMP_3,
+            PumpProfitModeV526.PUMP_2,
             FusionStabilityState(),
             observation(phase = BuyerBreathPhase.MATURE),
             1_000_000L
         )
         assertNull(decision.action)
-        assertTrue(decision.reason.contains("NO_FOMO"))
+        assertEquals(1, decision.nextState.entryStreak)
+        assertTrue(decision.reason.contains("BREATH_ARMED"))
     }
 
     @Test
@@ -197,28 +202,25 @@ class PumpProfitEngineV526Test {
         val decision = PumpProfitEngineV526.evaluateEntry(
             PumpProfitModeV526.PUMP_2,
             FusionStabilityState(),
-            observation(absorption = 88),
+            observation(absorption = 92),
             1_000_000L
         )
         assertNull(decision.action)
-        assertTrue(decision.reason.contains("ABSORPTION"))
+        assertTrue(decision.reason.contains("SAFETY_WAIT"))
     }
 
     @Test
-    fun `quiet low capital tape cannot arm pm2 or pm3`() {
-        val empty = observation(
+    fun `small absolute volume can arm when relative flow is strong`() {
+        val smallButStrong = observation(
             fiveMinuteBuy = 38_000.0,
-            fiveMinuteSell = 31_000.0,
-            fifteenMinuteTotal = 220_000.0
+            fiveMinuteSell = 12_000.0,
+            fifteenMinuteTotal = 120_000.0
         )
-        listOf(PumpProfitModeV526.PUMP_2, PumpProfitModeV526.PUMP_3).forEach { mode ->
-            val decision = PumpProfitEngineV526.evaluateEntry(
-                mode, FusionStabilityState(), empty, 1_000_000L
-            )
-            assertNull(decision.action)
-            assertEquals(0, decision.nextState.entryStreak)
-            assertTrue(decision.reason.contains("CAPITAL_WAIT"))
-        }
+        val decision = PumpProfitEngineV526.evaluateEntry(
+            PumpProfitModeV526.PUMP_2, FusionStabilityState(), smallButStrong, 1_000_000L
+        )
+        assertNull(decision.action)
+        assertEquals(1, decision.nextState.entryStreak)
     }
 
     @Test
@@ -228,11 +230,11 @@ class PumpProfitEngineV526Test {
             observation(microAvailable = false), 1_000_000L
         )
         assertNull(decision.action)
-        assertTrue(decision.reason.contains("CAPITAL_WAIT"))
+        assertTrue(decision.reason.contains("SAFETY_WAIT"))
     }
 
     @Test
-    fun `broad turnover without a large buy series cannot arm`() {
+    fun `large buy fingerprint is useful context but not a mandatory lock`() {
         val decision = PumpProfitEngineV526.evaluateEntry(
             PumpProfitModeV526.PUMP_2,
             FusionStabilityState(),
@@ -246,12 +248,11 @@ class PumpProfitEngineV526Test {
             1_000_000L
         )
         assertNull(decision.action)
-        assertEquals(0, decision.nextState.entryStreak)
-        assertTrue(decision.reason.contains("крупных BUY"))
+        assertEquals(1, decision.nextState.entryStreak)
     }
 
     @Test
-    fun `ask heavy book blocks an otherwise strong capital setup`() {
+    fun `ask heavy book lowers confidence instead of hard blocking`() {
         val decision = PumpProfitEngineV526.evaluateEntry(
             PumpProfitModeV526.PUMP_3,
             FusionStabilityState(),
@@ -259,21 +260,20 @@ class PumpProfitEngineV526Test {
             1_000_000L
         )
         assertNull(decision.action)
-        assertEquals(0, decision.nextState.entryStreak)
-        assertTrue(decision.reason.contains("стакан"))
+        assertEquals(1, decision.nextState.entryStreak)
+        assertTrue(decision.reason.contains("стакан="))
     }
 
     @Test
-    fun `capital that does not lift price remains armed but cannot buy`() {
+    fun `small pullback during confirmation is accepted`() {
         val first = PumpProfitEngineV526.evaluateEntry(
             PumpProfitModeV526.PUMP_2, FusionStabilityState(), observation(), 1_000_000L
         )
         val later = PumpProfitEngineV526.evaluateEntry(
             PumpProfitModeV526.PUMP_2, first.nextState,
-            observation(at = 1_090_000L, ask = 0.9995), 1_090_000L
+            observation(at = 1_015_000L, ask = 0.9995), 1_015_000L
         )
-        assertNull(later.action)
-        assertTrue(later.reason.contains("не приняла капитал"))
+        assertEquals("BUY", later.action)
     }
 
     @Test
@@ -282,7 +282,26 @@ class PumpProfitEngineV526Test {
             PumpProfitModeV526.PUMP_3, FusionStabilityState(), observation(move = 1.25), 1_000_000L
         )
         assertNull(decision.action)
-        assertTrue(decision.reason.contains("NO_FOMO"))
+        assertTrue(decision.reason.contains("поздно догонять"))
+    }
+
+    @Test
+    fun `one near threshold tick does not erase an armed breath`() {
+        val first = PumpProfitEngineV526.evaluateEntry(
+            PumpProfitModeV526.PUMP_2, FusionStabilityState(), observation(), 1_000_000L
+        )
+        val softer = observation(
+            instant = 10, score5 = 4, score15 = -3, score30 = -5,
+            buyer5 = 55.0, activity = 1.0, efficiency = 0, absorption = 20,
+            fiveMinuteBuy = 55_000.0, fiveMinuteSell = 45_000.0,
+            bookBid = 50_000.0, bookAsk = 50_000.0, at = 1_015_000L
+        )
+        val held = PumpProfitEngineV526.evaluateEntry(
+            PumpProfitModeV526.PUMP_2, first.nextState, softer, 1_015_000L
+        )
+        assertNull(held.action)
+        assertEquals(1, held.nextState.entryStreak)
+        assertTrue(held.reason.contains("BREATH_HOLD"))
     }
 
     @Test

@@ -76,7 +76,7 @@ object PumpProfitEngineV526 {
         minFiveMinuteNotionalUsdt = 250_000.0,
         minBuySellNotionalRatio = 1.12,
         maxEarlyMovePercent = 1.45,
-        confirmationMillis = 12_000L
+        confirmationMillis = 15_000L
     )
 
     private val PM3 = Config(
@@ -103,7 +103,7 @@ object PumpProfitEngineV526 {
         minFiveMinuteNotionalUsdt = 250_000.0,
         minBuySellNotionalRatio = 1.12,
         maxEarlyMovePercent = 0.90,
-        confirmationMillis = 90_000L
+        confirmationMillis = 30_000L
     )
 
     private val PM_RETEST = PM3.copy(name = "PM RETEST", confirmationMillis = 15_000L)
@@ -142,14 +142,9 @@ object PumpProfitEngineV526 {
         PumpProfitModeV526.PUMP_SAFE -> PM_SAFE
     }
 
-    // V5.28: PM2 and PM3 use the same strict market-quality gate, but each store owns its
-    // confirmation, cooldown and execution time. Either flat account may therefore re-enter
-    // independently while the other account is still managing an earlier position.
-    private fun entryCfg(mode: PumpProfitModeV526): Config = when (mode) {
-        PumpProfitModeV526.PUMP_RETEST -> PM_RETEST
-        PumpProfitModeV526.PUMP_SAFE -> PM_SAFE
-        else -> PM3
-    }
+    // Each account owns both its gate profile and state. V5.32 accidentally returned PM3 here
+    // for PM2 as well, silently turning the responsive account into another strict 90s account.
+    private fun entryCfg(mode: PumpProfitModeV526): Config = cfg(mode)
 
     private fun resetEntry(previous: FusionStabilityState, keepCooldown: Boolean = true) = previous.copy(
         entryStreak = 0,
@@ -196,9 +191,20 @@ object PumpProfitEngineV526 {
             }
         }
 
-        val (candidate, reason) = entryGate(mode, observation)
-        if (!candidate) {
-            return SharedFusionEntryDecision(null, resetEntry(previous, keepCooldown = false), reason)
+        val gate = AdaptiveBreathEntryPolicy.evaluate(mode, observation)
+        if (!gate.allowed) {
+            if (!gate.hardVeto && gate.nearCandidate && previous.entryStreak > 0) {
+                return SharedFusionEntryDecision(
+                    null,
+                    previous.copy(exitStreak = 0, exitArmedAt = 0L, exitArmedBid = 0.0),
+                    "V533_${c.name}_BREATH_HOLD: оценка ${gate.score}/${gate.threshold}; один мягкий откат не обнуляет кандидат; ${gate.reason}"
+                )
+            }
+            return SharedFusionEntryDecision(
+                null,
+                resetEntry(previous, keepCooldown = false),
+                "V533_${c.name}_${if (gate.hardVeto) "SAFETY_WAIT" else "SOFT_WAIT"}: оценка ${gate.score}/${gate.threshold}; ${gate.reason}"
+            )
         }
 
         val candidateAt = if (previous.entryStreak > 0 && previous.entryCandidateAt > 0L) {
@@ -220,19 +226,20 @@ object PumpProfitEngineV526 {
             cooldownUntil = 0L
         )
         val elapsed = (now - candidateAt).coerceAtLeast(0L)
-        val acceptance = CapitalParticipationGate.priceAcceptance(anchorAsk, observation.executionAsk)
-        return if (streak >= 2 && elapsed >= c.confirmationMillis && acceptance.allowed) {
+        val priceMove = if (anchorAsk > 0.0) (observation.executionAsk / anchorAsk - 1.0) * 100.0 else 0.0
+        val priceAccepted = priceMove in -0.20..0.85
+        return if (streak >= 2 && elapsed >= c.confirmationMillis && priceAccepted) {
             SharedFusionEntryDecision(
                 "BUY",
                 next,
-                "V531_${c.name}_CAPITAL_ACCEPTED: капитал и продолжение цены подтверждены; ${acceptance.reason}; $reason"
+                "V533_${c.name}_ADAPTIVE_ENTRY: дыхание подтверждено ${gate.score}/${gate.threshold}; цена от якоря ${fmtSigned(priceMove)}%; ${gate.reason}"
             )
         } else {
             val left = ((c.confirmationMillis - elapsed).coerceAtLeast(0L) + 999L) / 1000L
             SharedFusionEntryDecision(
                 null,
                 next,
-                "V531_${c.name}_CAPITAL_ARMED ${streak}/2: капитал виден, ждём принятие цены ещё ${left}с; ${acceptance.reason}; $reason"
+                "V533_${c.name}_BREATH_ARMED ${streak}/2: оценка ${gate.score}/${gate.threshold}, ещё ${left}с; цена от якоря ${fmtSigned(priceMove)}% ${if (priceAccepted) "допустима" else "вне диапазона"}; ${gate.reason}"
             )
         }
     }
@@ -241,65 +248,8 @@ object PumpProfitEngineV526 {
         mode: PumpProfitModeV526,
         observation: SharedFusionEntryObservation
     ): Pair<Boolean, String> {
-        val c = entryCfg(mode)
-        val breathing = observation.breathing
-            ?: return false to "V526_${c.name}_WAIT: нет live breathing snapshot"
-        val frame = observation.frame
-            ?: return false to "V526_${c.name}_WAIT: быстрый flow frame ещё не готов"
-        if (!breathing.fresh) return false to "V526_${c.name}_WAIT: live flow устарел"
-
-        val breath = breathing.buyerBreath
-        val phase = breath.phase
-        if (phase != BuyerBreathPhase.IGNITION && phase != BuyerBreathPhase.EXPANSION) {
-            return false to "V526_${c.name}_NO_FOMO: фаза $phase, вход разрешён только IGNITION/EXPANSION"
-        }
-
-        val buyer5 = breath.buyerPercent5m
-            ?: breathing.horizons.firstOrNull { it.minutes == 5 }?.buyerPercent
-            ?: 50.0
-        val activity = breath.activityRatio
-        val efficiency = breath.efficiencyScore ?: 0
-        val move = max(
-            0.0,
-            max(
-                breath.moveSincePhaseStartPercent ?: 0.0,
-                breath.priceChange5mPercent ?: 0.0
-            )
-        )
-
-        if (move > c.maxEarlyMovePercent) {
-            return false to "V526_${c.name}_NO_FOMO: движение уже ${fmt(move)}% > ${fmt(c.maxEarlyMovePercent)}%"
-        }
-        if (breath.absorptionRisk > c.maxAbsorptionRisk) {
-            return false to "V526_${c.name}_ABSORPTION: риск ${breath.absorptionRisk}/100"
-        }
-        if (efficiency < c.minEfficiency) {
-            return false to "V526_${c.name}_ABSORPTION: эффективность цены $efficiency слишком слабая"
-        }
-        if (buyer5 < c.minBuyer5m) {
-            return false to "V526_${c.name}_WAIT: buyer5=${fmt(buyer5)}% < ${fmt(c.minBuyer5m)}%"
-        }
-        if (activity == null) {
-            return false to "V526_${c.name}_CAPITAL_WAIT: ещё нет надёжной базы активности; в пустой рынок не входим"
-        }
-        if (activity < c.minActivityRatio) {
-            return false to "V526_${c.name}_WAIT: активность ${fmt(activity)}x < ${fmt(c.minActivityRatio)}x"
-        }
-        val capital = CapitalParticipationGate.evaluate(
-            observation,
-            minFiveMinuteNotional = c.minFiveMinuteNotionalUsdt,
-            minAcceleration = c.minCapitalActivityRatio,
-            minBuySellRatio = c.minBuySellNotionalRatio
-        )
-        if (!capital.allowed) return false to "V531_${c.name}_CAPITAL_WAIT: ${capital.reason}"
-        if (frame.instant < c.minInstant || frame.score5m < c.min5m) {
-            return false to "V526_${c.name}_WAIT: instant/5m ${frame.instant}/${frame.score5m} ещё недостаточны"
-        }
-        if (frame.score15m < c.min15m || frame.score30m < c.min30m) {
-            return false to "V526_${c.name}_WAIT: старший поток ещё падает слишком быстро (${frame.score15m}/${frame.score30m})"
-        }
-
-        return true to "phase=$phase instant/5/15/30=${frame.instant}/${frame.score5m}/${frame.score15m}/${frame.score30m}, buyer5=${fmt(buyer5)}%, activity=${fmt(activity)}x, ${capital.reason}, move=${fmt(move)}%, absorption=${breath.absorptionRisk}"
+        val result = AdaptiveBreathEntryPolicy.evaluate(mode, observation)
+        return result.allowed to "V533 score=${result.score}/${result.threshold}; ${result.reason}"
     }
 
     private fun shockPermitted(observation: SharedFusionEntryObservation): Boolean {
@@ -309,13 +259,9 @@ object PumpProfitEngineV526 {
         if (!breath.fresh) return false
         if (breath.phase == BuyerBreathPhase.SELLER_TAKEOVER || breath.phase == BuyerBreathPhase.EXHAUSTION) return false
         if (breath.absorptionRisk >= 72) return false
-        if (!CapitalParticipationGate.evaluate(
-                observation,
-                PM3.minFiveMinuteNotionalUsdt,
-                PM3.minCapitalActivityRatio,
-                PM3.minBuySellNotionalRatio
-            ).allowed) return false
-        return true
+        return AdaptiveBreathEntryPolicy.evaluate(PumpProfitModeV526.PUMP_2, observation).let {
+            it.allowed && !it.hardVeto
+        }
     }
 
     fun evaluatePosition(
