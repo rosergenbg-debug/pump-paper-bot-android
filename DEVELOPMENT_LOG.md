@@ -11,6 +11,7 @@ This is the agent's chronological external memory. Append every material change;
 - Branch `chatgpt/v5-36-guarded-self-tuning`; CI, compatible signing and final verification remain required.
 - PR #83 head `1935faebacffd07c92c2570e161c671299343842` passed complete GitHub Actions run #383 (`32872826242`): source verification, Kotlin/Android compilation, unit tests, lint, V5.36/code 116 package/activity checks, APK ZIP verification and artifact upload.
 - Re-signed that exact CI APK with the installed-compatible update key. Final `PumpSignal-V5.36-Compatible-FINAL.apk` is 7,706,996 bytes with SHA-256 `819385353189bfec4b04e48e8a33ba65f63f94a302ffaa2df4a8e8a96789c96f`; signature schemes v2/v3 and ZIP integrity verify, certificate SHA-256 is `1f778c4291c9d11c5f89f4de8773bda35a0125031adc05785daee23f27dc7823`, and all 843 non-signature payload entries are byte-identical to the CI APK. Saved persistently as `/Биткоин/PumpSignal-V5.36-Compatible-FINAL.apk`.
+- Documentation head `3bc4d861c5842b269391425ea9fbefb4f073af91` passed repeat GitHub Actions run #384 (`32873601679`). PR #83 was marked ready and merged into canonical `main` as `b476e064c31e55fcb9329271933ce60d7908dc25`. Source integration and compatible APK delivery are complete; immutable tag/Release publication is unavailable through the current managed GitHub tools.
 
 ## V5.35 — bounded 24-hour support logs and DeepSeek economy (2026-08-25, Codex Work Mode)
 
