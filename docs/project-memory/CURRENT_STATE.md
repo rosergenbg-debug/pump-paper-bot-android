@@ -11,12 +11,12 @@
 - Candidate source version: **V5.37**, `versionCode 117`.
 - `applicationId`: `com.example.pumppaperbot.v8` — сохранён для совместимого update/data continuity.
 - Guardian V5.36 CI run #387: **success**.
-- V5.37 full CI: **PENDING/IN_PROGRESS** до финальной фиксации результата; V5.37 не считать stable до success.
+- V5.37 code/build validation run #388: **success** — `testDebugUnitTest`, `lintDebug`, `assembleDebug`, APK package/version/activity/signature/ZIP checks и artifact upload прошли.
+- Pull request: **#84**, merge pending final PR-head checks.
 
 ## BUILD / RELEASE STATUS
 
-- Verified stable source/build до текущего изменения: V5.36.
-- V5.37 workflow выполняет `testDebugUnitTest`, `lintDebug`, `assembleDebug` и package/activity/APK checks.
+- V5.37 source/build уже прошёл полный CI на кодовой версии изменения.
 - Workflow artifact V5.37 называется `PumpSignal-V5.37-Scalp-Independence-Intermediate.apk`; это intermediate/debug artifact, не автоматически install-compatible final APK.
 - Совместимый certificate исторической линии: SHA-256 `1f778c4291c9d11c5f89f4de8773bda35a0125031adc05785daee23f27dc7823`.
 - Latest published GitHub Release исторически отстаёт от source/build state.
@@ -71,7 +71,7 @@ V5.37 исправляет именно эти причины:
 
 ## CURRENT MAIN PRIORITY
 
-**Сначала завершить и проверить V5.37 как исправление strategy independence/timing; затем не менять thresholds, пока не получен честный performance baseline на forward/device ledger.**
+**Завершить merge V5.37 как исправление strategy independence/timing; затем не менять thresholds, пока не получен честный performance baseline на forward/device ledger.**
 
 ## RISKS
 
@@ -82,4 +82,4 @@ V5.37 исправляет именно эти причины:
 
 ## NEXT REASONABLE STEP
 
-После успешного V5.37 CI/merge: **не менять торговые пороги**, а собрать device/ledger baseline и сравнить по каждому account своевременность входа, NET PnL/expectancy/drawdown/loss streak и причины BUY/EXIT. Это покажет, осталась ли проблема в распознавании, timing, AI filter или exit logic.
+После merge V5.37: **не менять торговые пороги**, а собрать device/ledger baseline и сравнить по каждому account своевременность входа, NET PnL/expectancy/drawdown/loss streak и причины BUY/EXIT. Это покажет, осталась ли проблема в распознавании, timing, AI filter или exit logic.
