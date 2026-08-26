@@ -3,14 +3,14 @@ package com.example.pumppaperbot
 import android.content.Context
 import org.json.JSONObject
 import java.util.Locale
-import kotlin.math.abs
 
 /**
  * V6.0 shadow-only execution intelligence.
  *
  * The existing Pump strategies keep full trading authority. This layer only measures whether
  * Binance-led flow agrees with the real Bitpanda Fusion execution book and how much gross move is
- * required to overcome current round-trip fees, spread and estimated depth slippage.
+ * required to overcome observed account fees, spread and depth slippage. No V6.0 result can allow
+ * or veto a V5 trade.
  */
 data class FusionBookMetricsV600(
     val top3BidEur: Double = 0.0,
@@ -21,8 +21,9 @@ data class FusionBookMetricsV600(
     val imbalance5: Double? = null,
     val microprice: Double? = null,
     val micropriceBiasBps: Double? = null,
-    val buySlippage500Bps: Double? = null,
-    val sellSlippage500Bps: Double? = null
+    val probeNotionalEur: Double = 1_000.0,
+    val buySlippageBps: Double? = null,
+    val sellSlippageBps: Double? = null
 )
 
 data class FusionBookMemoryV600(
@@ -62,8 +63,10 @@ data class ScalpExecutionSnapshotV600(
     val feeTier: String = FusionTradingCosts.FEE_TIER,
     val feeBpsPerSide: Double = FusionTradingCosts.FEE_RATE * 10_000.0,
     val spreadBps: Double = 0.0,
-    val buySlippage500Bps: Double? = null,
-    val sellSlippage500Bps: Double? = null,
+    val probeNotionalEur: Double = ScalpExecutionPolicyV600.EXECUTION_PROBE_EUR,
+    val buySlippageBps: Double? = null,
+    val sellSlippageBps: Double? = null,
+    /** Minimum observed gross move needed to cover round-trip costs; not a profit forecast. */
     val costFloorBps: Double? = null,
     val imbalance3: Double? = null,
     val imbalance5: Double? = null,
@@ -91,8 +94,9 @@ data class ScalpExecutionSnapshotV600(
         .put("feeTier", feeTier)
         .put("feeBpsPerSide", feeBpsPerSide)
         .put("spreadBps", spreadBps)
-        .putNullable("buySlippage500Bps", buySlippage500Bps)
-        .putNullable("sellSlippage500Bps", sellSlippage500Bps)
+        .put("probeNotionalEur", probeNotionalEur)
+        .putNullable("buySlippageBps", buySlippageBps)
+        .putNullable("sellSlippageBps", sellSlippageBps)
         .putNullable("costFloorBps", costFloorBps)
         .putNullable("imbalance3", imbalance3)
         .putNullable("imbalance5", imbalance5)
@@ -113,8 +117,9 @@ data class ScalpExecutionSnapshotV600(
 
     fun compactText(): String = buildString {
         append("V6 EXECUTION • $agreement • $executionScore/100")
-        append("\nfee ${fmt(feeBpsPerSide)} bp/side • spread ${fmt(spreadBps)} bp")
+        append("\nobserved fee ${fmt(feeBpsPerSide)} bp/side • spread ${fmt(spreadBps)} bp")
         costFloorBps?.let { append(" • cost floor ${fmt(it)} bp") }
+        append(" • probe €${fmt(probeNotionalEur)}")
         append("\nimb5 ${imbalance5?.let { fmtSigned(it * 100.0) } ?: "—"}%")
         append(" • micro ${micropriceBiasBps?.let(::fmtSigned) ?: "—"} bp")
         append(" • Binance buy15 ${fmt(aggressiveBuy15s)}%")
@@ -133,8 +138,11 @@ data class ScalpExecutionSnapshotV600(
                 feeTier = value.optString("feeTier", FusionTradingCosts.FEE_TIER),
                 feeBpsPerSide = value.optDouble("feeBpsPerSide", FusionTradingCosts.FEE_RATE * 10_000.0),
                 spreadBps = value.optDouble("spreadBps"),
-                buySlippage500Bps = value.nullableDouble("buySlippage500Bps"),
-                sellSlippage500Bps = value.nullableDouble("sellSlippage500Bps"),
+                probeNotionalEur = value.optDouble("probeNotionalEur", ScalpExecutionPolicyV600.EXECUTION_PROBE_EUR),
+                buySlippageBps = value.nullableDouble("buySlippageBps")
+                    ?: value.nullableDouble("buySlippage500Bps"),
+                sellSlippageBps = value.nullableDouble("sellSlippageBps")
+                    ?: value.nullableDouble("sellSlippage500Bps"),
                 costFloorBps = value.nullableDouble("costFloorBps"),
                 imbalance3 = value.nullableDouble("imbalance3"),
                 imbalance5 = value.nullableDouble("imbalance5"),
@@ -158,7 +166,8 @@ data class ScalpExecutionSnapshotV600(
 }
 
 object ScalpExecutionPolicyV600 {
-    const val SAMPLE_NOTIONAL_EUR = 500.0
+    /** Current paper accounts begin near €1,000; this is a diagnostic depth probe, not position sizing. */
+    const val EXECUTION_PROBE_EUR = 1_000.0
     private const val MEMORY_MAX_AGE_MILLIS = 90_000L
     private const val SAFETY_BUFFER_BPS = 10.0
 
@@ -185,8 +194,9 @@ object ScalpExecutionPolicyV600 {
             imbalance5 = imbalance(top5Bid, top5Ask),
             microprice = microprice,
             micropriceBiasBps = bias,
-            buySlippage500Bps = buySlippageBps(asks, SAMPLE_NOTIONAL_EUR, market.ask),
-            sellSlippage500Bps = sellSlippageBps(bids, SAMPLE_NOTIONAL_EUR, market.bid)
+            probeNotionalEur = EXECUTION_PROBE_EUR,
+            buySlippageBps = buySlippageBps(asks, EXECUTION_PROBE_EUR, market.ask),
+            sellSlippageBps = sellSlippageBps(bids, EXECUTION_PROBE_EUR, market.bid)
         )
     }
 
@@ -203,9 +213,10 @@ object ScalpExecutionPolicyV600 {
         val priorFresh = previous?.takeIf { it.at > 0L && now - it.at in 0..MEMORY_MAX_AGE_MILLIS }
         val bidChange = percentChange(priorFresh?.top5BidEur, metrics.top5BidEur)
         val askChange = percentChange(priorFresh?.top5AskEur, metrics.top5AskEur)
-        val feeBps = market.feeRate.coerceAtLeast(0.0) * 10_000.0
-        val costFloor = if (market.fresh(now) && metrics.buySlippage500Bps != null && metrics.sellSlippage500Bps != null) {
-            feeBps * 2.0 + spreadBps + metrics.buySlippage500Bps + metrics.sellSlippage500Bps + SAFETY_BUFFER_BPS
+        // V6 uses the authenticated fee if available, but V5 strategies still use fixed 0.25%.
+        val feeBps = market.v6ObservedFeeRate().coerceAtLeast(0.0) * 10_000.0
+        val costFloor = if (market.fresh(now) && metrics.buySlippageBps != null && metrics.sellSlippageBps != null) {
+            feeBps * 2.0 + spreadBps + metrics.buySlippageBps + metrics.sellSlippageBps + SAFETY_BUFFER_BPS
         } else null
         val flow = breathing.flowWave.latest
         val flow5 = flow?.score5m ?: breathing.horizons.firstOrNull { it.minutes == 5 }?.score
@@ -224,10 +235,10 @@ object ScalpExecutionPolicyV600 {
             (askChange != null && askChange >= 20.0 && (bidChange ?: 0.0) <= 0.0)
         val badExecution = market.fresh(now) && (
             spreadBps > 50.0 ||
-                metrics.buySlippage500Bps == null ||
-                metrics.sellSlippage500Bps == null ||
-                (metrics.buySlippage500Bps ?: 0.0) > 35.0 ||
-                (metrics.sellSlippage500Bps ?: 0.0) > 35.0
+                metrics.buySlippageBps == null ||
+                metrics.sellSlippageBps == null ||
+                (metrics.buySlippageBps ?: 0.0) > 35.0 ||
+                (metrics.sellSlippageBps ?: 0.0) > 35.0
             )
         val agreement = when {
             !market.fresh(now) || !micro.connected || !breathing.fresh -> "INSUFFICIENT_DATA"
@@ -245,7 +256,7 @@ object ScalpExecutionPolicyV600 {
         if (bidChange != null && bidChange > 0.0) score += (bidChange / 25.0).coerceIn(0.0, 1.0) * 8.0
         score += ((micro.aggressiveBuyPercent15s - 50.0) / 15.0).coerceIn(-1.0, 1.0) * 8.0
         score -= (spreadBps / 50.0).coerceIn(0.0, 1.5) * 20.0
-        score -= (((metrics.buySlippage500Bps ?: 40.0) + (metrics.sellSlippage500Bps ?: 40.0)) / 50.0)
+        score -= (((metrics.buySlippageBps ?: 40.0) + (metrics.sellSlippageBps ?: 40.0)) / 50.0)
             .coerceIn(0.0, 1.5) * 12.0
         score += when (agreement) {
             "CONFIRMED" -> 15.0
@@ -260,7 +271,7 @@ object ScalpExecutionPolicyV600 {
             "LEADING" -> "Binance уже ускоряется; Bitpanda ещё не дал сильного подтверждения"
             "FUSION_LEADING" -> "Bitpanda book улучшился раньше выраженного Binance-flow"
             "DIVERGENT" -> "Binance BUY-flow есть, но Bitpanda book показывает встречное давление"
-            "BAD_EXECUTION" -> "движение может быть, но spread/depth делают исполнение дорогим"
+            "BAD_EXECUTION" -> "движение может быть, но spread/depth делают исполнение €${EXECUTION_PROBE_EUR.toInt()} дорогим"
             "INSUFFICIENT_DATA" -> "нет одновременно свежих flow и Bitpanda execution-данных"
             else -> "явного согласованного преимущества исполнения пока нет"
         }
@@ -270,11 +281,12 @@ object ScalpExecutionPolicyV600 {
             agreement = agreement,
             executionScore = score.toInt().coerceIn(0, 100),
             shadowOnly = true,
-            feeTier = market.feeTier,
+            feeTier = market.v6ObservedFeeTier(),
             feeBpsPerSide = feeBps,
             spreadBps = spreadBps,
-            buySlippage500Bps = metrics.buySlippage500Bps,
-            sellSlippage500Bps = metrics.sellSlippage500Bps,
+            probeNotionalEur = EXECUTION_PROBE_EUR,
+            buySlippageBps = metrics.buySlippageBps,
+            sellSlippageBps = metrics.sellSlippageBps,
             costFloorBps = costFloor,
             imbalance3 = metrics.imbalance3,
             imbalance5 = metrics.imbalance5,
