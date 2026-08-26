@@ -64,4 +64,28 @@ class DeepSeekEntryCoachTest {
         assertEquals(15L * 60L * 1000L, DeepSeekEntryCoach.MIN_REQUEST_INTERVAL)
         assertEquals(10L * 60L * 1000L, DeepSeekEntryCoachPolicy.VERDICT_TTL)
     }
+
+    @Test
+    fun `cached verdict belongs only to requesting pump profile`() {
+        val state = DeepSeekEntryCoachState(candidateProfile = PumpProfitModeV526.PUMP_3.name)
+
+        assertTrue(DeepSeekEntryCoachPolicy.sameProfile(state, PumpProfitModeV526.PUMP_3))
+        assertFalse(DeepSeekEntryCoachPolicy.sameProfile(state, PumpProfitModeV526.PUMP_2))
+        assertFalse(DeepSeekEntryCoachPolicy.sameProfile(state, PumpProfitModeV526.PUMP_RETEST))
+    }
+
+    @Test
+    fun `profile scope survives persisted json and old state is safely unscoped`() {
+        val original = DeepSeekEntryCoachState(
+            status = "READY",
+            verdict = "APPROVE",
+            candidateProfile = PumpProfitModeV526.PUMP_SAFE.name
+        )
+        val restored = DeepSeekEntryCoachState.fromJson(original.toJson())
+        val legacy = DeepSeekEntryCoachState.fromJson(org.json.JSONObject().put("status", "READY"))
+
+        assertEquals(PumpProfitModeV526.PUMP_SAFE.name, restored.candidateProfile)
+        assertEquals("UNKNOWN", legacy.candidateProfile)
+        assertFalse(DeepSeekEntryCoachPolicy.sameProfile(legacy, PumpProfitModeV526.PUMP_2))
+    }
 }
