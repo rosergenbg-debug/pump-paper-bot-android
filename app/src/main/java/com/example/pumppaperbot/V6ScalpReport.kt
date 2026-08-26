@@ -18,13 +18,14 @@ object V6ScalpReportStore {
     private const val DIRECTORY = "v6_scalp_execution_reports"
     private const val RETENTION_MILLIS = 7L * 24L * 60L * 60L * 1_000L
     private const val MAX_EXPORT_PART_BYTES = 900_000
+    private const val MAX_TRADE_ROWS = 500
     private const val DEFAULT_WINDOW_HOURS = 24
     private val utc = TimeZone.getTimeZone("UTC")
     private val lock = Any()
 
     private const val COLUMNS =
-        "time_ms\ttrigger\tagreement\tscore\tfee_bp_side\tspread_bp\tbuy_slip_500_bp\t" +
-            "sell_slip_500_bp\tcost_floor_bp\timb3\timb5\tmicro_bias_bp\tbid5_change_pct\t" +
+        "time_ms\ttrigger\tagreement\tscore\tfee_bp_side\tspread_bp\tprobe_eur\tbuy_slip_bp\t" +
+            "sell_slip_bp\tcost_floor_bp\timb3\timb5\tmicro_bias_bp\tbid5_change_pct\t" +
             "ask5_change_pct\tbuy15_pct\tbuy60_pct\taccel\tprice60_pct\tinstant\tflow5\tflow15\tflow30\tbid\task\tfee_tier\treason"
 
     fun append(context: Context, snapshot: ScalpExecutionSnapshotV600) {
@@ -97,6 +98,7 @@ object V6ScalpReportStore {
         val recentTrades = ArrayList<String>()
         val events = ledger?.optJSONArray("eventsNewestFirst") ?: JSONArray()
         for (index in 0 until events.length()) {
+            if (recentTrades.size >= MAX_TRADE_ROWS) break
             val event = events.optJSONObject(index) ?: continue
             if (event.optLong("time") < cutoff || event.optString("kind") != "TRADE") continue
             recentTrades += buildString {
@@ -121,10 +123,17 @@ object V6ScalpReportStore {
             appendLine("maxPartBytes=$MAX_EXPORT_PART_BYTES")
             appendLine("safety=SHADOW_ONLY; REAL_ORDERS=false; CONTAINS_API_KEYS=false")
             appendLine("IMPORTANT=V6 does not allow or veto any V5 trade in this release")
+            appendLine("COST_FLOOR=observed round-trip fee + spread + depth slippage + safety buffer; NOT a profit forecast")
+            appendLine("EXECUTION_PROBE_EUR=${ScalpExecutionPolicyV600.EXECUTION_PROBE_EUR}; diagnostic depth probe, not position sizing")
             appendLine()
             appendLine("[CURRENT_EXECUTION_SHADOW]")
             appendLine(current.compactText().replace('\n', ' '))
-            appendLine("feeTier=${clean(fusion.feeTier)} feeRate=${fmt(fusion.feeRate * 100.0)}% tradedVolume30d=${fusion.tradedVolume30dEur?.let(::fmt) ?: "NA"}")
+            appendLine(
+                "v5ControlFee=${fmt(fusion.feeRate * 100.0)}% (${clean(fusion.feeTier)}); " +
+                    "observedAccountFee=${fusion.observedAccountFeeRate?.let { fmt(it * 100.0) + "%" } ?: "NA"}; " +
+                    "observedTier=${clean(fusion.observedAccountFeeTier ?: "NA")}; " +
+                    "tradedVolume30d=${fusion.tradedVolume30dEur?.let(::fmt) ?: "NA"}"
+            )
             appendLine("fusionFresh=${fusion.fresh(now)} bid=${fmt(fusion.bid)} ask=${fmt(fusion.ask)} depthBid=${fmt(fusion.bidDepthEur)} depthAsk=${fmt(fusion.askDepthEur)}")
             appendLine()
             appendLine("[CURRENT_ACCOUNTS]")
@@ -140,6 +149,7 @@ object V6ScalpReportStore {
             appendLine("[TRADES_LAST_${hours}H]")
             appendLine("time_ms\taccount\taction\tprice\tpnl_eur\treason")
             if (recentTrades.isEmpty()) appendLine("NONE") else recentTrades.forEach(::appendLine)
+            if (recentTrades.size >= MAX_TRADE_ROWS) appendLine("TRADES_TRUNCATED_AT=$MAX_TRADE_ROWS")
             appendLine()
             appendLine("[V6_EXECUTION_SAMPLES]")
             appendLine(COLUMNS)
@@ -197,8 +207,9 @@ object V6ScalpReportStore {
         value.executionScore.toString(),
         fmt(value.feeBpsPerSide),
         fmt(value.spreadBps),
-        nullable(value.buySlippage500Bps),
-        nullable(value.sellSlippage500Bps),
+        fmt(value.probeNotionalEur),
+        nullable(value.buySlippageBps),
+        nullable(value.sellSlippageBps),
         nullable(value.costFloorBps),
         nullable(value.imbalance3),
         nullable(value.imbalance5),
