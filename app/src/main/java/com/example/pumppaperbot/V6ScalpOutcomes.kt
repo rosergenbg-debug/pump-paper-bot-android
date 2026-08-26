@@ -15,8 +15,9 @@ import kotlin.math.min
  * Causal forward evaluation for V6.0 shadow observations.
  *
  * A V6 signal is useless unless we later know what happened. Pending observations are evaluated
- * only with future Bitpanda bid snapshots. Horizons that were missed by too much are recorded as
- * MISSED instead of pretending a late price was the requested 30/60/120/300-second outcome.
+ * only with a Bitpanda bid snapshot whose actual Fusion lastSuccess is strictly newer than the
+ * origin. Horizons that were missed by too much are recorded as MISSED instead of pretending a
+ * late/stale price was the requested 30/60/120/300-second outcome.
  */
 data class V6PendingOutcome(
     val originAt: Long,
@@ -67,6 +68,22 @@ data class V6PendingOutcome(
     }
 }
 
+internal data class V6OutcomeMarketFrame(
+    val observedAt: Long,
+    val bid: Double?
+)
+
+internal object V6OutcomeCausalityPolicy {
+    fun futureFrame(originAt: Long, market: FusionMarketSnapshot, now: Long): V6OutcomeMarketFrame {
+        val valid = market.connected && market.lastSuccess > originAt && market.lastSuccess <= now &&
+            market.bid > 0.0 && now - market.lastSuccess in 0..FusionMarketSnapshot.MAX_AGE
+        return V6OutcomeMarketFrame(
+            observedAt = market.lastSuccess.takeIf { valid } ?: 0L,
+            bid = market.bid.takeIf { valid }
+        )
+    }
+}
+
 object V6ScalpOutcomeStore {
     private const val PREFS = "v6_scalp_forward_outcomes_v600"
     private const val KEY_PENDING = "pending"
@@ -98,28 +115,30 @@ object V6ScalpOutcomeStore {
     ) = synchronized(lock) {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val pending = load(prefs.getString(KEY_PENDING, "[]").orEmpty())
-        val venueFresh = market.fresh(now) && market.bid > 0.0 && market.ask > 0.0
-        val currentBid = market.bid.takeIf { venueFresh }
         val next = ArrayList<V6PendingOutcome>()
 
         pending.forEach { original ->
+            val future = V6OutcomeCausalityPolicy.futureFrame(original.originAt, market, now)
+            val currentBid = future.bid
             var item = if (currentBid != null) original.copy(
                 bestBid = if (original.bestBid > 0.0) max(original.bestBid, currentBid) else currentBid,
                 worstBid = if (original.worstBid > 0.0) min(original.worstBid, currentBid) else currentBid
             ) else original
             var mask = item.completedMask
-            val elapsedSeconds = ((now - item.originAt).coerceAtLeast(0L) / 1_000L).toInt()
-            horizons.forEach { horizon ->
-                if (mask and horizon.bit != 0 || elapsedSeconds < horizon.seconds) return@forEach
-                val delay = elapsedSeconds - horizon.seconds
-                when {
-                    delay <= horizon.toleranceSeconds && currentBid != null -> {
-                        appendOutcome(context, item, horizon, now, delay, "OK", currentBid)
-                        mask = mask or horizon.bit
-                    }
-                    delay > horizon.toleranceSeconds -> {
-                        appendOutcome(context, item, horizon, now, delay, "MISSED", null)
-                        mask = mask or horizon.bit
+            if (future.observedAt > 0L) {
+                val elapsedSeconds = ((future.observedAt - item.originAt).coerceAtLeast(0L) / 1_000L).toInt()
+                horizons.forEach { horizon ->
+                    if (mask and horizon.bit != 0 || elapsedSeconds < horizon.seconds) return@forEach
+                    val delay = elapsedSeconds - horizon.seconds
+                    when {
+                        delay <= horizon.toleranceSeconds && currentBid != null -> {
+                            appendOutcome(context, item, horizon, future.observedAt, delay, "OK", currentBid)
+                            mask = mask or horizon.bit
+                        }
+                        delay > horizon.toleranceSeconds -> {
+                            appendOutcome(context, item, horizon, future.observedAt, delay, "MISSED", null)
+                            mask = mask or horizon.bit
+                        }
                     }
                 }
             }
@@ -127,9 +146,12 @@ object V6ScalpOutcomeStore {
             if (mask != allMask && now - item.originAt <= 10L * 60L * 1_000L) next += item
         }
 
-        if (venueFresh && snapshot.at > 0L && snapshot.ask > 0.0 &&
-            next.none { it.originAt == snapshot.at }
-        ) {
+        // Origin can use the current book because the V6 snapshot itself was derived from it. A
+        // future outcome, however, must wait for a strictly newer Fusion lastSuccess (policy above).
+        val originVenueValid = market.connected && market.lastSuccess > 0L && market.lastSuccess <= snapshot.at &&
+            snapshot.at - market.lastSuccess in 0..FusionMarketSnapshot.MAX_AGE &&
+            snapshot.at > 0L && snapshot.ask > 0.0 && snapshot.bid > 0.0
+        if (originVenueValid && next.none { it.originAt == snapshot.at }) {
             next += V6PendingOutcome(
                 originAt = snapshot.at,
                 trigger = snapshot.trigger,
