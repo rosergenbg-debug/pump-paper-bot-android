@@ -1,151 +1,72 @@
-# PumpSignal working memory
+# PUMP PROJECT GUARDIAN
 
-This file is mandatory context for every agent working in this repository.
+Главная простая точка входа для нового чата: **[`ИНСТРУКЦИЯ_1.md`](ИНСТРУКЦИЯ_1.md)**.
 
-## Required startup sequence
+Этот файл задаёт обязательный рабочий протокол для любого AI-агента, который меняет PUMP/PumpBot.
 
-1. Read this file completely.
-2. Read `DEVELOPMENT_LOG.md` completely.
-3. Inspect the actual branch, `git status`, version name/code, package id, signing configuration and recent commits.
-4. Preserve unrelated worktree changes. Never assume `main` is current; the project has historically advanced through version branches.
-5. After every material code, build, release or repository change, append an accurate entry to `DEVELOPMENT_LOG.md`.
-6. Do not ask Serge to repeat old chat history when these files and the repository answer the question.
+## Перед существенной работой
 
-## Product and user intent
+Обязательно прочитать:
 
-PumpSignal is an Android paper-trading and signal research application for PUMP/EUR. It never places real exchange orders. V5 compares three autonomous participants:
+1. `docs/project-memory/MASTER_SPEC.md` — что и зачем строится.
+2. `docs/project-memory/CURRENT_STATE.md` — где проект находится сейчас.
+3. релевантный раздел `docs/project-memory/ARCHITECTURE.md`.
+4. относящиеся к задаче решения в `docs/project-memory/DECISIONS.md`.
+5. относящиеся к задаче гарантии в `docs/project-memory/REGRESSION_MATRIX.md`.
+6. последние релевантные записи `docs/project-memory/AI_CHANGELOG.md`, если они нужны для понимания недавних изменений.
+7. фактический код, тесты и свежую Git-историю затрагиваемой области.
 
-- APP: causal `ResearchDecisionEngine` baseline and its own V5 virtual account.
-- DeepSig: independent primary AI market circuit and its own V5 virtual account. Legacy Gemini-named storage/classes remain only where needed for installed-data compatibility.
-- DeepSigX: an independent quantitative flow/CVD/breathing experiment and its own V5 virtual account; it must not mirror APP or DeepSig.
+`DEVELOPMENT_LOG.md` сохраняется как подробная историческая хроника и свидетельство прошлых работ, но не заменяет актуальную project-memory.
 
-SERGE is a separate user-controlled reference account, not a fourth autonomous competitor. The comparison view must show separate balances, signed percent return, entry/exit markers and trade profit/loss. Stored data must survive compatible APK updates. `Я купил` and `Я продал` record Serge's manual action and enable/disable personal-position supervision; they do not submit an exchange order.
+## Иерархия источников истины
 
-V5 has one persistent master switch for user signal notifications, sound and vibration. It defaults OFF after the update. Switching it off must immediately silence/cancel user alerts and reminders without stopping market analysis, AI cycles, journals or any of the three virtual portfolios. Switching it on restores the existing V4.22 workday/daily/24-hour schedule and participant-specific sound tests. No missed-alert backlog may ring after re-enabling.
+1. Последнее явное решение владельца проекта.
+2. `MASTER_SPEC.md`.
+3. `DECISIONS.md`.
+4. `REGRESSION_MATRIX.md` и автоматические тесты.
+5. `ARCHITECTURE.md`.
+6. Текущий код как фактическая реализация.
+7. Старые чаты, старые логи и старая документация как исторические свидетельства.
 
-## Current strategy direction
+Если новое решение владельца меняет фундаментальную цель, обнови также `MASTER_SPEC.md` и/или `DECISIONS.md`.
 
-- DeepSeek is the primary AI and owns the former Gemini paper-trading role: accepted BUY/EXIT decisions are executed once on its independent virtual account using a fresh quote.
-- DeepSeek experiment may copy DeepSeek's executed BUY at the same price. It may also enter earlier when APP reaches 99/100 or a fresh positive DeepSeek direction is confirmed by PUMP momentum and buyer flow/CVD. Late-entry, overheat, unconfirmed rapid-drop and simultaneous BTC/SOL weakness vetoes remain mandatory. Its exit evaluates buyer flow, spot/futures CVD, BTC/SOL, open interest, order book, direction and a pullback scaled to current PUMP volatility. A moderate reversal needs two monitor cycles; a strong multi-group reversal may exit immediately. A 5% loss is only an emergency backstop.
-- APP's exit timing is considered strong.
-- APP historically entered too rarely. V3.19 modestly widens entry confirmation, especially in Active mode, while preserving late-entry, rapid-drop and market-overheat blocks.
-- Fees are 0.15% on entry and 0.15% on exit.
-- DeepSeek, DeepSeek experiment, APP and Serge remain separate. Gemini is a manual second-opinion provider only: it has no automatic cadence and no trading authority. Experimental exit rules may manage only the DeepSeek experiment portfolio.
-- Pressing `Я купил` activates the highest-priority personal-position protection mode for the entire time Serge's position remains open. Protecting Serge's real position outranks routine market analysis, virtual-portfolio research and conserving AI quota or cost for a later trade/day. V4.14 removes the internal DeepSeek daily cost stop entirely for both research and position supervision; an estimated daily cost near €5 produces one informational warning only and never blocks or slows a request. Gemini position supervision may use the entire remaining provider quota for that day. Lower-priority automatic calls should yield first when a provider limit is shared. Use the available provider resources intelligently across the life of the position, with immediate checks after entry and escalation on fresh danger. Hard provider rate/quota limits, credential/network availability and local safety fallbacks still apply; exhausting a provider must never disable the free local guard or urgent alarms.
-- V4.11 adds profit-adaptive supervision: below +2% DeepSeek Flash checks every three minutes; from +2% the foreground market cycle and DeepSeek Pro position analysis run every minute; from +4%, on a protected-peak pullback or fresh seller takeover, Pro uses maximum reasoning. Position output must separately explain the decision, 20-level book, executed PUMP flow, live BTC flow and the concrete invalidation/watch condition. A single book wall is never sufficient evidence because it may be spoofed.
-- V4.13 adds one user-action scale. Before Serge buys, DeepSeek readiness 1–10 is red/yellow/green and can intensify the primary circuit to one minute or Pro; after Serge buys, exit danger 1–10 reverses to green/yellow/red. This is a conservative display/scheduling fusion layer only, never an automatic Serge trade. Virtual exits always notify even during Serge's open position; virtual BUY alerts remain muted then.
-- V4.14 removes the internal DeepSeek cost stop, retaining only one non-blocking warning near €5/day. Its critical overview graphically separates action level, direction, 20-level book, live PUMP executions, spot/futures flow, Bitcoin and open interest; it is display-only and cannot override hard entry vetoes or execute Serge trades. The main chart starts at 60 visible candles, and four-account trade connectors route wins above and losses below the price line.
-- V4.15 persists public live PUMP/BTC flow and book observations for 24 hours and supplies robust instant/5m/15m/30m/1h/6h breathing scores. Closed 30-minute APP late-entry/overheat flags are context only for the independent DeepSeek circuit and cannot freeze an intrabar DeepSeek BUY. The experiment uses a faster breathing score capped within 15 points of normal DeepSeek. A rejected proposal remains visible but never executes or anchors the experiment. APP trend mode accompanies the winner after first reaching +8% and waits for a later confirmed pullback instead of selling on the same rising candle.
-- V4.16 adds a no-new-screen Pump.fun fundamentals layer and a local 50-MiB verified DeepSeek evidence memory. Predictions are frozen before outcomes and evaluated at 15m/1h/3h/6h/24h. Promotion requires 30 independent cases, >=60% directional precision, positive expectancy after 0.30% round-trip fees, lift over baseline and walk-forward confirmation. Memory/fundamentals are context only and cannot execute a trade or bypass safety rules.
-- V4.17 removes distant preparation calls. DeepSeek entry notifications start at 7/10 (yellow) and repeat only on increases to 8/9/10, with 9–10 green. Ordinary sound is limited to Monday, Tuesday, Thursday and Friday, 06:15–23:00 local time; outside it messages are silent. Only an urgent exit for Serge's already-open position may ring around the clock. The selected Android alarm melody is user-configurable.
-- V4.19 carries the unreleased V4.18 stabilization forward. Position warnings notify only on the first confirmed exit or material new deterioration, with oscillation protection and a ten-minute ordinary repeat floor. An isolated APP sell is warning-only; red 9–10/10 requires DeepSeek plus fresh multi-group confirmation or a real local emergency. A strong live 15s/60s/5m buyer-confirmed rebound clears a contradictory EXIT immediately; moderate recovery must persist for two control cycles before clearing it. A past alarm cannot keep the scale at 10/10 after its condition disappears. BTC is a regime filter rather than a minute-by-minute synchronization gate. No participant may auto-exit or cap profit at +8%; trend winners use confirmed pullback/trailing evidence and may continue beyond +20%.
-- V4.21 keeps APP as the stable pilot while restoring independent DeepSeek authority on its own account. APP-confirmed entries remain immediate; DeepSeek may enter with APP below 55/100 only after two separate strong 30–90-minute AI evaluations confirmed by 5/15-minute flow and no APP sell. A DeepSeek-only normal exit likewise needs two AI evaluations plus fresh selling and 15/30/60-minute weakness. The experiment uses a stable 15-minute signal anchor, three entry confirmations, a 30-minute ordinary hold, three exit confirmations and a 30-minute re-entry pause. Virtual BUY and SELL trades all notify, including while Serge is in a position, but ordinary sound still obeys the agreed work schedule. A position-adviser response must re-check the current position id before saving; responses that finish after sale or replacement are discarded and their old notifications cleared.
-- V4.22 separates sound policy by event importance. Executed APP, DeepSeek and DeepSeek-experiment BUY/SELL trades ring every day from 06:15 to 23:00 even when preparatory alerts remain in workday mode. Preparatory alerts may be workdays, daily daytime or 24 hours according to the saved setting; the setting must not be reset when its screen opens. Urgent confirmed Serge exits ring around the clock. V4.22 uses fresh selectable channel ids and provides an explicit sound test for each participant channel.
-- V5.0 replaces the old APP threshold path with the causal research baseline and starts three new isolated €1 000 paper portfolios for APP, DeepSig and DeepSigX; V4.22 data remains archived. Candidate output is analytical evidence for manual review, never a profitability claim or real-money order. Fresh V5.0 notification channels and the master switch above apply before every user alert, including urgent Serge alerts.
-- V5.1 adds Bitpanda Fusion strictly as a read-only execution-venue evidence layer and a fourth isolated €1 000 `DEEPSIG FUSION` paper account. Store its key only through Android Keystore, require users to create a Read-only key, never implement Fusion order/cancel/transfer calls, and fail closed when venue data is stale. The unified export must omit secrets and combine the four autonomous agents' decisions/trades in one sanitized log.
-- V5.29 explicitly changes the comparison interaction: eight accounts use a vertical ScrollView, with the four Pump Machine accounts first and Fusion fifth. Chart touch handling must release vertical gestures to the parent while retaining synchronized horizontal offsets.
-- V5.2 treats an open `DEEPSIG FUSION` paper position as the highest-priority virtual research position. It forces the primary DeepSig and its trade verification to Pro, targets a one-minute foreground cycle, supplies Fusion entry/bid/ask/spread/fees/net PnL/peak/pullback to the model, and continues supervision even if the main DeepSig paper position has already closed. It remains financially and logically separate from Serge's manual position; no real Fusion order is implemented.
-- V5.3 makes Serge's manual-position card action-first and explanatory: it must show a deterministic hold/watch/confirmed-exit command, urgency, trend, risk, 30–90 minute scenario and explicit invalidation while preserving the multi-group exit confirmation and hard emergency precedence. The BTC/PUMP relation is a probabilistic regime only; never encode a permanent inverse rule or an automatic BTC-sideways catch-up assumption.
-- V5.4 treats aggressive-buy share as direction, not a price guarantee. The always-visible buyer-breath module must combine buy share, notional activity, price-response efficiency, persistence and fresh book context into quiet/ignition/expansion/mature/exhaustion/seller-takeover/shock phases. High buy share with weak price response is possible absorption. A phase is explanatory context only: ordinary EXIT still needs the existing multi-group confirmation, while shock preserves emergency precedence.
-- V5.5 keeps one graphical destination: the established critical overview. Do not recreate a second buyer-breath screen. The overview must retain its factor bars and 24-hour horizons and add an adaptive time-labelled breath arc. The arc represents buyer-pressure lifecycle, not predicted price; its 20/35/65-minute historical anchors, current phase age and shock-disable state are explanatory only and cannot execute BUY/EXIT.
-- V5.6 must keep human-facing DeepSig cards action-first. Never expose internal execution wording such as `СДЕЛКА НЕ ЗАПРАШИВАЛАСЬ` without explaining that no BUY/EXIT signal was formed. A low entry score must say `НЕ ВХОДИТЬ`, not `КАНДИДАТ ВХОДА`.
-- Compatible app updates must never make older research history invisible. Strategy epochs may keep separate balances/PnL, but every available trade and decision must remain in the stable append-only performance ledger and the previous epoch must remain exportable. Capture the ledger before an explicit account reset.
-- After the mandatory fresh market sync, optional feeds, AI providers, paper participants, notifications and diagnostic writers are failure-isolated. One optional-stage exception must be logged and must not cancel later independent participants in the same cycle.
+## Протокол задачи
 
-## Release invariants
+Перед изменением:
 
-- Application id must remain `com.example.pumppaperbot.v8`.
-- The installed compatible line uses certificate SHA-256 beginning `1f778c4291c9` and ending `27dc7823`.
-- Never give Serge a GitHub intermediate APK as an installable update unless its signing certificate has been compared with the compatible line.
-- The user-facing download must be one direct `.apk` link, not a ZIP or artifact directory.
-- Never delete the installed app during an update; doing so loses local state.
-- Increase both `versionName` and `versionCode` exactly once for a new release and keep UI title, workflow checks, artifact name and README consistent.
+- помести задачу в контекст общей цели;
+- установи root cause вместо лечения симптома;
+- проверь зависимости и возможные регрессии;
+- отличи косметику, эксперимент, новое требование и изменение концепции;
+- выбери наименьшее **архитектурно правильное**, а не просто самое короткое изменение.
 
-## Mandatory collaboration and repository order
+После изменения:
 
-- Serge has granted standing authorization to publish future PumpSignal version branches and source changes to the public `rosergenbg-debug/pump-paper-bot-android` repository, open/update pull requests, and run GitHub Actions without asking for a new per-version confirmation. This authorization is limited to this repository and the agreed PumpSignal work; release signing, destructive cleanup, credential handling and unrelated external actions remain subject to their existing safeguards.
-- Every project must keep exactly these two coordination records at the repository root: `AGENTS.md` for durable rules/current truth and `DEVELOPMENT_LOG.md` for chronological work history. If either is missing, create it before material work. Every agent must read both files completely before planning or editing.
-- `main` is the only canonical development line. Inspect existing branches and pull requests before creating anything. Reuse an already active branch for the same release/task; never create a parallel version branch merely because another agent or chat started the work.
-- A temporary branch is allowed only for an active, bounded change. Merge it into `main` after verification, then delete the temporary branch. Do not leave finished draft PRs or abandoned agent branches behind. Never force-push or delete unmerged work unless Serge explicitly authorizes repository cleanup and the retained commit/tag has first been verified.
-- Update `DEVELOPMENT_LOG.md` in the same branch and commit as each material code, configuration, build, release or repository operation. Each entry must say: date/time and agent, what changed, why, exact files/branch/commit/release affected, verification performed, and any remaining risk or next step. Do not record secrets, API keys, signing-key material, private payloads or chain-of-thought.
-- Keep `AGENTS.md` concise and current: update it when a durable product rule, architecture invariant, workflow rule or active-version fact changes. Do not use it as a second chronological log. When the log becomes long, retain it as history rather than starting an unlinked replacement.
-- A completed version must exist on `main`, have an immutable `vX.Y` tag, and be published as a GitHub Release. The Release must contain one compatible final APK named `PumpSignal-VX.Y-Compatible-FINAL.apk` plus checksum/signature facts in the notes. Never store an APK as Base64 chunks or commit build outputs to the source tree.
-- Keep only the latest two user-facing releases/APKs readily available. Older temporary build artifacts, redundant release branches and finished agent branches may be removed only after confirming that their source history is retained by `main` or an immutable tag. Source history itself must not be rewritten merely to save space.
-- Before giving Serge a download, verify the final APK itself: package id, version name/code, launch activity, ZIP integrity, signature schemes and compatible certificate fingerprint. Then provide both (1) a clickable local `sandbox:` link when the file exists in the current workspace and (2) the direct GitHub Release asset link for durable download. Never offer an expiring Actions artifact or an intermediate/debug-signed APK as the installable update.
-- At the end of every task, leave one clear handoff: canonical branch/commit, tests/build result, direct artifact link if applicable, and the exact unfinished items. If a requested upload or deletion could not be performed, state that plainly instead of inventing a location or claiming success.
+- запусти доступные unit/integration/regression tests, lint/static checks и build;
+- отдельно проверь, стала ли система в целом ближе к `MASTER_SPEC.md`;
+- обнови `CURRENT_STATE.md`;
+- при существенном решении обнови `DECISIONS.md`;
+- обнови относящиеся пункты `REGRESSION_MATRIX.md`;
+- добавь только существенную запись в `AI_CHANGELOG.md`.
 
-## Current version chain
+## Правило трёх ремонтов
 
-- V3.17: installed predecessor, code 49.
-- V3.18: three-way APP/Gemini/Serge competition, code 50, compatible update over V3.17.
-- V3.19: trade alerts and entry/exit tuning, code 51, current work.
-- V3.20: attributed signals and confirmed early entry for Gemini experiment, code 52, current work.
-- V3.21: APP confirmed-trend continuation entry, code 53, current work.
-- V3.22: full audit fixes for durable trade-alert delivery, independent APP readiness, storage recovery and current UI text, code 54, current work.
-- V4.0: protected Gemini/DeepSeek key UX and DeepSeek Flash/Pro supervision of Serge's open position, code 55, current work.
-- V4.1: DeepSeek Flash primary market/news circuit, DeepSeek Pro position reserve and 50/50 Gemini daily quota split, code 56, current work.
-- V4.2: dedicated DeepSeek/Gemini API centers, DeepSeek signal gauge, five-minute rich-market analysis and two-hour routine Gemini cadence, code 57, current work.
-- V4.3: freshness-labelled live price, 15-second spot trade/top-book stream and closed 5-minute spot/futures flow supplied to DeepSeek without changing StrategyV2 or paid-call cadence, code 58, current work.
-- V4.4: finish-reason-aware DeepSeek JSON recovery, economical reasoning, stale-signal suppression and shareable redacted diagnostics, code 59, current work.
-- V4.5: copyable/selectable diagnostics with per-version API telemetry separation, code 60, current work.
-- V4.6: provider-parity diagnostics, manual self-diagnostics, accurate completion timestamps and Russian-only visible AI output, code 61, current work.
-- V4.7: DeepSeek owns both former Gemini AI trading roles; Gemini becomes manual-only second opinion, code 62, current work.
-- V4.8: two-minute primary DeepSeek cadence, independent high-reasoning trade verification, confirmed intrabar entry and a $0.50 daily safety ceiling, code 63, current work.
-- V4.9: fresh/slipped paper execution, bounded independent entry reminders, post-buy alert suppression with uninterrupted virtual competition, local peak protection, faster DeepSeek position supervision and quota-aware Gemini position/news supervision, code 64, current work.
-- V4.10: selectable 1m/5m/15m/30m/1h display chart, 15-second live edge, one-time automatic 1m selection after `Я купил`, and maximum provider-resource priority for Serge's open position, code 65, current work. StrategyV2 remains on closed 30-minute candles.
-- V4.11: profit-adaptive 3m Flash / 1m Pro position supervision, max reasoning from +4% or danger, richer PUMP/BTC micro-flow and 20-level book evidence, and a detailed position-support card, code 66, current work.
-- V4.12: the four-account comparison adds a display-only live 30-minute edge and uses the fresh visible price so a Serge BUY/SELL marker and account state appear without waiting for the next closed strategy candle, code 67, current work.
-- V4.13: large adaptive DeepSeek entry/exit scale, one-minute yellow-zone monitoring, Pro preference for confirmed green entry, separate DeepSeek preparation alerts and explicit always-on virtual exit alerts, code 68, current work.
-- V4.14: no internal DeepSeek daily cost stop, one informational ≈€5 warning, critical multi-factor overview, closer 60-bar main chart and separated win/loss connector lanes, code 69, current work.
-- V4.15: persistent robust live-market breathing, independent intrabar DeepSeek, visible proposal/verification/execution states, bounded experiment sensitivity and APP winner accompaniment, code 70, current work.
-- V4.16: internal Pump.fun migrations/BOOST, volume, revenue, buyback/burn context; verified 50-MiB DeepSeek outcome memory; clearer short/long Russian scenarios and conflict-aware Pro escalation, code 71, current work.
-- V4.17: 7/8/9/10 DeepSeek entry steps, attributed trade reasons, fixed Mon/Tue/Thu/Fri 06:15–23:00 ordinary ringing, silent off-hours messages, round-the-clock urgent Serge exits and selectable alarm sound, code 72, current work.
-- V4.18: local-only intermediate checkpoint, never built or released, code 73.
-- V4.19: V4.18 stabilization plus immediate strong-rebound cancellation and two-cycle moderate-recovery hysteresis for stale EXIT alarms, code 74, current work.
-- V4.20: local-only APP-led checkpoint, never built or released, code 75.
-- V4.21: dual APP/DeepSeek authority with two-cycle independent AI confirmation and a calmer 30-minute experiment regime, code 76, current work.
-- V4.22: reliable ringing with separate executed-trade delivery, persistent workday/daily/24-hour modes and four participant-channel tests, code 77, current work.
-- V5.0: causal three-system paper research, analytical candidates, master alert switch default OFF and fresh V5 notification channels, code 78, current work.
-- V5.1: Bitpanda Fusion read-only market evidence, separate DeepSig Fusion paper account and sanitized unified four-agent log, code 79, current work.
-- V5.1.1: five simultaneously visible comparison charts without nested vertical scrolling, code 80, current work.
-- V5.2: one-minute DeepSig Pro priority supervision for an open FusionSim position, code 81, completed.
-- V5.3: detailed personal-position adviser with BTC/PUMP regime analysis, code 82, completed.
-- V5.4: always-visible graphical buyer-breath lifecycle and three-month empirical ranges, code 83, completed.
-- V5.5: integrated critical overview with adaptive buyer-breath time arc and no duplicate screen, code 84.
-- V5.6: action-first DeepSig card, isolated cycle stages, V4 archive and append-only V4→V5+ performance ledger, code 85, current work.
-- V5.7: continuous 15m/30m/1h/3h/6h flow map, 30-day entry-blocker audit and anonymous capital-mechanism proxy, code 86.
-- V5.8: human-readable 5m/15m/30m/60m flow clock, anonymous large-taker/metaorder fingerprint and isolated FusionSim flow strategy, code 87, current work. FusionSim BUY requires positive instant/5m/15m/30m flow; EXIT requires negative instant/5m/15m/20m flow while 30m may remain positive. Preserve every V5 preference name, V4 archive, SQLite ledger and breathing CSV across all compatible upgrades; no release may silently start a new research epoch. Public CEX flow must never be presented as a known person, firm or country.
-- V5.9: FusionSim reads the exact retrospective instant/5m/15m/20m/30m values rendered by the upper critical-overview bars, code 88. The lower exponentially-decayed flow clock is diagnostic only and cannot execute Fusion trades. Storage names, research epoch, package id and compatible signing line remain unchanged.
-- V5.27: canonical checked-in source and a common strict PM2/PM3 entry-quality gate, code 107. Its synchronized pair coordinator was rejected because it forced an exited account to wait for the other.
-- V5.28: PM2 and PM3 retain the same strict entry eligibility but own separate persisted confirmation, cooldown, execution and re-entry state, code 108. Never reintroduce cross-account waiting: either flat account may re-enter while the other still holds a position. Preserve both existing portfolio/stability stores and all history.
-- V5.29: add independent Retest and Safe Pump stores without resetting PM2/PM3. Retest changes entry only; Safe combines stricter local flow with causal APP evidence and targets +1.15% NET. All four Pump accounts plus Fusion must be recorded in the durable ledger/export. Virtual Pump/Fusion positions must not force or accelerate paid DeepSeek; preserve Pro escalation for Serge/manual-position danger and genuinely critical analysis.
-- V5.30: the paper monitor is always-on from MainActivity and has no user STOP button. Opening the app repairs a prior stopped flag without resetting accounts. Manual `ПРОВЕРИТЬ` forces timing only, never Pro by itself. Raw diagnostic history rolls for 30 days, export never clears it, duplicate heartbeats are compacted, while trades/errors and the append-only performance ledger remain durable.
-- V5.30 PM2/PM3 entry must fail closed on a stale/missing real trade tape or weak capital participation. Preserve their independent positions and exits, but require positive 15m/30m flow plus the adaptive five-minute notional/acceleration/buy-side capital gate; never treat buy percentage alone as deployable capital.
-- V5.31 removes broad turnover as an entry confirmation. PM2/PM3 and Fusion require a repeated large-BUY fingerprint, supportive top-20 book and later executable-ask price acceptance; PM2/PM3 confirmation lasts 90 seconds. Retest/Safe remain independent and must not be loosened because they correctly rejected the V5.30 losing episodes. Entry audits retain exact capital/book/ask evidence for later calibration.
-- V5.32 adds a shadow-only seller-exhaustion/liquidity-release observer. It compares 60-second aggressive BUY/SELL, top-20 bid/ask and price response against a causal 60–120-second baseline, requires 45 seconds of persistence, records false releases and retains 30 days of evidence. Its output is display/logging evidence only and must not be passed into any participant entry/exit policy until logged outcomes justify a separately reviewed promotion.
-- V5.33 replaces the V5.31 absolute-capital lock for the four Pump Machine entry profiles with a relative adaptive breath score: executed-flow imbalance, cross-horizon acceleration, book imbalance, activity, price efficiency, phase and absorption. PM2 is responsive with 15-second confirmation; PM3 is stricter with 30 seconds; stores/cooldowns remain independent. Do not restore a fixed USDT minimum or mandatory large-BUY fingerprint without outcome evidence. Missing/stale tape, missing execution ask, dangerous spread, extreme absorption, seller takeover and late chasing remain hard vetoes. The V5.32 liquidity-release observer stays shadow-only. Full 30-day export remains.
-- V5.34 adds one shared DeepSeek Flash pre-entry coach after—not instead of—each independent local Pump Machine BUY candidate. It classifies the last-five-minute snapshot as starting/continuing/late/noise and never submits a real order. The AI cannot override hard local vetoes. Its eight persisted soft controls are bounded; at most one small automatic step per 24 hours is allowed after at least six closed paper trades and confidence >=85. Preserve the coach/tuning preferences.
-- V5.35 caps the pre-entry coach at six requests per UTC day and 15 minutes apart, reuses a compatible verdict for up to ten minutes, disables its automatic paid repair request and backs off 30 minutes after ordinary errors or six hours after insufficient balance. Routine primary DeepSeek is capped at 24 calls per UTC day, normally hourly, and no longer runs merely because MainActivity opened; an explicit manual check and critical personal-position paths remain available. The support export covers 24 hours, uses minified valid JSON and splits into ordered files below 1.9 MB while leaving the 30-day archive untouched.
-- V5.36 turns every DeepSeek soft-tuning proposal into one guarded paper trial. Preserve the exact previous tuning, allow only one active trial, require at least eight prior closed paper trades, judge the candidate on post-change NET PnL after fees, and auto-rollback on severe or unprofitable results. DeepSeek cannot tune hard vetoes, exits, real orders or stored portfolios.
+Если одна функциональная область требует третьего последовательного исправления или новый fix исправляет последствия предыдущего fix, не добавляй автоматически следующую заплатку. Сначала проверь исходную предпосылку, уровень размещения логики, дублирование состояния, конфликт алгоритмов и необходимость небольшого рефакторинга.
 
-## Accumulated next-release backlog
+## Жёсткие инварианты
 
-- Record Serge's small, non-urgent corrections here as soon as they are agreed, instead of relying on chat memory or producing a separate APK for every minor issue.
-- Before scoping the next release, review every open item in this section, implement the compatible items together, add focused verification, and then remove or mark each completed item while recording the result in `DEVELOPMENT_LOG.md`.
-- Completed in V4.16 — internal Pump.fun fundamentals, 50-MiB verified outcome memory, statistical promotion/demotion, existing-screen capacity choice, concise Russian short/long scenarios and conflict-aware Pro escalation. These layers remain non-authoritative context and preserve all existing safety/trade-verification boundaries.
-- Completed in V4.6 — diagnostic timestamp: `lastAttempt` continues to represent request start, while `lastSuccess` is persisted and displayed as the completion/acceptance time of the successful response. This remains display/telemetry accuracy only and does not change DeepSeek scheduling or trading logic.
-- Do not create a standalone release solely for the timestamp correction; include it with the next suitable accumulated release unless it is found to affect runtime correctness.
-- Completed in V4.6 — provider-diagnostics parity: Gemini has the same practical diagnostics UX that DeepSeek has, including equivalent log/status panels and copy/share actions. DeepSeek and Gemini remain separate providers in the report so their requests, responses, timing, models, errors, retries/repairs, quota state and current-version totals can be audited independently.
-- The manual provider check for both DeepSeek and Gemini must run an expanded self-diagnostic, not merely a connectivity ping. It must verify the provider/API path, selected model and response parsing, current market-data freshness/availability, relevant scheduler/circuit state, telemetry persistence and the provider's other implemented runtime prerequisites. Record a clear PASS/WARN/FAIL result for every check and append the run to the provider log.
-- The copied redacted report must be sufficiently complete for another AI or developer to audit observable behaviour: include sanitized input/context summaries, executed stages, accepted action/output and reason/evidence fields, timestamps/durations, token usage, finish state, errors and recovery attempts, plus the self-diagnostic results. Do not claim or attempt to expose a model's private chain-of-thought; use observable decision traces and concise model-supplied reasons instead. Continue excluding API keys, authorization data and full sensitive request payloads.
-- Implement the provider-diagnostics parity and expanded self-diagnostic together in a future accumulated release. Do not change either provider's trading authority, strategy thresholds or paid automatic cadence merely to add diagnostics, and do not create a standalone APK until the accumulated release is deliberately scoped.
-- V4.6 completed the accumulated items above after unit tests, Android compilation, direct APK inspection and compatible final signing passed.
-- Permanent language invariant: all user-visible AI conclusions, reasons, evidence, risks, errors and copied diagnostics must be in Russian. DeepSeek/Gemini prompts must demand Russian, runtime validation must reject Han-script output, and persisted legacy text containing Han characters must be hidden behind a Russian explanatory placeholder rather than displayed.
+- Проект сейчас **paper-only / research-only**. Не добавлять реальные биржевые ордера как побочный эффект другой задачи.
+- Bitpanda Fusion используется как read-only источник исполнимых bid/ask/стакана; не добавлять order/cancel/transfer без отдельного явного решения владельца.
+- Не считать улучшением само по себе больше BUY, больше сигналов или хороший короткий отрезок.
+- Не подгонять параметры под одну сделку или один режим рынка.
+- Не давать AI обходить hard veto по свежести данных, исполнимой цене, опасному спреду, поздней погоне, seller takeover и другим зафиксированным защитам.
+- Не очищать историю, счета, настройки, ключи и накопленное состояние без явной необходимости и плана миграции.
+- Сохранять `applicationId = com.example.pumppaperbot.v8` для совместимой линии обновлений.
+- Не путать CI intermediate APK, совместимо подписанный APK и опубликованный GitHub Release.
+- Не удалять установленное приложение ради обновления: это может уничтожить локальное состояние.
 
-## Verification before delivery
+## Главное правило
 
-- Run unit tests and assemble the APK.
-- Inspect package id, version name/code and launchable activity with Android build tools.
-- Verify APK signature schemes and compare the final certificate fingerprint with the compatible line.
-- Confirm notification permission remains requested on Android 13+ and that notification channels use alarm sound/high importance.
-- Check the final APK directly, not merely a successful CI badge.
+**История чата НЕ является источником истины проекта. Репозиторий и `docs/project-memory/` являются долговременной памятью проекта.**
+
+Project-memory должна оставаться короткой, актуальной и проверяемой. Не копируй туда исходники и огромные логи.
