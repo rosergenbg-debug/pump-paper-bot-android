@@ -10,11 +10,15 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.abs
 
 /**
- * Eight deliberately narrow, persisted V5.34 entry regulators.
+ * Eight deliberately narrow, persisted V5.34+ entry regulators.
  *
  * They can shape only soft candidate/confirmation behaviour. They cannot disable stale-data,
  * spread, seller-takeover, late-phase or execution-price safety vetoes. Automatic adjustment is
  * limited to one small step per UTC day and requires enough completed paper trades.
+ *
+ * V5.37 keeps the paid request budget shared, but a cached/PENDING verdict belongs only to the
+ * Pump profile that requested it. A profile-specific AI decision must never become another
+ * strategy's trading authority.
  */
 data class DeepSeekEntryTuning(
     val pm2ScoreOffset: Int = 0,
@@ -77,6 +81,7 @@ data class DeepSeekEntryCoachState(
     val stage: String = "UNKNOWN",
     val confidence: Int = 0,
     val reason: String = "DeepSeek ещё не проверял локальный кандидат.",
+    val candidateProfile: String = "UNKNOWN",
     val requestedAt: Long = 0L,
     val completedAt: Long = 0L,
     val expiresAt: Long = 0L,
@@ -92,6 +97,7 @@ data class DeepSeekEntryCoachState(
     fun toJson() = JSONObject()
         .put("status", status).put("verdict", verdict).put("stage", stage)
         .put("confidence", confidence).put("reason", reason)
+        .put("candidateProfile", candidateProfile)
         .put("requestedAt", requestedAt).put("completedAt", completedAt).put("expiresAt", expiresAt)
         .put("referencePrice", referencePrice).put("referenceInstant", referenceInstant)
         .put("referencePhase", referencePhase).put("proposalKey", proposalKey)
@@ -105,6 +111,7 @@ data class DeepSeekEntryCoachState(
             stage = json.optString("stage", "UNKNOWN"),
             confidence = json.optInt("confidence").coerceIn(0, 100),
             reason = RussianOutputPolicy.visible(json.optString("reason")).take(500),
+            candidateProfile = json.optString("candidateProfile", "UNKNOWN"),
             requestedAt = json.optLong("requestedAt"), completedAt = json.optLong("completedAt"),
             expiresAt = json.optLong("expiresAt"), referencePrice = json.optDouble("referencePrice"),
             referenceInstant = json.optInt("referenceInstant"), referencePhase = json.optString("referencePhase"),
@@ -165,6 +172,8 @@ object DeepSeekEntryCoachStore {
             .put("minimumIntervalMinutes", DeepSeekEntryCoach.MIN_REQUEST_INTERVAL / 60_000L)
             .put("compatibleVerdictMinutes", DeepSeekEntryCoachPolicy.VERDICT_TTL / 60_000L)
             .put("automaticRepairRequest", false))
+        .put("verdictScope", "PUMP_PROFILE_SCOPED")
+        .put("requestBudgetScope", "SHARED_PROVIDER_RESOURCE")
         .put("automaticAuthority", "ONE_BOUNDED_SOFT_STEP_PER_UTC_DAY_WITH_TRIAL_AND_ROLLBACK")
         .put("adaptiveTrial", DeepSeekTuningTrialStore.state(context).toJson())
         .put("canOverrideHardVeto", false)
@@ -251,9 +260,18 @@ object DeepSeekEntryCoachPolicy {
             localScore >= localThreshold + extra
     }
 
-    fun compatible(state: DeepSeekEntryCoachState, observation: SharedFusionEntryObservation, now: Long): Boolean {
+    fun sameProfile(state: DeepSeekEntryCoachState, mode: PumpProfitModeV526): Boolean =
+        state.candidateProfile == mode.name
+
+    fun compatible(
+        state: DeepSeekEntryCoachState,
+        mode: PumpProfitModeV526,
+        observation: SharedFusionEntryObservation,
+        now: Long
+    ): Boolean {
         val frame = observation.frame ?: return false
         val breath = observation.breathing?.buyerBreath ?: return false
+        if (!sameProfile(state, mode)) return false
         if (state.completedAt <= 0L || state.expiresAt < now) return false
         if (state.referencePhase != breath.phase.name) return false
         if (abs(frame.instant - state.referenceInstant) > 18) return false
@@ -292,7 +310,8 @@ object DeepSeekEntryCoach {
             else "AI WAIT: ключ DeepSeek не введён и усиленный локальный резерв не подтверждён"
         )
         val state = DeepSeekEntryCoachStore.state(context)
-        if (DeepSeekEntryCoachPolicy.compatible(state, observation, now)) {
+        val sameProfile = DeepSeekEntryCoachPolicy.sameProfile(state, mode)
+        if (DeepSeekEntryCoachPolicy.compatible(state, mode, observation, now)) {
             return when (state.verdict) {
                 "APPROVE" -> {
                     val reliable = state.confidence >= 60 && state.stage in setOf("STARTING", "CONTINUING")
@@ -319,10 +338,12 @@ object DeepSeekEntryCoach {
                 )
             }
         }
-        if (state.status == "PENDING" && now - state.requestedAt < DeepSeekEntryCoachPolicy.PENDING_TTL) {
-            return DeepSeekEntryCoachGate(false, "AI WAIT: DeepSeek сейчас проверяет последние 5 минут")
+        if (sameProfile && state.status == "PENDING" &&
+            now - state.requestedAt < DeepSeekEntryCoachPolicy.PENDING_TTL) {
+            return DeepSeekEntryCoachGate(false, "AI WAIT: DeepSeek сейчас проверяет этот Pump-профиль")
         }
-        if (state.retryAfterAt > now) {
+        val providerPaused = state.status == "PAUSED_BALANCE"
+        if ((providerPaused || sameProfile) && state.retryAfterAt > now) {
             val minutes = ((state.retryAfterAt - now + 59_999L) / 60_000L).coerceAtLeast(1L)
             return DeepSeekEntryCoachGate(
                 strict,
@@ -337,7 +358,12 @@ object DeepSeekEntryCoach {
             val pending = state.copy(
                 status = "PENDING", verdict = "NONE", confidence = 0,
                 reason = "Проверяем, начинается ли движение или локальный импульс уже выдохся.",
-                requestedAt = now, expiresAt = 0L, retryAfterAt = 0L, error = ""
+                candidateProfile = mode.name,
+                requestedAt = now, completedAt = 0L, expiresAt = 0L,
+                referencePrice = observation.executionAsk,
+                referenceInstant = observation.frame?.instant ?: 0,
+                referencePhase = observation.breathing?.buyerBreath?.phase?.name.orEmpty(),
+                retryAfterAt = 0L, error = ""
             )
             DeepSeekEntryCoachStore.saveState(context, pending)
             executor.execute {
@@ -347,13 +373,13 @@ object DeepSeekEntryCoach {
                     running.set(false)
                 }
             }
-            return DeepSeekEntryCoachGate(false, "AI WAIT: запущена одна короткая проверка последних 5 минут")
+            return DeepSeekEntryCoachGate(false, "AI WAIT: запущена короткая проверка профиля ${mode.name}")
         }
         if (acquired) running.set(false)
         return DeepSeekEntryCoachGate(
             strict,
-            if (strict) "Лимит/пауза DeepSeek: разрешён усиленный ранний локальный резерв"
-            else "AI WAIT: свежего решения нет; DeepSeek экономит запросы, локальный резерв недостаточно сильный"
+            if (strict) "Лимит/занятость DeepSeek: разрешён усиленный ранний локальный резерв"
+            else "AI WAIT: свежего решения для ${mode.name} нет; общий DeepSeek-ресурс занят/экономит запросы"
         )
     }
 
@@ -370,9 +396,12 @@ object DeepSeekEntryCoach {
         val frame = requestFrame(context, mode, observation, localScore, localThreshold)
         ApiUsageLogStore.record(context, ApiUsageEvent(
             provider = "DEEPSEEK", circuit = CIRCUIT, model = model, status = "START", at = requestedAt,
-            detail = "локальный кандидат $localScore/$localThreshold; анализ последних 5 минут"
+            detail = "${mode.name}: локальный кандидат $localScore/$localThreshold; анализ последних 5 минут"
         ))
-        UnifiedResearchLog.record(context, "DEEPSEEK_ENTRY_COACH", "START", "кандидат $localScore/$localThreshold", requestedAt)
+        UnifiedResearchLog.record(
+            context, "DEEPSEEK_ENTRY_COACH", "START",
+            "${mode.name}: кандидат $localScore/$localThreshold", requestedAt
+        )
         val started = System.currentTimeMillis()
         runCatching {
             DeepSeekStructuredClient(http).request(
@@ -426,6 +455,7 @@ object DeepSeekEntryCoach {
             val phase = observation.breathing?.buyerBreath?.phase?.name.orEmpty()
             val state = DeepSeekEntryCoachState(
                 status = "READY", verdict = verdict, stage = stage, confidence = confidence, reason = reason,
+                candidateProfile = mode.name,
                 requestedAt = requestedAt, completedAt = now, expiresAt = now + DeepSeekEntryCoachPolicy.VERDICT_TTL,
                 referencePrice = observation.executionAsk, referenceInstant = observation.frame?.instant ?: micro.score,
                 referencePhase = phase, proposalKey = proposalKey, proposalDelta = proposalDelta,
@@ -436,11 +466,11 @@ object DeepSeekEntryCoach {
                 provider = "DEEPSEEK", circuit = CIRCUIT, model = model, status = "OK", at = now,
                 durationMillis = now - started, promptTokens = result.promptTokens,
                 outputTokens = result.completionTokens,
-                detail = "$verdict $confidence/100 • $stage • $reason".take(500)
+                detail = "${mode.name} • $verdict $confidence/100 • $stage • $reason".take(500)
             ))
             UnifiedResearchLog.record(
                 context, "DEEPSEEK_ENTRY_COACH", verdict,
-                "$confidence/100 • $stage • $reason • tuningApplied=${tuningResult.applied}", now
+                "${mode.name} • $confidence/100 • $stage • $reason • tuningApplied=${tuningResult.applied}", now
             )
         }, onFailure = { error ->
             val now = System.currentTimeMillis()
@@ -450,20 +480,20 @@ object DeepSeekEntryCoach {
             val retryAfterAt = now + DeepSeekEntryCoachPolicy.errorBackoff(detail)
             DeepSeekEntryCoachStore.saveState(context, DeepSeekEntryCoachStore.state(context).copy(
                 status = if (balanceError) "PAUSED_BALANCE" else "ERROR",
-                verdict = "NONE", completedAt = now, expiresAt = 0L,
+                verdict = "NONE", candidateProfile = mode.name, completedAt = now, expiresAt = 0L,
                 retryAfterAt = retryAfterAt, error = detail,
                 reason = if (balanceError) {
                     "DeepSeek остановлен на 6 часов: API сообщил о недостатке средств. Локальный резерв продолжает работать."
                 } else {
-                    "DeepSeek-проверка не завершилась; повтор отложен на 30 минут, действует усиленный локальный резерв."
+                    "DeepSeek-проверка не завершилась; повтор профиля отложен на 30 минут, действует усиленный локальный резерв."
                 }
             ))
             ApiUsageLogStore.record(context, ApiUsageEvent(
                 provider = "DEEPSEEK", circuit = CIRCUIT, model = model, status = "ERROR", at = now,
                 durationMillis = now - started, promptTokens = structured?.promptTokens ?: 0,
-                outputTokens = structured?.completionTokens ?: 0, detail = detail
+                outputTokens = structured?.completionTokens ?: 0, detail = "${mode.name}: $detail"
             ))
-            UnifiedResearchLog.record(context, "DEEPSEEK_ENTRY_COACH", "ERROR", detail, now)
+            UnifiedResearchLog.record(context, "DEEPSEEK_ENTRY_COACH", "ERROR", "${mode.name}: $detail", now)
         })
     }
 
