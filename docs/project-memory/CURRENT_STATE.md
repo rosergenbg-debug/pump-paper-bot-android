@@ -6,83 +6,80 @@
 
 ## VERSION / BRANCH
 
-- Canonical branch: `main`.
-- Current source version: **V5.36**, `versionCode 116`.
-- `applicationId`: `com.example.pumppaperbot.v8`.
-- Source baseline до Guardian setup: commit `3975dd5fb9c965a9a8b9306c4c942df940842acf` (`Record canonical V5.36 integration`).
-- Последний CI для этого baseline: GitHub Actions run #386 — **success**; workflow выполняет `testDebugUnitTest`, `lintDebug`, `assembleDebug`, package/activity/APK checks.
+- Canonical branch: `main` пока содержит verified **V5.36 / code116** + Project Guardian.
+- Candidate branch: `chatgpt/v5-37-scalp-independence`.
+- Candidate source version: **V5.37**, `versionCode 117`.
+- `applicationId`: `com.example.pumppaperbot.v8` — сохранён для совместимого update/data continuity.
+- Guardian V5.36 CI run #387: **success**.
+- V5.37 code/build validation run #388: **success** — `testDebugUnitTest`, `lintDebug`, `assembleDebug`, APK package/version/activity/signature/ZIP checks и artifact upload прошли.
+- Pull request: **#84**, merge pending final PR-head checks.
 
 ## BUILD / RELEASE STATUS
 
-- **Verified V5.36 source/build:** да.
-- `DEVELOPMENT_LOG.md` фиксирует совместимо подписанный `PumpSignal-V5.36-Compatible-FINAL.apk`, SHA-256 `819385353189bfec4b04e48e8a33ba65f63f94a302ffaa2df4a8e8a96789c96f`, certificate SHA-256 `1f778c4291c9d11c5f89f4de8773bda35a0125031adc05785daee23f27dc7823`.
-- Этот V5.36 APK был сохранён вне GitHub Release как `/Биткоин/PumpSignal-V5.36-Compatible-FINAL.apk`.
-- **Latest published GitHub Release:** V4.9. Git tag/Release `v5.36` в GitHub сейчас отсутствует.
+- V5.37 source/build уже прошёл полный CI на кодовой версии изменения.
+- Workflow artifact V5.37 называется `PumpSignal-V5.37-Scalp-Independence-Intermediate.apk`; это intermediate/debug artifact, не автоматически install-compatible final APK.
+- Совместимый certificate исторической линии: SHA-256 `1f778c4291c9d11c5f89f4de8773bda35a0125031adc05785daee23f27dc7823`.
+- Latest published GitHub Release исторически отстаёт от source/build state.
 - Фактически установленная сейчас на телефоне владельца версия: `UNKNOWN`.
-
-Поэтому не использовать выражение «последняя стабильная версия» без уточнения: source/build, compatible APK или published Release.
 
 ## WHAT WORKS
 
 - Android foreground monitoring и автоматическое продолжение после закрытия UI.
-- Binance market sync + short-horizon local evidence.
+- Binance/public market sync + short-horizon local evidence.
 - Bitpanda Fusion read-only bid/ask/order-book с Keystore key storage.
-- Четыре независимых Pump Machine paper accounts.
-- Отдельный Fusion paper account.
-- APP, DeepSigX и ручной SERGE account/history.
-- 8-account Competition UI с отдельными markers/history.
-- SQLite append-only `ResearchPerformanceLedger` и V4→V5 archive capture.
-- V5.33 adaptive breath entry scoring + hard veto.
-- V5.34/5.35 bounded DeepSeek pre-entry coach.
+- Четыре раздельных Pump Machine paper portfolios/state/cooldowns.
+- Fusion, APP, DeepSigX и SERGE отдельными paper/reference accounts.
+- 8-account Competition UI.
+- SQLite append-only `ResearchPerformanceLedger` и V4→V5 history capture.
+- V5.33 adaptive breath entry + hard veto.
+- V5.34/5.35 bounded DeepSeek pre-entry coach/cost limits.
 - V5.36 guarded one-change tuning trial with rollback.
-- V5.32 liquidity-release observer остаётся shadow-only.
-- Master alerts могут быть выключены без остановки research/paper journals.
+- V5.32 liquidity-release observer shadow-only.
+
+## V5.37 MATERIAL CHANGE
+
+Архитектурный аудит после Guardian выявил скрытую взаимную зависимость стратегий:
+
+1. В V5.36 fast ~15s path всех четырёх PM был привязан к `PUMP_3` candidate.
+2. Единственный DeepSeek cached/PENDING entry state не содержал profile identity и мог влиять на другой PM-профиль.
+
+V5.37 исправляет именно эти причины:
+
+- `PumpFastCandidatePolicyV537` считает fast eligibility отдельно для PUMP_2/PUMP_3/RETEST/SAFE;
+- каждый PM fast-sync зависит от собственного candidate/position;
+- DeepSeek cached verdict/PENDING/ordinary retry state теперь profile-scoped;
+- общий DeepSeek paid request budget/running lock остаётся общим provider resource;
+- старый persisted coach state без profile читается как `UNKNOWN` и не переиспользуется как чужой verdict;
+- добавлены targeted regression tests;
+- TP/SL и основные entry thresholds **не менялись**.
 
 ## WORKS PARTIALLY / NEEDS SYSTEM VALIDATION
 
-- Глобальная прибыльность/expectancy текущего V5.36 набора стратегий: **не доказана**.
-- Полное соответствие live Pump Machine decision path и replay/walk-forward проверки: `NEEDS_VERIFICATION`.
-- Полная migration coverage всех старых compatible installs до V5.36: `NEEDS_VERIFICATION`.
-- AI self-tuning имеет safety guard, но его полезность должна оцениваться на достаточном количестве новых closed NET trades; наличие механизма само по себе не доказывает улучшение.
-- Release publication process отстаёт от source/build state.
+- Глобальная прибыльность/expectancy текущего набора стратегий: **не доказана**.
+- Full live↔replay equivalence текущего 15s PM/coach path: `NEEDS_VERIFICATION`.
+- Shared DeepSeek tuning layer использует pooled outcomes и несколько общих soft regulators: допустимо как guarded learning layer, но влияние на независимость/NET требует forward evidence.
+- Полная migration coverage всех старых compatible installs: `NEEDS_VERIFICATION`.
+- Release publication/sign-compatible distribution отстают от source development.
 
-## KNOWN PROBLEMS
+## KNOWN PROBLEMS / DEBT
 
-1. **Naming drift:** UI Pump Machine 1/2 не совпадает с именами `PumpMachine2Store`/`PumpMachineStore`.
-2. **Stop text drift:** код PM2/PUMP_2 использует -1.10% NET и PM3/PUMP_3 -1.30%, но часть старых комментариев/status strings всё ещё говорит -1.5%.
-3. **Architecture layering:** старый V5 research/replay контур и новый Pump Machine/Fusion fast-flow контур сосуществуют без одного общего явно проверенного evaluation interface.
-4. **Release drift:** V5.36 source/build есть, published GitHub Release только V4.9.
-5. **Persistence complexity:** много versioned SharedPreferences/stores; неизвестный `PumpBotEngine` algorithm version приводит к reset его engine prefs.
-6. Полные фактические текущие device-ledger/log outcomes отсутствуют в GitHub: без экспорта с устройства нельзя достоверно утверждать, почему система сейчас в плюсе/минусе.
+1. Naming drift: UI PM1 = `PumpMachine2Store`/PUMP_2; UI PM2 = `PumpMachineStore`/PUMP_3.
+2. Часть старых stop strings/comments может говорить -1.5%, хотя фактические PUMP_2/PUMP_3 stops -1.10/-1.30.
+3. Research/replay baseline и более поздний fast PM/Fusion слой сосуществуют без одного полного replay interface.
+4. Persistence фрагментирован между versioned stores; все upgrade paths не доказаны.
+5. Фактические device ledger/log outcomes сейчас отсутствуют в GitHub, поэтому нельзя достоверно объяснить общий плюс/минус без экспорта.
 
 ## CURRENT MAIN PRIORITY
 
-**Остановить архитектурный дрейф и получить честный baseline эффективности V5.36 прежде, чем снова менять пороги/торговые алгоритмы.**
-
-Guardian project-memory создан именно для этого.
-
-## LAST MATERIAL CHANGES
-
-- V5.33: fixed-capital lock заменён относительным adaptive breath score; PM responsive/strict profiles снова разведены.
-- V5.34: DeepSeek Flash стал post-local-candidate coach и получил bounded soft controls.
-- V5.35: жёстко ограничены paid AI cadence/cost и облегчён support export.
-- V5.36: каждое soft-tuning предложение превращено в guarded paper trial с сохранением исходной настройки и rollback.
-- 2026-08-26: создан Project Guardian и постоянная project-memory; код торговых алгоритмов не менялся.
-
-## UNFINISHED WORK
-
-- Нет единого зафиксированного performance baseline текущего V5.36 по всем доступным closed trades/regimes.
-- Не установлена replay/live equivalence полного Pump Machine/Fusion/coach пути.
-- Не устранены naming/text inconsistencies; это пока зафиксированный долг, а не текущая задача.
-- GitHub Release V5.36 отсутствует; это отдельная release-management задача, не повод менять торговую логику.
+**Завершить merge V5.37 как исправление strategy independence/timing; затем не менять thresholds, пока не получен честный performance baseline на forward/device ledger.**
 
 ## RISKS
 
-- Следующая локальная подкрутка может оптимизировать последний убыточный эпизод и ухудшить другой режим.
-- Shared flow/AI layers могут создать скрытую корреляцию между «независимыми» стратегиями даже при раздельных portfolios; это надо измерять, а не предполагать.
-- Плохое различение class/UI naming повышает риск правки не того агента.
-- Без сохранённого before/after baseline self-tuning может быть ошибочно признан полезным по слишком маленькой выборке.
+- Fast local processing может активироваться чаще, потому что responsive PM2 больше не ждёт PM3 — это ожидаемое восстановление скальпинговой своевременности, но runtime следует наблюдать.
+- Общий DeepSeek API budget может означать, что не каждый профиль получит отдельный paid verdict; это ресурсное ограничение, а не право другого профиля блокировать сделку.
+- Shared tuning может создавать корреляцию между стратегиями; не разделять/переписывать его без evidence.
+- Любая новая подкрутка thresholds до baseline снова создаст архитектурный drift.
 
 ## NEXT REASONABLE STEP
 
-**Одна следующая задача:** провести baseline-аудит V5.36 **без изменения алгоритмов**: взять доступный 30-дневный/ledger export с устройства, разложить closed trades по каждому current account и рыночным режимам, проверить NET PnL/expectancy/drawdown/серии убытков/причины входа и сопоставить их с текущими hard/soft gates. Результат должен определить root cause убыточности до любой новой юстировки.
+После merge V5.37: **не менять торговые пороги**, а собрать device/ledger baseline и сравнить по каждому account своевременность входа, NET PnL/expectancy/drawdown/loss streak и причины BUY/EXIT. Это покажет, осталась ли проблема в распознавании, timing, AI filter или exit logic.

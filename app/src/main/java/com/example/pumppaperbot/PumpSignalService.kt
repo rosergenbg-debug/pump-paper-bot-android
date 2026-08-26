@@ -99,30 +99,27 @@ class PumpSignalService : Service() {
                 val pumpRetestFast = PumpMachineRetestStore.state(this)
                 val pumpSafeFast = PumpMachineSafeStore.state(this)
                 val entryObservationFast = SharedFusionEntryObservationStore.snapshot(this, now)
-                val commonFastCandidate = PumpProfitEngineV526.isFastCandidate(
-                    PumpProfitModeV526.PUMP_3,
-                    entryObservationFast
-                )
+                val fastCandidates = PumpFastCandidatePolicyV537.evaluate(entryObservationFast)
                 if (pumpMachineFast.inPosition || pumpMachine2Fast.inPosition || pumpRetestFast.inPosition ||
-                    pumpSafeFast.inPosition || commonFastCandidate) {
+                    pumpSafeFast.inPosition || fastCandidates.any) {
                     val venue = BitpandaFusionStore.state(this)
                     if (!venue.fresh(now) || now - venue.lastSuccess >= 15_000L) {
                         BitpandaFusionClient().sync(this, force = true)
                     }
                     val fastNow = System.currentTimeMillis()
-                    if (pumpMachineFast.inPosition || commonFastCandidate) {
+                    if (pumpMachineFast.inPosition || fastCandidates.pump3) {
                         runCatching { PumpMachineStore.sync(this, fastNow) }
                             .onFailure { recordIndependentPumpFailure("PUMP_MACHINE_FAST", it) }
                     }
-                    if (pumpMachine2Fast.inPosition || commonFastCandidate) {
+                    if (pumpMachine2Fast.inPosition || fastCandidates.pump2) {
                         runCatching { PumpMachine2Store.sync(this, fastNow) }
                             .onFailure { recordIndependentPumpFailure("PUMP_MACHINE_2_FAST", it) }
                     }
-                    if (pumpRetestFast.inPosition || commonFastCandidate) {
+                    if (pumpRetestFast.inPosition || fastCandidates.retest) {
                         runCatching { PumpMachineRetestStore.sync(this, fastNow) }
                             .onFailure { recordIndependentPumpFailure("PUMP_MACHINE_RETEST_FAST", it) }
                     }
-                    if (pumpSafeFast.inPosition || commonFastCandidate) {
+                    if (pumpSafeFast.inPosition || fastCandidates.safe) {
                         runCatching { PumpMachineSafeStore.sync(this, fastNow) }
                             .onFailure { recordIndependentPumpFailure("PUMP_MACHINE_SAFE_FAST", it) }
                     }

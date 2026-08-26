@@ -151,3 +151,26 @@ AI не может tuning hard veto, exits, real orders или stored portfolios
 
 **Consequences**  
 Перед существенной задачей новый агент обязан восстановить контекст по project-memory; после задачи обновлять её. Фундаментальное новое решение владельца должно быть записано в `MASTER_SPEC.md`/`DECISIONS.md`.
+
+---
+
+## 2026-08-26 — V5.37: scalping-first и независимость profile-specific решений
+
+**Decision**  
+Уточнить смысл PUMP как **скальпингового** проекта: название не ограничивает систему только классическими pump-событиями. Общие market observations могут использоваться всеми стратегиями, но fast-candidate eligibility, confirmation/cooldown, portfolio и cached/PENDING DeepSeek entry verdict относятся к конкретному Pump-профилю. Общий лимит DeepSeek остаётся общим как ограниченный внешний ресурс.
+
+**Reason**  
+Аудит V5.36 выявил две реальные скрытые связи: 15-секундный fast-path для всех четырёх PM запускался по кандидату `PUMP_3`, а единый cached/PENDING `DeepSeekEntryCoachState` не содержал profile identity, хотя запрос к модели содержал `candidate_profile`. Responsive `PUMP_2` мог терять своевременность или зависеть от AI-состояния другого профиля.
+
+**Alternatives considered**  
+1. Оставить V5.36 и просто ослабить thresholds.  
+2. Полностью разнести market data и DeepSeek API на четыре независимых копии.  
+3. Создать новый Android package/app с чистым состоянием.
+
+**Rejected because**  
+1. Порог не устраняет архитектурную причину.  
+2. Четыре копии market/API создают лишний расход, гонки и не дают дополнительной независимости решений.  
+3. Новый package нарушает data/update invariant и потеряет continuity.
+
+**Consequences**  
+V5.37 остаётся совместимым обновлением `com.example.pumppaperbot.v8`. TP/SL и основные entry thresholds в этой задаче не меняются. Shared tuning layer остаётся ограниченным общим soft-learning слоем и должен оцениваться по forward outcomes; его полезность пока `NEEDS_VERIFICATION`. Реальные ордера остаются отдельным будущим решением.

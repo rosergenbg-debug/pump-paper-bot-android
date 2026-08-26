@@ -11,27 +11,52 @@
 После многих version-specific fixes знания о цели, архитектуре, текущем состоянии и исторических причинах решений были смешаны между огромным `AGENTS.md`, `DEVELOPMENT_LOG.md`, README, кодом и чатами. Это создавало архитектурный дрейф и риск «fix поверх fix».
 
 **Change**  
-Созданы:
-
-- `ИНСТРУКЦИЯ_1.md`;
-- новый короткий `AGENTS.md`;
-- `docs/project-memory/MASTER_SPEC.md`;
-- `docs/project-memory/ARCHITECTURE.md`;
-- `docs/project-memory/CURRENT_STATE.md`;
-- `docs/project-memory/DECISIONS.md`;
-- `docs/project-memory/REGRESSION_MATRIX.md`;
-- `docs/project-memory/AI_CHANGELOG.md`.
-
-Торговые алгоритмы, thresholds, stores и UI не изменялись.
+Созданы `ИНСТРУКЦИЯ_1.md`, новый короткий `AGENTS.md` и шесть файлов `docs/project-memory/*`. Торговые алгоритмы, thresholds, stores и UI не изменялись.
 
 **Affected components**  
 Repository governance/documentation only.
 
 **Regression risk**  
-Основной риск — неверно зафиксировать устаревшее историческое правило как текущую архитектуру. Поэтому version-specific старые материалы использованы как evidence, а current code/CI/main получили приоритет при описании фактической реализации. Неизвестное помечено `UNKNOWN`/`NEEDS_VERIFICATION`.
+Основной риск — неверно зафиксировать устаревшее историческое правило как текущую архитектуру. Неизвестное помечено `UNKNOWN`/`NEEDS_VERIFICATION`.
 
 **Verification**  
-Перед созданием памяти сверены структура repo, current `main`, V5.36 build config, recent commits/CI, V5 research audit, service/data flow, Pump Machine 2/3/Retest/Safe, Fusion, Competition UI, ResearchMode, Bitpanda read-only client, DeepSeek coach/tuning guard, performance ledger и существующий набор unit tests. Документы сверены между собой на названия счетов, fees, paper-only contract, current version и known uncertainties.
+Сверены repo/current main, V5.36 build/CI, research audit, service/data flow, четыре Pump Machine, Fusion, UI, ResearchMode, Bitpanda read-only, DeepSeek tuning guard, ledger и tests. Guardian CI run #387 завершился success.
 
 **Project impact**  
-Системное улучшение: следующие изменения должны оцениваться относительно `MASTER_SPEC`, существующих решений и regression matrix, а не только последнего наблюдаемого симптома.
+Системное улучшение: следующие изменения оцениваются относительно `MASTER_SPEC`, решений и regression matrix, а не только последнего симптома.
+
+---
+
+## 2026-08-26 / V5.37 — Scalp timing and Pump profile independence
+
+**Task**  
+Проверить V5.36 после Project Guardian относительно реальной цели скальпинга и найти скрытые перекрёстные блокировки между автономными paper-ботами.
+
+**Root cause**  
+Обнаружены две системные связи V5.36:
+
+1. `PumpSignalService` использовал только `PUMP_3` как `commonFastCandidate`, поэтому responsive `PUMP_2` и другие профили могли не получить быстрый ~15s sync, пока строгий PUMP_3 не становился кандидатом.
+2. `DeepSeekEntryCoachState` не хранил profile identity. Cached verdict и `PENDING` могли переиспользоваться/блокировать другой PM-профиль, хотя в DeepSeek request уже передавался конкретный `candidate_profile`.
+
+Это проблема архитектуры независимых экспериментов и timing, а не недостаток очередного threshold.
+
+**Change**  
+- Добавлен `PumpFastCandidatePolicyV537`: один общий market observation, но отдельный fast-candidate для PUMP_2/PUMP_3/RETEST/SAFE.
+- Fast sync каждого PM теперь зависит только от его собственной позиции/кандидата.
+- `DeepSeekEntryCoachState` получил `candidateProfile` с безопасной миграцией старого persisted state в `UNKNOWN`.
+- Cached/PENDING/ordinary retry AI state стал profile-scoped; provider balance pause и request budget остаются shared resource.
+- Добавлены regression tests для PM2-fast-vs-PM3 и DeepSeek profile scope.
+- Версия повышена до V5.37/code117, package id сохранён.
+- TP/SL, основные entry thresholds, paper/live policy и portfolios не менялись.
+
+**Affected components**  
+`PumpSignalService`, `PumpFastCandidatePolicyV537`, `DeepSeekEntryCoach`, unit tests, build/CI metadata, Guardian project-memory.
+
+**Regression risk**  
+Fast-path может активироваться чаще, потому что теперь каждый профиль имеет право самостоятельно стать кандидатом; это ожидаемое восстановление timing, но требует наблюдения CPU/API-independent local behavior. DeepSeek paid API cadence остаётся общей и не увеличена. Старый cached coach state без profile намеренно не переиспользуется после upgrade.
+
+**Verification**  
+Добавлены targeted unit tests; full CI выполняет `testDebugUnitTest`, `lintDebug`, `assembleDebug` и APK package/version/signature checks. Финальный CI status фиксируется в `CURRENT_STATE.md` после завершения run. До CI success V5.37 не считать стабильной сборкой.
+
+**Project impact**  
+Системное исправление в сторону `MASTER_SPEC`: уменьшает скрытую связность стратегий и возвращает responsive профилю собственную скорость реакции без подгонки торговых порогов.
