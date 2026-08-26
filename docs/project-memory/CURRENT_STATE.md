@@ -11,16 +11,20 @@
 - `applicationId`: `com.example.pumppaperbot.v8` — сохранён для совместимого update/data continuity.
 - V5.37 merged via PR **#84**, merge commit `48a3c3001e01fbc8f7722fb25c077a3ce25e0ea3`.
 - Guardian V5.36 CI run #387: **success**.
-- V5.37 code/build validation run #388: **success** — `testDebugUnitTest`, `lintDebug`, `assembleDebug`, APK package/version/activity/signature/ZIP checks и artifact upload прошли.
-- После успешного code CI до merge менялись только шесть `docs/project-memory/*` файлов; trading/runtime code не менялся.
+- V5.37 code/build validation run #388: **success**.
+- Latest full `main` build run #402: **success** — tests, lint, assemble, APK package/version/activity/v2-signature/ZIP checks and artifact upload passed.
 
 ## BUILD / RELEASE STATUS
 
 - V5.37 source/runtime code прошёл полный CI.
-- CI artifact: `PumpSignal-V5.37-Scalp-Independence-Intermediate.apk`.
-- Этот artifact подписан стандартным Android Debug certificate SHA-256 `4cd18ecec5ecc69a23e1b710f919ed686c58e447d6ec9c91b33cd543f26e5672` и **не является install-compatible final APK** для существующей пользовательской установки.
-- Совместимый certificate исторической линии: SHA-256 `1f778c4291c9d11c5f89f4de8773bda35a0125031adc05785daee23f27dc7823`.
-- Для выдачи пользователю V5.37 как обновления нужен отдельный compatible signing/re-sign verification тем же ключом; uninstall/clean install не использовать.
+- Fresh CI source artifact from run #402: `PumpSignal-V5.37-Scalp-Independence-Intermediate.apk`.
+- Final compatible handoff APK создан: `PumpSignal-V5.37-Compatible-FINAL.apk`.
+- Final APK size: `7,625,105` bytes.
+- Final APK SHA-256: `4acfcc3030d517660c7a7bb45b12116aa88ef18287eed0ffc5366662443e3837`.
+- Final APK uses APK Signature Scheme **v2** and was independently verified after signing.
+- Final signing certificate SHA-256: `1f778c4291c9d11c5f89f4de8773bda35a0125031adc05785daee23f27dc7823` — совпадает с исторической совместимой `.v8` линией.
+- Keystore/пароль получены из приватного Google Drive recovery bundle; они **не записаны в GitHub**.
+- Новый signing key не создавался. Uninstall/clean install для обновления не использовать.
 - Фактически установленная сейчас на телефоне владельца версия: `UNKNOWN`.
 
 ## WHAT WORKS
@@ -60,7 +64,7 @@ V5.37 исправляет именно эти причины:
 - Full live↔replay equivalence текущего 15s PM/coach path: `NEEDS_VERIFICATION`.
 - Shared DeepSeek tuning layer использует pooled outcomes и несколько общих soft regulators: допустимо как guarded learning layer, но влияние на независимость/NET требует forward evidence.
 - Полная migration coverage всех старых compatible installs: `NEEDS_VERIFICATION`.
-- Release publication/sign-compatible distribution отстают от source development.
+- Published GitHub Release всё ещё может отставать от source/signed-handoff state.
 
 ## KNOWN PROBLEMS / DEBT
 
@@ -83,4 +87,4 @@ V5.37 исправляет именно эти причины:
 
 ## NEXT REASONABLE STEP
 
-**Собрать device/ledger baseline V5.37 и сравнить по каждому account своевременность входа, NET PnL/expectancy/drawdown/loss streak и причины BUY/EXIT.** Это покажет, осталась ли проблема в распознавании, timing, AI filter или exit logic.
+**Установить совместимо подписанный V5.37 поверх существующей `.v8` установки без удаления приложения, затем собрать device/ledger baseline и сравнить по каждому account своевременность входа, NET PnL/expectancy/drawdown/loss streak и причины BUY/EXIT.**

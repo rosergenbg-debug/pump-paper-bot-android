@@ -56,7 +56,33 @@ Repository governance/documentation only.
 Fast-path может активироваться чаще, потому что теперь каждый профиль имеет право самостоятельно стать кандидатом; это ожидаемое восстановление timing, но требует наблюдения CPU/API-independent local behavior. DeepSeek paid API cadence остаётся общей и не увеличена. Старый cached coach state без profile намеренно не переиспользуется после upgrade.
 
 **Verification**  
-Targeted regression tests добавлены. GitHub Actions run #388 полностью прошёл `testDebugUnitTest`, `lintDebug`, `assembleDebug`, APK package/version/activity/v2-signature/ZIP checks и upload artifact. После этого runtime/trading code больше не менялся — до final PR head менялись только шесть `docs/project-memory/*` файлов. PR #84 успешно слит в `main` как V5.37. CI artifact проверен как debug-signed intermediate, поэтому он не выдаётся как совместимое пользовательское обновление без отдельной подписи правильным ключом.
+Targeted regression tests добавлены. GitHub Actions run #388 полностью прошёл `testDebugUnitTest`, `lintDebug`, `assembleDebug`, APK package/version/activity/v2-signature/ZIP checks и upload artifact. После этого runtime/trading code больше не менялся — до final PR head менялись только шесть `docs/project-memory/*` файлов. PR #84 успешно слит в `main` как V5.37.
 
 **Project impact**  
 Системное исправление в сторону `MASTER_SPEC`: уменьшает скрытую связность стратегий и возвращает responsive профилю собственную скорость реакции без подгонки торговых порогов.
+
+---
+
+## 2026-08-26 / V5.37 — Compatible signed final APK
+
+**Task**  
+Собрать пользовательский V5.37 APK и подписать его тем же update-ключом, что совместим с существующей `.v8` установкой.
+
+**Change**  
+Использован свежий artifact из успешного `main` build run #402. Debug signature заменена на исторический update certificate из приватного Google Drive recovery bundle. Новый signing key не создавался; package/version/runtime code не менялись.
+
+**Verification**  
+- build run #402: success;
+- package/version исходного artifact проверены CI как `com.example.pumppaperbot.v8`, V5.37/code117;
+- alias update keystore проверен перед подписью;
+- certificate SHA-256: `1f778c4291c9d11c5f89f4de8773bda35a0125031adc05785daee23f27dc7823`;
+- APK Signature Scheme v2 после подписи проверена криптографически;
+- ZIP integrity: OK;
+- final APK size: `7,625,105` bytes;
+- final APK SHA-256: `4acfcc3030d517660c7a7bb45b12116aa88ef18287eed0ffc5366662443e3837`.
+
+**Security**  
+JKS, пароль и recovery bundle не коммитились и не должны коммититься в GitHub.
+
+**Project impact**  
+V5.37 готов как совместимый signed handoff APK для установки поверх существующей `.v8` версии без uninstall.
