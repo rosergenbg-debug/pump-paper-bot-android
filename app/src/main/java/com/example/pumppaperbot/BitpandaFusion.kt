@@ -16,8 +16,9 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 object FusionTradingCosts {
+    /** Conservative fallback when the authenticated Fusion account tier is unavailable. */
     const val FEE_RATE = 0.0025
-    const val FEE_TIER = "симуляция 0,25% за сторону"
+    const val FEE_TIER = "fallback 0,25% за сторону"
 }
 
 /** Keystore-backed storage. The plaintext key is never written to SharedPreferences or logs. */
@@ -83,6 +84,24 @@ object BitpandaFusionSecureKeyStore {
     }
 }
 
+data class FusionBookLevel(
+    val price: Double,
+    val quantity: Double
+) {
+    val notionalEur: Double get() = price * quantity
+
+    fun toJson() = JSONObject().put("price", price).put("quantity", quantity)
+
+    companion object {
+        fun fromJson(value: JSONObject?): FusionBookLevel? {
+            if (value == null) return null
+            val price = value.optDouble("price")
+            val quantity = value.optDouble("quantity", value.optDouble("size"))
+            return FusionBookLevel(price, quantity).takeIf { price > 0.0 && quantity > 0.0 }
+        }
+    }
+}
+
 data class FusionMarketSnapshot(
     val configured: Boolean = false,
     val connected: Boolean = false,
@@ -93,8 +112,12 @@ data class FusionMarketSnapshot(
     val spreadPercent: Double = 0.0,
     val bidDepthEur: Double = 0.0,
     val askDepthEur: Double = 0.0,
+    val bidLevels: List<FusionBookLevel> = emptyList(),
+    val askLevels: List<FusionBookLevel> = emptyList(),
     val feeRate: Double = FusionTradingCosts.FEE_RATE,
     val feeTier: String = FusionTradingCosts.FEE_TIER,
+    val tradedVolume30dEur: Double? = null,
+    val feeUpdatedAt: Long = 0L,
     val lastAttempt: Long = 0L,
     val lastSuccess: Long = 0L,
     val error: String = ""
@@ -107,7 +130,11 @@ data class FusionMarketSnapshot(
         .put("bid", bid).put("ask", ask).put("mid", mid)
         .put("spreadPercent", spreadPercent)
         .put("bidDepthEur", bidDepthEur).put("askDepthEur", askDepthEur)
-        .put("feeRate", FusionTradingCosts.FEE_RATE).put("feeTier", FusionTradingCosts.FEE_TIER)
+        .put("bidLevels", JSONArray(bidLevels.map { it.toJson() }))
+        .put("askLevels", JSONArray(askLevels.map { it.toJson() }))
+        .put("feeRate", feeRate).put("feeTier", feeTier)
+        .put("tradedVolume30dEur", tradedVolume30dEur ?: JSONObject.NULL)
+        .put("feeUpdatedAt", feeUpdatedAt)
         .put("lastAttempt", lastAttempt).put("lastSuccess", lastSuccess).put("error", error)
 
     companion object { const val MAX_AGE = 5L * 60L * 1000L }
@@ -117,7 +144,9 @@ object BitpandaFusionStore {
     private const val PREFS = "bitpanda_fusion_read_only_v51"
     private const val SNAPSHOT = "snapshot"
     private const val LAST_SYNC_STARTED = "last_sync_started"
+    private const val LAST_ACCOUNT_SYNC_STARTED = "last_account_sync_started_v600"
     private const val MIN_SYNC_INTERVAL = 60_000L
+    private const val ACCOUNT_SYNC_INTERVAL = 6L * 60L * 60L * 1000L
 
     fun state(context: Context): FusionMarketSnapshot {
         val configured = BitpandaFusionSecureKeyStore.read(context).isNotBlank()
@@ -130,8 +159,14 @@ object BitpandaFusionStore {
                 bid = j.optDouble("bid"), ask = j.optDouble("ask"), mid = j.optDouble("mid"),
                 spreadPercent = j.optDouble("spreadPercent"),
                 bidDepthEur = j.optDouble("bidDepthEur"), askDepthEur = j.optDouble("askDepthEur"),
-                feeRate = FusionTradingCosts.FEE_RATE,
-                feeTier = FusionTradingCosts.FEE_TIER,
+                bidLevels = levels(j.optJSONArray("bidLevels")),
+                askLevels = levels(j.optJSONArray("askLevels")),
+                feeRate = j.optDouble("feeRate", FusionTradingCosts.FEE_RATE)
+                    .takeIf { it.isFinite() && it in 0.0..0.05 } ?: FusionTradingCosts.FEE_RATE,
+                feeTier = j.optString("feeTier", FusionTradingCosts.FEE_TIER).ifBlank { FusionTradingCosts.FEE_TIER },
+                tradedVolume30dEur = if (!j.has("tradedVolume30dEur") || j.isNull("tradedVolume30dEur")) null
+                else j.optDouble("tradedVolume30dEur").takeIf(Double::isFinite),
+                feeUpdatedAt = j.optLong("feeUpdatedAt"),
                 lastAttempt = j.optLong("lastAttempt"), lastSuccess = j.optLong("lastSuccess"),
                 error = j.optString("error")
             )
@@ -152,16 +187,28 @@ object BitpandaFusionStore {
         return true
     }
 
+    fun shouldSyncAccount(context: Context, now: Long): Boolean {
+        val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        return now - p.getLong(LAST_ACCOUNT_SYNC_STARTED, 0L) >= ACCOUNT_SYNC_INTERVAL
+    }
+
+    fun markAccountAttempt(context: Context, now: Long) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putLong(LAST_ACCOUNT_SYNC_STARTED, now).apply()
+    }
+
     fun save(context: Context, value: FusionMarketSnapshot) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putString(SNAPSHOT, value.copy(
-                feeRate = FusionTradingCosts.FEE_RATE,
-                feeTier = FusionTradingCosts.FEE_TIER
-            ).toJson().toString()).apply()
+            .putString(SNAPSHOT, value.toJson().toString()).apply()
     }
 
     fun clear(context: Context) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().apply()
+    }
+
+    private fun levels(array: JSONArray?): List<FusionBookLevel> {
+        if (array == null) return emptyList()
+        return (0 until array.length()).mapNotNull { FusionBookLevel.fromJson(array.optJSONObject(it)) }
     }
 }
 
@@ -178,12 +225,17 @@ class BitpandaFusionClient {
         val previous = BitpandaFusionStore.state(context)
         val next = runCatching {
             val book = getJson("$BASE/v1/orderbook/$PAIR?depth=20", key)
-            parseOrderbook(book, now, previous)
+            var snapshot = parseOrderbook(book, now, previous)
+            if (BitpandaFusionStore.shouldSyncAccount(context, now)) {
+                BitpandaFusionStore.markAccountAttempt(context, now)
+                snapshot = runCatching {
+                    parseAccount(getJson("$BASE/v1/account", key), now, snapshot)
+                }.getOrElse { snapshot }
+            }
+            snapshot
         }.getOrElse { error ->
             previous.copy(
                 configured = true, connected = false,
-                feeRate = FusionTradingCosts.FEE_RATE,
-                feeTier = FusionTradingCosts.FEE_TIER,
                 lastAttempt = now,
                 error = safeError(error)
             )
@@ -193,8 +245,9 @@ class BitpandaFusionClient {
             context,
             "BITPANDA_FUSION",
             if (next.connected) "OK" else "ERROR",
-            if (next.connected) "Получен read-only стакан ${next.pair}; торговые команды отключены"
-            else next.error
+            if (next.connected) {
+                "Получен read-only стакан ${next.pair}; fee=${next.feeTier} ${String.format(java.util.Locale.US, "%.3f", next.feeRate * 100.0)}%; торговые команды отключены"
+            } else next.error
         )
         return next
     }
@@ -219,23 +272,11 @@ class BitpandaFusionClient {
         ): FusionMarketSnapshot {
             val bids = json.optJSONArray("bids") ?: JSONArray()
             val asks = json.optJSONArray("asks") ?: JSONArray()
-            fun price(item: Any?): Double = when (item) {
-                is JSONObject -> item.optDouble("price")
-                is JSONArray -> item.optDouble(0)
-                else -> 0.0
-            }
-            fun quantity(item: Any?): Double = when (item) {
-                is JSONObject -> item.optDouble("quantity", item.optDouble("size"))
-                is JSONArray -> item.optDouble(1)
-                else -> 0.0
-            }
-            val bid = price(bids.opt(0))
-            val ask = price(asks.opt(0))
+            val bidLevels = parseLevels(bids)
+            val askLevels = parseLevels(asks)
+            val bid = bidLevels.firstOrNull()?.price ?: 0.0
+            val ask = askLevels.firstOrNull()?.price ?: 0.0
             require(bid > 0.0 && ask >= bid) { "Некорректный стакан PUMP-EUR" }
-            fun depth(side: JSONArray): Double = (0 until side.length()).sumOf { i ->
-                val item = side.opt(i)
-                price(item) * quantity(item)
-            }
             val mid = (bid + ask) / 2.0
             return previous.copy(
                 configured = true,
@@ -245,15 +286,66 @@ class BitpandaFusionClient {
                 ask = ask,
                 mid = mid,
                 spreadPercent = if (mid > 0.0) (ask - bid) / mid * 100.0 else 0.0,
-                bidDepthEur = depth(bids),
-                askDepthEur = depth(asks),
-                feeRate = FusionTradingCosts.FEE_RATE,
-                feeTier = FusionTradingCosts.FEE_TIER,
+                bidDepthEur = bidLevels.sumOf { it.notionalEur },
+                askDepthEur = askLevels.sumOf { it.notionalEur },
+                bidLevels = bidLevels,
+                askLevels = askLevels,
                 lastAttempt = now,
                 lastSuccess = now,
                 error = ""
             )
         }
+
+        /** Fusion /v1/account returns fee as percentage points, e.g. 0.15 means 0.15%. */
+        internal fun parseAccount(
+            json: JSONObject,
+            now: Long,
+            previous: FusionMarketSnapshot
+        ): FusionMarketSnapshot {
+            val tier = json.optJSONObject("current_tier") ?: return previous
+            val feePercent = tier.number("fee")
+            val mode = tier.optString("fee_mode", "Percentage")
+            val rate = if (mode.equals("Percentage", ignoreCase = true) && feePercent != null) {
+                (feePercent / 100.0).takeIf { it.isFinite() && it in 0.0..0.05 }
+            } else null
+            val volume = json.number("traded_volume30d")
+            return previous.copy(
+                feeRate = rate ?: previous.feeRate,
+                feeTier = tier.optString("name", previous.feeTier).ifBlank { previous.feeTier },
+                tradedVolume30dEur = volume ?: previous.tradedVolume30dEur,
+                feeUpdatedAt = now
+            )
+        }
+
+        private fun parseLevels(array: JSONArray): List<FusionBookLevel> =
+            (0 until array.length()).mapNotNull { index ->
+                val item = array.opt(index)
+                val price = when (item) {
+                    is JSONObject -> item.number("price")
+                    is JSONArray -> item.number(0)
+                    else -> null
+                }
+                val quantity = when (item) {
+                    is JSONObject -> item.number("quantity") ?: item.number("size")
+                    is JSONArray -> item.number(1)
+                    else -> null
+                }
+                if (price != null && quantity != null && price > 0.0 && quantity > 0.0) {
+                    FusionBookLevel(price, quantity)
+                } else null
+            }
+
+        private fun JSONObject.number(key: String): Double? = when (val raw = opt(key)) {
+            is Number -> raw.toDouble()
+            is String -> raw.toDoubleOrNull()
+            else -> null
+        }?.takeIf(Double::isFinite)
+
+        private fun JSONArray.number(index: Int): Double? = when (val raw = opt(index)) {
+            is Number -> raw.toDouble()
+            is String -> raw.toDoubleOrNull()
+            else -> null
+        }?.takeIf(Double::isFinite)
 
         private fun safeError(error: Throwable): String = error.message.orEmpty()
             .replace(Regex("(?i)(x-api-key|api[_ -]?key)[^,;\\s]*"), "API_KEY=[СКРЫТО]")
