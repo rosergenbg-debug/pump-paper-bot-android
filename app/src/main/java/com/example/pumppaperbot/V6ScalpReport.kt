@@ -23,7 +23,7 @@ object V6ScalpReportStore {
     private val utc = TimeZone.getTimeZone("UTC")
     private val lock = Any()
 
-    private const val COLUMNS =
+    private const val SAMPLE_COLUMNS =
         "time_ms\ttrigger\tagreement\tscore\tfee_bp_side\tspread_bp\tprobe_eur\tbuy_slip_bp\t" +
             "sell_slip_bp\tcost_floor_bp\timb3\timb5\tmicro_bias_bp\tbid5_change_pct\t" +
             "ask5_change_pct\tbuy15_pct\tbuy60_pct\taccel\tprice60_pct\tinstant\tflow5\tflow15\tflow30\tbid\task\tfee_tier\treason"
@@ -31,6 +31,14 @@ object V6ScalpReportStore {
     fun append(context: Context, snapshot: ScalpExecutionSnapshotV600) {
         if (snapshot.at <= 0L) return
         synchronized(lock) {
+            // First close/update older causal observations with this strictly later market frame,
+            // then register the current frame as a new pending origin.
+            V6ScalpOutcomeStore.observe(
+                context,
+                snapshot,
+                BitpandaFusionStore.state(context),
+                snapshot.at
+            )
             val dir = File(context.filesDir, DIRECTORY).apply { mkdirs() }
             File(dir, "v6-${day(snapshot.at)}.tsv").appendText(line(snapshot) + "\n", Charsets.UTF_8)
             val cutoff = snapshot.at - RETENTION_MILLIS
@@ -46,8 +54,13 @@ object V6ScalpReportStore {
         val hours = windowHours.coerceIn(1, 168)
         val cutoff = now - hours * 60L * 60L * 1_000L
         val samples = readLines(context, cutoff)
-        val summary = summaryText(context, cutoff, now, hours, samples.size)
-        val parts = split(summary, samples, MAX_EXPORT_PART_BYTES)
+        val outcomes = V6ScalpOutcomeStore.readLines(context, cutoff)
+        val dataRows = ArrayList<String>(samples.size + outcomes.size).apply {
+            samples.forEach { add("SAMPLE\t$it") }
+            outcomes.forEach { add("OUTCOME\t$it") }
+        }
+        val summary = summaryText(context, cutoff, now, hours, samples.size, outcomes.size)
+        val parts = split(summary, dataRows, MAX_EXPORT_PART_BYTES)
         val dir = File(context.cacheDir, "reports").apply { mkdirs() }
         dir.listFiles()?.filter { it.name.contains("V6-Scalp-${hours}h-") }?.forEach { it.delete() }
         parts.mapIndexed { index, text ->
@@ -82,7 +95,8 @@ object V6ScalpReportStore {
         cutoff: Long,
         now: Long,
         hours: Int,
-        sampleCount: Int
+        sampleCount: Int,
+        outcomeCount: Int
     ): String {
         runCatching { ResearchPerformanceLedger.capture(context) }
         val current = ScalpExecutionIntelligenceStoreV600.current(context)
@@ -119,12 +133,14 @@ object V6ScalpReportStore {
             appendLine("windowHours=$hours")
             appendLine("cutoffAt=$cutoff")
             appendLine("sampleCount=$sampleCount")
+            appendLine("forwardOutcomeRows=$outcomeCount")
             appendLine("format=UTF-8 TAB-SEPARATED TEXT")
             appendLine("maxPartBytes=$MAX_EXPORT_PART_BYTES")
             appendLine("safety=SHADOW_ONLY; REAL_ORDERS=false; CONTAINS_API_KEYS=false")
             appendLine("IMPORTANT=V6 does not allow or veto any V5 trade in this release")
             appendLine("COST_FLOOR=observed round-trip fee + spread + depth slippage + safety buffer; NOT a profit forecast")
             appendLine("EXECUTION_PROBE_EUR=${ScalpExecutionPolicyV600.EXECUTION_PROBE_EUR}; diagnostic depth probe, not position sizing")
+            appendLine("FORWARD_OUTCOMES=30/60/120/300s use later Bitpanda bid; late observations are marked MISSED, never backfilled with a wrong timestamp")
             appendLine()
             appendLine("[CURRENT_EXECUTION_SHADOW]")
             appendLine(current.compactText().replace('\n', ' '))
@@ -151,8 +167,10 @@ object V6ScalpReportStore {
             if (recentTrades.isEmpty()) appendLine("NONE") else recentTrades.forEach(::appendLine)
             if (recentTrades.size >= MAX_TRADE_ROWS) appendLine("TRADES_TRUNCATED_AT=$MAX_TRADE_ROWS")
             appendLine()
-            appendLine("[V6_EXECUTION_SAMPLES]")
-            appendLine(COLUMNS)
+            appendLine("[DATA_ROWS]")
+            appendLine("SAMPLE_COLUMNS=$SAMPLE_COLUMNS")
+            appendLine("OUTCOME_COLUMNS=${V6ScalpOutcomeStore.COLUMNS}")
+            appendLine("Each row begins with SAMPLE or OUTCOME before the corresponding columns.")
         }
     }
 
