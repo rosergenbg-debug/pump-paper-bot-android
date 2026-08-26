@@ -16,9 +16,9 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 object FusionTradingCosts {
-    /** Conservative fallback when the authenticated Fusion account tier is unavailable. */
+    /** V5/V6 control-group simulation cost. V6 observed account fees are stored separately. */
     const val FEE_RATE = 0.0025
-    const val FEE_TIER = "fallback 0,25% за сторону"
+    const val FEE_TIER = "симуляция 0,25% за сторону"
 }
 
 /** Keystore-backed storage. The plaintext key is never written to SharedPreferences or logs. */
@@ -95,8 +95,13 @@ data class FusionBookLevel(
     companion object {
         fun fromJson(value: JSONObject?): FusionBookLevel? {
             if (value == null) return null
-            val price = value.optDouble("price")
-            val quantity = value.optDouble("quantity", value.optDouble("size"))
+            fun number(key: String): Double? = when (val raw = value.opt(key)) {
+                is Number -> raw.toDouble()
+                is String -> raw.toDoubleOrNull()
+                else -> null
+            }?.takeIf(Double::isFinite)
+            val price = number("price") ?: return null
+            val quantity = number("quantity") ?: number("size") ?: return null
             return FusionBookLevel(price, quantity).takeIf { price > 0.0 && quantity > 0.0 }
         }
     }
@@ -114,8 +119,12 @@ data class FusionMarketSnapshot(
     val askDepthEur: Double = 0.0,
     val bidLevels: List<FusionBookLevel> = emptyList(),
     val askLevels: List<FusionBookLevel> = emptyList(),
+    /** Control-group cost used by all pre-V6 paper engines. Must remain 0.25% in V6.0. */
     val feeRate: Double = FusionTradingCosts.FEE_RATE,
     val feeTier: String = FusionTradingCosts.FEE_TIER,
+    /** Authenticated account fee is evidence for V6 shadow only in V6.0. */
+    val observedAccountFeeRate: Double? = null,
+    val observedAccountFeeTier: String? = null,
     val tradedVolume30dEur: Double? = null,
     val feeUpdatedAt: Long = 0L,
     val lastAttempt: Long = 0L,
@@ -125,6 +134,9 @@ data class FusionMarketSnapshot(
     fun fresh(now: Long = System.currentTimeMillis()): Boolean =
         connected && lastSuccess > 0L && now - lastSuccess in 0..MAX_AGE
 
+    fun v6ObservedFeeRate(): Double = observedAccountFeeRate ?: feeRate
+    fun v6ObservedFeeTier(): String = observedAccountFeeTier ?: feeTier
+
     fun toJson(): JSONObject = JSONObject()
         .put("configured", configured).put("connected", connected).put("pair", pair)
         .put("bid", bid).put("ask", ask).put("mid", mid)
@@ -132,7 +144,9 @@ data class FusionMarketSnapshot(
         .put("bidDepthEur", bidDepthEur).put("askDepthEur", askDepthEur)
         .put("bidLevels", JSONArray(bidLevels.map { it.toJson() }))
         .put("askLevels", JSONArray(askLevels.map { it.toJson() }))
-        .put("feeRate", feeRate).put("feeTier", feeTier)
+        .put("feeRate", FusionTradingCosts.FEE_RATE).put("feeTier", FusionTradingCosts.FEE_TIER)
+        .put("observedAccountFeeRate", observedAccountFeeRate ?: JSONObject.NULL)
+        .put("observedAccountFeeTier", observedAccountFeeTier ?: JSONObject.NULL)
         .put("tradedVolume30dEur", tradedVolume30dEur ?: JSONObject.NULL)
         .put("feeUpdatedAt", feeUpdatedAt)
         .put("lastAttempt", lastAttempt).put("lastSuccess", lastSuccess).put("error", error)
@@ -161,21 +175,19 @@ object BitpandaFusionStore {
                 bidDepthEur = j.optDouble("bidDepthEur"), askDepthEur = j.optDouble("askDepthEur"),
                 bidLevels = levels(j.optJSONArray("bidLevels")),
                 askLevels = levels(j.optJSONArray("askLevels")),
-                feeRate = j.optDouble("feeRate", FusionTradingCosts.FEE_RATE)
-                    .takeIf { it.isFinite() && it in 0.0..0.05 } ?: FusionTradingCosts.FEE_RATE,
-                feeTier = j.optString("feeTier", FusionTradingCosts.FEE_TIER).ifBlank { FusionTradingCosts.FEE_TIER },
-                tradedVolume30dEur = if (!j.has("tradedVolume30dEur") || j.isNull("tradedVolume30dEur")) null
-                else j.optDouble("tradedVolume30dEur").takeIf(Double::isFinite),
+                // A V6.0 install must restore the V5 control-group fee even if an early V6 build
+                // briefly persisted an observed account fee into these legacy fields.
+                feeRate = FusionTradingCosts.FEE_RATE,
+                feeTier = FusionTradingCosts.FEE_TIER,
+                observedAccountFeeRate = nullableDouble(j, "observedAccountFeeRate"),
+                observedAccountFeeTier = nullableString(j, "observedAccountFeeTier"),
+                tradedVolume30dEur = nullableDouble(j, "tradedVolume30dEur"),
                 feeUpdatedAt = j.optLong("feeUpdatedAt"),
                 lastAttempt = j.optLong("lastAttempt"), lastSuccess = j.optLong("lastSuccess"),
                 error = j.optString("error")
             )
         }.getOrElse {
-            FusionMarketSnapshot(
-                configured = configured,
-                feeRate = FusionTradingCosts.FEE_RATE,
-                feeTier = FusionTradingCosts.FEE_TIER
-            )
+            FusionMarketSnapshot(configured = configured)
         }
     }
 
@@ -199,7 +211,10 @@ object BitpandaFusionStore {
 
     fun save(context: Context, value: FusionMarketSnapshot) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putString(SNAPSHOT, value.toJson().toString()).apply()
+            .putString(SNAPSHOT, value.copy(
+                feeRate = FusionTradingCosts.FEE_RATE,
+                feeTier = FusionTradingCosts.FEE_TIER
+            ).toJson().toString()).apply()
     }
 
     fun clear(context: Context) {
@@ -210,6 +225,12 @@ object BitpandaFusionStore {
         if (array == null) return emptyList()
         return (0 until array.length()).mapNotNull { FusionBookLevel.fromJson(array.optJSONObject(it)) }
     }
+
+    private fun nullableDouble(j: JSONObject, key: String): Double? =
+        if (!j.has(key) || j.isNull(key)) null else j.optDouble(key).takeIf(Double::isFinite)
+
+    private fun nullableString(j: JSONObject, key: String): String? =
+        if (!j.has(key) || j.isNull(key)) null else j.optString(key).takeIf(String::isNotBlank)
 }
 
 /** Read-only Fusion REST client. Deliberately contains GET requests only. */
@@ -236,6 +257,8 @@ class BitpandaFusionClient {
         }.getOrElse { error ->
             previous.copy(
                 configured = true, connected = false,
+                feeRate = FusionTradingCosts.FEE_RATE,
+                feeTier = FusionTradingCosts.FEE_TIER,
                 lastAttempt = now,
                 error = safeError(error)
             )
@@ -246,7 +269,10 @@ class BitpandaFusionClient {
             "BITPANDA_FUSION",
             if (next.connected) "OK" else "ERROR",
             if (next.connected) {
-                "Получен read-only стакан ${next.pair}; fee=${next.feeTier} ${String.format(java.util.Locale.US, "%.3f", next.feeRate * 100.0)}%; торговые команды отключены"
+                val observed = next.observedAccountFeeRate?.let {
+                    "account=${next.v6ObservedFeeTier()} ${String.format(java.util.Locale.US, "%.3f", it * 100.0)}%"
+                } ?: "account fee ещё не получена"
+                "Получен read-only стакан ${next.pair}; V5 fee=${FusionTradingCosts.FEE_TIER}; $observed; торговые команды отключены"
             } else next.error
         )
         return next
@@ -290,6 +316,8 @@ class BitpandaFusionClient {
                 askDepthEur = askLevels.sumOf { it.notionalEur },
                 bidLevels = bidLevels,
                 askLevels = askLevels,
+                feeRate = FusionTradingCosts.FEE_RATE,
+                feeTier = FusionTradingCosts.FEE_TIER,
                 lastAttempt = now,
                 lastSuccess = now,
                 error = ""
@@ -310,10 +338,13 @@ class BitpandaFusionClient {
             } else null
             val volume = json.number("traded_volume30d")
             return previous.copy(
-                feeRate = rate ?: previous.feeRate,
-                feeTier = tier.optString("name", previous.feeTier).ifBlank { previous.feeTier },
+                feeRate = FusionTradingCosts.FEE_RATE,
+                feeTier = FusionTradingCosts.FEE_TIER,
+                observedAccountFeeRate = rate ?: previous.observedAccountFeeRate,
+                observedAccountFeeTier = tier.optString("name", previous.observedAccountFeeTier.orEmpty())
+                    .takeIf(String::isNotBlank) ?: previous.observedAccountFeeTier,
                 tradedVolume30dEur = volume ?: previous.tradedVolume30dEur,
-                feeUpdatedAt = now
+                feeUpdatedAt = if (rate != null || volume != null) now else previous.feeUpdatedAt
             )
         }
 
