@@ -7,84 +7,61 @@
 ## VERSION / BRANCH
 
 - Canonical branch: `main`.
-- Current source version: **V5.37**, `versionCode 117`.
+- Current source version: **V6.0**, `versionCode 118`.
 - `applicationId`: `com.example.pumppaperbot.v8` — сохранён для совместимого update/data continuity.
-- V5.37 merged via PR **#84**, merge commit `48a3c3001e01fbc8f7722fb25c077a3ce25e0ea3`.
-- Guardian V5.36 CI run #387: **success**.
-- V5.37 code/build validation run #388: **success**.
-- Latest full `main` build run #402: **success** — tests, lint, assemble, APK package/version/activity/v2-signature/ZIP checks and artifact upload passed.
+- V6.0 merged via PR **#85**, squash merge commit `33bf845d744d8fa9780a340ab8f2e3a0f0d1dae6`.
+- Full `main` build run **#423** (`33020059070`): **success** — unit tests, lint, assemble, APK package/version/activity/v2-signature/ZIP checks and artifact upload passed.
 
 ## BUILD / RELEASE STATUS
 
-- V5.37 source/runtime code прошёл полный CI.
-- Fresh CI source artifact from run #402: `PumpSignal-V5.37-Scalp-Independence-Intermediate.apk`.
-- Final compatible handoff APK создан: `PumpSignal-V5.37-Compatible-FINAL.apk`.
-- Final APK size: `7,625,105` bytes.
-- Final APK SHA-256: `4acfcc3030d517660c7a7bb45b12116aa88ef18287eed0ffc5366662443e3837`.
+- V6.0 source/runtime code прошёл полный CI на `main`.
+- CI source artifact: `PumpSignal-V6.0-Execution-Intelligence-Intermediate.apk`.
+- Final compatible handoff APK создан: `PumpSignal-V6.0-Compatible-FINAL.apk`.
+- Final APK size: `7,669,709` bytes.
+- Final APK SHA-256: `c07089854a9326e7abc742d5fc87d4922244e0e66b1a8e0320d5ba38394d5701`.
 - Final APK uses APK Signature Scheme **v2** and was independently verified after signing.
 - Final signing certificate SHA-256: `1f778c4291c9d11c5f89f4de8773bda35a0125031adc05785daee23f27dc7823` — совпадает с исторической совместимой `.v8` линией.
 - Keystore/пароль получены из приватного Google Drive recovery bundle; они **не записаны в GitHub**.
 - Новый signing key не создавался. Uninstall/clean install для обновления не использовать.
-- Фактически установленная сейчас на телефоне владельца версия: `UNKNOWN`.
+- Фактически установленная сейчас на телефоне владельца версия: `UNKNOWN` до подтверждения установки V6.0.
 
-## WHAT WORKS
+## V6.0 MATERIAL CHANGE
 
-- Android foreground monitoring и автоматическое продолжение после закрытия UI.
-- Binance/public market sync + short-horizon local evidence.
-- Bitpanda Fusion read-only bid/ask/order-book с Keystore key storage.
-- Четыре раздельных Pump Machine paper portfolios/state/cooldowns.
-- Fusion, APP, DeepSigX и SERGE отдельными paper/reference accounts.
-- 8-account Competition UI.
-- SQLite append-only `ResearchPerformanceLedger` и V4→V5 history capture.
-- V5.33 adaptive breath entry + hard veto.
-- V5.34/5.35 bounded DeepSeek pre-entry coach/cost limits.
-- V5.36 guarded one-change tuning trial with rollback.
-- V5.32 liquidity-release observer shadow-only.
+V6.0 добавляет **shadow-only execution intelligence**, не меняя торговую власть V5.37 и не меняя PM entry/TP/SL thresholds.
 
-## V5.37 MATERIAL CHANGE
+- Bitpanda Fusion сохраняет отдельные уровни стакана.
+- Считаются top-3/top-5 imbalance, microprice, spread, depth/slippage и execution cost floor.
+- Binance-flow сравнивается с Bitpanda execution book: `CONFIRMED`, `LEADING`, `FUSION_LEADING`, `DIVERGENT`, `BAD_EXECUTION`, `NEUTRAL`, `INSUFFICIENT_DATA`.
+- Authenticated Fusion account fee сохраняется отдельно как V6 evidence; старые paper engines остаются на фиксированной 0.25%/side control-group cost.
+- V6 **не может разрешать или запрещать сделки** существующих стратегий.
+- Для каждого V6 наблюдения собираются causal forward outcomes на 30/60/120/300 секунд по будущим Bitpanda bid snapshots; пропущенные горизонты записываются как `MISSED`, а не подменяются поздней ценой.
+- Future outcome принимается только если `Fusion.lastSuccess > originAt`, чтобы прошлый стакан не мог быть записан как будущее.
 
-Архитектурный аудит после Guardian выявил скрытую взаимную зависимость стратегий:
+## REPORTING
 
-1. В V5.36 fast ~15s path всех четырёх PM был привязан к `PUMP_3` candidate.
-2. Единственный DeepSeek cached/PENDING entry state не содержал profile identity и мог влиять на другой PM-профиль.
+- Основной V6 support export: UTF-8 `.txt`, 24 часа.
+- Файлы автоматически разбиваются примерно до **900 KB** на часть, чтобы не упираться в старую проблему загрузки >2 MB.
+- Отчёт содержит account/trade state, V6 execution samples и causal outcome rows.
+- Старый большой JSON остаётся диагностическим архивом, но не является основным каналом для V6 анализа.
+- Автоматическая запись Android-приложения в GitHub пока **не реализована**, чтобы не хранить GitHub write-token в APK. Безопасный relay/GitHub-App канал — отдельный будущий этап.
 
-V5.37 исправляет именно эти причины:
-
-- `PumpFastCandidatePolicyV537` считает fast eligibility отдельно для PUMP_2/PUMP_3/RETEST/SAFE;
-- каждый PM fast-sync зависит от собственного candidate/position;
-- DeepSeek cached verdict/PENDING/ordinary retry state теперь profile-scoped;
-- общий DeepSeek paid request budget/running lock остаётся общим provider resource;
-- старый persisted coach state без profile читается как `UNKNOWN` и не переиспользуется как чужой verdict;
-- добавлены targeted regression tests;
-- TP/SL и основные entry thresholds **не менялись**.
-
-## WORKS PARTIALLY / NEEDS SYSTEM VALIDATION
+## WHAT REMAINS UNPROVEN
 
 - Глобальная прибыльность/expectancy текущего набора стратегий: **не доказана**.
-- Full live↔replay equivalence текущего 15s PM/coach path: `NEEDS_VERIFICATION`.
-- Shared DeepSeek tuning layer использует pooled outcomes и несколько общих soft regulators: допустимо как guarded learning layer, но влияние на независимость/NET требует forward evidence.
-- Полная migration coverage всех старых compatible installs: `NEEDS_VERIFICATION`.
-- Published GitHub Release всё ещё может отставать от source/signed-handoff state.
-
-## KNOWN PROBLEMS / DEBT
-
-1. Naming drift: UI PM1 = `PumpMachine2Store`/PUMP_2; UI PM2 = `PumpMachineStore`/PUMP_3.
-2. Часть старых stop strings/comments может говорить -1.5%, хотя фактические PUMP_2/PUMP_3 stops -1.10/-1.30.
-3. Research/replay baseline и более поздний fast PM/Fusion слой сосуществуют без одного полного replay interface.
-4. Persistence фрагментирован между versioned stores; все upgrade paths не доказаны.
-5. Фактические device ledger/log outcomes сейчас отсутствуют в GitHub, поэтому нельзя достоверно объяснить общий плюс/минус без экспорта.
+- Полезность V6 execution score как будущего hard/soft gate: **не доказана**. V6 должна накопить forward evidence до promotion.
+- Full live↔replay equivalence текущего fast PM/coach stack: `NEEDS_VERIFICATION`.
+- Shared DeepSeek tuning remains a guarded soft-learning layer; не расширять его власть без NET forward evidence.
+- Реальные ордера всё ещё не реализованы и требуют отдельного явного решения владельца.
 
 ## CURRENT MAIN PRIORITY
 
-**Не менять thresholds после V5.37, пока не получен честный performance baseline на forward/device ledger.**
+**Установить совместимо подписанный V6.0 поверх существующей `.v8` установки без удаления приложения, затем накопить V6 compact TXT + causal outcomes и только после этого решать, какую часть V6 execution evidence повышать из shadow в decision support.**
 
-## RISKS
+## INVARIANTS
 
-- Fast local processing может активироваться чаще, потому что responsive PM2 больше не ждёт PM3 — это ожидаемое восстановление скальпинговой своевременности, но runtime следует наблюдать.
-- Общий DeepSeek API budget может означать, что не каждый профиль получит отдельный paid verdict; это ресурсное ограничение, а не право другого профиля блокировать сделку.
-- Shared tuning может создавать корреляцию между стратегиями; не разделять/переписывать его без evidence.
-- Любая новая подкрутка thresholds до baseline снова создаст архитектурный drift.
-
-## NEXT REASONABLE STEP
-
-**Установить совместимо подписанный V5.37 поверх существующей `.v8` установки без удаления приложения, затем собрать device/ledger baseline и сравнить по каждому account своевременность входа, NET PnL/expectancy/drawdown/loss streak и причины BUY/EXIT.**
+1. Не менять package/signing identity.
+2. Не удалять установленное приложение ради update.
+3. Не очищать накопленную history/state.
+4. Не подключать V6 shadow как hard gate без evidence review.
+5. Не менять одновременно V5 control thresholds и V6 evaluation logic — иначе теряется контрольная группа.
+6. Любую будущую автоюстировку оценивать по NET outcomes с guarded trial/rollback.
