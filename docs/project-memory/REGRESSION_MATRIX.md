@@ -10,7 +10,7 @@
 | Область | Ожидаемое поведение | Как проверяется | Статус |
 |---|---|---|---|
 | Build baseline | `testDebugUnitTest`, `lintDebug`, `assembleDebug` проходят | `.github/workflows/android.yml` | AUTO |
-| Package/version | compatible line остаётся `com.example.pumppaperbot.v8`; текущая V5.36/code116 | CI `aapt dump badging` | AUTO |
+| Package/version | compatible line остаётся `com.example.pumppaperbot.v8`; V5.37/code117 после merge | CI `aapt dump badging` | AUTO |
 | Launch APK | launch activity `MainActivity`, APK ZIP валиден, signature scheme проверяется | CI APK checks; final certificate отдельно | PARTIAL |
 | Real trading | Ни одна текущая автономная стратегия не отправляет реальный order/cancel/transfer | source review, `ResearchModePolicy`, `V49SafetyPolicyTest` и related safety tests | PARTIAL |
 | Bitpanda access | Fusion client использует read-only GET order book; key не пишется plaintext в prefs/log | `BitpandaFusionTest` + source review | PARTIAL |
@@ -19,6 +19,10 @@
 | Compatible update data | portfolios/settings/keys/history переживают update без uninstall | version-specific retention tests + final APK upgrade on device | MANUAL |
 | Engine migration | известные `PumpBotEngine` algorithm versions мигрируют без неожиданного reset | source migration + targeted tests | NEEDS_TEST |
 | Independent accounts | APP/PM profiles/Fusion/DeepSigX/SERGE не используют общий portfolio | store separation + strategy tests + Competition inspection | PARTIAL |
+| Fast PM independence | responsive PUMP_2 может сам активировать 15s fast-path, не ожидая PUMP_3 candidate; каждый PM fast-sync идёт только по своей позиции/кандидату | `PumpFastCandidatePolicyV537Test` + service wiring | AUTO/PARTIAL |
+| DeepSeek verdict scope | cached/PENDING entry verdict одного PM-профиля не является решением другого профиля | `DeepSeekEntryCoachTest` profile-scope tests + source wiring | AUTO/PARTIAL |
+| DeepSeek shared budget | общий provider request budget/running lock может экономить API, но при отсутствии профильного verdict другой PM может использовать только свой strict local fallback, а не чужой verdict | `DeepSeekEntryCoachTest` + source review; runtime concurrency scenario | PARTIAL |
+| Shared tuning layer | pooled outcomes/shared soft regulators не должны скрыто ухудшать profile independence; полезность должна подтверждаться trial/rollback outcomes | `AdaptiveTuningGuardV536Test` + representative ledger analysis | PARTIAL |
 | UI account mapping | Competition содержит 8 счетов в порядке 4 PM → Fusion → DeepSigX → APP → SERGE | compile + `CompetitionActivity` review; UI device check | MANUAL |
 | PM UI 1 / PUMP_2 | +2.00% NET target, hard stop -1.10%, отдельный state | `PumpMachine2PolicyTest`, `PumpProfitEngineV526Test` | AUTO |
 | PM UI 2 / PUMP_3 | +3.00% NET target, hard stop -1.30%, отдельный state | `PumpMachinePolicyTest`, `PumpProfitEngineV526Test` | AUTO |
@@ -28,7 +32,7 @@
 | Fusion/PM fees | Fusion/PM simulation uses 0.25% each side and bid/ask spread | `FusionTradingCosts`, PumpMachine tests | AUTO |
 | APP/legacy fees | APP/legacy base fee remains 0.15% per side unless explicitly changed | `PumpBotEngine.feeRate`, App/strategy tests | PARTIAL |
 | Entry hard veto | stale/missing tape, no executable ask, dangerous spread, seller takeover/extreme absorption/late chase cannot be overridden by AI | `AdaptiveBreathEntryPolicy`/`PumpProfitEngineV526Test`, coach policy tests | PARTIAL |
-| PM profile independence | responsive PUMP_2 confirmation и strict PUMP_3 confirmation остаются различными | `PumpProfitEngineV526Test` + V5.33 regression intent | AUTO |
+| PM profile thresholds | responsive PUMP_2 confirmation и strict PUMP_3 confirmation остаются различными; V5.37 independence fix не меняет их TP/SL/thresholds | `PumpProfitEngineV526Test` + diff review | AUTO/PARTIAL |
 | Shadow liquidity release | V5.32 observer не открывает/закрывает paper trades | `LiquidityReleaseShadowPolicyTest` + source wiring review | PARTIAL |
 | DeepSeek coach authority | Coach вызывается после local candidate и не может override hard veto | DeepSeek entry/tuning tests + source review | PARTIAL |
 | DeepSeek request economy | coach ≤6/UTC day, min 15 min; verdict reuse ≤10 min; backoff работает | DeepSeek coach policy/unit tests | PARTIAL |
