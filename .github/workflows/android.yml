@@ -2,10 +2,14 @@ name: Android Build
 
 on:
   push:
-    branches: [ "main", "chatgpt/v5-24-pump-machine-2", "chatgpt/v5-25-six-account-comparison", "chatgpt/v5-26-profit-engine", "chatgpt/v5-37-scalp-independence" ]
+    branches: [ "main", "chatgpt/v5-24-pump-machine-2", "chatgpt/v5-25-six-account-comparison", "chatgpt/v5-26-profit-engine", "chatgpt/v5-37-scalp-independence", "chatgpt/v6-0-execution-intelligence" ]
   pull_request:
-    branches: [ "main", "chatgpt/v5-10-deepsig-trading", "chatgpt/v5-11-fusion-stability", "chatgpt/v5-12-main-chart-flow", "chatgpt/v5-13-big-overview", "chatgpt/v5-13-1-sequential-fix", "chatgpt/v5-14-unified-flow", "chatgpt/v5-15-flow-performance", "chatgpt/v5-16-anti-churn-profit-defense", "chatgpt/v5-17-deepsig-entry-exit", "chatgpt/v5-18-ci-base", "chatgpt/v5-18-money-flow-ui", "chatgpt/v5-19-deepsig-independence-exit-tuning", "chatgpt/v5-20-background-persistence", "chatgpt/v5-21-pump-machine", "chatgpt/v5-22-shared-fusion-entry-lab", "chatgpt/v5-23-clean-lab-reset", "chatgpt/v5-24-pump-machine-2", "chatgpt/v5-25-six-account-comparison", "chatgpt/v5-37-scalp-independence" ]
+    branches: [ "main", "chatgpt/v5-10-deepsig-trading", "chatgpt/v5-11-fusion-stability", "chatgpt/v5-12-main-chart-flow", "chatgpt/v5-13-big-overview", "chatgpt/v5-13-1-sequential-fix", "chatgpt/v5-14-unified-flow", "chatgpt/v5-15-flow-performance", "chatgpt/v5-16-anti-churn-profit-defense", "chatgpt/v5-17-deepsig-entry-exit", "chatgpt/v5-18-ci-base", "chatgpt/v5-18-money-flow-ui", "chatgpt/v5-19-deepsig-independence-exit-tuning", "chatgpt/v5-20-background-persistence", "chatgpt/v5-21-pump-machine", "chatgpt/v5-22-shared-fusion-entry-lab", "chatgpt/v5-23-clean-lab-reset", "chatgpt/v5-24-pump-machine-2", "chatgpt/v5-25-six-account-comparison", "chatgpt/v5-37-scalp-independence", "chatgpt/v6-0-execution-intelligence" ]
   workflow_dispatch:
+
+concurrency:
+  group: android-build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -26,7 +30,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Validate and build V5.37
+      - name: Validate and build V6.0
         run: |
           chmod +x gradlew
           ./gradlew testDebugUnitTest lintDebug assembleDebug
@@ -38,7 +42,7 @@ jobs:
           grep -F "Verified using v2 scheme (APK Signature Scheme v2): true" "$RUNNER_TEMP/signature.txt"
           "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging \
             app/build/outputs/apk/debug/app-debug.apk | tee "$RUNNER_TEMP/badging.txt"
-          grep -F "package: name='com.example.pumppaperbot.v8' versionCode='117' versionName='5.37'" \
+          grep -F "package: name='com.example.pumppaperbot.v8' versionCode='118' versionName='6.0'" \
             "$RUNNER_TEMP/badging.txt"
           grep -F "launchable-activity: name='com.example.pumppaperbot.MainActivity'" \
             "$RUNNER_TEMP/badging.txt"
@@ -47,11 +51,11 @@ jobs:
           test "$(stat -c%s app/build/outputs/apk/debug/app-debug.apk)" -gt 6000000
 
       - name: Prepare named APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk PumpSignal-V5.37-Scalp-Independence-Intermediate.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk PumpSignal-V6.0-Execution-Intelligence-Intermediate.apk
 
       - name: Upload intermediate APK
         uses: actions/upload-artifact@v4
         with:
-          name: PumpSignal-V5.37-Scalp-Independence-Intermediate-APK
-          path: PumpSignal-V5.37-Scalp-Independence-Intermediate.apk
+          name: PumpSignal-V6.0-Execution-Intelligence-Intermediate-APK
+          path: PumpSignal-V6.0-Execution-Intelligence-Intermediate.apk
           retention-days: 7

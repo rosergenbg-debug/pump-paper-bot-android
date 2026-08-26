@@ -39,8 +39,8 @@ class PumpSignalService : Service() {
             PumpAlert.monitorId(),
             PumpAlert.monitorNotification(
                 this,
-                "V${BuildConfig.VERSION_NAME}: четыре Pump Machine и Fusion работают независимо; " +
-                    (if (ResearchModePolicy.alertsEnabled(this)) "звонки включены." else "звонки выключены.")
+                "V${BuildConfig.VERSION_NAME}: V6 execution intelligence работает в SHADOW; " +
+                    "четыре Pump Machine и Fusion сохраняют независимые решения."
             )
         )
     }
@@ -85,6 +85,19 @@ class PumpSignalService : Service() {
         )
     }
 
+    private fun observeV6(trigger: String, now: Long = System.currentTimeMillis()) {
+        runCatching { ScalpExecutionIntelligenceStoreV600.observe(this, trigger, now) }
+            .onFailure { error ->
+                UnifiedResearchLog.record(
+                    this,
+                    "V6_EXECUTION_SHADOW",
+                    "ERROR",
+                    "Изолированная ошибка shadow-надстройки: ${error.javaClass.simpleName}: ${error.message.orEmpty().take(160)}",
+                    now
+                )
+            }
+    }
+
     private fun requestFastShockCheck() {
         if (!shockCheckQueuedOrRunning.compareAndSet(false, true)) return
         shockExecutor.execute {
@@ -107,6 +120,17 @@ class PumpSignalService : Service() {
                         BitpandaFusionClient().sync(this, force = true)
                     }
                     val fastNow = System.currentTimeMillis()
+                    val trigger = buildList {
+                        if (fastCandidates.pump2) add("PM1_CAND")
+                        if (fastCandidates.pump3) add("PM2_CAND")
+                        if (fastCandidates.retest) add("PM3_RETEST_CAND")
+                        if (fastCandidates.safe) add("PM4_SAFE_CAND")
+                        if (pumpMachine2Fast.inPosition) add("PM1_POS")
+                        if (pumpMachineFast.inPosition) add("PM2_POS")
+                        if (pumpRetestFast.inPosition) add("PM3_POS")
+                        if (pumpSafeFast.inPosition) add("PM4_POS")
+                    }.joinToString("+").ifBlank { "FAST" }
+                    observeV6(trigger, fastNow)
                     if (pumpMachineFast.inPosition || fastCandidates.pump3) {
                         runCatching { PumpMachineStore.sync(this, fastNow) }
                             .onFailure { recordIndependentPumpFailure("PUMP_MACHINE_FAST", it) }
@@ -135,6 +159,7 @@ class PumpSignalService : Service() {
                 // read-only execution book and run the local paper engines; no AI call is made.
                 BitpandaFusionClient().sync(this, force = true)
                 val shockNow = System.currentTimeMillis()
+                observeV6("SHOCK_REBOUND", shockNow)
                 FusionSimStore.sync(this, DeepSeekPrimaryStore.state(this), shockNow)
                 runCatching { PumpMachineStore.sync(this, shockNow) }
                     .onFailure { recordIndependentPumpFailure("PUMP_MACHINE_SHOCK", it) }
@@ -196,6 +221,9 @@ class PumpSignalService : Service() {
                 }
                 CycleStageGuard.run(this, "BITPANDA_FUSION", { BitpandaFusionStore.state(this) }) {
                     BitpandaFusionClient().sync(this)
+                }
+                CycleStageGuard.run(this, "V6_EXECUTION_SHADOW", { ScalpExecutionIntelligenceStoreV600.current(this) }) {
+                    ScalpExecutionIntelligenceStoreV600.observe(this, "BASELINE")
                 }
                 val eventState = CycleStageGuard.run(this, "EVENT_RADAR", { EventRadarStore.state(this) }) {
                     eventRadar.sync(this)
@@ -289,7 +317,7 @@ class PumpSignalService : Service() {
                     source,
                     startedAt,
                     finishedAt + cycleIntervalMillis,
-                    "проверка завершена; DeepSeek аналитик: ${deepSeek.action}; Pump Machine: ${pumpMachine.status}; Gemini контролирует только открытую позицию Сержа",
+                    "проверка завершена; V6 execution=SHADOW; DeepSeek аналитик: ${deepSeek.action}; Pump Machine: ${pumpMachine.status}; Gemini контролирует только открытую позицию Сержа",
                     finishedAt
                 )
             } catch (error: Exception) {

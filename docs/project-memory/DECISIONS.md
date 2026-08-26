@@ -174,3 +174,37 @@ AI не может tuning hard veto, exits, real orders или stored portfolios
 
 **Consequences**  
 V5.37 остаётся совместимым обновлением `com.example.pumppaperbot.v8`. TP/SL и основные entry thresholds в этой задаче не меняются. Shared tuning layer остаётся ограниченным общим soft-learning слоем и должен оцениваться по forward outcomes; его полезность пока `NEEDS_VERIFICATION`. Реальные ордера остаются отдельным будущим решением.
+
+---
+
+## 2026-08-26 — V6.0: Execution Intelligence сначала только SHADOW
+
+**Decision**  
+Не переписывать четыре Pump Machine и не подключать новый execution слой как gate. V6.0 добавляет `ScalpExecutionIntelligenceV600` как независимую shadow-надстройку: сохраняет отдельные уровни Bitpanda Fusion order book, сравнивает Binance executed-flow с Bitpanda execution-book, оценивает top-3/top-5 imbalance, microprice, изменение глубины, spread, slippage на диагностическом €1000 depth-probe и минимальный наблюдаемый round-trip cost floor. Для каждого V6 кадра причинно собираются future outcomes на 30/60/120/300 секунд.
+
+**Reason**  
+V5.37 уже неплохо описывает направление/дыхание рынка, но недостаточно измеряет качество исполнения именно на Bitpanda. Без shadow-периода невозможно доказать, что новый execution score отсекает плохие входы, а не просто зажимает систему. Без future outcomes нельзя отличить красивую классификацию `CONFIRMED/DIVERGENT` от реально полезного edge.
+
+**Critical correction found during first review**  
+Первая реализация пыталась записывать authenticated Fusion fee прямо в общий `FusionMarketSnapshot.feeRate`. Это незаметно изменило бы расчёты старых PM/Fusion и уничтожило V5.37 как контрольную группу. Исправлено: `feeRate`/`feeTier` остаются фиксированной V5 simulation 0.25%/side; authenticated account fee хранится отдельно как `observedAccountFeeRate/observedAccountFeeTier` и в V6.0 используется только shadow-аналитикой.
+
+**Alternatives considered**  
+1. Сразу дать V6 право блокировать BUY.  
+2. Перенести фактический account fee во все старые paper engines.  
+3. Сразу добавить ML/RL/Pump.fun BUY/market-making.  
+4. Встроить GitHub write token в Android app для автоматической отправки отчётов.
+
+**Rejected because**  
+1. Нет forward evidence, поэтому это повторило бы старую ошибку чрезмерного зажатия.  
+2. Нарушилась бы чистая контрольная группа и сравнимость V5.37.  
+3. Сначала нужен причинный dataset; сложность без evidence повышает риск overfit/drift.  
+4. Репозиторный write-secret в клиентском APK создаёт лишний security risk; V6.0 использует локальные безопасные exports.
+
+**Consequences**  
+- V6.0 не имеет entry/exit authority и не может разрешать/запрещать старые сделки.
+- TP/SL/entry thresholds V5.37 не меняются.
+- `costFloorBps` — наблюдаемая нижняя оценка расходов, а не прогноз прибыли.
+- €1000 probe — диагностическая проверка depth, не position sizing.
+- 24h V6 report экспортируется как UTF-8 TXT/TSV, автоматически режется на части <=900 KB и содержит SAMPLE + causal OUTCOME rows.
+- Promotion V6 в отдельный paper account или gate допускается только после репрезентативного forward анализа.
+- Автоматическая загрузка отчётов в GitHub и remote tuning не входят в V6.0; если понадобятся, проектировать отдельный authenticated relay/GitHub App без секретов в APK.
