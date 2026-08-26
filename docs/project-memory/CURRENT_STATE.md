@@ -6,20 +6,21 @@
 
 ## VERSION / BRANCH
 
-- Canonical branch: `main` пока содержит verified **V5.36 / code116** + Project Guardian.
-- Candidate branch: `chatgpt/v5-37-scalp-independence`.
-- Candidate source version: **V5.37**, `versionCode 117`.
+- Canonical branch: `main`.
+- Current source version: **V5.37**, `versionCode 117`.
 - `applicationId`: `com.example.pumppaperbot.v8` — сохранён для совместимого update/data continuity.
+- V5.37 merged via PR **#84**, merge commit `48a3c3001e01fbc8f7722fb25c077a3ce25e0ea3`.
 - Guardian V5.36 CI run #387: **success**.
 - V5.37 code/build validation run #388: **success** — `testDebugUnitTest`, `lintDebug`, `assembleDebug`, APK package/version/activity/signature/ZIP checks и artifact upload прошли.
-- Pull request: **#84**, merge pending final PR-head checks.
+- После успешного code CI до merge менялись только шесть `docs/project-memory/*` файлов; trading/runtime code не менялся.
 
 ## BUILD / RELEASE STATUS
 
-- V5.37 source/build уже прошёл полный CI на кодовой версии изменения.
-- Workflow artifact V5.37 называется `PumpSignal-V5.37-Scalp-Independence-Intermediate.apk`; это intermediate/debug artifact, не автоматически install-compatible final APK.
+- V5.37 source/runtime code прошёл полный CI.
+- CI artifact: `PumpSignal-V5.37-Scalp-Independence-Intermediate.apk`.
+- Этот artifact подписан стандартным Android Debug certificate SHA-256 `4cd18ecec5ecc69a23e1b710f919ed686c58e447d6ec9c91b33cd543f26e5672` и **не является install-compatible final APK** для существующей пользовательской установки.
 - Совместимый certificate исторической линии: SHA-256 `1f778c4291c9d11c5f89f4de8773bda35a0125031adc05785daee23f27dc7823`.
-- Latest published GitHub Release исторически отстаёт от source/build state.
+- Для выдачи пользователю V5.37 как обновления нужен отдельный compatible signing/re-sign verification тем же ключом; uninstall/clean install не использовать.
 - Фактически установленная сейчас на телефоне владельца версия: `UNKNOWN`.
 
 ## WHAT WORKS
@@ -71,7 +72,7 @@ V5.37 исправляет именно эти причины:
 
 ## CURRENT MAIN PRIORITY
 
-**Завершить merge V5.37 как исправление strategy independence/timing; затем не менять thresholds, пока не получен честный performance baseline на forward/device ledger.**
+**Не менять thresholds после V5.37, пока не получен честный performance baseline на forward/device ledger.**
 
 ## RISKS
 
@@ -82,4 +83,4 @@ V5.37 исправляет именно эти причины:
 
 ## NEXT REASONABLE STEP
 
-После merge V5.37: **не менять торговые пороги**, а собрать device/ledger baseline и сравнить по каждому account своевременность входа, NET PnL/expectancy/drawdown/loss streak и причины BUY/EXIT. Это покажет, осталась ли проблема в распознавании, timing, AI filter или exit logic.
+**Собрать device/ledger baseline V5.37 и сравнить по каждому account своевременность входа, NET PnL/expectancy/drawdown/loss streak и причины BUY/EXIT.** Это покажет, осталась ли проблема в распознавании, timing, AI filter или exit logic.
