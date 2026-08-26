@@ -2,6 +2,7 @@ package com.example.pumppaperbot
 
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -26,13 +27,14 @@ class BitpandaFusionV600Test {
         assertEquals(200.0, snapshot.bidLevels.first().notionalEur, 0.0001)
         assertEquals(176.0, snapshot.askLevels.first().notionalEur, 0.0001)
         assertEquals(FusionTradingCosts.FEE_RATE, snapshot.feeRate, 0.0)
+        assertNull(snapshot.observedAccountFeeRate)
     }
 
-    @Test fun `account parser converts percentage points into decimal fee rate`() {
+    @Test fun `account parser stores observed fee without changing V5 control fee`() {
         val prior = FusionMarketSnapshot(
             configured = true,
             connected = true,
-            feeRate = 0.0025,
+            feeRate = FusionTradingCosts.FEE_RATE,
             feeTier = FusionTradingCosts.FEE_TIER
         )
         val parsed = BitpandaFusionClient.parseAccount(
@@ -48,14 +50,16 @@ class BitpandaFusionV600Test {
             now = 9876L,
             previous = prior
         )
-        assertEquals(0.0015, parsed.feeRate, 0.00000001)
-        assertEquals("Tier 2", parsed.feeTier)
+        assertEquals(FusionTradingCosts.FEE_RATE, parsed.feeRate, 0.0)
+        assertEquals(FusionTradingCosts.FEE_TIER, parsed.feeTier)
+        assertEquals(0.0015, parsed.observedAccountFeeRate!!, 0.00000001)
+        assertEquals("Tier 2", parsed.observedAccountFeeTier)
         assertEquals(12_500.0, parsed.tradedVolume30dEur!!, 0.0001)
         assertEquals(9876L, parsed.feeUpdatedAt)
     }
 
     @Test fun `unknown fee mode cannot silently replace the conservative fallback`() {
-        val prior = FusionMarketSnapshot(feeRate = 0.0025, feeTier = "fallback")
+        val prior = FusionMarketSnapshot(feeRate = FusionTradingCosts.FEE_RATE, feeTier = FusionTradingCosts.FEE_TIER)
         val parsed = BitpandaFusionClient.parseAccount(
             JSONObject("""{
                 "traded_volume30d":"100",
@@ -64,7 +68,8 @@ class BitpandaFusionV600Test {
             now = 10L,
             previous = prior
         )
-        assertEquals(0.0025, parsed.feeRate, 0.0)
+        assertEquals(FusionTradingCosts.FEE_RATE, parsed.feeRate, 0.0)
+        assertNull(parsed.observedAccountFeeRate)
         assertTrue(parsed.tradedVolume30dEur == 100.0)
     }
 }
