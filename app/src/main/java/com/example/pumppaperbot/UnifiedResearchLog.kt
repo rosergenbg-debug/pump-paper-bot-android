@@ -17,7 +17,8 @@ object UnifiedResearchLog {
     private const val RETENTION_DAYS = 30
     private const val HEARTBEAT_MILLIS = 15L * 60L * 1000L
     private const val RECENT_WINDOW_MILLIS = 24L * 60L * 60L * 1000L
-    private const val MAX_SUPPORT_FILE_BYTES = 1_900_000
+    // V6 keeps diagnostic parts comfortably below the observed chat upload failure near 2 MB.
+    private const val MAX_SUPPORT_FILE_BYTES = 900_000
     private const val CONTROL_PREFS = "unified_log_control_v530"
     private val lock = Any()
     private val utc = TimeZone.getTimeZone("UTC")
@@ -115,6 +116,14 @@ object UnifiedResearchLog {
                 "reason=${coach.reason}; tuningRevision=${tuning.revision}; ${tuning.compact()}",
             now
         )
+        val v6 = ScalpExecutionIntelligenceStoreV600.current(context)
+        record(
+            context,
+            "V6_EXECUTION_SHADOW",
+            v6.agreement,
+            "$source; score=${v6.executionScore}; costFloor=${v6.costFloorBps ?: -1.0}bp; ${v6.reason}",
+            now
+        )
     }
 
     fun export(context: Context, now: Long = System.currentTimeMillis()): File {
@@ -147,7 +156,7 @@ object UnifiedResearchLog {
             }
         val compactJournal = ResearchLogCompactionPolicy.compact(rawJournal, HEARTBEAT_MILLIS)
         val report = JSONObject()
-            .put("schema", "pump-signal-unified-log-v534")
+            .put("schema", "pump-signal-unified-log-v600")
             .put("appVersion", BuildConfig.VERSION_NAME)
             .put("generatedAt", now)
             .put("logPolicy", JSONObject()
@@ -160,9 +169,11 @@ object UnifiedResearchLog {
             .put("safety", JSONObject()
                 .put("realOrdersImplemented", false)
                 .put("bitpandaMode", "READ_ONLY_MARKET_DATA_AND_PAPER_SIMULATION")
+                .put("v6ExecutionMode", "SHADOW_ONLY")
                 .put("containsApiKeys", false))
             .put("market", JSONObject().put("pumpEur", displayPrice).put("lastSync", market.lastSync))
             .put("bitpandaFusion", fusion.toJson().apply { put("error", sanitize(fusion.error)) })
+            .put("v6ScalpExecutionShadow", ScalpExecutionIntelligenceStoreV600.current(context).toJson())
             .put("fusionPriority", JSONObject()
                 .put("active", FusionPriorityPolicy.plan(fusionSim).active)
                 .put("forceDeepSigPro", FusionPriorityPolicy.plan(fusionSim).forcePro)
@@ -204,7 +215,7 @@ object UnifiedResearchLog {
         context.startActivity(Intent.createChooser(send, "Отправить единый лог"))
     }
 
-    /** Lightweight support export: 24 hours, minified and split below the upload limit. */
+    /** Lightweight legacy support export: 24 hours, minified and split below 900 KB. */
     fun exportRecent24h(context: Context, now: Long = System.currentTimeMillis()): List<File> {
         val cutoff = now - RECENT_WINDOW_MILLIS
         val market = PumpBotEngine.snapshot(context)
@@ -219,7 +230,7 @@ object UnifiedResearchLog {
             .put("PumpMachineSafe", recentJson(PumpMachineSafeStore.toJson(PumpMachineSafeStore.state(context)), cutoff))
             .put("FusionSim", recentJson(FusionSimStore.toJson(FusionSimStore.state(context)), cutoff))
         val report = JSONObject()
-            .put("schema", "pump-signal-support-log-24h-v535")
+            .put("schema", "pump-signal-support-log-24h-v600")
             .put("appVersion", BuildConfig.VERSION_NAME)
             .put("generatedAt", now)
             .put("windowHours", 24)
@@ -227,6 +238,7 @@ object UnifiedResearchLog {
             .put("clearedAfterExport", false)
             .put("safety", JSONObject()
                 .put("realOrdersImplemented", false)
+                .put("v6ExecutionMode", "SHADOW_ONLY")
                 .put("containsApiKeys", false))
             .put("market", JSONObject()
                 .put("pumpEur", PaperExecutionPolicy.displayPrice(market, now))
@@ -236,6 +248,7 @@ object UnifiedResearchLog {
                 .put("spreadPercent", market.spreadPercent ?: JSONObject.NULL))
             .put("flow", breathing.toJson())
             .put("bitpandaFusion", fusionMarket.toJson().apply { put("error", sanitize(fusionMarket.error)) })
+            .put("v6ScalpExecutionShadow", ScalpExecutionIntelligenceStoreV600.current(context).toJson())
             .put("latestEntryAudit", EntryOpportunityAuditStore.latest(context).toJson())
             .put("latestLiquidityShadow", LiquidityReleaseShadowStore.latest(context).toJson())
             .put("deepSeekEntryCoach", DeepSeekEntryCoachStore.exportJson(context))
@@ -264,22 +277,9 @@ object UnifiedResearchLog {
         }
     }
 
+    /** V6 user-facing support button now exports the compact text report, not a near-2MB JSON. */
     fun shareRecent24h(context: Context) {
-        val files = exportRecent24h(context)
-        val uris = ArrayList(files.map {
-            FileProvider.getUriForFile(context, "${context.packageName}.files", it)
-        })
-        val send = Intent(if (uris.size == 1) Intent.ACTION_SEND else Intent.ACTION_SEND_MULTIPLE).apply {
-            type = "application/json"
-            if (uris.size == 1) putExtra(Intent.EXTRA_STREAM, uris.single())
-            else putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
-            putExtra(
-                Intent.EXTRA_SUBJECT,
-                "PumpSignal V${BuildConfig.VERSION_NAME} — лог за 24 часа (${uris.size} файл.)"
-            )
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        context.startActivity(Intent.createChooser(send, "Отправить лог за 24 часа"))
+        V6ScalpReportStore.shareRecent24h(context)
     }
 
     private fun readJournal(context: Context, cutoff: Long): List<JSONObject> {
