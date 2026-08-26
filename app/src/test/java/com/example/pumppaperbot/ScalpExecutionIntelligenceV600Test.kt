@@ -34,7 +34,6 @@ class ScalpExecutionIntelligenceV600Test {
     }
 
     private fun breathing() = LiveMarketBreathingSnapshot(
-        updatedAt = 1_000L,
         fresh = true,
         instantScore = 12,
         horizons = listOf(
@@ -46,7 +45,6 @@ class ScalpExecutionIntelligenceV600Test {
 
     private fun positiveMicro() = MicroImpulseSnapshot(
         connected = true,
-        updatedAt = 1_000L,
         aggressiveBuyPercent15s = 64.0,
         aggressiveBuyPercent60s = 58.0,
         tradeAcceleration = 1.8,
@@ -62,11 +60,11 @@ class ScalpExecutionIntelligenceV600Test {
             FusionBookLevel(0.9992, 400.0)
         )
         val asks = listOf(
-            FusionBookLevel(1.0005, 200.0),
-            FusionBookLevel(1.0007, 180.0),
-            FusionBookLevel(1.0009, 160.0),
-            FusionBookLevel(1.0011, 150.0),
-            FusionBookLevel(1.0013, 140.0)
+            FusionBookLevel(1.0005, 500.0),
+            FusionBookLevel(1.0007, 450.0),
+            FusionBookLevel(1.0009, 400.0),
+            FusionBookLevel(1.0011, 350.0),
+            FusionBookLevel(1.0013, 300.0)
         )
         val result = ScalpExecutionPolicyV600.evaluate(
             market(bids, asks), positiveMicro(), breathing(), null, "PM1_CAND", 1_000L
@@ -80,18 +78,18 @@ class ScalpExecutionIntelligenceV600Test {
 
     @Test fun `divergence is detected when Binance buys but Fusion book is ask heavy`() {
         val bids = listOf(
-            FusionBookLevel(1.0000, 100.0),
-            FusionBookLevel(0.9998, 100.0),
-            FusionBookLevel(0.9996, 100.0),
-            FusionBookLevel(0.9994, 100.0),
-            FusionBookLevel(0.9992, 100.0)
+            FusionBookLevel(1.0000, 300.0),
+            FusionBookLevel(0.9998, 300.0),
+            FusionBookLevel(0.9996, 300.0),
+            FusionBookLevel(0.9994, 300.0),
+            FusionBookLevel(0.9992, 300.0)
         )
         val asks = listOf(
-            FusionBookLevel(1.0005, 900.0),
-            FusionBookLevel(1.0007, 800.0),
-            FusionBookLevel(1.0009, 700.0),
-            FusionBookLevel(1.0011, 600.0),
-            FusionBookLevel(1.0013, 500.0)
+            FusionBookLevel(1.0005, 1500.0),
+            FusionBookLevel(1.0007, 1400.0),
+            FusionBookLevel(1.0009, 1300.0),
+            FusionBookLevel(1.0011, 1200.0),
+            FusionBookLevel(1.0013, 1100.0)
         )
         val result = ScalpExecutionPolicyV600.evaluate(
             market(bids, asks), positiveMicro(), breathing(), null, "PM1_CAND", 1_000L
@@ -126,13 +124,13 @@ class ScalpExecutionIntelligenceV600Test {
     }
 
     @Test fun `book memory only affects depth change while it is fresh`() {
-        val bids = listOf(FusionBookLevel(1.0000, 1_000.0))
-        val asks = listOf(FusionBookLevel(1.0005, 1_000.0))
+        val bids = listOf(FusionBookLevel(1.0000, 2_000.0))
+        val asks = listOf(FusionBookLevel(1.0005, 2_000.0))
         val current = market(bids, asks, now = 100_000L)
         val freshPrior = FusionBookMemoryV600(
             at = 50_000L,
             top5BidEur = 500.0,
-            top5AskEur = 2_000.0
+            top5AskEur = 3_000.0
         )
         val withFresh = ScalpExecutionPolicyV600.evaluate(
             current, positiveMicro(), breathing(), freshPrior, "FAST", 100_000L
