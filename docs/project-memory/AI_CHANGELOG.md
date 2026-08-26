@@ -56,7 +56,7 @@ Repository governance/documentation only.
 Fast-path может активироваться чаще, потому что теперь каждый профиль имеет право самостоятельно стать кандидатом; это ожидаемое восстановление timing, но требует наблюдения CPU/API-independent local behavior. DeepSeek paid API cadence остаётся общей и не увеличена. Старый cached coach state без profile намеренно не переиспользуется после upgrade.
 
 **Verification**  
-Добавлены targeted unit tests; full CI выполняет `testDebugUnitTest`, `lintDebug`, `assembleDebug` и APK package/version/signature checks. Финальный CI status фиксируется в `CURRENT_STATE.md` после завершения run. До CI success V5.37 не считать стабильной сборкой.
+Targeted regression tests добавлены. GitHub Actions run #388 полностью прошёл `testDebugUnitTest`, `lintDebug`, `assembleDebug`, APK package/version/activity/v2-signature/ZIP checks и upload artifact. После этого runtime/trading code больше не менялся — до final PR head менялись только шесть `docs/project-memory/*` файлов. PR #84 успешно слит в `main` как V5.37. CI artifact проверен как debug-signed intermediate, поэтому он не выдаётся как совместимое пользовательское обновление без отдельной подписи правильным ключом.
 
 **Project impact**  
 Системное исправление в сторону `MASTER_SPEC`: уменьшает скрытую связность стратегий и возвращает responsive профилю собственную скорость реакции без подгонки торговых порогов.
