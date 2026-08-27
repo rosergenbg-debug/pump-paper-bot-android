@@ -2,13 +2,7 @@ package com.example.pumppaperbot
 
 import android.content.Context
 
-/**
- * V5.22 single source of truth for entry timing shared by Fusion and Pump Machine.
- *
- * Fusion, PM2 and PM3 consume the same short-lived market observation through separate
- * persisted stability states. Since V5.28, PM2 and PM3 use the same strict eligibility
- * criteria but independently confirm, execute, cool down and re-enter.
- */
+/** One causal market observation shared as evidence, never as shared trading state. */
 data class SharedFusionEntryObservation(
     val frame: FusionFlowFrame?,
     val shockReady: Boolean,
@@ -82,7 +76,24 @@ object SharedFusionEntryObservationStore {
     }
 }
 
+/**
+ * Standalone Fusion paper-entry state machine.
+ *
+ * V6.1 stops requiring instant/5/15/30 to all be green. Fusion is intentionally a different
+ * hypothesis from the four Pump Machines: short flow leads, medium flow must not be broken,
+ * capital/book/executable-price evidence confirms, then the existing 60s anti-churn acceptance
+ * remains. This keeps it selective without waiting for the entire move to be historically green.
+ */
 object SharedFusionEntryPolicy {
+    internal fun directionalCandidate(frame: FusionFlowFrame?): Boolean {
+        frame ?: return false
+        if (frame.deteriorationSignal) return false
+        return frame.instant >= 5 &&
+            frame.score5m >= 3 &&
+            frame.score15m >= -4 &&
+            frame.score30m >= -10
+    }
+
     fun evaluate(
         previous: FusionStabilityState,
         observation: SharedFusionEntryObservation,
@@ -102,7 +113,7 @@ object SharedFusionEntryPolicy {
                     peakBid = 0.0,
                     profitDefenseArmed = false
                 ),
-                "COOLDOWN: общий Fusion-вход заблокирован ещё ${leftSeconds}с после собственного выхода"
+                "COOLDOWN: Fusion-вход заблокирован ещё ${leftSeconds}с после собственного выхода"
             )
         }
 
@@ -128,13 +139,12 @@ object SharedFusionEntryPolicy {
                     profitDefenseArmed = false,
                     cooldownUntil = 0L
                 ),
-                "SHOCK_REBOUND_ENTRY: общий Fusion-entry engine получил подтверждённый быстрый отскок"
+                "V610_SHOCK_REBOUND_ENTRY: Fusion получил подтверждённый быстрый отскок и исполнимый рынок"
             )
         }
 
         val frame = observation.frame
-        val buy = frame?.buySignal == true
-        if (!buy) {
+        if (!directionalCandidate(frame)) {
             return SharedFusionEntryDecision(
                 null,
                 previous.copy(
@@ -148,7 +158,7 @@ object SharedFusionEntryPolicy {
                     profitDefenseArmed = false,
                     cooldownUntil = 0L
                 ),
-                "WAIT: общий Fusion-вход сейчас/5/15/30 ещё не собран"
+                "V610_WAIT: Fusion ждёт ведущий короткий поток; нужно мгн≥5, 5м≥3, 15м≥−4, 30м≥−10 без развала"
             )
         }
 
@@ -157,7 +167,7 @@ object SharedFusionEntryPolicy {
             return SharedFusionEntryDecision(
                 null,
                 previous.copy(entryStreak = 0, entryCandidateAt = 0L, entryAnchorAsk = 0.0),
-                "CAPITAL_WAIT: ${capital.reason}"
+                "V610_CAPITAL_WAIT: ${capital.reason}"
             )
         }
 
@@ -182,11 +192,13 @@ object SharedFusionEntryPolicy {
         )
 
         val acceptance = CapitalParticipationGate.priceAcceptance(anchorAsk, observation.executionAsk)
+        val frameText = frame?.let { "мгн/5/15/30=${it.instant}/${it.score5m}/${it.score15m}/${it.score30m}" }
+            ?: "flow недоступен"
         return if (streak >= FusionStabilityPolicy.ENTRY_CONFIRMATIONS && confirmedByTime && acceptance.allowed) {
             SharedFusionEntryDecision(
                 "BUY",
                 next,
-                "ENTRY_CONFIRMED: сейчас/5/15/30, крупные BUY, стакан и принятие цены подтверждены; ${capital.reason}; ${acceptance.reason}"
+                "V610_ENTRY_CONFIRMED: $frameText; относительный поток/стакан/принятие цены подтверждены; ${capital.reason}; ${acceptance.reason}"
             )
         } else {
             val elapsed = (now - candidateAt).coerceAtLeast(0L)
@@ -194,11 +206,7 @@ object SharedFusionEntryPolicy {
             SharedFusionEntryDecision(
                 null,
                 next,
-                if (frame?.strongBuy == true) {
-                    "ENTRY_ARMED_STRONG ${streak}/${FusionStabilityPolicy.ENTRY_CONFIRMATIONS}: сильный BUY и капитал есть; ещё ${left}с; ${acceptance.reason}"
-                } else {
-                    "ENTRY_ARMED ${streak}/${FusionStabilityPolicy.ENTRY_CONFIRMATIONS}: BUY и капитал подтверждаются; ещё ${left}с; ${acceptance.reason}"
-                }
+                "V610_ENTRY_ARMED ${streak}/${FusionStabilityPolicy.ENTRY_CONFIRMATIONS}: $frameText; ещё ${left}с; ${capital.reason}; ${acceptance.reason}"
             )
         }
     }
