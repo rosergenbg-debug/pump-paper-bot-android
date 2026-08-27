@@ -43,7 +43,10 @@ object SharedFusionEntryObservationStore {
     @Synchronized
     fun snapshot(context: Context, now: Long = System.currentTimeMillis()): SharedFusionEntryObservation {
         val bucket = now / SAMPLE_MILLIS
-        cached?.takeIf { cachedBucket == bucket }?.let { return it }
+        val latestFusionMarket = BitpandaFusionStore.state(context)
+        cached?.takeIf {
+            cachedBucket == bucket && latestFusionMarket.lastSuccess <= it.sampledAt
+        }?.let { return it }
 
         val breathing = LiveMarketBreathingStore.snapshot(context, now)
         val shock = ShockReboundStore.state(context)
@@ -53,7 +56,7 @@ object SharedFusionEntryObservationStore {
             )
         }
         val market = PumpBotEngine.snapshot(context)
-        val fusionMarket = BitpandaFusionStore.state(context)
+        val fusionMarket = latestFusionMarket
         val impulse = ImpulseRadarStore.state(context)
         return SharedFusionEntryObservation(
             frame = FusionFlowPolicy.frame(breathing),
