@@ -256,6 +256,9 @@ class PumpSignalService : Service() {
                 val appTrade = CycleStageGuard.run(
                     this, "APP_PAPER", { AppPaperSyncResult(AppPaperStore.state(this), false) }
                 ) { AppPaperStore.syncWithAlerts(this) }
+                CycleStageGuard.run(this, "DEEPSIGX_PAPER", { GeminiExitExperimentStore.state(this) }) {
+                    DeepSigXRuntimeV610.sync(this, deepSeek)
+                }
                 val pumpMachine = CycleStageGuard.run(
                     this, "PUMP_MACHINE", {
                         PumpMachineSyncResult(PumpMachineStore.state(this), "ошибка Pump 3 изолирована", 0.0)
