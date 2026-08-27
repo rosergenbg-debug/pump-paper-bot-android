@@ -5,11 +5,10 @@ import kotlin.math.max
 /**
  * Relative, volume-scale-independent entry model.
  *
- * A small market may move on small money and a busy market may ignore a large print, therefore
- * absolute USDT thresholds are deliberately not used here. V6.1 keeps the PM1/PM2 architecture
- * intact but corrects two observed timing errors: flat/noisy buyer imbalance is penalised, while a
- * genuinely accelerating move is not hard-rejected merely because the lifecycle label already
- * reached MATURE for a moment. Hard execution/data safety remains local and deterministic.
+ * V6.1 keeps PM1/PM2 architecture intact but corrects two timing errors: flat/noisy buyer
+ * imbalance is penalised, while a genuinely accelerating move gets a small conditional timing
+ * allowance. The ordinary anti-chase ceiling remains strict; only strong short-flow evidence earns
+ * extra room. Hard execution/data safety remains local and deterministic.
  */
 object AdaptiveBreathEntryPolicy {
     data class Result(
@@ -29,9 +28,7 @@ object AdaptiveBreathEntryPolicy {
 
     private fun profile(mode: PumpProfitModeV526) = when (mode) {
         PumpProfitModeV526.PUMP_2 -> Profile(25, 7, 1.65)
-        // V6.1 gives the stricter PM2 a little more room before anti-chase veto. The old 1.15%
-        // ceiling could reject a valid large impulse before its 30s confirmation completed.
-        PumpProfitModeV526.PUMP_3 -> Profile(36, 7, 1.35)
+        PumpProfitModeV526.PUMP_3 -> Profile(36, 7, 1.15)
         PumpProfitModeV526.PUMP_RETEST -> Profile(31, 7, 1.35)
         PumpProfitModeV526.PUMP_SAFE -> Profile(47, 6, 1.10)
     }
@@ -59,19 +56,28 @@ object AdaptiveBreathEntryPolicy {
         if (spread != null && spread > 0.50) return veto(p, "спред ${fmt(spread)}% слишком широк")
 
         val breath = breathing.buyerBreath
+        val primaryMode = mode == PumpProfitModeV526.PUMP_2 || mode == PumpProfitModeV526.PUMP_3
+        val strongShortImpulse = primaryMode &&
+            frame.instant >= if (mode == PumpProfitModeV526.PUMP_2) 10 else 12 &&
+            micro.aggressiveBuyPercent15s >= 57.0 &&
+            micro.aggressiveBuyPercent60s >= 54.0 &&
+            micro.priceChange60sPercent >= 0.10 &&
+            breath.absorptionRisk <= 62
         val move = max(0.0, max(breath.moveSincePhaseStartPercent ?: 0.0, breath.priceChange5mPercent ?: 0.0))
-        if (move > p.maxMovePercent) return veto(p, "движение уже ${fmt(move)}%: поздно догонять")
+        val conditionalMoveRoom = if (strongShortImpulse && mode == PumpProfitModeV526.PUMP_3) 0.25 else 0.0
+        val effectiveMaxMove = p.maxMovePercent + conditionalMoveRoom
+        if (move > effectiveMaxMove) {
+            return veto(
+                p,
+                "движение уже ${fmt(move)}%: поздно догонять${if (conditionalMoveRoom > 0.0) " даже с сильным fast-flow" else ""}"
+            )
+        }
         val absorptionLimit = (90 - tuning.absorptionTightening).coerceAtLeast(76)
         if (breath.absorptionRisk >= absorptionLimit) return veto(p, "поглощение ${breath.absorptionRisk}/100")
 
-        val primaryMode = mode == PumpProfitModeV526.PUMP_2 || mode == PumpProfitModeV526.PUMP_3
         val matureReacceleration = primaryMode && breath.phase == BuyerBreathPhase.MATURE &&
-            frame.instant >= if (mode == PumpProfitModeV526.PUMP_2) 8 else 10 &&
-            frame.instant >= frame.score5m - 1 &&
-            micro.aggressiveBuyPercent15s >= 56.0 &&
-            micro.aggressiveBuyPercent60s >= 53.0 &&
-            micro.priceChange60sPercent >= 0.08 &&
-            breath.absorptionRisk <= 62
+            strongShortImpulse &&
+            frame.instant >= frame.score5m - 1
         if (breath.phase !in setOf(BuyerBreathPhase.IGNITION, BuyerBreathPhase.EXPANSION, BuyerBreathPhase.SHOCK) &&
             !matureReacceleration
         ) {
@@ -80,13 +86,14 @@ object AdaptiveBreathEntryPolicy {
 
         val fastDecelerating = frame.instant + tuning.decelerationGap < frame.score5m
         val mediumDecelerating = frame.score5m + tuning.decelerationGap < frame.score15m
-        val severeDeceleration =
+        val collapsedFastPeak = fastDecelerating && frame.score5m >= 15 && frame.instant <= 5
+        val severeDeceleration = collapsedFastPeak ||
             (frame.instant + tuning.decelerationGap * 2 < frame.score5m && micro.aggressiveBuyPercent15s < 49.0) ||
-                (frame.score5m + tuning.decelerationGap * 2 < frame.score15m && micro.aggressiveBuyPercent60s < 50.0)
+            (frame.score5m + tuning.decelerationGap * 2 < frame.score15m && micro.aggressiveBuyPercent60s < 50.0)
         if (severeDeceleration) {
             return veto(
                 p,
-                "поток резко разваливается: мгн/5/15=${frame.instant}/${frame.score5m}/${frame.score15m}, покупатели 15с/60с=${fmt(micro.aggressiveBuyPercent15s)}/${fmt(micro.aggressiveBuyPercent60s)}"
+                "поток тормозит резко: мгн/5/15=${frame.instant}/${frame.score5m}/${frame.score15m}, покупатели 15с/60с=${fmt(micro.aggressiveBuyPercent15s)}/${fmt(micro.aggressiveBuyPercent60s)}"
             )
         }
 
@@ -112,8 +119,8 @@ object AdaptiveBreathEntryPolicy {
         }
         val absorptionPenalty = ((breath.absorptionRisk - 45).coerceAtLeast(0) * 0.22)
 
-        // V6.1 noise correction: buyer imbalance without price response is not enough. This is a
-        // soft penalty rather than a veto so a very strong early flow can still become a candidate.
+        // Buyer imbalance without price response is not enough. This stays a soft penalty so a
+        // genuinely strong early flow can still become a candidate.
         val response5m = breath.priceChange5mPercent ?: 0.0
         val response60s = micro.priceChange60sPercent
         val flatNoisePenalty = when {
@@ -149,6 +156,7 @@ object AdaptiveBreathEntryPolicy {
             if (flatNoisePenalty > 0.0) append("; шум−${flatNoisePenalty.toInt()}")
             if (decelerationPenalty > 0.0) append("; торможение−${decelerationPenalty.toInt()}")
             if (realMoveBonus > 0.0) append("; движение+${realMoveBonus.toInt()}")
+            if (conditionalMoveRoom > 0.0) append("; fast-room+${fmt(conditionalMoveRoom)}%")
             if (matureReacceleration) append("; MATURE re-acceleration")
         }
         return Result(
