@@ -29,6 +29,17 @@ object SharedFusionEntryObservationStore {
     private var cachedBucket = Long.MIN_VALUE
     private var cached: SharedFusionEntryObservation? = null
 
+    /**
+     * Bitpanda execution data can refresh inside the same 15-second micro bucket. In that case the
+     * old observation must not keep a stale/zero executionAsk until the next bucket. This clears
+     * only the derived shared frame; strategy state, history and market evidence are untouched.
+     */
+    @Synchronized
+    fun invalidate() {
+        cachedBucket = Long.MIN_VALUE
+        cached = null
+    }
+
     @Synchronized
     fun snapshot(context: Context, now: Long = System.currentTimeMillis()): SharedFusionEntryObservation {
         val bucket = now / SAMPLE_MILLIS
