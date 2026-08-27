@@ -6,7 +6,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PumpMachine2PolicyTest {
-    private val feeRate = 0.0025
+    private val feeRate = FusionTradingCosts.FEE_RATE
     private val entryCost = 1000.0
     private val buyFee = entryCost * feeRate
     private val amount = (entryCost - buyFee) / 1.0
@@ -54,6 +54,6 @@ class PumpMachine2PolicyTest {
         assertEquals(2.0, PumpMachine2Policy.TAKE_PROFIT_NET_PERCENT, 0.0)
         assertEquals("EXIT", decision.action)
         assertTrue(decision.tradeNetPercent >= 2.0)
-        assertTrue(decision.reason.startsWith("V610_TAKE_PROFIT_PM2"))
+        assertTrue(decision.reason.startsWith("V620_TAKE_PROFIT_PM2"))
     }
 }
