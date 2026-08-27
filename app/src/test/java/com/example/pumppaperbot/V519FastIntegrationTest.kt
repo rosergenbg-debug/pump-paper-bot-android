@@ -89,7 +89,7 @@ class V519FastIntegrationTest {
             entryObservation = capitalReadyObservation(null, now, ask = 1.0, shock = true)
         )
         assertEquals("BUY", buy.action)
-        assertTrue(buy.reason.startsWith("SHOCK_REBOUND_ENTRY"))
+        assertTrue(buy.reason.startsWith("V610_SHOCK_REBOUND_ENTRY"))
 
         val blocked = FusionStabilityPolicy.evaluate(
             inPosition = false,
