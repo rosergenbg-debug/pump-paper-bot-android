@@ -111,10 +111,15 @@ class PumpSignalService : Service() {
                 val pumpMachine2Fast = PumpMachine2Store.state(this)
                 val pumpRetestFast = PumpMachineRetestStore.state(this)
                 val pumpSafeFast = PumpMachineSafeStore.state(this)
+                val fusionFast = FusionSimStore.state(this)
                 val entryObservationFast = SharedFusionEntryObservationStore.snapshot(this, now)
                 val fastCandidates = PumpFastCandidatePolicyV537.evaluate(entryObservationFast)
+                // Fusion is a different strategy, but once its own short-flow hypothesis is alive
+                // it must not be physically delayed by the generic ~2 minute app cycle.
+                val fusionFastCandidate = !fusionFast.inPosition &&
+                    SharedFusionEntryPolicy.directionalCandidate(entryObservationFast.frame)
                 if (pumpMachineFast.inPosition || pumpMachine2Fast.inPosition || pumpRetestFast.inPosition ||
-                    pumpSafeFast.inPosition || fastCandidates.any) {
+                    pumpSafeFast.inPosition || fusionFast.inPosition || fastCandidates.any || fusionFastCandidate) {
                     val venue = BitpandaFusionStore.state(this)
                     if (!venue.fresh(now) || now - venue.lastSuccess >= 15_000L) {
                         BitpandaFusionClient().sync(this, force = true)
@@ -125,10 +130,12 @@ class PumpSignalService : Service() {
                         if (fastCandidates.pump3) add("PM2_CAND")
                         if (fastCandidates.retest) add("PM3_RETEST_CAND")
                         if (fastCandidates.safe) add("PM4_SAFE_CAND")
+                        if (fusionFastCandidate) add("FUSION_CAND")
                         if (pumpMachine2Fast.inPosition) add("PM1_POS")
                         if (pumpMachineFast.inPosition) add("PM2_POS")
                         if (pumpRetestFast.inPosition) add("PM3_POS")
                         if (pumpSafeFast.inPosition) add("PM4_POS")
+                        if (fusionFast.inPosition) add("FUSION_POS")
                     }.joinToString("+").ifBlank { "FAST" }
                     observeV6(trigger, fastNow)
                     if (pumpMachineFast.inPosition || fastCandidates.pump3) {
@@ -146,6 +153,10 @@ class PumpSignalService : Service() {
                     if (pumpSafeFast.inPosition || fastCandidates.safe) {
                         runCatching { PumpMachineSafeStore.sync(this, fastNow) }
                             .onFailure { recordIndependentPumpFailure("PUMP_MACHINE_SAFE_FAST", it) }
+                    }
+                    if (fusionFast.inPosition || fusionFastCandidate) {
+                        runCatching { FusionSimStore.sync(this, DeepSeekPrimaryStore.state(this), fastNow) }
+                            .onFailure { recordIndependentPumpFailure("FUSION_FAST", it) }
                     }
                 }
 
