@@ -13,9 +13,13 @@ data class PumpProfitPositionDecisionV526(
 )
 
 /**
- * PM paper execution/risk engine. V6.1 preserves the existing PM1/PM2 strategy shape, while
- * correcting confirmation timing for genuinely strong impulses and aligning RETEST exit economics
- * with its advertised +2% NET profile. All PnL remains simulated from executable ask/bid and fees.
+ * PM paper execution/risk engine.
+ *
+ * V6.2 corrects two different units that had been mixed in the old early-risk path:
+ * TP/hard-stop/breakeven remain NET-after-fees economics, while an early adverse PRICE move is
+ * measured from executable entry ask to current bid before fees. This prevents the normal ~0.5%
+ * round-trip fee floor from masquerading as a market drawdown. Structural seller failure remains
+ * able to exit earlier, but a single transient seller phase is not enough on its own.
  */
 object PumpProfitEngineV526 {
     private data class Config(
@@ -24,7 +28,7 @@ object PumpProfitEngineV526 {
         val hardStopNet: Double,
         val breakevenTriggerNet: Double,
         val breakevenLockNet: Double,
-        val earlyAdverseNet: Double,
+        val earlyAdversePricePercent: Double,
         val givebackArmNet: Double,
         val maxGivebackNet: Double,
         val softHoldMillis: Long,
@@ -52,7 +56,7 @@ object PumpProfitEngineV526 {
         hardStopNet = -1.10,
         breakevenTriggerNet = 0.85,
         breakevenLockNet = 0.10,
-        earlyAdverseNet = -0.45,
+        earlyAdversePricePercent = -0.45,
         givebackArmNet = 1.25,
         maxGivebackNet = 0.55,
         softHoldMillis = 20L * 60L * 1000L,
@@ -80,7 +84,7 @@ object PumpProfitEngineV526 {
         hardStopNet = -1.30,
         breakevenTriggerNet = 1.25,
         breakevenLockNet = 0.15,
-        earlyAdverseNet = -0.55,
+        earlyAdversePricePercent = -0.55,
         givebackArmNet = 2.00,
         maxGivebackNet = 0.75,
         softHoldMillis = 35L * 60L * 1000L,
@@ -114,7 +118,7 @@ object PumpProfitEngineV526 {
         hardStopNet = -0.75,
         breakevenTriggerNet = 0.55,
         breakevenLockNet = 0.05,
-        earlyAdverseNet = -0.30,
+        earlyAdversePricePercent = -0.30,
         givebackArmNet = 0.80,
         maxGivebackNet = 0.32,
         softHoldMillis = 15L * 60L * 1000L,
@@ -159,7 +163,11 @@ object PumpProfitEngineV526 {
 
     fun isFastCandidate(mode: PumpProfitModeV526, observation: SharedFusionEntryObservation): Boolean {
         if (observation.shockReady) return shockPermitted(observation)
-        return entryGate(mode, observation).first
+        val result = AdaptiveBreathEntryPolicy.evaluate(mode, observation)
+        if (result.allowed) return true
+        if (mode !in setOf(PumpProfitModeV526.PUMP_2, PumpProfitModeV526.PUMP_3)) return false
+        if (result.hardVeto || !result.nearCandidate) return false
+        return PrimaryImpulseLifecycleV620.assess(observation).keepFastTracking
     }
 
     fun entryGateResult(
@@ -201,13 +209,13 @@ object PumpProfitEngineV526 {
                 return SharedFusionEntryDecision(
                     null,
                     previous.copy(exitStreak = 0, exitArmedAt = 0L, exitArmedBid = 0.0),
-                    "V610_${c.name}_BREATH_HOLD: оценка ${gate.score}/${gate.threshold}; один мягкий откат не обнуляет кандидат; ${gate.reason}"
+                    "V620_${c.name}_BREATH_HOLD: оценка ${gate.score}/${gate.threshold}; мягкий переход не обнуляет кандидат; ${gate.reason}"
                 )
             }
             return SharedFusionEntryDecision(
                 null,
                 resetEntry(previous, keepCooldown = false),
-                "V610_${c.name}_${if (gate.hardVeto) "SAFETY_WAIT" else "SOFT_WAIT"}: оценка ${gate.score}/${gate.threshold}; ${gate.reason}"
+                "V620_${c.name}_${if (gate.hardVeto) "SAFETY_WAIT" else "SOFT_WAIT"}: оценка ${gate.score}/${gate.threshold}; ${gate.reason}"
             )
         }
 
@@ -228,7 +236,9 @@ object PumpProfitEngineV526 {
         val elapsed = (now - candidateAt).coerceAtLeast(0L)
         val priceMove = if (anchorAsk > 0.0) (observation.executionAsk / anchorAsk - 1.0) * 100.0 else 0.0
         val micro = observation.micro
-        val strongImpulse = mode in setOf(PumpProfitModeV526.PUMP_2, PumpProfitModeV526.PUMP_3) &&
+        val primary = mode in setOf(PumpProfitModeV526.PUMP_2, PumpProfitModeV526.PUMP_3)
+        val lifecycle = if (primary) PrimaryImpulseLifecycleV620.assess(observation) else null
+        val strongImpulse = primary && lifecycle?.allowStrongShortcut != false &&
             gate.score >= gate.threshold + 9 &&
             (observation.frame?.instant ?: 0) >= (if (mode == PumpProfitModeV526.PUMP_2) 10 else 12) &&
             (micro?.aggressiveBuyPercent15s ?: 0.0) >= 57.0 &&
@@ -240,26 +250,31 @@ object PumpProfitEngineV526 {
         val maxRise = (c.maxConfirmationRisePercent + strongExtraRise -
             observation.entryTuning.chaseTighteningBps / 100.0).coerceAtLeast(0.15)
         val priceAccepted = priceMove in -0.20..maxRise
-        val timingLabel = if (strongImpulse) "сильный импульс" else "обычное подтверждение"
+        val timingLabel = when {
+            lifecycle?.regime == PrimaryImpulseRegimeV620.BURST_NEEDS_ACCEPTANCE -> "burst: обычное подтверждение"
+            lifecycle?.regime == PrimaryImpulseRegimeV620.REPAIRING_REVERSAL -> "ремонт разворота: обычное подтверждение"
+            strongImpulse -> "сильный импульс"
+            else -> "обычное подтверждение"
+        }
         return if (streak >= 2 && elapsed >= confirmationMillis && priceAccepted) {
             SharedFusionEntryDecision(
                 "BUY",
                 next,
-                "V610_${c.name}_ADAPTIVE_ENTRY: $timingLabel; дыхание ${gate.score}/${gate.threshold}; цена от якоря ${fmtSigned(priceMove)}%; ${gate.reason}"
+                "V620_${c.name}_ADAPTIVE_ENTRY: $timingLabel; дыхание ${gate.score}/${gate.threshold}; цена от якоря ${fmtSigned(priceMove)}%; ${gate.reason}"
             )
         } else {
             val left = ((confirmationMillis - elapsed).coerceAtLeast(0L) + 999L) / 1000L
             SharedFusionEntryDecision(
                 null,
                 next,
-                "V610_${c.name}_BREATH_ARMED ${streak}/2: $timingLabel; оценка ${gate.score}/${gate.threshold}, ещё ${left}с; цена от якоря ${fmtSigned(priceMove)}% ${if (priceAccepted) "допустима" else "вне диапазона −0,20…+${fmt(maxRise)}%"}; ${gate.reason}"
+                "V620_${c.name}_BREATH_ARMED ${streak}/2: $timingLabel; оценка ${gate.score}/${gate.threshold}, ещё ${left}с; цена от якоря ${fmtSigned(priceMove)}% ${if (priceAccepted) "допустима" else "вне диапазона −0,20…+${fmt(maxRise)}%"}; ${gate.reason}"
             )
         }
     }
 
     private fun entryGate(mode: PumpProfitModeV526, observation: SharedFusionEntryObservation): Pair<Boolean, String> {
         val result = AdaptiveBreathEntryPolicy.evaluate(mode, observation)
-        return result.allowed to "V610 score=${result.score}/${result.threshold}; ${result.reason}"
+        return result.allowed to "V620 score=${result.score}/${result.threshold}; ${result.reason}"
     }
 
     private fun shockPermitted(observation: SharedFusionEntryObservation): Boolean {
@@ -283,6 +298,7 @@ object PumpProfitEngineV526 {
     ): PumpProfitPositionDecisionV526 {
         val c = cfg(mode)
         val tradeNet = tradeNetPercent(portfolio, bid, feeRate)
+        val grossPriceMove = priceMovePercent(portfolio.entryPrice, bid)
         val peakBid = max(max(previous.peakBid, bid), portfolio.entryPrice)
         val peakNet = tradeNetPercent(portfolio, peakBid, feeRate)
         val armed = previous.profitDefenseArmed || peakNet >= c.breakevenTriggerNet
@@ -299,18 +315,26 @@ object PumpProfitEngineV526 {
         if (tradeNet <= c.hardStopNet) return exit("V610_HARD_STOP_${c.name}: ${fmtSigned(tradeNet)}% NET; лимит ${fmtSigned(c.hardStopNet)}%")
         if (armed && tradeNet <= c.breakevenLockNet) return exit("V610_BREAKEVEN_${c.name}: пик ${fmtSigned(peakNet)}% NET; защищаем не менее ${fmtSigned(c.breakevenLockNet)}% NET")
 
-        val frame = observation?.frame
-        val breath = observation?.breathing?.buyerBreath
-        val deterioration = frame?.deteriorationSignal == true ||
-            breath?.phase == BuyerBreathPhase.SELLER_TAKEOVER ||
-            ((breath?.absorptionRisk ?: 0) >= 85 && (frame?.instant ?: 0) < 0)
-        if (positionAgeMillis >= 90_000L && tradeNet <= c.earlyAdverseNet && deterioration) {
-            return exit("V610_EARLY_RISK_EXIT_${c.name}: ${fmtSigned(tradeNet)}% NET и быстрый поток ухудшился; не ждём полного стопа")
+        val structuralFailure = PrimaryImpulseLifecycleV620.structuralFailure(observation)
+        val deterioration = PrimaryImpulseLifecycleV620.ordinaryDeterioration(observation)
+        val structuralPriceLimit = c.earlyAdversePricePercent * 0.60
+        if (positionAgeMillis >= 90_000L && structuralFailure && grossPriceMove <= structuralPriceLimit) {
+            return exit(
+                "V620_STRUCTURAL_RISK_EXIT_${c.name}: цена ${fmtSigned(grossPriceMove)}% от entry без комиссий, подтверждён структурный слом; NET ${fmtSigned(tradeNet)}%"
+            )
         }
+        if (positionAgeMillis >= 90_000L && grossPriceMove <= c.earlyAdversePricePercent && deterioration) {
+            return exit(
+                "V620_EARLY_PRICE_EXIT_${c.name}: цена ${fmtSigned(grossPriceMove)}% от entry без комиссий и поток ухудшился; NET ${fmtSigned(tradeNet)}%; комиссии не считаем падением цены"
+            )
+        }
+
         val giveback = peakNet - tradeNet
         if (peakNet >= c.givebackArmNet && giveback >= c.maxGivebackNet && tradeNet > c.breakevenLockNet) {
             return exit("V610_PROFIT_GIVEBACK_${c.name}: пик ${fmtSigned(peakNet)}%, откат ${fmt(giveback)} п.п.; фиксируем ${fmtSigned(tradeNet)}% NET")
         }
+        val frame = observation?.frame
+        val breath = observation?.breathing?.buyerBreath
         val constructive = frame != null && frame.instant >= 0 && frame.score5m >= 0 && frame.score15m >= -2 &&
             breath?.phase != BuyerBreathPhase.EXHAUSTION && breath?.phase != BuyerBreathPhase.SELLER_TAKEOVER
         if (positionAgeMillis >= c.hardHoldMillis) {
@@ -320,9 +344,9 @@ object PumpProfitEngineV526 {
             return exit("V610_TIMEOUT_${c.name}: ${(positionAgeMillis / 60_000L)} мин без достаточного продолжения; NET ${fmtSigned(tradeNet)}%")
         }
         val stateReason = if (armed) {
-            "V610_${c.name}_HOLD: BE armed; peak=${fmtSigned(peakNet)}% net, now=${fmtSigned(tradeNet)}% net"
+            "V620_${c.name}_HOLD: BE armed; peak=${fmtSigned(peakNet)}% net, now=${fmtSigned(tradeNet)}% net; price=${fmtSigned(grossPriceMove)}%"
         } else {
-            "V610_${c.name}_HOLD: peak=${fmtSigned(peakNet)}% net, now=${fmtSigned(tradeNet)}% net"
+            "V620_${c.name}_HOLD: peak=${fmtSigned(peakNet)}% net, now=${fmtSigned(tradeNet)}% net; price=${fmtSigned(grossPriceMove)}%"
         }
         return PumpProfitPositionDecisionV526(null, next, stateReason, tradeNet, peakNet)
     }
@@ -333,6 +357,9 @@ object PumpProfitEngineV526 {
         val netExit = portfolio.pumpAmount * bid * (1.0 - fee)
         return (netExit / portfolio.entryCostEur - 1.0) * 100.0
     }
+
+    internal fun priceMovePercent(entryPrice: Double, bid: Double): Double =
+        if (entryPrice > 0.0 && bid > 0.0) (bid / entryPrice - 1.0) * 100.0 else 0.0
 
     private fun fmt(value: Double): String = String.format(java.util.Locale.GERMANY, "%.2f", value)
     private fun fmtSigned(value: Double): String = String.format(java.util.Locale.GERMANY, "%+.2f", value)
