@@ -58,7 +58,7 @@ object AdaptiveBreathEntryPolicy {
         val breath = breathing.buyerBreath
         val primaryMode = mode == PumpProfitModeV526.PUMP_2 || mode == PumpProfitModeV526.PUMP_3
         val strongShortImpulse = primaryMode &&
-            frame.instant >= if (mode == PumpProfitModeV526.PUMP_2) 10 else 12 &&
+            frame.instant >= (if (mode == PumpProfitModeV526.PUMP_2) 10 else 12) &&
             micro.aggressiveBuyPercent15s >= 57.0 &&
             micro.aggressiveBuyPercent60s >= 54.0 &&
             micro.priceChange60sPercent >= 0.10 &&
@@ -119,8 +119,6 @@ object AdaptiveBreathEntryPolicy {
         }
         val absorptionPenalty = ((breath.absorptionRisk - 45).coerceAtLeast(0) * 0.22)
 
-        // Buyer imbalance without price response is not enough. This stays a soft penalty so a
-        // genuinely strong early flow can still become a candidate.
         val response5m = breath.priceChange5mPercent ?: 0.0
         val response60s = micro.priceChange60sPercent
         val flatNoisePenalty = when {
