@@ -495,9 +495,11 @@ object FusionStabilityPolicy {
             recentPriorLoss -> (previous.lossExitStreak + 1).coerceAtMost(99)
             else -> 1
         }
+        // Cooldown classification is semantic, not coupled to versioned reason strings in each store.
+        // Any realised loss receives protective spacing; a second recent loss remains the hard brake.
         val cooldown = when {
             loss && lossStreak >= 2 -> DOUBLE_LOSS_COOLDOWN_MILLIS
-            wasProtectiveStop -> STOP_REENTRY_COOLDOWN_MILLIS
+            loss || wasProtectiveStop -> STOP_REENTRY_COOLDOWN_MILLIS
             else -> NORMAL_REENTRY_COOLDOWN_MILLIS
         }
         return FusionStabilityState(
@@ -699,9 +701,9 @@ object FusionSimStore {
                     "FUSION_PRIORITY",
                     "START",
                     if (reason.contains("SHOCK_REBOUND_ENTRY")) {
-                        "Виртуальный BUY исполнен по ask после подтверждённого быстрого отскока; комиссия 0,25% учтена; реальных ордеров нет"
+                        "Виртуальный BUY исполнен по ask; ${FusionTradingCosts.FEE_TIER} учтена; быстрый отскок подтверждён; реальных ордеров нет"
                     } else {
-                        "Виртуальный BUY исполнен по ask; комиссия 0,25% учтена; обычный вход подтверждён во времени и не ловит один зелёный тик"
+                        "Виртуальный BUY исполнен по ask; ${FusionTradingCosts.FEE_TIER} учтена; обычный вход подтверждён во времени и не ловит один зелёный тик"
                     }
                 )
                 tracked.inPosition && !next.inPosition -> {
