@@ -1,6 +1,5 @@
 package com.example.pumppaperbot
 
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -67,11 +66,14 @@ class PumpFastCandidatePolicyV537Test {
     }
 
     @Test
-    fun `responsive pm2 can trigger fast cycle without pm3`() {
+    fun `responsive primary setup keeps both independent PM lanes on fast observation`() {
         val plan = PumpFastCandidatePolicyV537.evaluate(responsivePm2Observation())
 
+        // Fast-cycle eligibility is observation frequency, not shared BUY authority. V6.2 may keep
+        // the stricter PM warm while PM1 is already locally eligible so it does not miss a regime
+        // transition; each store still evaluates and confirms its own entry independently.
         assertTrue(plan.pump2)
-        assertFalse(plan.pump3)
+        assertTrue(plan.pump3)
         assertTrue(plan.any)
     }
 }

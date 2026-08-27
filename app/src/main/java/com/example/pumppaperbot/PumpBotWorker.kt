@@ -102,6 +102,9 @@ class PumpBotWorker(
             val appTrade = CycleStageGuard.run(applicationContext, "APP_PAPER", {
                 AppPaperSyncResult(AppPaperStore.state(applicationContext), false)
             }) { AppPaperStore.syncWithAlerts(applicationContext) }
+            CycleStageGuard.run(applicationContext, "DEEPSIGX_PAPER", {
+                GeminiExitExperimentStore.state(applicationContext)
+            }) { DeepSigXRuntimeV610.sync(applicationContext, deepSeek) }
             val pumpMachine = CycleStageGuard.run(applicationContext, "PUMP_MACHINE", {
                 PumpMachineSyncResult(
                     PumpMachineStore.state(applicationContext),
