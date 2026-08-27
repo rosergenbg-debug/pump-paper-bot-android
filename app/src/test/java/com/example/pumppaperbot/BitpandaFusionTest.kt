@@ -74,7 +74,7 @@ class BitpandaFusionTest {
         assertEquals(null, FusionFlowPolicy.decide(true, missing20))
     }
 
-    @Test fun `weak and strong positive entry both need persistent confirmation`() {
+    @Test fun `weak noise does not arm but strong positive entry needs persistent confirmation`() {
         val weak = FusionFlowFrame(1, 1, 1, 1, 1)
         val first = FusionStabilityPolicy.evaluate(
             false, 0.0, FusionStabilityState(), weak, bid = 1.0,
@@ -82,29 +82,34 @@ class BitpandaFusionTest {
             entryObservation = capitalReadyObservation(weak, 1_000L)
         )
         assertNull(first.action)
-        assertEquals(1, first.nextState.entryStreak)
+        assertEquals(0, first.nextState.entryStreak)
+        assertTrue(first.reason.startsWith("V610_WAIT"))
 
         val second = FusionStabilityPolicy.evaluate(
             false, 0.0, first.nextState, weak, bid = 1.0,
             feeRate = FusionTradingCosts.FEE_RATE, now = 61_000L,
             entryObservation = capitalReadyObservation(weak, 61_000L, ask = 1.0015)
         )
-        assertEquals("BUY", second.action)
+        assertNull(second.action)
+        assertEquals(0, second.nextState.entryStreak)
 
+        val strong = FusionFlowFrame(12, 9, 8, 0, 6)
         val strongFirst = FusionStabilityPolicy.evaluate(
-            false, 0.0, FusionStabilityState(), FusionFlowFrame(12, 9, 8, 0, 6),
+            false, 0.0, FusionStabilityState(), strong,
             bid = 1.0, feeRate = FusionTradingCosts.FEE_RATE, now = 100_000L,
-            entryObservation = capitalReadyObservation(FusionFlowFrame(12, 9, 8, 0, 6), 100_000L)
+            entryObservation = capitalReadyObservation(strong, 100_000L)
         )
         assertNull(strongFirst.action)
-        assertTrue(strongFirst.reason.contains("STRONG"))
+        assertEquals(1, strongFirst.nextState.entryStreak)
+        assertTrue(strongFirst.reason.startsWith("V610_ENTRY_ARMED"))
 
         val strongConfirmed = FusionStabilityPolicy.evaluate(
-            false, 0.0, strongFirst.nextState, FusionFlowFrame(12, 9, 8, 0, 6),
+            false, 0.0, strongFirst.nextState, strong,
             bid = 1.0, feeRate = FusionTradingCosts.FEE_RATE, now = 160_000L,
-            entryObservation = capitalReadyObservation(FusionFlowFrame(12, 9, 8, 0, 6), 160_000L, ask = 1.0015)
+            entryObservation = capitalReadyObservation(strong, 160_000L, ask = 1.0015)
         )
         assertEquals("BUY", strongConfirmed.action)
+        assertTrue(strongConfirmed.reason.startsWith("V610_ENTRY_CONFIRMED"))
     }
 
     @Test fun `negative exit signal waits through sideways and sells after bid actually falls`() {
