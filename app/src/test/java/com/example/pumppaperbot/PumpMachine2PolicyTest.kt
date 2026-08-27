@@ -54,6 +54,6 @@ class PumpMachine2PolicyTest {
         assertEquals(2.0, PumpMachine2Policy.TAKE_PROFIT_NET_PERCENT, 0.0)
         assertEquals("EXIT", decision.action)
         assertTrue(decision.tradeNetPercent >= 2.0)
-        assertTrue(decision.reason.startsWith("V526_TAKE_PROFIT_PM2"))
+        assertTrue(decision.reason.startsWith("V610_TAKE_PROFIT_PM2"))
     }
 }
