@@ -155,7 +155,9 @@ class BitpandaFusionTest {
             profitDefenseArmed = true
         )
         assertEquals(1.02 * 0.99, defended, 0.0000001)
-        assertTrue(FusionRiskPolicy.breakEvenGrossPercent(FusionTradingCosts.FEE_RATE) > 0.50)
+        val breakEven = FusionRiskPolicy.breakEvenGrossPercent(FusionTradingCosts.FEE_RATE)
+        assertTrue(breakEven > 0.42)
+        assertTrue(breakEven < 0.43)
     }
 
     @Test fun `virtual structural stop exits without waiting for flow bars`() {
@@ -167,7 +169,7 @@ class BitpandaFusionTest {
         assertTrue(result.reason.contains("STOP"))
     }
 
-    @Test fun `orderbook parser uses best bid ask depth and fixed quarter percent simulation fee`() {
+    @Test fun `orderbook parser uses best bid ask depth and current paper fee`() {
         val snapshot = BitpandaFusionClient.parseOrderbook(
             JSONObject("""{
                 "pair":"PUMP-EUR",
@@ -182,7 +184,7 @@ class BitpandaFusionTest {
         assertEquals(9.5238095, snapshot.spreadPercent, 0.0001)
         assertEquals(295.0, snapshot.bidDepthEur, 0.0001)
         assertEquals(268.0, snapshot.askDepthEur, 0.0001)
-        assertEquals(0.0025, snapshot.feeRate, 0.0)
+        assertEquals(FusionTradingCosts.FEE_RATE, snapshot.feeRate, 0.0)
         assertTrue(snapshot.connected)
     }
 
@@ -194,7 +196,7 @@ class BitpandaFusionTest {
         assertTrue(bought.inPosition)
         assertEquals(0.0022, bought.trades.single().price, 0.0)
         assertEquals(0.0, bought.cashEur, 0.0)
-        assertEquals(2.5, bought.totalFeesEur, 0.0001)
+        assertEquals(2.1, bought.totalFeesEur, 0.0001)
 
         val sold = FusionSimTrader.apply(
             bought, 11L, "SELL", bid = 0.0021, ask = 0.0023,
@@ -203,7 +205,7 @@ class BitpandaFusionTest {
         assertFalse(sold.inPosition)
         assertEquals(0.0021, sold.trades.last().price, 0.0)
         assertTrue(sold.cashEur < 1000.0)
-        assertTrue(sold.totalFeesEur > 4.5)
+        assertTrue(sold.totalFeesEur > 4.0)
     }
 
     @Test fun `duplicate decision can never execute twice`() {
