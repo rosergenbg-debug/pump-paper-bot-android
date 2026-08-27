@@ -16,9 +16,9 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 object FusionTradingCosts {
-    /** V5/V6 control-group simulation cost. V6 observed account fees are stored separately. */
-    const val FEE_RATE = 0.0025
-    const val FEE_TIER = "симуляция 0,25% за сторону"
+    /** V6.2 owner-set paper execution cost. Authenticated account fee remains separate evidence. */
+    const val FEE_RATE = 0.0021
+    const val FEE_TIER = "симуляция 0,21% за сторону"
 }
 
 /** Keystore-backed storage. The plaintext key is never written to SharedPreferences or logs. */
@@ -119,10 +119,10 @@ data class FusionMarketSnapshot(
     val askDepthEur: Double = 0.0,
     val bidLevels: List<FusionBookLevel> = emptyList(),
     val askLevels: List<FusionBookLevel> = emptyList(),
-    /** Control-group cost used by all pre-V6 paper engines. Must remain 0.25% in V6.0. */
+    /** Paper execution fee used by the current compatible PM/Fusion simulation line. */
     val feeRate: Double = FusionTradingCosts.FEE_RATE,
     val feeTier: String = FusionTradingCosts.FEE_TIER,
-    /** Authenticated account fee is evidence for V6 shadow only in V6.0. */
+    /** Authenticated account fee remains separately visible execution evidence. */
     val observedAccountFeeRate: Double? = null,
     val observedAccountFeeTier: String? = null,
     val tradedVolume30dEur: Double? = null,
@@ -175,8 +175,8 @@ object BitpandaFusionStore {
                 bidDepthEur = j.optDouble("bidDepthEur"), askDepthEur = j.optDouble("askDepthEur"),
                 bidLevels = levels(j.optJSONArray("bidLevels")),
                 askLevels = levels(j.optJSONArray("askLevels")),
-                // A V6.0 install must restore the V5 control-group fee even if an early V6 build
-                // briefly persisted an observed account fee into these legacy fields.
+                // V6.2 explicitly migrates the paper model to the owner-set 0.21%/side fee even
+                // if an older install persisted the previous 0.25% simulation value.
                 feeRate = FusionTradingCosts.FEE_RATE,
                 feeTier = FusionTradingCosts.FEE_TIER,
                 observedAccountFeeRate = nullableDouble(j, "observedAccountFeeRate"),
@@ -272,7 +272,7 @@ class BitpandaFusionClient {
                 val observed = next.observedAccountFeeRate?.let {
                     "account=${next.v6ObservedFeeTier()} ${String.format(java.util.Locale.US, "%.3f", it * 100.0)}%"
                 } ?: "account fee ещё не получена"
-                "Получен read-only стакан ${next.pair}; V5 fee=${FusionTradingCosts.FEE_TIER}; $observed; торговые команды отключены"
+                "Получен read-only стакан ${next.pair}; paper fee=${FusionTradingCosts.FEE_TIER}; $observed; торговые команды отключены"
             } else next.error
         )
         return next
