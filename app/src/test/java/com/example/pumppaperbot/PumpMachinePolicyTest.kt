@@ -51,11 +51,11 @@ class PumpMachinePolicyTest {
             positionAgeMillis = 699_000L
         )
         assertEquals("EXIT", decision.action)
-        assertTrue(decision.reason.startsWith("V610_TAKE_PROFIT_PM3"))
+        assertTrue(decision.reason.startsWith("V620_TAKE_PROFIT_PM3"))
     }
 
     @Test
-    fun `v610 minus one point three percent net stop exits immediately`() {
+    fun `v620 minus one point three percent net stop exits immediately`() {
         val p = openPortfolio()
         val bid = 0.989
         val net = PumpMachinePolicy.tradeNetPercent(p, bid, fee)
@@ -73,7 +73,7 @@ class PumpMachinePolicyTest {
             positionAgeMillis = 79_000L
         )
         assertEquals("EXIT", decision.action)
-        assertTrue(decision.reason.startsWith("V610_HARD_STOP_PM3"))
+        assertTrue(decision.reason.startsWith("V620_HARD_STOP_PM3"))
     }
 
     @Test
@@ -110,7 +110,11 @@ class PumpMachinePolicyTest {
             positionAgeMillis = Long.MAX_VALUE
         )
         assertNull(decision.action)
-        assertTrue(decision.reason.startsWith("V526_PM3_NO_FOMO") || decision.reason.startsWith("V610_PM3_NO_FOMO"))
+        assertTrue(
+            decision.reason.startsWith("V526_PM3_NO_FOMO") ||
+                decision.reason.startsWith("V610_PM3_NO_FOMO") ||
+                decision.reason.startsWith("V620_PM3_NO_FOMO")
+        )
     }
 
     @Test
