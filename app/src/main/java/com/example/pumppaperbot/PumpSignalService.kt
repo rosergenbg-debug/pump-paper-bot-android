@@ -12,10 +12,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * V6.6 focused foreground monitor.
- *
- * The legacy PumpMachine/T32/Fusion paper engines are deliberately no longer driven from the
- * production service. V6.6 runs only the three new X-derived automatic profiles plus HUMAN SELECT.
- * Existing historical preferences are left on-device as dormant evidence, but they cannot trade.
+ * Legacy automatic paper engines are deliberately dormant. Only three V6.6 autos + HUMAN run.
  */
 class PumpSignalService : Service() {
     private val handler = Handler(Looper.getMainLooper())
@@ -41,10 +38,7 @@ class PumpSignalService : Service() {
         PumpAlert.ensureChannels(this)
         startForeground(
             PumpAlert.monitorId(),
-            PumpAlert.monitorNotification(
-                this,
-                "V${BuildConfig.VERSION_NAME}: X CORE + BTC GUARD + SOL/BTC SELECT + HUMAN. Paper-only."
-            )
+            PumpAlert.monitorNotification(this, "V${BuildConfig.VERSION_NAME}: X CORE + BTC GUARD + SOL/BTC SELECT + HUMAN. Paper-only.")
         )
     }
 
@@ -56,7 +50,6 @@ class PumpSignalService : Service() {
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
-        // Removing the UI task is not a Stop command. Foreground monitoring continues.
         super.onTaskRemoved(rootIntent)
     }
 
@@ -75,8 +68,6 @@ class PumpSignalService : Service() {
         executor.execute {
             val startedAt = System.currentTimeMillis()
             try {
-                // First boot and every two minutes: refresh the 30m PUMP/BTC/ETH/SOL context used
-                // by the 12h drawdown and delayed BTC/SOL features.
                 if (lastFullMarketSyncAt == 0L || startedAt - lastFullMarketSyncAt >= fullMarketIntervalMillis) {
                     runCatching { market.sync(this) }
                         .onSuccess { lastFullMarketSyncAt = System.currentTimeMillis() }
@@ -84,9 +75,7 @@ class PumpSignalService : Service() {
                     runCatching { ecosystem.sync(this) }.onFailure { logError("PUMP_ECOSYSTEM", it) }
                 }
 
-                // Lightweight fast path. The live one-minute candle and execution book refresh every
-                // ~30 seconds, so the 0-100 readiness gauge develops progressively instead of waiting
-                // for a two-minute binary decision.
+                // 30-second live path feeds the progressive 0-100 readiness gauge.
                 runCatching { ChartMarketClient().sync(this, ChartInterval.ONE_MINUTE) }
                     .onFailure { logError("MARKET_1M", it) }
                 runCatching { BitpandaFusionClient().sync(this, force = false) }
@@ -98,27 +87,36 @@ class PumpSignalService : Service() {
                 runCatching { HumanFactorStore.sync(this, now) }
                     .onFailure { logError("V660_HUMAN", it) }
 
-                // Keep the owner's pre-existing personal position safety warning alive. This is not
-                // one of the removed automatic paper strategies and never opens a real order.
-                runCatching { FastPositionWarningStore.sync(this, now) }
-                    .onFailure { logError("PERSONAL_WARNING", it) }
+                // Absolute sound gate for all surviving legacy safety-alert routes.
+                // HUMAN has the same master/schedule checks internally, including while a position is open.
+                val canRingNow = ResearchModePolicy.alertsEnabled(this) && AlertSchedule.isAllowedNow(this)
+                if (canRingNow) {
+                    runCatching { FastPositionWarningStore.sync(this, now) }
+                        .onFailure { logError("PERSONAL_WARNING", it) }
 
-                val snapshot = PumpBotEngine.snapshot(this)
-                val userPositionOpen = snapshot.waitMode == "SELL" && snapshot.entryPrice > 0.0
-                if (userPositionOpen && snapshot.sellSignal && PumpBotEngine.shouldAlert(this, snapshot)) {
-                    runCatching {
-                        PumpAlert.showSignal(this, snapshot)
-                        PumpBotEngine.markAlerted(this, snapshot)
-                    }.onFailure { logError("PERSONAL_SIGNAL", it) }
-                }
-                if (PumpBotEngine.shouldAlertRapidDrop(this, snapshot)) {
-                    runCatching {
-                        PumpAlert.showRapidDrop(this, snapshot)
-                        PumpBotEngine.markRapidDropAlerted(this, snapshot)
-                    }.onFailure { logError("RAPID_DROP", it) }
+                    val snapshot = PumpBotEngine.snapshot(this)
+                    val userPositionOpen = snapshot.waitMode == "SELL" && snapshot.entryPrice > 0.0
+                    if (userPositionOpen && snapshot.sellSignal && PumpBotEngine.shouldAlert(this, snapshot)) {
+                        runCatching {
+                            PumpAlert.showSignal(this, snapshot)
+                            PumpBotEngine.markAlerted(this, snapshot)
+                        }.onFailure { logError("PERSONAL_SIGNAL", it) }
+                    }
+                    if (PumpBotEngine.shouldAlertRapidDrop(this, snapshot)) {
+                        runCatching {
+                            PumpAlert.showRapidDrop(this, snapshot)
+                            PumpBotEngine.markRapidDropAlerted(this, snapshot)
+                        }.onFailure { logError("RAPID_DROP", it) }
+                    }
+                    runCatching { EntryAlertReminderStore.flush(this) }
+                } else {
+                    runCatching { EntryAlertReminderStore.clear(this) }
+                    runCatching { PumpAlert.silenceUserAlerts(this) }
+                    if (!ResearchModePolicy.alertsEnabled(this)) {
+                        runCatching { HumanFactorAlarmV650.cancel(this) }
+                    }
                 }
 
-                runCatching { EntryAlertReminderStore.flush(this) }
                 runCatching { UnifiedResearchLog.captureCycle(this, "V660_FOCUSED_30S", now) }
             } catch (error: Throwable) {
                 logError("V660_CYCLE", error)
