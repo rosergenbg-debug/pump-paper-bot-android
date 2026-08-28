@@ -1,5 +1,6 @@
 package com.example.pumppaperbot
 
+import android.annotation.SuppressLint
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -61,6 +62,7 @@ object HumanFactorAlarmV650 {
         activeRingtone = null
     }
 
+    @SuppressLint("MissingPermission")
     private fun issue(context: Context, detail: String) {
         ensureChannel(context)
         val open = Intent(context, MainActivity::class.java).apply {
@@ -87,8 +89,9 @@ object HumanFactorAlarmV650 {
             .setVibrate(longArrayOf(0L, 500L, 180L, 500L, 180L, 900L))
             .build()
 
-        // Re-posting after cancel makes a still-pending setup alert again instead of silently
-        // updating an old notification on OEM Android builds.
+        // POST_NOTIFICATIONS is requested by the app on Android 13+. If the user denies it,
+        // NotificationManagerCompat may be blocked by the OS; the direct vibration/ringtone
+        // attempts below are intentionally kept as a second delivery path for this paper alert.
         runCatching { NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID) }
         runCatching { NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification) }
         vibrateStrong(context)
