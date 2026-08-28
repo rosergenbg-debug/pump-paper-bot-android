@@ -5,16 +5,14 @@ import org.junit.Test
 
 class CompetitionAccountSpecTest {
     @Test
-    fun comparisonContainsFourT32BranchesPlusOwnerAndApp() {
-        assertEquals(6, CompetitionAccountSpec.COUNT)
+    fun comparisonContainsExactlyThreeAutosPlusHuman() {
+        assertEquals(4, CompetitionAccountSpec.COUNT)
         assertEquals(
             listOf(
-                "T32 ORIGINAL",
-                "T32 +1,5% NET",
-                "T32 +2,0% NET",
-                "HUMAN +2,0% NET",
-                "СЕРЖ",
-                "APP"
+                "AUTO CORE",
+                "AUTO BTC GUARD",
+                "AUTO SOL/BTC SELECT",
+                "HUMAN SELECT"
             ),
             CompetitionAccountSpec.ORDER
         )
