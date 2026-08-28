@@ -6,91 +6,81 @@
 
 ## VERSION / BRANCH
 
-- Canonical branch: `main`.
-- Current source version: **V6.4**, `versionCode 122`.
+- Canonical branch after merge: `main`.
+- Current source version in this change: **V6.5**, `versionCode 123`.
 - `applicationId`: `com.example.pumppaperbot.v8` — сохранён для совместимого update/data continuity.
-- V6.2 is present on canonical `main` at merge commit `949fa1b`.
-- Full `main` build run **#423** (`33020059070`): **success** — unit tests, lint, assemble, APK package/version/activity/v2-signature/ZIP checks and artifact upload passed.
+- V6.5 implementation PR: **#87**, branch `v6.5-t32-profit-variants`.
+- Реальные ордера не добавлены: все новые T32 варианты остаются paper/research-only.
 
-## BUILD / RELEASE STATUS
+## V6.5 — FOUR T32 EXPERIMENTS
 
-- V6.0 source/runtime code прошёл полный CI на `main`.
-- CI source artifact: `PumpSignal-V6.0-Execution-Intelligence-Intermediate.apk`.
-- Final compatible handoff APK создан: `PumpSignal-V6.0-Compatible-FINAL.apk`.
-- Final APK size: `7,669,709` bytes.
-- Final APK SHA-256: `c07089854a9326e7abc742d5fc87d4922244e0e66b1a8e0320d5ba38394d5701`.
-- Final APK uses APK Signature Scheme **v2** and was independently verified after signing.
-- Final signing certificate SHA-256: `1f778c4291c9d11c5f89f4de8773bda35a0125031adc05785daee23f27dc7823` — совпадает с исторической совместимой `.v8` линией.
-- Keystore/пароль получены из приватного Google Drive recovery bundle; они **не записаны в GitHub**.
-- Новый signing key не создавался. Uninstall/clean install для обновления не использовать.
-- Фактически установленная сейчас на телефоне владельца версия: `UNKNOWN` до подтверждения установки V6.0.
+Один и тот же исходный T32/VWAP entry evaluator теперь сравнивается на четырёх независимых paper-счетах:
 
-## V6.0 MATERIAL CHANGE
+1. `T32 ORIGINAL` — полностью автоматический вход T32; исходный VWAP/STOP/90m выход сохранён как контроль.
+2. `T32 +1,5% NET` — полностью автоматический вход T32; автоматический TP только после достижения +1,5% NET.
+3. `T32 +2,0% NET` — полностью автоматический вход T32; автоматический TP только после достижения +2,0% NET.
+4. `HUMAN +2,0% NET` — T32 создаёт предложение входа; BUY выполняется только после кнопки владельца `ВОЙТИ`; после этого выход автоматический при +2,0% NET либо по safety STOP/90m.
 
-## V6.3 HUMAN FACTOR EXPERIMENT
+- Все четыре ветви используют T32 commission model **0,21% BUY + 0,21% SELL**.
+- Fixed-profit target вычисляется математически так, чтобы после обеих комиссий осталось ровно +1,5% или +2,0% NET; это не простое прибавление 0,42 п.п. к цене.
+- Для новых fixed-profit/Human ветвей safety exit сохранён: `NET <= -0,80%` или максимум 90 минут.
+- Новые +1,5%/+2,0% portfolios имеют отдельные `SharedPreferences`; существующие T32 ORIGINAL и Human Factor сохраняют прежние prefs/history для continuity.
 
-- Добавлены два независимых VWAP 32,65 paper-счёта: полностью автономный без звуков и Human Factor с обязательным подтверждением владельца.
-- Human Factor показывает подготовку 90–97/100 и постоянную карточку подтверждения при 98–100/100; отменяет карточку при распаде условий.
-- Общий экран теперь содержит 10 счетов. Остальные виртуальные стратегии продолжают расчёт, но не создают пользовательские trade-звонки; safety/exit предупреждения по ручной позиции сохраняются.
-- Реальные ордера не добавлены.
+## HUMAN FACTOR ALERT
 
-## V6.4 FOCUSED NETWORK UI
+- Human Factor entry больше не зависит от обычного preparatory-alert schedule/master sound gate.
+- Используется отдельный high-importance alarm channel `pump_human_factor_v650`.
+- При pending Human Factor выполняются notification alarm + сильная vibration + direct alarm sound attempt.
+- Пока setup остаётся pending, alarm самостоятельно повторяется примерно раз в 60 секунд между полными торговыми циклами.
+- `ВОЙТИ`, `ОТКЛОНИТЬ`, распад setup или уже открытая Human позиция останавливают повтор.
+- Android DND/ручное отключение системного канала/жёсткие OEM-ограничения всё ещё могут переопределить звук на уровне ОС; приложение максимально дублирует delivery, но не может обойти системный запрет.
 
-- Экран сети показывает только четыре основных счёта в порядке: T32 → Human Factor → СЕРЖ → APP.
-- Старые PM/Fusion/DeepSigX стратегии и их данные не удалены; они лишь скрыты из основного сравнения.
-- Верхний DeepSeek-блок уменьшен и показывает подключение, последнее успешное обращение/ошибку, дневные успехи/ошибки и оценку расхода.
-- Нижняя кнопка `ТЕСТ НАЗАД` удалена. Торговая логика не менялась.
+## FOCUSED NETWORK UI
 
-V6.0 добавляет **shadow-only execution intelligence**, не меняя торговую власть V5.37 и не меняя PM entry/TP/SL thresholds.
+Экран сети V6.5 содержит шесть owner-facing счетов в порядке:
 
-## UNRELEASED CROSS-MARKET RESEARCH
+`T32 ORIGINAL → T32 +1,5% NET → T32 +2,0% NET → HUMAN +2,0% NET → СЕРЖ → APP`
 
-- Третий независимый replay Z-Score VWAP, volatility squeeze, strict lead-lag и session-open breakout также не нашёл edge. Squeeze дал 50% на early/24 fills, но только 14,29% и отрицательный NET на control/14 fills; лучший control WR серии 14,29%. Strict lead-lag не создал ни одного сигнала. Production authority не выдана.
-- Отдельный ранее не использованный 120-дневный replay cost-aware VWAP и session gap-fill не превзошёл прежние 32,65%: обе формулы дали 8,33% win rate на control, отрицательный NET и PF значительно ниже 1. Production authority не выдана; следующий новый уровень требует tape/L2.
-- Новый 120-дневный причинный replay пяти контекстных идей (regime-adaptive, liquidity sweep, VWAP reversion, sell exhaustion, 4H node + relative strength) не нашёл edge: лучший control win rate 32,65%, лучший средний NET −0,419%, лучший PF 0,399. Synthetic predicates прошли 10/10, но production authority не выдана.
+Старые PM/Fusion/DeepSigX расчёты и persisted data не удалены; они остаются вне focused network.
 
-- Причинный 14-дневный replay PUMP/BTC/SOL проверил BTC/SOL как внешнее подтверждение предполагаемого дна PUMP.
-- Одноминутная contemporaneous correlation заметна (BTC около 0,34, SOL около 0,43), но устойчивого опережения PUMP на 1–10 минут не найдено.
-- На контрольной части синхронный рост BTC/SOL изменил PM-like win rate только с 31,3% до 32,3%; другие turn-фильтры не улучшили результат.
-- Недельное улучшение 33,3% → 41,2% не воспроизвелось на 14 днях и считается коротким нестабильным эффектом.
-- Production entry authority не изменена; версия/сборка не создавались. Инструмент: `tools/research_cross_market_breath.js`; отчёты и постоянный реестр: `docs/research-lab/`.
-- Отдельный order-type replay (`tools/research_order_execution.js`) сравнил market/limit/stop-market/stop-limit/OCO/trailing. Все варианты остались отрицательными; лучший контрольный вход stop-limit дал 24,6% wins и −0,397% среднего NET при 38/99 незаполненных сигналах. Реальные ордера не добавлены.
-- 30-дневный flow/absorption replay (`tools/research_flow_absorption.js`) проверил taker SELL decay, buy-share/delta recovery, absorption, volume spike, relative strength, soft-score, ATR/time-stop, UTC sessions и 4h context. Европейская UTC-сессия и отрицательный 4h-контекст дали устойчивый lift, но ни одна заранее фиксированная гипотеза не получила положительный NET одновременно на train и control. Production не изменён.
-- 60-дневный replay пяти дополнительных фиксированных гипотез (`tools/research_five_hypotheses.js`) разделён на два последовательных 30-дневных периода. Quiet-entry, fake-breakout, 60m volume-cluster и BTC/SOL cross-impulse отрицательны в обеих частях. Session-rebound дал recent +0,113% среднего NET, PF 1,255 на 62 fills, но early −0,403%, PF 0,373 на 45 fills; он сохранён только как замороженный forward/shadow-кандидат. Ни одна гипотеза не разрешена для V6.3.
+## REPORTING / 24H TXT
 
-- Bitpanda Fusion сохраняет отдельные уровни стакана.
-- Считаются top-3/top-5 imbalance, microprice, spread, depth/slippage и execution cost floor.
-- Binance-flow сравнивается с Bitpanda execution book: `CONFIRMED`, `LEADING`, `FUSION_LEADING`, `DIVERGENT`, `BAD_EXECUTION`, `NEUTRAL`, `INSUFFICIENT_DATA`.
-- Authenticated Fusion account fee сохраняется отдельно как V6 evidence; старые paper engines остаются на фиксированной 0.25%/side control-group cost.
-- V6 **не может разрешать или запрещать сделки** существующих стратегий.
-- Для каждого V6 наблюдения собираются causal forward outcomes на 30/60/120/300 секунд по будущим Bitpanda bid snapshots; пропущенные горизонты записываются как `MISSED`, а не подменяются поздней ценой.
-- Future outcome принимается только если `Fusion.lastSuccess > originAt`, чтобы прошлый стакан не мог быть записан как будущее.
+- Основной support export остаётся UTF-8 `.txt` за 24 часа с разбиением примерно до 900 KB на часть.
+- V6.5 TXT явно включает текущее состояние всех четырёх T32 ветвей: value, position, readiness/pending, target и status.
+- BUY/SELL четырёх T32 ветвей за выбранное 24h окно добавляются в `[TRADES_LAST_24H]`.
+- `UnifiedResearchLog` дополнительно получает отдельные агенты `T32_ORIGINAL`, `T32_NET_1P5`, `T32_NET_2P0`, `T32_HUMAN_2P0`; Human также пишет `ALERT`, `PENDING`, `REJECT`.
+- Старый V6 execution sample/outcome journal сохранён и продолжает попадать в тот же support TXT.
 
-## REPORTING
+## VERIFICATION TARGET
 
-- Основной V6 support export: UTF-8 `.txt`, 24 часа.
-- Файлы автоматически разбиваются примерно до **900 KB** на часть, чтобы не упираться в старую проблему загрузки >2 MB.
-- Отчёт содержит account/trade state, V6 execution samples и causal outcome rows.
-- Старый большой JSON остаётся диагностическим архивом, но не является основным каналом для V6 анализа.
-- Автоматическая запись Android-приложения в GitHub пока **не реализована**, чтобы не хранить GitHub write-token в APK. Безопасный relay/GitHub-App канал — отдельный будущий этап.
+Перед merge V6.5 обязана пройти GitHub Actions:
+
+- `testDebugUnitTest`
+- `lintDebug`
+- `assembleDebug`
+- package/version/activity checks
+- APK v2 signature check
+- ZIP integrity / artifact upload
+
+Добавлены regression tests для точной 0,21% fee model, +1,5/+2,0 NET target math, repeat-policy Human alarm и 6-account focused order.
 
 ## WHAT REMAINS UNPROVEN
 
-- Глобальная прибыльность/expectancy текущего набора стратегий: **не доказана**.
-- Полезность V6 execution score как будущего hard/soft gate: **не доказана**. V6 должна накопить forward evidence до promotion.
-- Full live↔replay equivalence текущего fast PM/coach stack: `NEEDS_VERIFICATION`.
-- Shared DeepSeek tuning remains a guarded soft-learning layer; не расширять его власть без NET forward evidence.
-- Реальные ордера всё ещё не реализованы и требуют отдельного явного решения владельца.
+- Win rate 32,65% — исторический research baseline, а не гарантия будущей прибыли.
+- Что TP +1,5% или +2,0% улучшит expectancy по сравнению с original VWAP exit — **не доказано**; именно поэтому варианты разделены на независимые portfolios.
+- Польза Human подтверждения должна оцениваться по будущим NET outcomes, а не по отдельным удачным сделкам.
+- Реальные ордера всё ещё не реализованы.
 
-## CURRENT MAIN PRIORITY
+## CURRENT PRIORITY
 
-**Установить совместимо подписанный V6.0 поверх существующей `.v8` установки без удаления приложения, затем накопить V6 compact TXT + causal outcomes и только после этого решать, какую часть V6 execution evidence повышать из shadow в decision support.**
+Накопить сопоставимые forward outcomes четырёх T32 ветвей и использовать 24h TXT для проверки: частоты входов, win rate, среднего NET, времени удержания, stop/time exits и эффекта Human confirmation.
 
 ## INVARIANTS
 
 1. Не менять package/signing identity.
 2. Не удалять установленное приложение ради update.
 3. Не очищать накопленную history/state.
-4. Не подключать V6 shadow как hard gate без evidence review.
-5. Не менять одновременно V5 control thresholds и V6 evaluation logic — иначе теряется контрольная группа.
-6. Любую будущую автоюстировку оценивать по NET outcomes с guarded trial/rollback.
+4. T32 ORIGINAL сохранять как контроль, пока fixed-profit варианты не накопят достаточное evidence.
+5. Не смешивать portfolios четырёх T32 ветвей.
+6. Оценивать результаты по NET после расходов.
+7. Не добавлять live-order authority без отдельного явного решения владельца.

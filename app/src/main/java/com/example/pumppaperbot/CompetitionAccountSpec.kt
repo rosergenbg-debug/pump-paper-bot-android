@@ -1,13 +1,15 @@
 package com.example.pumppaperbot
 
-/** Stable slot contract for the full account comparison screen. */
+/** Stable owner-facing order for the focused V6.5 comparison screen. */
 internal object CompetitionAccountSpec {
-    const val COUNT = 4
-    const val SCREEN_TITLE = "←  СЕТЬ • 4 ОСНОВНЫХ СЧЁТА"
+    const val COUNT = 6
+    const val SCREEN_TITLE = "←  СЕТЬ • 6 ОСНОВНЫХ СЧЁТОВ"
 
     val ORDER = listOf(
-        "T32",
-        "ЧЕЛОВЕЧЕСКИЙ ФАКТОР",
+        "T32 ORIGINAL",
+        "T32 +1,5% NET",
+        "T32 +2,0% NET",
+        "HUMAN +2,0% NET",
         "СЕРЖ",
         "APP"
     )

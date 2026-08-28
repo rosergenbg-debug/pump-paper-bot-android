@@ -10,7 +10,7 @@
 | Область | Ожидаемое поведение | Как проверяется | Статус |
 |---|---|---|---|
 | Build baseline | `testDebugUnitTest`, `lintDebug`, `assembleDebug` проходят | `.github/workflows/android.yml` | AUTO |
-| Package/version | compatible line остаётся `com.example.pumppaperbot.v8`; V5.37/code117 после merge | CI `aapt dump badging` | AUTO |
+| Package/version | compatible line остаётся `com.example.pumppaperbot.v8`; V6.5/code123 после merge | CI `aapt dump badging` | AUTO |
 | Launch APK | launch activity `MainActivity`, APK ZIP валиден, signature scheme проверяется | CI APK checks; final certificate отдельно | PARTIAL |
 | Real trading | Ни одна текущая автономная стратегия не отправляет реальный order/cancel/transfer | source review, `ResearchModePolicy`, `V49SafetyPolicyTest` и related safety tests | PARTIAL |
 | Bitpanda access | Fusion client использует read-only GET order book; key не пишется plaintext в prefs/log | `BitpandaFusionTest` + source review | PARTIAL |
@@ -18,14 +18,21 @@
 | V4→V5 history | доступная V4 history захватывается/остаётся экспортируемой | `ResearchHistoryArchiveTest`, ledger capture | PARTIAL |
 | Compatible update data | portfolios/settings/keys/history переживают update без uninstall | version-specific retention tests + final APK upgrade on device | MANUAL |
 | Engine migration | известные `PumpBotEngine` algorithm versions мигрируют без неожиданного reset | source migration + targeted tests | NEEDS_TEST |
-| Independent accounts | APP/PM profiles/Fusion/DeepSigX/SERGE не используют общий portfolio | store separation + strategy tests + Competition inspection | PARTIAL |
+| Independent accounts | APP/PM profiles/Fusion/DeepSigX/SERGE и четыре T32 ветви не используют общий portfolio | store separation + strategy tests + Competition inspection | PARTIAL |
+| V6.5 T32 fee model | Все четыре T32 ветви считают 0,21% BUY + 0,21% SELL; fixed TP даёт ровно заданный NET после обеих комиссий | `T32CostPolicyV650Test` | AUTO |
+| T32 control | `T32 ORIGINAL` сохраняет прежний exact T32 entry и VWAP/STOP/90m exit как контроль | `HumanFactorVwapTest` + source review | PARTIAL |
+| T32 fixed-profit branches | +1,5% и +2,0% имеют отдельные prefs/portfolio, входят по exact T32=100 и выходят по своему NET TP либо safety STOP/90m | `T32CostPolicyV650Test` + source review/runtime | PARTIAL |
+| T32 failure isolation | Ошибка +1,5% не блокирует +2,0%/Human; ошибка +2,0% не блокирует Human | isolated `runCatching` + `ERROR` journal; runtime fault injection пока отсутствует | PARTIAL |
 | Fast PM independence | responsive PUMP_2 может сам активировать 15s fast-path, не ожидая PUMP_3 candidate; каждый PM fast-sync идёт только по своей позиции/кандидату | `PumpFastCandidatePolicyV537Test` + service wiring | AUTO/PARTIAL |
 | DeepSeek verdict scope | cached/PENDING entry verdict одного PM-профиля не является решением другого профиля | `DeepSeekEntryCoachTest` profile-scope tests + source wiring | AUTO/PARTIAL |
 | DeepSeek shared budget | общий provider request budget/running lock может экономить API, но при отсутствии профильного verdict другой PM может использовать только свой strict local fallback, а не чужой verdict | `DeepSeekEntryCoachTest` + source review; runtime concurrency scenario | PARTIAL |
 | Shared tuning layer | pooled outcomes/shared soft regulators не должны скрыто ухудшать profile independence; полезность должна подтверждаться trial/rollback outcomes | `AdaptiveTuningGuardV536Test` + representative ledger analysis | PARTIAL |
-| UI account mapping | Сеть содержит только 4 видимых счёта: T32 → HUMAN FACTOR → SERGE → APP; скрытые старые stores не очищаются | `CompetitionAccountSpecTest` + UI device check | AUTO/PARTIAL |
+| UI account mapping | Сеть содержит 6 видимых счётов: T32 ORIGINAL → T32 +1,5% → T32 +2,0% → HUMAN +2,0% → SERGE → APP; скрытые старые stores не очищаются | `CompetitionAccountSpecTest` + UI device check | AUTO/PARTIAL |
 | Compact DeepSeek status | Верхний блок показывает наличие ключа/работоспособность, ошибку, дневные успехи/ошибки и оценку расхода | source review + UI device check | PARTIAL |
-| Human Factor authority | VWAP AUTO торгует только виртуально и без звука; Human Factor BUY невозможен без явного подтверждения, pending исчезает при распаде сигнала | `HumanFactorVwapTest` + source/UI review | PARTIAL |
+| Human Factor authority | Human BUY невозможен без `ВОЙТИ`; `ОТКЛОНИТЬ` блокирует текущий setup до распада; после BUY выход автоматический +2,0% NET/STOP/90m | `HumanFactorVwapTest`, `T32CostPolicyV650Test` + source/UI review | PARTIAL |
+| Human Factor repeated alarm | Пока pending, отдельный alarm/vibration повторяется примерно каждые 60s; ВОЙТИ/ОТКЛОНИТЬ/распад setup/позиция прекращают повтор | `T32CostPolicyV650Test` repeat-policy + source/device check | PARTIAL |
+| Human Factor OS delivery | Приложение использует dedicated high-importance alarm channel, direct alarm ringtone и vibration; OS DND/manual mute всё равно могут переопределить звук | Android device test | MANUAL |
+| 24h T32 text log | TXT содержит current state всех 4 T32, BUY/SELL и raw T32 journal события включая Human ALERT/PENDING/REJECT/ERROR | `V6ScalpReport.kt` source + runtime export inspection | PARTIAL |
 | PM UI 1 / PUMP_2 | +2.00% NET target, hard stop -1.10%, отдельный state | `PumpMachine2PolicyTest`, `PumpProfitEngineV526Test` | AUTO |
 | PM UI 2 / PUMP_3 | +3.00% NET target, hard stop -1.30%, отдельный state | `PumpMachinePolicyTest`, `PumpProfitEngineV526Test` | AUTO |
 | PM RETEST | Вход только после allowed candidate + bounded pullback/rebound; target +2/-1.10 | `PumpProfitEngineV526Test` + variant logic tests if present | PARTIAL |
@@ -42,8 +49,8 @@
 | V5.36 rollback | Одновременно один trial; post-change NET loss/weakness возвращает exact previous tuning | `AdaptiveTuningGuardV536Test` | AUTO |
 | Tuning scope | AI не меняет hard veto, exits, real orders или portfolios | source contract + tests | PARTIAL |
 | Service persistence | Смахивание UI не останавливает foreground monitor | `PumpSignalService` source; Android runtime check | MANUAL |
-| Failure isolation | exception optional stage не отменяет независимые последующие participants | `CycleStageGuard`, integration tests | PARTIAL |
-| Alerts master | OFF глушит пользовательские alerts/sound, но не останавливает research/paper/logging | `ResearchModePolicy` + alert policy tests/runtime | PARTIAL |
+| Failure isolation | exception optional stage не отменяет независимые последующие participants | `CycleStageGuard`, T32 isolated sync + integration tests | PARTIAL |
+| Alerts master | OFF глушит обычные пользовательские alerts/sound, но не останавливает research/paper/logging; Human manual-decision alarm V6.5 намеренно отдельный | `ResearchModePolicy`, Human alarm source/runtime | PARTIAL |
 | Logs | BUY/SELL/ERROR/history остаются доступны; support export не очищает full archive | V5.35 log/export tests + runtime export | PARTIAL |
 | Ledger after restart | SQLite ledger и individual prefs восстанавливаются после process/app restart | device/instrumentation restart scenario | NEEDS_TEST |
 | Replay/live equivalence APP | research decision/replay использует causal closed data и next execution logic | `ResearchDecisionEngineTest`, `ResearchReplayEngine` tests | AUTO/PARTIAL |

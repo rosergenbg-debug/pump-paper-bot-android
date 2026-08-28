@@ -113,12 +113,14 @@ class CompetitionActivity : AppCompatActivity() {
         val ledger = runCatching { ResearchPerformanceLedger.summary(this) }
             .getOrDefault(ResearchLedgerSummary(0, 0, 0))
         archiveStatus.text = archive.compactText() +
-            "\nНЕПРЕРЫВНЫЙ ЖУРНАЛ V4→V5+: ${ledger.trades} сделок, ${ledger.decisions} решений. • Нажмите график для деталей"
+            "\nНЕПРЕРЫВНЫЙ ЖУРНАЛ V4→V6.5: ${ledger.trades} сделок, ${ledger.decisions} решений. • Нажмите график для деталей"
         val now = System.currentTimeMillis()
         val snapshot = PumpBotEngine.snapshot(this)
-        val price = PaperExecutionPolicy.displayPrice(snapshot, now)
+        val displayPrice = PaperExecutionPolicy.displayPrice(snapshot, now)
+        val market = BitpandaFusionStore.state(this)
+        val t32Mark = market.bid.takeIf { market.fresh(now) } ?: displayPrice
         val app = AppPaperStore.state(this)
-        val user = UserPaperStore.markToMarket(this, price)
+        val user = UserPaperStore.markToMarket(this, displayPrice)
         val closedCandles = if (historicalCandles.isNotEmpty()) {
             (historicalCandles + snapshot.chart.candles)
                 .distinctBy { it.closeTime }
@@ -126,41 +128,54 @@ class CompetitionActivity : AppCompatActivity() {
         } else {
             snapshot.chart.candles
         }
-        val candles = CompetitionChartPresentation.withLiveEdge(closedCandles, price, now)
-        val auto3265 = Vwap3265AutoStore.state(this)
+        val candles = CompetitionChartPresentation.withLiveEdge(closedCandles, displayPrice, now)
+
+        val original = Vwap3265AutoStore.state(this)
         setChart(0, CompetitionDataset(
-            "T32 • VWAP 32,65 • AUTO • БЕЗ ЗВУКОВ",
-            summary(
-                auto3265.value(price),
-                (auto3265.value(price) / 1000.0 - 1.0) * 100.0,
-                auto3265.inPosition
-            ),
+            "T32 ORIGINAL • VWAP EXIT • AUTO",
+            summary(original.value(t32Mark), (original.value(t32Mark) / 1000.0 - 1.0) * 100.0, original.inPosition),
             candles,
-            auto3265.trades.map { CompetitionMarker(it.time, it.action, it.price, it.pnlEur) },
-            0.0025
+            original.trades.map { CompetitionMarker(it.time, it.action, it.price, it.pnlEur) },
+            T32CostPolicyV650.FEE_RATE
         ))
-        val human = HumanFactorStore.state(this)
+
+        val net15 = T32Net15Store.state(this)
         setChart(1, CompetitionDataset(
-            "ЧЕЛОВЕЧЕСКИЙ ФАКТОР • РУЧНОЕ ПОДТВЕРЖДЕНИЕ",
-            summary(
-                human.value(price),
-                (human.value(price) / 1000.0 - 1.0) * 100.0,
-                human.inPosition
-            ),
+            "T32 +1,5% NET • AUTO",
+            summary(net15.value(t32Mark), (net15.value(t32Mark) / 1000.0 - 1.0) * 100.0, net15.inPosition),
+            candles,
+            net15.trades.map { CompetitionMarker(it.time, it.action, it.price, it.pnlEur) },
+            T32CostPolicyV650.FEE_RATE
+        ))
+
+        val net20 = T32Net20Store.state(this)
+        setChart(2, CompetitionDataset(
+            "T32 +2,0% NET • AUTO",
+            summary(net20.value(t32Mark), (net20.value(t32Mark) / 1000.0 - 1.0) * 100.0, net20.inPosition),
+            candles,
+            net20.trades.map { CompetitionMarker(it.time, it.action, it.price, it.pnlEur) },
+            T32CostPolicyV650.FEE_RATE
+        ))
+
+        val human = HumanFactorStore.state(this)
+        setChart(3, CompetitionDataset(
+            "HUMAN +2,0% NET • РУЧНОЙ ВХОД / AUTO EXIT",
+            summary(human.value(t32Mark), (human.value(t32Mark) / 1000.0 - 1.0) * 100.0, human.inPosition),
             candles,
             human.trades.map { CompetitionMarker(it.time, it.action, it.price, it.pnlEur) },
-            0.0025
+            T32CostPolicyV650.FEE_RATE
         ))
-        setChart(2, CompetitionDataset(
+
+        setChart(4, CompetitionDataset(
             "СЕРЖ",
-            summary(user.value(price), user.profitPercent(price), user.inPosition),
+            summary(user.value(displayPrice), user.profitPercent(displayPrice), user.inPosition),
             candles,
             user.trades.map { CompetitionMarker(it.time, it.action, it.price) },
             0.0015
         ))
-        setChart(3, CompetitionDataset(
+        setChart(5, CompetitionDataset(
             "APP",
-            summary(app.value(price), app.profitPercent(price), app.inPosition),
+            summary(app.value(displayPrice), app.profitPercent(displayPrice), app.inPosition),
             candles,
             app.trades.map { CompetitionMarker(it.candleTime, it.action, it.price, it.pnlEur) },
             0.0015
