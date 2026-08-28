@@ -11,7 +11,7 @@ import java.util.Locale
 import java.util.TimeZone
 
 /**
- * Compact text evidence for V6.0. Raw samples stay on-device for seven days; exports are split
+ * Compact text evidence for V6.0+. Raw samples stay on-device for seven days; exports are split
  * well below the known ~2 MB chat upload problem. No API key or secret is ever included.
  */
 object V6ScalpReportStore {
@@ -31,8 +31,6 @@ object V6ScalpReportStore {
     fun append(context: Context, snapshot: ScalpExecutionSnapshotV600) {
         if (snapshot.at <= 0L) return
         synchronized(lock) {
-            // First close/update older causal observations with this strictly later market frame,
-            // then register the current frame as a new pending origin.
             V6ScalpOutcomeStore.observe(
                 context,
                 snapshot,
@@ -108,11 +106,34 @@ object V6ScalpReportStore {
         val pm3 = PumpMachineRetestStore.state(context)
         val pm4 = PumpMachineSafeStore.state(context)
         val fusionSim = FusionSimStore.state(context)
+        val t32Original = Vwap3265AutoStore.state(context)
+        val t32Net15 = T32Net15Store.state(context)
+        val t32Net20 = T32Net20Store.state(context)
+        val t32Human = HumanFactorStore.state(context)
         val ledger = runCatching { ResearchPerformanceLedger.exportJson(context, 5_000) }.getOrNull()
         val recentTrades = ArrayList<String>()
+
+        fun appendT32Trades(account: String, trades: List<HumanFactorTrade>) {
+            trades.asSequence()
+                .filter { it.time >= cutoff }
+                .forEach { trade ->
+                    recentTrades += buildString {
+                        append(trade.time); append('\t')
+                        append(account); append('\t')
+                        append(clean(trade.action)); append('\t')
+                        append(fmt(trade.price)); append('\t')
+                        append(fmtSigned(trade.pnlEur)); append('\t')
+                        append(clean(trade.reason).take(260))
+                    }
+                }
+        }
+        appendT32Trades("T32_ORIGINAL", t32Original.trades)
+        appendT32Trades("T32_NET_1P5", t32Net15.trades)
+        appendT32Trades("T32_NET_2P0", t32Net20.trades)
+        appendT32Trades("T32_HUMAN_2P0", t32Human.trades)
+
         val events = ledger?.optJSONArray("eventsNewestFirst") ?: JSONArray()
         for (index in 0 until events.length()) {
-            if (recentTrades.size >= MAX_TRADE_ROWS) break
             val event = events.optJSONObject(index) ?: continue
             if (event.optLong("time") < cutoff || event.optString("kind") != "TRADE") continue
             recentTrades += buildString {
@@ -124,10 +145,16 @@ object V6ScalpReportStore {
                 append(clean(event.optString("reason")).take(260))
             }
         }
+        val orderedTrades = recentTrades
+            .distinct()
+            .sortedByDescending { it.substringBefore('\t').toLongOrNull() ?: 0L }
+            .take(MAX_TRADE_ROWS)
+
         val fusionMark = fusion.bid.takeIf { fusion.fresh(now) } ?: price
+        val t32Mark = fusionMark
         return buildString {
-            appendLine("PUMP / PumpBot V6.0 SCALP EXECUTION REPORT")
-            appendLine("schema=pump-v6-scalp-report-v1")
+            appendLine("PUMP / PumpBot V6.0+ SCALP EXECUTION REPORT")
+            appendLine("schema=pump-v6-scalp-report-v2")
             appendLine("appVersion=${BuildConfig.VERSION_NAME}")
             appendLine("generatedAt=$now")
             appendLine("windowHours=$hours")
@@ -137,7 +164,8 @@ object V6ScalpReportStore {
             appendLine("format=UTF-8 TAB-SEPARATED TEXT")
             appendLine("maxPartBytes=$MAX_EXPORT_PART_BYTES")
             appendLine("safety=SHADOW_ONLY; REAL_ORDERS=false; CONTAINS_API_KEYS=false")
-            appendLine("IMPORTANT=V6 does not allow or veto any V5 trade in this release")
+            appendLine("T32_FEE_MODEL=0.21% BUY + 0.21% SELL; fixed-profit targets are NET after both fees")
+            appendLine("IMPORTANT=V6 execution intelligence does not allow or veto any trading account")
             appendLine("COST_FLOOR=observed round-trip fee + spread + depth slippage + safety buffer; NOT a profit forecast")
             appendLine("EXECUTION_PROBE_EUR=${ScalpExecutionPolicyV600.EXECUTION_PROBE_EUR}; diagnostic depth probe, not position sizing")
             appendLine("FORWARD_OUTCOMES=30/60/120/300s use later Bitpanda bid; late observations are marked MISSED, never backfilled with a wrong timestamp")
@@ -153,6 +181,10 @@ object V6ScalpReportStore {
             appendLine("fusionFresh=${fusion.fresh(now)} bid=${fmt(fusion.bid)} ask=${fmt(fusion.ask)} depthBid=${fmt(fusion.bidDepthEur)} depthAsk=${fmt(fusion.askDepthEur)}")
             appendLine()
             appendLine("[CURRENT_ACCOUNTS]")
+            appendLine("T32_ORIGINAL\tvalue=${fmt(t32Original.value(t32Mark))}\tinPosition=${t32Original.inPosition}\treadiness=${t32Original.readiness}\ttrades=${t32Original.trades.size}\tstatus=${clean(t32Original.reason).take(300)}")
+            appendLine("T32_NET_1P5\tvalue=${fmt(t32Net15.value(t32Mark))}\tinPosition=${t32Net15.inPosition}\treadiness=${t32Net15.readiness}\ttargetPrice=${fmt(t32Net15.targetPrice)}\ttrades=${t32Net15.trades.size}\tstatus=${clean(t32Net15.reason).take(300)}")
+            appendLine("T32_NET_2P0\tvalue=${fmt(t32Net20.value(t32Mark))}\tinPosition=${t32Net20.inPosition}\treadiness=${t32Net20.readiness}\ttargetPrice=${fmt(t32Net20.targetPrice)}\ttrades=${t32Net20.trades.size}\tstatus=${clean(t32Net20.reason).take(300)}")
+            appendLine("T32_HUMAN_2P0\tvalue=${fmt(t32Human.value(t32Mark))}\tinPosition=${t32Human.inPosition}\tpending=${t32Human.pending}\treadiness=${t32Human.readiness}\ttargetPrice=${fmt(t32Human.targetPrice)}\ttrades=${t32Human.trades.size}\tstatus=${clean(t32Human.reason).take(300)}")
             appendLine("PM1_2pct\tvalue=${fmt(PumpMachine2Policy.netLiquidationValue(pm1, fusionMark, fusion.feeRate))}\tinPosition=${pm1.inPosition}\ttrades=${pm1.trades.size}\tstatus=${clean(PumpMachine2Store.lastStatus(context)).take(300)}")
             appendLine("PM2_3pct\tvalue=${fmt(PumpMachinePolicy.netLiquidationValue(pm2, fusionMark, fusion.feeRate))}\tinPosition=${pm2.inPosition}\ttrades=${pm2.trades.size}\tstatus=${clean(PumpMachineStore.lastStatus(context)).take(300)}")
             appendLine("PM3_RETEST\tvalue=${fmt(PumpMachineRetestStore.netValue(context, now))}\tinPosition=${pm3.inPosition}\ttrades=${pm3.trades.size}\tstatus=${clean(PumpMachineRetestStore.lastStatus(context)).take(300)}")
@@ -164,8 +196,8 @@ object V6ScalpReportStore {
             appendLine()
             appendLine("[TRADES_LAST_${hours}H]")
             appendLine("time_ms\taccount\taction\tprice\tpnl_eur\treason")
-            if (recentTrades.isEmpty()) appendLine("NONE") else recentTrades.forEach(::appendLine)
-            if (recentTrades.size >= MAX_TRADE_ROWS) appendLine("TRADES_TRUNCATED_AT=$MAX_TRADE_ROWS")
+            if (orderedTrades.isEmpty()) appendLine("NONE") else orderedTrades.forEach(::appendLine)
+            if (recentTrades.distinct().size > MAX_TRADE_ROWS) appendLine("TRADES_TRUNCATED_AT=$MAX_TRADE_ROWS")
             appendLine()
             appendLine("[DATA_ROWS]")
             appendLine("SAMPLE_COLUMNS=$SAMPLE_COLUMNS")
