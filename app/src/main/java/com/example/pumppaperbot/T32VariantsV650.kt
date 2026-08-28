@@ -212,7 +212,25 @@ object T32Net20Store {
 
 object T32ProfitVariantsV650 {
     fun syncAll(context: Context, now: Long = System.currentTimeMillis()) {
-        T32Net15Store.sync(context, now)
-        T32Net20Store.sync(context, now)
+        runCatching { T32Net15Store.sync(context, now) }
+            .onFailure {
+                UnifiedResearchLog.record(
+                    context,
+                    "T32_NET_1P5",
+                    "ERROR",
+                    "Изолированная ошибка +1,5%: ${it.javaClass.simpleName}: ${it.message.orEmpty().take(180)}",
+                    now
+                )
+            }
+        runCatching { T32Net20Store.sync(context, now) }
+            .onFailure {
+                UnifiedResearchLog.record(
+                    context,
+                    "T32_NET_2P0",
+                    "ERROR",
+                    "Изолированная ошибка +2,0%: ${it.javaClass.simpleName}: ${it.message.orEmpty().take(180)}",
+                    now
+                )
+            }
     }
 }
