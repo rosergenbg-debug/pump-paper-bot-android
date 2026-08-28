@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import androidx.core.content.FileProvider
 import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -19,6 +20,7 @@ object V6ScalpReportStore {
     private const val RETENTION_MILLIS = 7L * 24L * 60L * 60L * 1_000L
     private const val MAX_EXPORT_PART_BYTES = 900_000
     private const val MAX_TRADE_ROWS = 500
+    private const val MAX_T32_EVENT_ROWS = 800
     private const val DEFAULT_WINDOW_HOURS = 24
     private val utc = TimeZone.getTimeZone("UTC")
     private val lock = Any()
@@ -110,6 +112,7 @@ object V6ScalpReportStore {
         val t32Net15 = T32Net15Store.state(context)
         val t32Net20 = T32Net20Store.state(context)
         val t32Human = HumanFactorStore.state(context)
+        val t32Events = readT32Journal(context, cutoff)
         val ledger = runCatching { ResearchPerformanceLedger.exportJson(context, 5_000) }.getOrNull()
         val recentTrades = ArrayList<String>()
 
@@ -199,6 +202,10 @@ object V6ScalpReportStore {
             if (orderedTrades.isEmpty()) appendLine("NONE") else orderedTrades.forEach(::appendLine)
             if (recentTrades.distinct().size > MAX_TRADE_ROWS) appendLine("TRADES_TRUNCATED_AT=$MAX_TRADE_ROWS")
             appendLine()
+            appendLine("[T32_EVENTS_LAST_${hours}H]")
+            appendLine("time_ms\tagent\tevent\tdetail")
+            if (t32Events.isEmpty()) appendLine("NONE") else t32Events.forEach(::appendLine)
+            appendLine()
             appendLine("[DATA_ROWS]")
             appendLine("SAMPLE_COLUMNS=$SAMPLE_COLUMNS")
             appendLine("OUTCOME_COLUMNS=${V6ScalpOutcomeStore.COLUMNS}")
@@ -218,6 +225,34 @@ object V6ScalpReportStore {
                 } }
             }
         return result.sortedBy { it.substringBefore('\t').toLongOrNull() ?: 0L }
+    }
+
+    private fun readT32Journal(context: Context, cutoff: Long): List<String> {
+        val allowed = setOf("T32_ORIGINAL", "T32_NET_1P5", "T32_NET_2P0", "T32_HUMAN_2P0")
+        val result = ArrayList<String>()
+        File(context.filesDir, "research_logs").listFiles()
+            ?.filter { it.name.endsWith(".ndjson") && it.lastModified() >= cutoff }
+            ?.sortedByDescending { it.name }
+            ?.forEach { file ->
+                file.useLines(Charsets.UTF_8) { lines ->
+                    lines.forEach { raw ->
+                        val event = runCatching { JSONObject(raw) }.getOrNull() ?: return@forEach
+                        val at = event.optLong("time")
+                        val agent = event.optString("agent")
+                        if (at < cutoff || agent !in allowed) return@forEach
+                        result += buildString {
+                            append(at); append('\t')
+                            append(clean(agent)); append('\t')
+                            append(clean(event.optString("event"))); append('\t')
+                            append(clean(event.optString("detail")).take(360))
+                        }
+                    }
+                }
+            }
+        return result
+            .distinct()
+            .sortedByDescending { it.substringBefore('\t').toLongOrNull() ?: 0L }
+            .take(MAX_T32_EVENT_ROWS)
     }
 
     internal fun split(summary: String, lines: List<String>, maxBytes: Int): List<String> {
