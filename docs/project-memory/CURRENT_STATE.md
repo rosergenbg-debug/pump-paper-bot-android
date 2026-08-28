@@ -2,117 +2,137 @@
 
 Обновлено: **2026-08-28**
 
-Это короткий снимок текущего состояния. Старую историю сюда не накапливать.
+Это короткий снимок текущего состояния. Старую историю сюда не накапливать; исследовательские checkpoints хранятся в `X/`.
 
-## VERSION / BRANCH
+## VERSION / PRODUCTION
 
-- Canonical branch after merge: `main`.
-- Current source version in this change: **V6.5**, `versionCode 123`.
-- `applicationId`: `com.example.pumppaperbot.v8` — сохранён для совместимого update/data continuity.
-- V6.5 implementation PR: **#87**, branch `v6.5-t32-profit-variants`.
-- Реальные ордера не добавлены: все новые T32 варианты остаются paper/research-only.
-- Production commit, от которого велись последние research replay: `cbc10b4948bd22cbf5684b36596121ee562c8614`.
+- Canonical branch: `main`.
+- Current production source: **V6.6**, `versionCode 124`.
+- `applicationId`: `com.example.pumppaperbot.v8` — сохранён для update/data continuity.
+- Production merge: PR **#88**, merge commit `9eb48bdab784f60fc9e7ab5d10ae62c8efda3103`.
+- Validated source head before merge: `080f3c3ae7732098314e28ffcb47a2683f390666`.
+- Green Android Build run: **33214504275** (`testDebugUnitTest + lintDebug + assembleDebug + APK checks`).
+- Real orders are not implemented. V6.6 remains paper-only.
 
-## ОБЯЗАТЕЛЬНАЯ ПАМЯТЬ X
+## MANDATORY STARTUP MEMORY
 
-В корне репозитория создана защищённая папка `X/`.
+Every new chat must read:
 
-Каждый новый чат обязан читать в порядке:
+`ИНСТРУКЦИЯ_1.md` → `AGENTS.md` → `X/README.md` → `docs/project-memory/*`
 
-`ИНСТРУКЦИЯ_1.md` → `AGENTS.md` → `X/README.md` → project-memory.
+For strategy work also read the newest files under `X/`.
 
-`X/` хранит текущие лучшие измеренные T32/VWAP checkpoints и защищает проект от потери уже найденной линии:
+## V6.6 — FOCUSED NETWORK
 
-- исторический T32/VWAP canary: **32,65% WR** (`1772 signals / 974 fills / 318 positive`);
-- тот же T32 + `-4% / rolling peak 12h`: **34,88% WR**;
-- тот же -4%/12h + VWAP exit при STOP `-1,2%`: **52,03% WR**;
-- тот же -4%/12h + VWAP exit при STOP `-1,5%`: **57,36% WR**;
-- высокий WR сам по себе не равен прибыльности: эти 52–57% варианты всё ещё имели отрицательный Avg NET/PF < 1;
-- текущий лучший экономический компромисс: `-4%/12h + TP +2,5% NET + STOP -1,2% NET + max 2 entries/day`, с WR **40,21% / 43,14% / 37,50%** на 60d/30d/7d и PF до **0,982** на recent 7d.
+V6.5's active T32 variants are removed from the production service loop. V6.6 actively runs exactly four fresh portfolios, each starting from **€1000 / zero trade history** in new V6.6 preferences:
 
-Точные цифры и provenance лежат в `X/RESULTS_2026-08-28.md`.
+1. `AUTO CORE`
+2. `AUTO BTC GUARD`
+3. `AUTO SOL/BTC SELECT`
+4. `HUMAN SELECT`
 
-## V6.5 — FOUR T32 EXPERIMENTS
+The old V6.5 persisted stores remain dormant for evidence/compatibility only; they are not driven by the V6.6 foreground service.
 
-Один и тот же исходный T32/VWAP entry evaluator теперь сравнивается на четырёх независимых paper-счетах:
+All three AUTO profiles share the same economic core:
 
-1. `T32 ORIGINAL` — полностью автоматический вход T32; исходный VWAP/STOP/90m выход сохранён как контроль.
-2. `T32 +1,5% NET` — полностью автоматический вход T32; автоматический TP только после достижения +1,5% NET.
-3. `T32 +2,0% NET` — полностью автоматический вход T32; автоматический TP только после достижения +2,0% NET.
-4. `HUMAN +2,0% NET` — T32 создаёт предложение входа; BUY выполняется только после кнопки владельца `ВОЙТИ`; после этого выход автоматический при +2,0% NET либо по safety STOP/90m.
+- T32/VWAP-style entry context from protected X lineage;
+- `BELOW4_PEAK12H` context;
+- execution intent equivalent to `LIMIT close * 0.999`, short TTL;
+- **TP +2.5% NET**;
+- **STOP -1.2% NET**;
+- **TIME 120 minutes**;
+- **max 2 entries per UTC day**;
+- fee model **0.21% BUY + 0.21% SELL**.
 
-- Все четыре ветви используют T32 commission model **0,21% BUY + 0,21% SELL**.
-- Fixed-profit target вычисляется математически так, чтобы после обеих комиссий осталось ровно +1,5% или +2,0% NET; это не простое прибавление 0,42 п.п. к цене.
-- Для production V6.5 fixed-profit/Human ветвей safety exit пока сохранён: `NET <= -0,80%` или максимум 90 минут. Последний research показывает, что `-0,80%` вероятно слишком тесный для исследовательской линии, но production пока не изменён.
-- Новые +1,5%/+2,0% portfolios имеют отдельные `SharedPreferences`; существующие T32 ORIGINAL и Human Factor сохраняют прежние prefs/history для continuity.
+Profiles differ only by entry context:
 
-## HUMAN FACTOR ALERT
+- `AUTO CORE`: frozen core conditions without extra market gate.
+- `AUTO BTC GUARD`: blocks when BTC has a strong recent 1h rise in the recent 1–3h window.
+- `AUTO SOL/BTC SELECT`: requires delayed SOL-vs-BTC relative strength around lag 6h (`SOL-BTC L6 >= +0.40 percentage points`).
 
-- Human Factor entry больше не зависит от обычного preparatory-alert schedule/master sound gate.
-- Используется отдельный high-importance alarm channel `pump_human_factor_v650`.
-- При pending Human Factor выполняются notification alarm + сильная vibration + direct alarm sound attempt.
-- Пока setup остаётся pending, alarm самостоятельно повторяется примерно раз в 60 секунд между полными торговыми циклами.
-- `ВОЙТИ`, `ОТКЛОНИТЬ`, распад setup или уже открытая Human позиция останавливают повтор.
-- Android DND/ручное отключение системного канала/жёсткие OEM-ограничения всё ещё могут переопределить звук на уровне ОС; приложение максимально дублирует delivery, но не может обойти системный запрет.
+This separation is intentional: compare entry context, not multiple TP/STOP changes at once.
 
-## FOCUSED NETWORK UI
+## HUMAN SELECT
 
-Экран сети V6.5 содержит шесть owner-facing счетов в порядке:
+- Uses the same V6.6 economic exit core as AUTO: `+2.5% NET / -1.2% NET / 120m`.
+- Entry is **owner-confirmed only** through `ВОЙТИ HUMAN`.
+- `ОТКЛОНИТЬ` suppresses the current setup until it decays/reset conditions are met.
+- Opportunity monitoring continues even while a HUMAN position is already open.
+- A second HUMAN BUY cannot be opened while the current HUMAN position is open.
 
-`T32 ORIGINAL → T32 +1,5% NET → T32 +2,0% NET → HUMAN +2,0% NET → СЕРЖ → APP`
+## LIVE READINESS 0–100
 
-Старые PM/Fusion/DeepSigX расчёты и persisted data не удалены; они остаются вне focused network.
+The old near-binary behavior was replaced with a continuous owner-facing readiness score.
 
-## REPORTING / 24H TXT
+The score develops from live one-minute context using:
 
-- Основной support export остаётся UTF-8 `.txt` за 24 часа с разбиением примерно до 900 KB на часть.
-- V6.5 TXT явно включает текущее состояние всех четырёх T32 ветвей: value, position, readiness/pending, target и status.
-- BUY/SELL четырёх T32 ветвей за выбранное 24h окно добавляются в `[TRADES_LAST_24H]`.
-- `UnifiedResearchLog` дополнительно получает отдельные агенты `T32_ORIGINAL`, `T32_NET_1P5`, `T32_NET_2P0`, `T32_HUMAN_2P0`; Human также пишет `ALERT`, `PENDING`, `REJECT`.
-- Старый V6 execution sample/outcome journal сохранён и продолжает попадать в тот же support TXT.
+- distance below VWAP;
+- 12h drawdown depth;
+- current taker BUY share;
+- current candle recovery/body;
+- acceleration of BUY share.
 
-## VERIFICATION TARGET
+The fast path refreshes roughly every **30 seconds**. The gauge is informative only; AUTO BUY still requires the exact closed-candle setup and the profile gate.
 
-Перед merge V6.5 обязана пройти GitHub Actions:
+## ALERT / CALL LOGIC V6.6
 
-- `testDebugUnitTest`
-- `lintDebug`
-- `assembleDebug`
-- package/version/activity checks
-- APK v2 signature check
-- ZIP integrity / artifact upload
+All alert paths now use one master policy:
 
-Добавлены regression tests для точной 0,21% fee model, +1,5/+2,0 NET target math, repeat-policy Human alarm и 6-account focused order.
+- `OFF` = absolute silence;
+- `WORK` = only allowed work-schedule windows;
+- `DAILY` = every day in configured daily window;
+- `ALWAYS` = 24/7.
 
-## WHAT REMAINS UNPROVEN
+Important fixes:
 
-- Win rate 32,65% — исторический research baseline, а не гарантия будущей прибыли.
-- 52,03%/57,36% из stop sweep показывают чувствительность WR к слишком тесному STOP, но **не являются доказательством прибыльной стратегии**.
-- Текущий fixed `+2,5% / -1,2% / max2/day` кандидат близок к breakeven, но Avg NET всё ещё отрицателен на 60d/30d/7d.
-- Что production TP +1,5% или +2,0% улучшит expectancy по сравнению с original VWAP exit — **не доказано**; именно поэтому варианты разделены на независимые portfolios.
-- Польза Human подтверждения должна оцениваться по будущим NET outcomes, а не по отдельным удачным сделкам.
-- Реальные ордера всё ещё не реализованы.
+- HUMAN alerts no longer stop merely because a HUMAN position is already open;
+- old safety/legacy sound paths cannot bypass the common master switch/schedule;
+- while HUMAN remains pending, alarm can repeat approximately once per minute;
+- main V6.6 screen includes `ТЕСТ HUMAN-ЗВОНКА СЕЙЧАС` for immediate sound/vibration verification;
+- Android DND, manually muted notification channels, and OEM battery/audio restrictions can still suppress delivery at OS level.
 
-## CURRENT PRIORITY
+## BACKGROUND SERVICE
 
-Не терять защищённую линию из `X/`.
+`PumpSignalService` V6.6 foreground loop runs only:
 
-Для следующего research шага заморозить текущий лучший экономический кандидат:
+- three V6.6 AUTO profiles;
+- HUMAN SELECT;
+- existing personal-position safety warning (does not open real orders).
 
-`T32 entry + BELOW4_PEAK12H + LIMIT -0,10% TTL2 + TP +2,5% NET + STOP -1,2% NET + max 2 entries/day`.
+Fast market path refreshes ~30s; broader market/ecosystem context refreshes ~2m.
 
-Не менять вход и риск одновременно. Следующий изолированный тест — TIME/exit: **60 / 90 / 120 / 180 минут**, возврат к VWAP и ранний защитный выход при угасании импульса. Причина: на control 60d у текущего кандидата **34 из 97** сделок закрылись по 90m TIME.
+## SIGNING / INSTALL CONTINUITY
 
-Параллельно продолжать накапливать forward outcomes production V6.5, не смешивая их с historical research.
+- Signing alias: `pump-signal-update`.
+- Expected certificate SHA-256:
+  `1F:77:8C:42:91:C9:D1:1C:5F:89:F4:DE:87:73:BD:A3:5A:01:25:03:1A:DC:05:78:5D:AE:E2:3F:27:DC:78:23`
+- V6.6 signed APK certificate matches V6.5 exactly.
+- V6.6 APK verifies with APK Signature Scheme **v2 + v3**.
+- Delivered V6.6 signed APK SHA-256:
+  `62463dfc460d6e0706415583954f89b3a33fbe74ee8fe77c08ca7a95d5193dbe`
+- Never create a replacement signing key and never commit JKS/password/recovery bundle.
+- Install V6.6 **over** the existing app; do not uninstall first.
+
+## RESEARCH BASIS / WHAT IS STILL UNPROVEN
+
+Protected X results remain the source of truth:
+
+- original canary: `1772 signals / 974 fills / 318 positive = 32.65% WR`;
+- `BELOW4_PEAK12H` improved garbage filtering;
+- wider stop showed that production `-0.8%` had been too tight;
+- fixed `TP +2.5 / STOP -1.2` plus a **120–135m TIME plateau** materially improved economics versus 90m;
+- 120m was selected for production V6.6 as the conservative point in that plateau, not because 135m looked best on one recent slice;
+- SOL/BTC delayed relative-strength context is an experimental profile, not proven alpha.
+
+V6.6 is a forward paper test. Do not call it profitable until forward NET/PF evidence supports that conclusion.
 
 ## INVARIANTS
 
-1. Не менять package/signing identity.
-2. Не удалять установленное приложение ради update.
-3. Не очищать накопленную history/state.
-4. T32 ORIGINAL сохранять как контроль, пока fixed-profit варианты не накопят достаточное evidence.
-5. Не смешивать portfolios четырёх T32 ветвей.
-6. Оценивать результаты по NET после расходов.
-7. Не добавлять live-order authority без отдельного явного решения владельца.
-8. Перед новым T32 replay читать `X/README.md` и воспроизводить соответствующий canary.
-9. Не стирать старые checkpoints из `X/` при появлении нового результата.
+1. Keep package/signing identity unchanged.
+2. Never uninstall the old app just to update.
+3. No real-order authority without an explicit separate decision.
+4. Judge strategies by NET expectancy/PF and trade frequency, not win rate alone.
+5. Do not exceed three automatic owner-facing strategy profiles without a new explicit decision.
+6. Keep HUMAN entry owner-confirmed.
+7. Before strategy research, read X and reproduce the relevant canary.
+8. Never erase older X checkpoints when a new result appears.
