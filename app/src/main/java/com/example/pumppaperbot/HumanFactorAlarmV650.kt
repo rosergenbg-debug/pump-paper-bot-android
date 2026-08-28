@@ -40,7 +40,7 @@ object HumanFactorAlarmV650 {
                 cancel(context)
                 return
             }
-            issue(context, detail)
+            issue(context, detail, ignoreSchedule = false)
             handler.postDelayed(this, HumanFactorAlertPolicyV650.REPEAT_MILLIS)
         }
     }
@@ -54,8 +54,16 @@ object HumanFactorAlarmV650 {
         repeatContext = app
         repeatDetail = detail
         handler.removeCallbacks(repeatRunnable)
-        issue(app, detail)
+        issue(app, detail, ignoreSchedule = false)
         handler.postDelayed(repeatRunnable, HumanFactorAlertPolicyV650.REPEAT_MILLIS)
+    }
+
+    /** Manual settings test: bypasses the clock/day schedule, but never bypasses the master OFF switch. */
+    fun testOnce(context: Context): Boolean {
+        val app = context.applicationContext
+        if (!ResearchModePolicy.alertsEnabled(app)) return false
+        issue(app, "ТЕСТ V6.6 HUMAN • если слышите звонок и вибрацию, канал ручного входа работает.", ignoreSchedule = true)
+        return true
     }
 
     fun cancel(context: Context) {
@@ -71,10 +79,11 @@ object HumanFactorAlarmV650 {
         ResearchModePolicy.alertsEnabled(context) && AlertSchedule.isAllowedNow(context)
 
     @SuppressLint("MissingPermission")
-    private fun issue(context: Context, detail: String) {
-        if (!allowed(context)) return
+    private fun issue(context: Context, detail: String, ignoreSchedule: Boolean) {
+        if (!ResearchModePolicy.alertsEnabled(context)) return
+        if (!ignoreSchedule && !AlertSchedule.isAllowedNow(context)) return
         ensureChannel(context)
-        val open = Intent(context, MainActivity::class.java).apply {
+        val open = Intent(context, V660DashboardActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
         val pending = PendingIntent.getActivity(
@@ -91,8 +100,8 @@ object HumanFactorAlarmV650 {
             .setContentIntent(pending)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setPriority(NotificationCompat.PRIORITY_MAX)
-            .setOngoing(true)
-            .setAutoCancel(false)
+            .setOngoing(!ignoreSchedule)
+            .setAutoCancel(ignoreSchedule)
             .setOnlyAlertOnce(false)
             .setTimeoutAfter(NOTIFICATION_TIMEOUT_MILLIS)
             .setVibrate(longArrayOf(0L, 500L, 180L, 500L, 180L, 900L))
@@ -100,8 +109,8 @@ object HumanFactorAlarmV650 {
 
         runCatching { NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID) }
         runCatching { NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification) }
-        vibrateStrong(context)
-        playShortAlarm(context)
+        vibrateStrong(context, ignoreSchedule)
+        playShortAlarm(context, ignoreSchedule)
     }
 
     private fun ensureChannel(context: Context) {
@@ -129,8 +138,9 @@ object HumanFactorAlarmV650 {
     }
 
     @Suppress("DEPRECATION")
-    private fun vibrateStrong(context: Context) {
-        if (!allowed(context)) return
+    private fun vibrateStrong(context: Context, ignoreSchedule: Boolean) {
+        if (!ResearchModePolicy.alertsEnabled(context)) return
+        if (!ignoreSchedule && !AlertSchedule.isAllowedNow(context)) return
         val pattern = longArrayOf(0L, 500L, 180L, 500L, 180L, 900L)
         runCatching {
             val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -138,16 +148,14 @@ object HumanFactorAlarmV650 {
             } else {
                 context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vibrator.vibrate(VibrationEffect.createWaveform(pattern, -1))
-            } else {
-                vibrator.vibrate(pattern, -1)
-            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) vibrator.vibrate(VibrationEffect.createWaveform(pattern, -1))
+            else vibrator.vibrate(pattern, -1)
         }
     }
 
-    private fun playShortAlarm(context: Context) {
-        if (!allowed(context)) return
+    private fun playShortAlarm(context: Context, ignoreSchedule: Boolean) {
+        if (!ResearchModePolicy.alertsEnabled(context)) return
+        if (!ignoreSchedule && !AlertSchedule.isAllowedNow(context)) return
         runCatching { activeRingtone?.stop() }
         val uri = AlertSoundPreferences.uri(context)
         runCatching {
