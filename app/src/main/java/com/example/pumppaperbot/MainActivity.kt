@@ -68,6 +68,10 @@ class MainActivity : AppCompatActivity() {
     private var tvDeepSeekActionLevel: TextView? = null
     private var tvAlertStatus: TextView? = null
     private var tvBuyerBreathSummary: TextView? = null
+    private var tvHumanFactor: TextView? = null
+    private var humanFactorActions: View? = null
+    private var btnHumanApprove: Button? = null
+    private var btnHumanReject: Button? = null
     private var chart: StrategyChartView? = null
     private var manualPositionChart: ManualPositionChartView? = null
     private var btnRisk30: Button? = null
@@ -124,6 +128,10 @@ class MainActivity : AppCompatActivity() {
         tvDeepSeekActionLevel = findViewById(R.id.tvDeepSeekActionLevel)
         tvAlertStatus = findViewById(R.id.tvAlertStatus)
         tvBuyerBreathSummary = findViewById(R.id.tvBuyerBreathSummary)
+        tvHumanFactor = findViewById(R.id.tvHumanFactor)
+        humanFactorActions = findViewById(R.id.humanFactorActions)
+        btnHumanApprove = findViewById(R.id.btnHumanApprove)
+        btnHumanReject = findViewById(R.id.btnHumanReject)
         chart = findViewById(R.id.chart)
         manualPositionChart = findViewById(R.id.manualPositionChart)
         btnRisk30 = findViewById(R.id.btnRisk30)
@@ -177,6 +185,12 @@ class MainActivity : AppCompatActivity() {
         btnManualBuy?.setOnClickListener { confirmManualBuy() }
         btnManualSell?.setOnClickListener { confirmManualSell() }
         btnManualHistory?.setOnClickListener { showManualHistory() }
+        btnHumanApprove?.setOnClickListener {
+            if (HumanFactorStore.approve(this)) Toast.makeText(this,"Виртуальная покупка подтверждена",Toast.LENGTH_LONG).show()
+            else Toast.makeText(this,"Сигнал уже изменился или цена устарела",Toast.LENGTH_LONG).show()
+            updateUi()
+        }
+        btnHumanReject?.setOnClickListener { HumanFactorStore.reject(this); updateUi() }
         btnChartSpeed?.setOnClickListener { showChartSpeedDialog() }
         btnBacktest?.setOnClickListener { startActivity(Intent(this, BacktestActivity::class.java)) }
         btnAlertSettings?.setOnClickListener { startActivity(Intent(this, AlertSettingsActivity::class.java)) }
@@ -480,6 +494,8 @@ class MainActivity : AppCompatActivity() {
         val geminiExitExperiment = GeminiExitExperimentStore.state(this)?.portfolio
             ?: GeminiPaperPortfolio()
         val sergeAccount = UserPaperStore.markToMarket(this, accountPrice)
+        val human = HumanFactorStore.state(this)
+        val auto3265 = Vwap3265AutoStore.state(this)
         val fusionMarket = BitpandaFusionStore.state(this)
         val fusionAccount = FusionSimStore.state(this)
         val fusionPriority = FusionPriorityPolicy.plan(fusionAccount)
@@ -521,7 +537,7 @@ class MainActivity : AppCompatActivity() {
             fusionAccount.value(fusionMark),
             fusionAccount.profit(fusionMark) / FusionSimPortfolio.START_BALANCE * 100.0
         )
-        btnPumpMachine2?.text = "ЕЩЁ 3 СЧЁТА\nAPP • DEEPSIGX • СЕРЖ\nоткрыть сравнение"
+        btnPumpMachine2?.text = "ЕЩЁ 5 СЧЕТОВ\nAPP • DEEPSIGX • СЕРЖ • AUTO • ЧЕЛОВЕК\nоткрыть сравнение"
         tvStatus?.text = if (snapshot.running) {
             "V${BuildConfig.VERSION_NAME} PAPER‑ТЕСТ • монитор включён" +
                 (if (fusionPriority.active) " • FUSION: локальная защита" else "") +
@@ -529,6 +545,13 @@ class MainActivity : AppCompatActivity() {
         } else {
             "V${BuildConfig.VERSION_NAME} PAPER‑ТЕСТ • монитор остановлен • последнее обновление ${PumpBotEngine.formatTime(snapshot.lastSync)}"
         }
+        tvHumanFactor?.text = buildString {
+            append("ЧЕЛОВЕЧЕСКИЙ ФАКТОР • VWAP 32,65\n")
+            append(if(human.inPosition) String.format(Locale.GERMANY,"ПОЗИЦИЯ • €%.2f",human.value(accountPrice)) else "ГОТОВНОСТЬ ${human.readiness}/100")
+            append("\n${human.reason}")
+            append(String.format(Locale.GERMANY,"\nAUTO 32,65: €%.2f • %s",auto3265.value(accountPrice),if(auto3265.inPosition)"В PUMP" else "В EUR"))
+        }
+        humanFactorActions?.visibility = if(human.pending&&!human.inPosition) View.VISIBLE else View.GONE
         val deepSeekPrimary = DeepSeekPrimaryStore.state(this)
         tvDeepSeekPrimary?.text = DeepSeekPrimaryPolicy.compactStatus(
             deepSeekPrimary,

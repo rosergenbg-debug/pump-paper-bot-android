@@ -7,7 +7,7 @@
 ## VERSION / BRANCH
 
 - Canonical branch: `main`.
-- Current source version: **V6.2**, `versionCode 120`.
+- Current source version: **V6.3**, `versionCode 121`.
 - `applicationId`: `com.example.pumppaperbot.v8` — сохранён для совместимого update/data continuity.
 - V6.2 is present on canonical `main` at merge commit `949fa1b`.
 - Full `main` build run **#423** (`33020059070`): **success** — unit tests, lint, assemble, APK package/version/activity/v2-signature/ZIP checks and artifact upload passed.
@@ -27,9 +27,20 @@
 
 ## V6.0 MATERIAL CHANGE
 
+## V6.3 HUMAN FACTOR EXPERIMENT
+
+- Добавлены два независимых VWAP 32,65 paper-счёта: полностью автономный без звуков и Human Factor с обязательным подтверждением владельца.
+- Human Factor показывает подготовку 90–97/100 и постоянную карточку подтверждения при 98–100/100; отменяет карточку при распаде условий.
+- Общий экран теперь содержит 10 счетов. Остальные виртуальные стратегии продолжают расчёт, но не создают пользовательские trade-звонки; safety/exit предупреждения по ручной позиции сохраняются.
+- Реальные ордера не добавлены.
+
 V6.0 добавляет **shadow-only execution intelligence**, не меняя торговую власть V5.37 и не меняя PM entry/TP/SL thresholds.
 
 ## UNRELEASED CROSS-MARKET RESEARCH
+
+- Третий независимый replay Z-Score VWAP, volatility squeeze, strict lead-lag и session-open breakout также не нашёл edge. Squeeze дал 50% на early/24 fills, но только 14,29% и отрицательный NET на control/14 fills; лучший control WR серии 14,29%. Strict lead-lag не создал ни одного сигнала. Production authority не выдана.
+- Отдельный ранее не использованный 120-дневный replay cost-aware VWAP и session gap-fill не превзошёл прежние 32,65%: обе формулы дали 8,33% win rate на control, отрицательный NET и PF значительно ниже 1. Production authority не выдана; следующий новый уровень требует tape/L2.
+- Новый 120-дневный причинный replay пяти контекстных идей (regime-adaptive, liquidity sweep, VWAP reversion, sell exhaustion, 4H node + relative strength) не нашёл edge: лучший control win rate 32,65%, лучший средний NET −0,419%, лучший PF 0,399. Synthetic predicates прошли 10/10, но production authority не выдана.
 
 - Причинный 14-дневный replay PUMP/BTC/SOL проверил BTC/SOL как внешнее подтверждение предполагаемого дна PUMP.
 - Одноминутная contemporaneous correlation заметна (BTC около 0,34, SOL около 0,43), но устойчивого опережения PUMP на 1–10 минут не найдено.

@@ -1,0 +1,281 @@
+ОТЧЁТ PUMP: ЧЕТЫРЕ НОВЫЕ ФИКСИРОВАННЫЕ OHLCV-ГИПОТЕЗЫ
+
+Дата: 28.08.2026
+Статус: research-only; production-алгоритмы не изменены
+
+
+1. ЦЕЛЬ
+
+Проверить четыре стратегии из двух новых внешних AI-анализов:
+
+1. Z-Score VWAP Reversion.
+2. Volatility Squeeze Breakout.
+3. Lead-Lag Momentum Spillover BTC/SOL → PUMP.
+4. Session Open Squeeze Breakout.
+
+CVD Absorption и L2 Order Book Imbalance не симулировались, поскольку для них
+обязательны individual trade tape и история инкрементальных обновлений стакана.
+Минутные свечи не позволяют честно восстановить эти данные.
+
+
+2. ДАННЫЕ И РАЗДЕЛЕНИЕ
+
+Запрашивалось отдельное окно 180 дней, заканчивающееся 31.12.2025. После
+пересечения доступных рядов PUMPUSDT, BTCUSDT и SOLUSDT реально получено
+159 565 общих минут. Более ранних общих данных PUMP в выбранном источнике не
+оказалось.
+
+Фактические периоды:
+
+- early: 11.09.2025 12:30 — 05.11.2025 22:11 UTC;
+- control: 05.11.2025 22:12 — 31.12.2025 07:54 UTC.
+
+Этот блок не пересекается с двумя предыдущими сериями, начинавшимися
+31.12.2025 и 30.04.2026.
+
+Источник: публичные Binance Spot 1m klines.
+
+
+3. МОДЕЛЬ ИСПОЛНЕНИЯ
+
+- комиссия: 0,21% на входе и 0,21% на выходе;
+- adverse slippage: 0,08% для stop/aggressive входов и market/stop/time выходов;
+- сигнал использует только уже закрытые свечи;
+- одна позиция или pending-заявка одновременно;
+- незаполненные заявки учитываются;
+- stop проверяется раньше target внутри одной минутной свечи;
+- Profit Factor и win rate рассчитываются по фактическому NET после расходов.
+
+
+4. SYNTHETIC TESTS
+
+Для каждой формулы проверены разрешённый и запрещённый сценарии через те же
+accept-предикаты, что использует replay:
+
+- Z-Score VWAP: 2/2 PASS;
+- Volatility Squeeze: 2/2 PASS;
+- Lead-Lag: 2/2 PASS;
+- Session Open Squeeze: 2/2 PASS.
+
+ИТОГО: 8/8 PASS.
+
+
+5. Z-SCORE VWAP REVERSION
+
+Формула:
+
+- 60m volume-weighted VWAP и weighted sigma;
+- Z <= -2,5;
+- sigma >= 0,55% цены;
+- наклон VWAP за 5 минут не хуже -0,03% в минуту;
+- зелёная сигнальная свеча;
+- taker-buy share >=55%;
+- limit на close, TTL 2 минуты;
+- target VWAP - 0,5 sigma;
+- stop -0,85% от цены входа;
+- time-stop 40 минут.
+
+EARLY:
+
+- signals/fills: 2/2;
+- wins/losses: 0/2;
+- win rate: 0%;
+- Avg NET: -1,345%;
+- PF: 0;
+- оба выхода по stop.
+
+CONTROL:
+
+- signals/fills: 1/1;
+- wins/losses: 0/1;
+- win rate: 0%;
+- Avg NET: -1,345%;
+- PF: 0;
+- выход по stop.
+
+Вывод: формула чрезмерно редкая и все три события убыточны. Данных недостаточно
+для точной оценки вероятности, но оснований для продвижения нет. Обещание win
+rate >=50% не подтверждено.
+
+
+6. VOLATILITY SQUEEZE BREAKOUT
+
+Формула:
+
+- Bollinger(20, 2 sigma) внутри Keltner(20, 1,5 ATR) минимум 5 баров;
+- close выше верхней Bollinger band;
+- quote volume >=2,2 × среднего предыдущих 20 минут;
+- stop-market выше high на 1 базисный пункт, TTL 1 минута;
+- stop = signal close - 1,2 ATR(20);
+- target = signal close + 2,5 ATR(20);
+- time-stop 45 минут.
+
+EARLY:
+
+- signals: 58;
+- filled/unfilled: 24/34;
+- wins/losses: 12/12;
+- WIN RATE: 50,00%;
+- Avg NET: -0,291%;
+- PF: 0,335;
+- total NET points: -6,989;
+- target touches: 14;
+- stops: 10.
+
+CONTROL:
+
+- signals: 28;
+- filled/unfilled: 14/14;
+- wins/losses: 2/12;
+- WIN RATE: 14,29%;
+- Avg NET: -0,534%;
+- PF: 0,034;
+- total NET points: -7,479;
+- target touches: 6;
+- stops: 8.
+
+Критически важное наблюдение: количество target touches больше количества
+NET-прибыльных сделок. ATR-target иногда был настолько мал, что даже достижение
+ценовой цели не покрывало комиссии и slippage. Это опровергает предположение,
+что заданное ATR risk/reward автоматически обеспечивает экономический запас.
+
+Вывод: 50% на early не воспроизвелись. На control win rate упал до 14,29%,
+Avg NET отрицательный, PF почти нулевой. Стратегия отклонена.
+
+
+7. LEAD-LAG MOMENTUM SPILLOVER
+
+Формула:
+
+- BTC +0,60% за 2 минуты либо SOL +0,80%;
+- двухминутный объём лидера >=2 × своей предыдущей нормы;
+- PUMP за те же 2 минуты <=+0,10%;
+- PUMP 24h volume выше медианы предыдущих семи суток;
+- aggressive stop/limit proxy +0,02%, TTL 1 минута;
+- stop -0,75%;
+- target +1,70%;
+- time-stop 30 минут;
+- раннее закрытие при двух последовательных падениях лидера <=-0,20%.
+
+EARLY: 0 сигналов.
+CONTROL: 0 сигналов.
+
+Вывод: фиксированная комбинация порогов слишком редкая на доступных данных.
+Она не может считаться успешной или неуспешной по доходности, но непригодна как
+практическая стратегия в данном виде. Ослаблять пороги на просмотренном периоде
+нельзя — это будет подгонкой. Ранее более мягкий cross-impulse уже давал
+отрицательный результат.
+
+
+8. SESSION OPEN SQUEEZE BREAKOUT
+
+Формула:
+
+- диапазон первых 15 минут EU-сессии 07:00–07:15 UTC либо US-сессии
+  13:30–13:45 UTC;
+- ширина диапазона <=0,90%;
+- с 16-й по 45-ю минуту close выше high диапазона;
+- quote volume >=2,2 × среднего предыдущих 20 минут;
+- stop-market high диапазона +0,02%, TTL 2 минуты;
+- stop на середине стартового диапазона;
+- target +1,80% gross;
+- time-stop 60 минут.
+
+EARLY:
+
+- signals/fills: 11/11;
+- wins/losses: 4/7;
+- win rate: 36,36%;
+- Avg NET: -0,360%;
+- PF: 0,547;
+- total NET points: -3,960;
+- targets/stops/other: 3/6/2.
+
+CONTROL:
+
+- signals/fills: 23/23;
+- wins/losses: 3/20;
+- win rate: 13,04%;
+- Avg NET: -0,764%;
+- PF: 0,141;
+- total NET points: -17,576;
+- targets/stops/other: 2/17/4.
+
+Вывод: результат отрицателен в обеих частях и заметно ухудшается на control.
+Приток объёма во время формального открытия традиционных сессий не создал
+устойчивого long-edge для круглосуточного криптоактива PUMP.
+
+
+9. СРАВНИТЕЛЬНАЯ ТАБЛИЦА
+
+Стратегия                 Период   Filled   WR       Avg NET    PF
+---------------------------------------------------------------------
+Z-Score VWAP              early         2    0,00%   -1,345%   0
+Z-Score VWAP              control       1    0,00%   -1,345%   0
+Volatility Squeeze        early        24   50,00%   -0,291%   0,335
+Volatility Squeeze        control      14   14,29%   -0,534%   0,034
+Lead-Lag                  early         0      N/A       N/A     N/A
+Lead-Lag                  control       0      N/A       N/A     N/A
+Session Open Squeeze      early        11   36,36%   -0,360%   0,547
+Session Open Squeeze      control      23   13,04%   -0,764%   0,141
+
+
+10. СРАВНЕНИЕ С ПРЕЖНИМ МАКСИМУМОМ
+
+Прежний VWAP mean-reversion:
+
+- control win rate 32,65%;
+- 974 сделки;
+- Avg NET -0,446%;
+- PF 0,251.
+
+В новой серии:
+
+- единственный результат выше 30% — 50% Volatility Squeeze на early из 24
+  сделок, но он отрицателен по NET и не воспроизводится на control;
+- лучший control win rate среди стратегий со сделками — 14,29%;
+- ни одна control-стратегия не превзошла прежние 32,65%;
+- ни одна стратегия не дала положительный Avg NET или PF >1.
+
+
+11. ЧЕСТНЫЙ ИТОГ
+
+- Synthetic: 8/8 PASS.
+- Готовой прибыльной стратегии не найдено.
+- Цель >30% на control не достигнута.
+- Early 50% у squeeze — невоспроизводимый результат, а не успех.
+- Все измеренные Avg NET отрицательны.
+- Все измеренные PF ниже 1.
+- Z-Score VWAP слишком редкий.
+- Lead-Lag при заданных порогах не генерирует сигналов.
+- Session breakout не переносится на control.
+- Production-алгоритмы не изменяются.
+
+
+12. ЧТО ЕЩЁ НЕ ПРОВЕРЕНО
+
+CVD Absorption и L2 Order Book Imbalance остаются принципиально новыми
+гипотезами, но требуют другого набора данных:
+
+- individual trades с maker/taker flag;
+- Best Bid/Ask;
+- L2 snapshots и depth diff updates;
+- точное время с шагом секунд/миллисекунд;
+- модель maker queue и partial fills.
+
+Их нельзя честно объявлять перспективными только по обещанному win rate
+50–62%. Сначала необходим сбор причинного dataset и отдельный replay.
+
+
+13. ВОСПРОИЗВЕДЕНИЕ
+
+Скрипт:
+
+tools/research_four_fixed_ohlcv.js
+
+Команда:
+
+node tools/research_four_fixed_ohlcv.js 180 2025-12-31T07:55:00Z
+
+
+КОНЕЦ ОТЧЁТА

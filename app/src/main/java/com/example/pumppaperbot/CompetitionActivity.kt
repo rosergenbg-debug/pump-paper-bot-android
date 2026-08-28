@@ -217,6 +217,18 @@ class CompetitionActivity : AppCompatActivity() {
             user.trades.map { CompetitionMarker(it.time, it.action, it.price) },
             0.0015
         ))
+        val auto3265=Vwap3265AutoStore.state(this)
+        setChart(8,CompetitionDataset(
+            "VWAP 32,65 • AUTO • БЕЗ ЗВУКОВ",
+            summary(auto3265.value(price),(auto3265.value(price)/1000.0-1.0)*100.0,auto3265.inPosition),candles,
+            auto3265.trades.map{CompetitionMarker(it.time,it.action,it.price,it.pnlEur)},0.0025
+        ))
+        val human=HumanFactorStore.state(this)
+        setChart(9,CompetitionDataset(
+            "ЧЕЛОВЕЧЕСКИЙ ФАКТОР • ПОДТВЕРЖДЕНИЕ ВХОДА",
+            summary(human.value(price),(human.value(price)/1000.0-1.0)*100.0,human.inPosition),candles,
+            human.trades.map{CompetitionMarker(it.time,it.action,it.price,it.pnlEur)},0.0025
+        ))
     }
 
     private fun setChart(index: Int, dataset: CompetitionDataset) {

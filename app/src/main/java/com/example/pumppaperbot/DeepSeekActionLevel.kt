@@ -262,7 +262,7 @@ object DeepSeekActionLevelAlertStore {
 
 internal object VirtualTradeAlertPolicy {
     @Suppress("UNUSED_PARAMETER")
-    fun shouldNotify(action: String, userPositionOpen: Boolean): Boolean = !userPositionOpen
+    fun shouldNotify(action: String, userPositionOpen: Boolean): Boolean = false
 }
 
 internal object AlertDeliveryPolicy {

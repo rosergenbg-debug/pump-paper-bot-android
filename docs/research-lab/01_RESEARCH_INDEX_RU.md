@@ -16,6 +16,10 @@
 1. `01_RESEARCH_INDEX_RU.md` — этот индекс и краткий реестр.
 2. `02_SYNTHETIC_REPLAY_REPORT_20260828_RU.txt` — полный объединённый отчёт по top-view, BTC/SOL, order types, целям, flow/absorption, режимам, микроотскоку, volume node и динамическим выходам.
 3. `03_CROSS_MARKET_BREATH_20260828_RU.md` — отдельный компактный отчёт первого BTC/SOL replay.
+4. `04_CONTEXTUAL_FIVE_20260828_RU.md` — regime-adaptive, liquidity sweep, VWAP, sell exhaustion и 4H node + relative strength на 120 днях.
+5. `05_CONTEXTUAL_FIVE_SHARE_REPORT_RU.txt` — переносимый полный TXT-отчёт пяти контекстных гипотез.
+6. `06_VWAP_GAP_FORWARD_REPORT_RU.txt` — отдельный out-of-sample replay cost-aware VWAP и session gap-fill.
+7. `07_FOUR_FIXED_OHLCV_REPORT_RU.txt` — Z-Score VWAP, volatility squeeze, lead-lag и session-open breakout на третьем независимом блоке.
 
 Воспроизводимые инструменты находятся в `tools/`:
 
@@ -23,6 +27,9 @@
 - `research_order_execution.js`;
 - `research_flow_absorption.js`;
 - `research_five_hypotheses.js`.
+- `research_contextual_five.js`.
+- `research_vwap_gap_forward.js`.
+- `research_four_fixed_ohlcv.js`.
 
 ## Реестр результатов на 2026-08-28
 
@@ -53,6 +60,9 @@
 | 60m volume cluster + SELL decay + BTC/SOL | 60 дней, 30/30 | early −0,362% (9), recent −0,632% (8) | Минус и малая выборка; отвергнуто |
 | BTC/SOL cross-impulse with PUMP lag | 60 дней, 30/30 | early −0,486% (19), recent −0,425% (42) | Lead edge не найден; отвергнуто |
 | UTC 09–15 + negative 4h + high ATR + red-run rebound | 60 дней, 30/30 | early −0,403% (45), recent +0,113% (62), PF 1,255 | Research/shadow; recent plus не воспроизведён early |
+| Пять контекстных гипотез: regime/sweep/VWAP/exhaustion/node+RS | 120 дней, 60/60 | лучший control WR 32,65%; лучший Avg NET −0,419%; лучший PF 0,399 | Ни одну не продвигать |
+| Cost-aware VWAP + session gap-fill | отдельные 120 дней, 60/60 | оба control WR 8,33%; Avg NET −0,566% / −0,917% | Отвергнуть; прежние 32,65% не улучшены |
+| Z-VWAP / squeeze / lead-lag / session breakout | отдельные 159 565 минут | лучший control WR 14,29%; все Avg NET <0; lead-lag 0 сигналов | Не продвигать |
 
 ## Текущая лучшая следующая гипотеза
 

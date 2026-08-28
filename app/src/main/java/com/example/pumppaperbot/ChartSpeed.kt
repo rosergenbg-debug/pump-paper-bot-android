@@ -89,6 +89,13 @@ object ChartSpeedStore {
     fun error(context: Context, interval: ChartInterval): String =
         prefs(context).getString(KEY_ERROR_PREFIX + interval.code, "").orEmpty()
 
+    fun candles(context: Context, interval: ChartInterval): List<PumpCandle> {
+        val p = prefs(context)
+        val pump = parseChartCandles(p.getString(KEY_PUMP_PREFIX + interval.code, "").orEmpty())
+        val eur = parseChartCandles(p.getString(KEY_EUR_PREFIX + interval.code, "").orEmpty())
+        return StrategyV2.synthesizeEur(pump, eur)
+    }
+
     fun chartBundle(
         context: Context,
         snapshot: LiveSnapshot,

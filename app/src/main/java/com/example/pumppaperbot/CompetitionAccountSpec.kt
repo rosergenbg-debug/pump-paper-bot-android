@@ -2,7 +2,7 @@ package com.example.pumppaperbot
 
 /** Stable slot contract for the full account comparison screen. */
 internal object CompetitionAccountSpec {
-    const val COUNT = 8
+    const val COUNT = 10
     const val SCREEN_TITLE = "←  ВСЕ СЧЕТА • ПРОКРУТКА ВВЕРХ/ВНИЗ"
 
     val ORDER = listOf(
@@ -13,6 +13,8 @@ internal object CompetitionAccountSpec {
         "DEEPSIG FUSION",
         "DEEPSIGX",
         "APP",
-        "СЕРЖ"
+        "СЕРЖ",
+        "VWAP 32,65 AUTO",
+        "ЧЕЛОВЕЧЕСКИЙ ФАКТОР"
     )
 }

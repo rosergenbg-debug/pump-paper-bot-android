@@ -120,6 +120,39 @@
             android:textSize="18sp"
             android:textStyle="bold" />
 
+        <LinearLayout
+            android:id="@+id/humanFactorPanel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:background="#172D20"
+            android:orientation="vertical"
+            android:padding="10dp">
+
+            <TextView
+                android:id="@+id/tvHumanFactor"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:minHeight="82dp"
+                android:text="ЧЕЛОВЕЧЕСКИЙ ФАКТОР • VWAP 32,65\nожидает условия"
+                android:textColor="#7EE787"
+                android:textSize="17sp"
+                android:textStyle="bold" />
+
+            <LinearLayout
+                android:id="@+id/humanFactorActions"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:layout_marginTop="6dp"
+                android:orientation="horizontal"
+                android:visibility="gone">
+
+                <Button android:id="@+id/btnHumanApprove" android:layout_width="0dp" android:layout_height="56dp" android:layout_weight="1" android:backgroundTint="#238636" android:text="ПОДТВЕРЖДАЮ ПОКУПКУ" android:textColor="#FFFFFF" android:textStyle="bold" />
+                <Button android:id="@+id/btnHumanReject" android:layout_width="0dp" android:layout_height="56dp" android:layout_marginStart="6dp" android:layout_weight="1" android:backgroundTint="#8E1519" android:text="НЕ ПОКУПАТЬ" android:textColor="#FFFFFF" android:textStyle="bold" />
+            </LinearLayout>
+        </LinearLayout>
+
         <TextView
             android:id="@+id/tvRapidDrop"
             android:layout_width="match_parent"
@@ -267,7 +300,7 @@
             android:layout_height="50dp"
             android:layout_marginTop="7dp"
             android:backgroundTint="#1F6FEB"
-            android:text="ВСЕ 8 СЧЕТОВ • ВЕРТИКАЛЬНАЯ ПРОКРУТКА И ПОЛНАЯ ИСТОРИЯ"
+            android:text="ВСЕ 10 СЧЕТОВ • ВЕРТИКАЛЬНАЯ ПРОКРУТКА И ПОЛНАЯ ИСТОРИЯ"
             android:textColor="#FFFFFF"
             android:textSize="13sp"
             android:textStyle="bold" />

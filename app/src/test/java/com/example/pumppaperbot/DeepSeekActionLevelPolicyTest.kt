@@ -143,7 +143,7 @@ class DeepSeekActionLevelPolicyTest {
         assertFalse(VirtualTradeAlertPolicy.shouldNotify("SELL", userPositionOpen = true))
         assertFalse(VirtualTradeAlertPolicy.shouldNotify(StrategyV2.ACTION_SELL_HALF, userPositionOpen = true))
         assertFalse(VirtualTradeAlertPolicy.shouldNotify("BUY", userPositionOpen = true))
-        assertTrue(VirtualTradeAlertPolicy.shouldNotify("BUY", userPositionOpen = false))
+        assertFalse(VirtualTradeAlertPolicy.shouldNotify("BUY", userPositionOpen = false))
     }
 
     @Test fun `DeepSeek entry alerts start at seven and repeat on each ten percent improvement`() {

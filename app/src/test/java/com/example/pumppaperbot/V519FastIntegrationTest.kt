@@ -34,7 +34,7 @@ class V519FastIntegrationTest {
     }
 
     @Test fun `virtual participant trade sounds stop when Serge owns a position`() {
-        assertTrue(VirtualTradeAlertPolicy.shouldNotify("BUY", userPositionOpen = false))
+        assertFalse(VirtualTradeAlertPolicy.shouldNotify("BUY", userPositionOpen = false))
         assertFalse(VirtualTradeAlertPolicy.shouldNotify("BUY", userPositionOpen = true))
         assertFalse(VirtualTradeAlertPolicy.shouldNotify("EXIT", userPositionOpen = true))
     }

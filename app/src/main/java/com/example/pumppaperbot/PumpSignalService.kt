@@ -220,6 +220,9 @@ class PumpSignalService : Service() {
             GeminiPaperStore.beginCycle(this, source, cycleIntervalMillis, startedAt)
             try {
                 market.sync(this)
+                CycleStageGuard.run(this, "HUMAN_FACTOR_1M", { Unit }) {
+                    ChartMarketClient().sync(this, ChartInterval.ONE_MINUTE)
+                }
                 val marketSnapshot = PumpBotEngine.snapshot(this)
                 val evidenceNow = System.currentTimeMillis()
                 PaperExecutionPolicy.freshLivePrice(marketSnapshot, evidenceNow)?.let { freshPrice ->
@@ -289,6 +292,12 @@ class PumpSignalService : Service() {
                 CycleStageGuard.run(this, "FUSION_SIM", { FusionSimStore.state(this) }) {
                     FusionSimStore.sync(this, deepSeek)
                 }
+                CycleStageGuard.run(this, "VWAP_3265_AUTO", { Vwap3265AutoStore.state(this) }) {
+                    Vwap3265AutoStore.sync(this)
+                }
+                CycleStageGuard.run(this, "HUMAN_FACTOR", { HumanFactorStore.state(this) }) {
+                    HumanFactorStore.sync(this)
+                }
                 CycleStageGuard.run(this, "ENTRY_GATE_AUDIT", { EntryOpportunityAuditStore.latest(this) }) {
                     EntryOpportunityAuditStore.capture(this)
                 }
@@ -300,21 +309,13 @@ class PumpSignalService : Service() {
                     } else false
                 }
                 val signalAlerted = CycleStageGuard.run(this, "SIGNAL_ALERT", { false }) {
-                    if (!rapidDropAlerted && !appTrade.tradeAlerted &&
-                        (!userPositionOpen || snapshot.sellSignal) && PumpBotEngine.shouldAlert(this, snapshot)
+                    if (!rapidDropAlerted && userPositionOpen && snapshot.sellSignal &&
+                        PumpBotEngine.shouldAlert(this, snapshot)
                     ) {
                         PumpAlert.showSignal(this, snapshot)
                         PumpBotEngine.markAlerted(this, snapshot)
                         true
                     } else false
-                }
-                if (!userPositionOpen && !rapidDropAlerted && !appTrade.tradeAlerted && !signalAlerted &&
-                    EventRadarStore.shouldAlert(this, eventState)
-                ) {
-                    CycleStageGuard.run(this, "EVENT_ALERT", { Unit }) {
-                        PumpAlert.showEventRadar(this, eventState, snapshot)
-                        EventRadarStore.markAlerted(this, eventState)
-                    }
                 }
                 CycleStageGuard.run(this, "ENTRY_REMINDER", { Unit }) {
                     EntryAlertReminderStore.flush(this)

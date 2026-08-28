@@ -17,6 +17,10 @@ class ChartMarketClient {
     fun syncSelected(context: Context) {
         val interval = ChartSpeedStore.selected(context)
         if (interval == ChartInterval.THIRTY_MINUTES) return
+        sync(context, interval)
+    }
+
+    fun sync(context: Context, interval: ChartInterval) {
         val pool = Executors.newFixedThreadPool(2)
         try {
             val pump = pool.submit<String> {

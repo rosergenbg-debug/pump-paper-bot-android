@@ -2,6 +2,70 @@
 
 Только существенные законченные задачи. Не дублировать Git history.
 
+## 2026-08-28 / V6.3 — VWAP AUTO + HUMAN FACTOR
+
+**Task**
+Создать параллельное сравнение исходного VWAP 32,65 алгоритма с человеческим подтверждением входа.
+
+**Change**
+Добавлены независимые AUTO и HUMAN portfolios, 1m VWAP evaluator, 90/100 warning, постоянная approve/reject карточка, два новых Competition slots и маршрутизация пользовательских входных звонков только через Human Factor.
+
+**Verification**
+Kotlin compilation passed. Добавлены policy tests и обновлён account contract; полный Gradle test task блокируется локальным Android SDK jlink transform до выполнения Java/unit стадии.
+
+**Project impact**
+Два paper-эксперимента позволяют измерить ценность человеческого решения. Live trading не добавлен; applicationId и история сохранены.
+
+---
+
+## 2026-08-28 — Четыре фиксированные OHLCV-гипотезы
+
+**Task**
+Проверить Z-Score VWAP, volatility squeeze, strict BTC/SOL lead-lag и session-open breakout на отдельном блоке.
+
+**Change**
+Добавлены воспроизводимый research-only replay и полный TXT-отчёт. Runtime/version не менялись.
+
+**Verification**
+159 565 общих минут, временной split пополам, synthetic 8/8 PASS. Лучший control WR 14,29%, все Avg NET отрицательны, PF ниже 1.
+
+**Project impact**
+Ни одна формула не получает trading authority. Следующий новый уровень — trade tape/L2.
+
+---
+
+## 2026-08-28 — Cost-aware VWAP и session gap-fill replay
+
+**Task**
+Проверить на отдельном окне, можно ли превзойти прежний VWAP win rate 32,65% после исправления cost-floor/adverse-selection и новой session gap-fill формулой.
+
+**Change**
+Добавлен воспроизводимый research-only replay и полный TXT-отчёт. Runtime/version не менялись.
+
+**Verification**
+172 800 минут, split 60/60 дней, synthetic 4/4 PASS. Обе формулы дали 8,33% control WR, отрицательный NET и PF ниже 1.
+
+**Project impact**
+Прежние 32,65% не улучшены. Формулы отклонены; tape/L2 обозначен следующим новым уровнем исследования.
+
+---
+
+## 2026-08-28 — Пять контекстных гипотез
+
+**Task**
+Причинно проверить regime-adaptive entry, liquidity sweep, VWAP reversion, sell exhaustion и 4H node + relative strength.
+
+**Change**
+Добавлен research-only воспроизводимый 120-дневный replay и отчёт. Production/runtime/version не менялись.
+
+**Verification**
+Synthetic 10/10 PASS; 172 800 выровненных минут; временной split 60/60 дней; комиссии, slippage, TTL и незаполненные заявки учтены. Лучший control WR 32,65%, Avg NET −0,419%, PF 0,399.
+
+**Project impact**
+Гипотезы не получают торговую власть; отрицательное evidence сохранено против повторной подгонки.
+
+---
+
 ## 2026-08-26 / V5.36 — Project Guardian initial setup
 
 **Task**  

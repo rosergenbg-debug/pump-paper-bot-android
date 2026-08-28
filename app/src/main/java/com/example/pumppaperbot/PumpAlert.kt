@@ -824,6 +824,17 @@ object PumpAlert {
         if (loud) vibrate(context)
     }
 
+    fun showHumanFactor(context: Context, entry: Boolean, detail: String) {
+        ensureChannels(context)
+        if (!ResearchModePolicy.userAlertsAllowed(context)) return
+        showTradeNotification(
+            context, appTradeChannelId, if (entry) 64032 else 64033,
+            if (entry) "ЧЕЛОВЕЧЕСКИЙ ФАКТОР • ПРОВЕРЬТЕ ВХОД" else "ЧЕЛОВЕЧЕСКИЙ ФАКТОР • ВЫХОД",
+            detail, if (entry) 0xFF238636.toInt() else 0xFFDA3633.toInt(),
+            alwaysLoud = !entry, executedTrade = false
+        )
+    }
+
     private fun requireTradeNotificationsAvailable(context: Context) {
         if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) {
             error("уведомления приложения отключены в Android")
