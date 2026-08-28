@@ -7,7 +7,7 @@
 ## VERSION / BRANCH
 
 - Canonical branch: `main`.
-- Current source version: **V6.3**, `versionCode 121`.
+- Current source version: **V6.4**, `versionCode 122`.
 - `applicationId`: `com.example.pumppaperbot.v8` — сохранён для совместимого update/data continuity.
 - V6.2 is present on canonical `main` at merge commit `949fa1b`.
 - Full `main` build run **#423** (`33020059070`): **success** — unit tests, lint, assemble, APK package/version/activity/v2-signature/ZIP checks and artifact upload passed.
@@ -33,6 +33,13 @@
 - Human Factor показывает подготовку 90–97/100 и постоянную карточку подтверждения при 98–100/100; отменяет карточку при распаде условий.
 - Общий экран теперь содержит 10 счетов. Остальные виртуальные стратегии продолжают расчёт, но не создают пользовательские trade-звонки; safety/exit предупреждения по ручной позиции сохраняются.
 - Реальные ордера не добавлены.
+
+## V6.4 FOCUSED NETWORK UI
+
+- Экран сети показывает только четыре основных счёта в порядке: T32 → Human Factor → СЕРЖ → APP.
+- Старые PM/Fusion/DeepSigX стратегии и их данные не удалены; они лишь скрыты из основного сравнения.
+- Верхний DeepSeek-блок уменьшен и показывает подключение, последнее успешное обращение/ошибку, дневные успехи/ошибки и оценку расхода.
+- Нижняя кнопка `ТЕСТ НАЗАД` удалена. Торговая логика не менялась.
 
 V6.0 добавляет **shadow-only execution intelligence**, не меняя торговую власть V5.37 и не меняя PM entry/TP/SL thresholds.
 

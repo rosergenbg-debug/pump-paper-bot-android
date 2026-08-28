@@ -83,7 +83,6 @@ class MainActivity : AppCompatActivity() {
     private var btnManualSell: Button? = null
     private var btnManualHistory: Button? = null
     private var btnChartSpeed: Button? = null
-    private var btnBacktest: Button? = null
     private var btnAlertSettings: Button? = null
     private var btnAppPaper: Button? = null
     private var btnGeminiExperiment: Button? = null
@@ -143,7 +142,6 @@ class MainActivity : AppCompatActivity() {
         btnManualSell = findViewById(R.id.btnManualSell)
         btnManualHistory = findViewById(R.id.btnManualHistory)
         btnChartSpeed = findViewById(R.id.btnChartSpeed)
-        btnBacktest = findViewById(R.id.btnBacktest)
         btnAlertSettings = findViewById(R.id.btnAlertSettings)
         btnAppPaper = findViewById(R.id.btnAppPaper)
         btnGeminiExperiment = findViewById(R.id.btnGeminiExperiment)
@@ -192,7 +190,6 @@ class MainActivity : AppCompatActivity() {
         }
         btnHumanReject?.setOnClickListener { HumanFactorStore.reject(this); updateUi() }
         btnChartSpeed?.setOnClickListener { showChartSpeedDialog() }
-        btnBacktest?.setOnClickListener { startActivity(Intent(this, BacktestActivity::class.java)) }
         btnAlertSettings?.setOnClickListener { startActivity(Intent(this, AlertSettingsActivity::class.java)) }
         btnAppPaper?.setOnClickListener {
             startActivity(Intent(this, PumpMachineActivity::class.java))
@@ -537,7 +534,7 @@ class MainActivity : AppCompatActivity() {
             fusionAccount.value(fusionMark),
             fusionAccount.profit(fusionMark) / FusionSimPortfolio.START_BALANCE * 100.0
         )
-        btnPumpMachine2?.text = "ЕЩЁ 5 СЧЕТОВ\nAPP • DEEPSIGX • СЕРЖ • AUTO • ЧЕЛОВЕК\nоткрыть сравнение"
+        btnPumpMachine2?.text = "СЕТЬ • 4 СЧЁТА\nT32 • ЧЕЛОВЕК • СЕРЖ • APP"
         tvStatus?.text = if (snapshot.running) {
             "V${BuildConfig.VERSION_NAME} PAPER‑ТЕСТ • монитор включён" +
                 (if (fusionPriority.active) " • FUSION: локальная защита" else "") +
@@ -553,23 +550,31 @@ class MainActivity : AppCompatActivity() {
         }
         humanFactorActions?.visibility = if(human.pending&&!human.inPosition) View.VISIBLE else View.GONE
         val deepSeekPrimary = DeepSeekPrimaryStore.state(this)
-        tvDeepSeekPrimary?.text = DeepSeekPrimaryPolicy.compactStatus(
-            deepSeekPrimary,
-            DeepSeekSecureKeyStore.read(this).isNotBlank()
-        ) + DeepSeekDailyBudgetStore.costUsd(this, now).takeIf {
-            DeepSeekCostWarningPolicy.warningReached(it)
-        }?.let { String.format(Locale.GERMANY, "\nРАСХОД: $%.2f • предупреждение, анализ продолжается", it) }.orEmpty()
+        val deepSeekConfigured = DeepSeekSecureKeyStore.read(this).isNotBlank()
+        val deepSeekCost = DeepSeekDailyBudgetStore.costUsd(this, now)
+        val deepSeekUsage = ApiUsageLogStore.summary(this, "DEEPSEEK", now, BuildConfig.VERSION_NAME)
+        tvDeepSeekPrimary?.text = buildString {
+            append("DEEPSEEK • ")
+            append(when {
+                !deepSeekConfigured -> "НЕТ КЛЮЧА"
+                deepSeekPrimary.error.isNotBlank() -> "ОШИБКА: ${deepSeekPrimary.error.take(70)}"
+                deepSeekPrimary.lastSuccess > 0L -> "РАБОТАЕТ • ${PumpBotEngine.formatTime(deepSeekPrimary.lastSuccess)}"
+                else -> "ПОДКЛЮЧЁН • ЖДЁТ АНАЛИЗ"
+            })
+            append(String.format(Locale.GERMANY, "\nСегодня: %d успешно • %d ошибок • $%.4f", deepSeekUsage.successesToday, deepSeekUsage.errorsToday, deepSeekCost))
+            if (DeepSeekCostWarningPolicy.warningReached(deepSeekCost)) append(" • ПРОВЕРЬТЕ БАЛАНС")
+        }
         tvDeepSeekPrimary?.setTextColor(Color.parseColor(
             when {
                 deepSeekPrimary.error.isNotBlank() -> "#FF7B72"
-                DeepSeekCostWarningPolicy.warningReached(DeepSeekDailyBudgetStore.costUsd(this, now)) -> "#FFD866"
+                DeepSeekCostWarningPolicy.warningReached(deepSeekCost) -> "#FFD866"
                 else -> "#7EE787"
             }
         ))
         renderDeepSeekActionLevel(snapshot, deepSeekPrimary, now)
         renderLatestSignal()
         tvMode?.text = if (ResearchModePolicy.ENABLED) {
-            "V5 АНАЛИТИКА + PAPER‑ТЕСТ • APP | DEEPSIG | DEEPSIGX"
+            "V6.4 PAPER‑СЕТЬ • T32 | ЧЕЛОВЕК | СЕРЖ | APP"
         } else if (snapshot.rapidDrop.active) {
             String.format(Locale.GERMANY, "АВАРИЙНОЕ ПАДЕНИЕ −%.1f%% — ПРОВЕРЬТЕ РЫНОК", snapshot.rapidDrop.dropPercent)
         } else if (snapshot.lateEntryBlocked && snapshot.waitMode == "BUY") {

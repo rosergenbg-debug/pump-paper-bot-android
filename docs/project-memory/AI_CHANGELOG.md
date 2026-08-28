@@ -150,3 +150,20 @@ JKS, пароль и recovery bundle не коммитились и не дол�
 
 **Project impact**  
 V5.37 готов как совместимый signed handoff APK для установки поверх существующей `.v8` версии без uninstall.
+
+---
+
+## 2026-08-28 / V6.4 — Focused four-account network UI
+
+**Change**
+- Сеть сокращена и переупорядочена: T32 → Human Factor → СЕРЖ → APP.
+- PM1–PM4, Fusion/local node и DeepSigX скрыты из сети без очистки их persisted state.
+- DeepSeek-блок наверху стал компактным и показывает состояние подключения, последнюю ошибку/успех, дневную статистику и расход.
+- Удалена нижняя кнопка `ТЕСТ НАЗАД`.
+- Версия повышена до V6.4/code122; package id сохранён.
+
+**Verification**
+Локально прошли `testDebugUnitTest`, `lintDebug` и `assembleDebug`.
+
+**Project impact**
+Уменьшен визуальный шум без изменения торговой логики, истории, счетов, API-ключей или paper-only ограничений.

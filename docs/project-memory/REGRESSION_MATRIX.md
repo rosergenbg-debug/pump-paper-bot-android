@@ -23,7 +23,8 @@
 | DeepSeek verdict scope | cached/PENDING entry verdict одного PM-профиля не является решением другого профиля | `DeepSeekEntryCoachTest` profile-scope tests + source wiring | AUTO/PARTIAL |
 | DeepSeek shared budget | общий provider request budget/running lock может экономить API, но при отсутствии профильного verdict другой PM может использовать только свой strict local fallback, а не чужой verdict | `DeepSeekEntryCoachTest` + source review; runtime concurrency scenario | PARTIAL |
 | Shared tuning layer | pooled outcomes/shared soft regulators не должны скрыто ухудшать profile independence; полезность должна подтверждаться trial/rollback outcomes | `AdaptiveTuningGuardV536Test` + representative ledger analysis | PARTIAL |
-| UI account mapping | Competition содержит 10 счетов: 4 PM → Fusion → DeepSigX → APP → SERGE → VWAP AUTO → HUMAN FACTOR | `CompetitionAccountSpecTest` + UI device check | AUTO/PARTIAL |
+| UI account mapping | Сеть содержит только 4 видимых счёта: T32 → HUMAN FACTOR → SERGE → APP; скрытые старые stores не очищаются | `CompetitionAccountSpecTest` + UI device check | AUTO/PARTIAL |
+| Compact DeepSeek status | Верхний блок показывает наличие ключа/работоспособность, ошибку, дневные успехи/ошибки и оценку расхода | source review + UI device check | PARTIAL |
 | Human Factor authority | VWAP AUTO торгует только виртуально и без звука; Human Factor BUY невозможен без явного подтверждения, pending исчезает при распаде сигнала | `HumanFactorVwapTest` + source/UI review | PARTIAL |
 | PM UI 1 / PUMP_2 | +2.00% NET target, hard stop -1.10%, отдельный state | `PumpMachine2PolicyTest`, `PumpProfitEngineV526Test` | AUTO |
 | PM UI 2 / PUMP_3 | +3.00% NET target, hard stop -1.30%, отдельный state | `PumpMachinePolicyTest`, `PumpProfitEngineV526Test` | AUTO |

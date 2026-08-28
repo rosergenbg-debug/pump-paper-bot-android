@@ -35,11 +35,11 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="7dp"
             android:background="#10251C"
-            android:minHeight="68dp"
-            android:padding="9dp"
+            android:minHeight="44dp"
+            android:padding="7dp"
             android:text="DEEPSEEK АНАЛИТИК • ожидает первый анализ"
             android:textColor="#7EE787"
-            android:textSize="13sp"
+            android:textSize="12sp"
             android:textStyle="bold" />
 
         <TextView
@@ -49,11 +49,11 @@
             android:layout_marginTop="7dp"
             android:background="#3A171A"
             android:gravity="center"
-            android:minHeight="116dp"
-            android:padding="10dp"
+            android:minHeight="66dp"
+            android:padding="7dp"
             android:text="DEEPSEEK АНАЛИТИК • РЫНОЧНЫЙ КОНТЕКСТ\nне управляет счётом Pump Machine"
             android:textColor="#FF7B72"
-            android:textSize="20sp"
+            android:textSize="14sp"
             android:textStyle="bold" />
 
         <Button
@@ -172,7 +172,8 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:orientation="vertical">
+            android:orientation="vertical"
+            android:visibility="gone">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -300,7 +301,7 @@
             android:layout_height="50dp"
             android:layout_marginTop="7dp"
             android:backgroundTint="#1F6FEB"
-            android:text="ВСЕ 10 СЧЕТОВ • ВЕРТИКАЛЬНАЯ ПРОКРУТКА И ПОЛНАЯ ИСТОРИЯ"
+            android:text="СЕТЬ • T32 | ЧЕЛОВЕК | СЕРЖ | APP"
             android:textColor="#FFFFFF"
             android:textSize="13sp"
             android:textStyle="bold" />
@@ -722,14 +723,5 @@
                 android:textStyle="bold" />
         </LinearLayout>
 
-        <Button
-            android:id="@+id/btnBacktest"
-            android:layout_width="match_parent"
-            android:layout_height="54dp"
-            android:layout_marginTop="8dp"
-            android:backgroundTint="#2F81F7"
-            android:text="ТЕСТ НАЗАД"
-            android:textColor="#FFFFFF"
-            android:textStyle="bold" />
     </LinearLayout>
 </ScrollView>

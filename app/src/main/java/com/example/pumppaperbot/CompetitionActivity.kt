@@ -118,16 +118,7 @@ class CompetitionActivity : AppCompatActivity() {
         val snapshot = PumpBotEngine.snapshot(this)
         val price = PaperExecutionPolicy.displayPrice(snapshot, now)
         val app = AppPaperStore.state(this)
-        val pumpMachine = PumpMachineStore.state(this)
-        val pumpMachine2 = PumpMachine2Store.state(this)
-        val pumpRetest = PumpMachineRetestStore.state(this)
-        val pumpSafe = PumpMachineSafeStore.state(this)
-        val geminiExitExperiment = GeminiExitExperimentStore.state(this)?.portfolio
-            ?: GeminiPaperPortfolio()
         val user = UserPaperStore.markToMarket(this, price)
-        val fusionMarket = BitpandaFusionStore.state(this)
-        val fusionPrice = fusionMarket.bid.takeIf { fusionMarket.fresh(now) } ?: price
-        val fusion = FusionSimStore.state(this)
         val closedCandles = if (historicalCandles.isNotEmpty()) {
             (historicalCandles + snapshot.chart.candles)
                 .distinctBy { it.closeTime }
@@ -136,98 +127,43 @@ class CompetitionActivity : AppCompatActivity() {
             snapshot.chart.candles
         }
         val candles = CompetitionChartPresentation.withLiveEdge(closedCandles, price, now)
-
-        val pumpMachineValue = PumpMachinePolicy.netLiquidationValue(
-            pumpMachine,
-            fusionPrice,
-            fusionMarket.feeRate
-        )
-        val pumpMachine2Value = PumpMachine2Policy.netLiquidationValue(
-            pumpMachine2,
-            fusionPrice,
-            fusionMarket.feeRate
-        )
+        val auto3265 = Vwap3265AutoStore.state(this)
         setChart(0, CompetitionDataset(
-            "PUMP MACHINE 1 • +2% NET • НЕЗАВИСИМЫЙ",
+            "T32 • VWAP 32,65 • AUTO • БЕЗ ЗВУКОВ",
             summary(
-                pumpMachine2Value,
-                (pumpMachine2Value / FusionSimPortfolio.START_BALANCE - 1.0) * 100.0,
-                pumpMachine2.inPosition
+                auto3265.value(price),
+                (auto3265.value(price) / 1000.0 - 1.0) * 100.0,
+                auto3265.inPosition
             ),
             candles,
-            pumpMachine2.trades.map { CompetitionMarker(it.time, it.action, it.price, it.pnlEur) },
-            FusionTradingCosts.FEE_RATE
+            auto3265.trades.map { CompetitionMarker(it.time, it.action, it.price, it.pnlEur) },
+            0.0025
         ))
+        val human = HumanFactorStore.state(this)
         setChart(1, CompetitionDataset(
-            "PUMP MACHINE 2 • +3% NET • НЕЗАВИСИМЫЙ",
+            "ЧЕЛОВЕЧЕСКИЙ ФАКТОР • РУЧНОЕ ПОДТВЕРЖДЕНИЕ",
             summary(
-                pumpMachineValue,
-                (pumpMachineValue / FusionSimPortfolio.START_BALANCE - 1.0) * 100.0,
-                pumpMachine.inPosition
+                human.value(price),
+                (human.value(price) / 1000.0 - 1.0) * 100.0,
+                human.inPosition
             ),
             candles,
-            pumpMachine.trades.map { CompetitionMarker(it.time, it.action, it.price, it.pnlEur) },
-            FusionTradingCosts.FEE_RATE
+            human.trades.map { CompetitionMarker(it.time, it.action, it.price, it.pnlEur) },
+            0.0025
         ))
-        val retestValue = PumpMachineRetestStore.netValue(this, now)
         setChart(2, CompetitionDataset(
-            "PUMP MACHINE 3 • RETEST • +2% NET",
-            summary(retestValue, (retestValue / 1000.0 - 1.0) * 100.0, pumpRetest.inPosition),
-            candles,
-            pumpRetest.trades.map { CompetitionMarker(it.time, it.action, it.price, it.pnlEur) },
-            FusionTradingCosts.FEE_RATE
-        ))
-        val safeValue = PumpMachineSafeStore.netValue(this, now)
-        setChart(3, CompetitionDataset(
-            "PUMP MACHINE 4 • SAFE + APP • +1,15% NET",
-            summary(safeValue, (safeValue / 1000.0 - 1.0) * 100.0, pumpSafe.inPosition),
-            candles,
-            pumpSafe.trades.map { CompetitionMarker(it.time, it.action, it.price, it.pnlEur) },
-            FusionTradingCosts.FEE_RATE
-        ))
-        setChart(4, CompetitionDataset(
-            "FUSION • ЛОКАЛЬНЫЙ ПОТОК • БЕЗ ОБЯЗАТЕЛЬНОГО PRO",
-            summary(fusion.value(fusionPrice), fusion.profit(fusionPrice) / 10.0, fusion.inPosition),
-            candles,
-            fusion.trades.map { CompetitionMarker(it.time, it.action, it.price, it.pnlEur) },
-            FusionTradingCosts.FEE_RATE
-        ))
-        setChart(5, CompetitionDataset(
-            "DEEPSIGX",
-            summary(
-                geminiExitExperiment.value(price),
-                geminiExitExperiment.profitPercent(price),
-                geminiExitExperiment.inPosition
-            ),
-            candles,
-            geminiExitExperiment.trades.map { CompetitionMarker(it.time, it.action, it.price, it.pnlEur) },
-            0.0015
-        ))
-        setChart(6, CompetitionDataset(
-            "APP",
-            summary(app.value(price), app.profitPercent(price), app.inPosition),
-            candles,
-            app.trades.map { CompetitionMarker(it.candleTime, it.action, it.price, it.pnlEur) },
-            0.0015
-        ))
-        setChart(7, CompetitionDataset(
             "СЕРЖ",
             summary(user.value(price), user.profitPercent(price), user.inPosition),
             candles,
             user.trades.map { CompetitionMarker(it.time, it.action, it.price) },
             0.0015
         ))
-        val auto3265=Vwap3265AutoStore.state(this)
-        setChart(8,CompetitionDataset(
-            "VWAP 32,65 • AUTO • БЕЗ ЗВУКОВ",
-            summary(auto3265.value(price),(auto3265.value(price)/1000.0-1.0)*100.0,auto3265.inPosition),candles,
-            auto3265.trades.map{CompetitionMarker(it.time,it.action,it.price,it.pnlEur)},0.0025
-        ))
-        val human=HumanFactorStore.state(this)
-        setChart(9,CompetitionDataset(
-            "ЧЕЛОВЕЧЕСКИЙ ФАКТОР • ПОДТВЕРЖДЕНИЕ ВХОДА",
-            summary(human.value(price),(human.value(price)/1000.0-1.0)*100.0,human.inPosition),candles,
-            human.trades.map{CompetitionMarker(it.time,it.action,it.price,it.pnlEur)},0.0025
+        setChart(3, CompetitionDataset(
+            "APP",
+            summary(app.value(price), app.profitPercent(price), app.inPosition),
+            candles,
+            app.trades.map { CompetitionMarker(it.candleTime, it.action, it.price, it.pnlEur) },
+            0.0015
         ))
     }
 
