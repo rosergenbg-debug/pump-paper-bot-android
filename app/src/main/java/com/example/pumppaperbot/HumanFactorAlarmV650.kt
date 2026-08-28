@@ -19,15 +19,12 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 
 /**
- * Human Factor is the only T32 branch that requires the owner to act before a paper BUY.
- * Its entry alarm is intentionally independent from ordinary preparatory-alert schedules.
- * While the setup stays pending this object repeats the audible/vibration attempt every minute,
- * even between the slower full trading cycles. Android DND or OS-level restrictions can still
- * override sound, so notification sound, direct alarm sound and vibration are all attempted.
+ * V6.6 owner alarm. Master switch and AlertSchedule are the single source of truth:
+ * OFF = silence; WORK/DAILY = configured window; ALWAYS = 24/7.
  */
 object HumanFactorAlarmV650 {
-    private const val CHANNEL_ID = "pump_human_factor_v650"
-    private const val NOTIFICATION_ID = 65032
+    private const val CHANNEL_ID = "pump_human_factor_v660"
+    private const val NOTIFICATION_ID = 66032
     private const val NOTIFICATION_TIMEOUT_MILLIS = 150_000L
     private val handler = Handler(Looper.getMainLooper())
 
@@ -39,6 +36,10 @@ object HumanFactorAlarmV650 {
         override fun run() {
             val context = repeatContext ?: return
             val detail = repeatDetail ?: return
+            if (!allowed(context)) {
+                cancel(context)
+                return
+            }
             issue(context, detail)
             handler.postDelayed(this, HumanFactorAlertPolicyV650.REPEAT_MILLIS)
         }
@@ -46,6 +47,10 @@ object HumanFactorAlarmV650 {
 
     fun ring(context: Context, detail: String) {
         val app = context.applicationContext
+        if (!allowed(app)) {
+            cancel(app)
+            return
+        }
         repeatContext = app
         repeatDetail = detail
         handler.removeCallbacks(repeatRunnable)
@@ -62,8 +67,12 @@ object HumanFactorAlarmV650 {
         activeRingtone = null
     }
 
+    private fun allowed(context: Context): Boolean =
+        ResearchModePolicy.alertsEnabled(context) && AlertSchedule.isAllowedNow(context)
+
     @SuppressLint("MissingPermission")
     private fun issue(context: Context, detail: String) {
+        if (!allowed(context)) return
         ensureChannel(context)
         val open = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -76,9 +85,9 @@ object HumanFactorAlarmV650 {
         )
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle("ЧЕЛОВЕЧЕСКИЙ ФАКТОР • НУЖНО РЕШЕНИЕ")
+            .setContentTitle("PUMP V6.6 • НУЖНО РЕШЕНИЕ")
             .setContentText(detail.take(220))
-            .setStyle(NotificationCompat.BigTextStyle().bigText(detail.take(800)))
+            .setStyle(NotificationCompat.BigTextStyle().bigText(detail.take(900)))
             .setContentIntent(pending)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setPriority(NotificationCompat.PRIORITY_MAX)
@@ -89,9 +98,6 @@ object HumanFactorAlarmV650 {
             .setVibrate(longArrayOf(0L, 500L, 180L, 500L, 180L, 900L))
             .build()
 
-        // POST_NOTIFICATIONS is requested by the app on Android 13+. If the user denies it,
-        // NotificationManagerCompat may be blocked by the OS; the direct vibration/ringtone
-        // attempts below are intentionally kept as a second delivery path for this paper alert.
         runCatching { NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID) }
         runCatching { NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification) }
         vibrateStrong(context)
@@ -102,8 +108,7 @@ object HumanFactorAlarmV650 {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (manager.getNotificationChannel(CHANNEL_ID) != null) return
-        val sound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+        val sound = AlertSoundPreferences.uri(context)
         val audio = AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_ALARM)
             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
@@ -111,10 +116,10 @@ object HumanFactorAlarmV650 {
         manager.createNotificationChannel(
             NotificationChannel(
                 CHANNEL_ID,
-                "Human Factor — обязательный вход",
+                "PUMP V6.6 — ручной вход",
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "Повторяющийся сигнал, пока Human Factor ждёт решения ВОЙТИ/ОТКЛОНИТЬ"
+                description = "Повторяющийся сигнал V6.6 по общей кнопке звонков и расписанию"
                 enableVibration(true)
                 vibrationPattern = longArrayOf(0L, 500L, 180L, 500L, 180L, 900L)
                 setSound(sound, audio)
@@ -125,6 +130,7 @@ object HumanFactorAlarmV650 {
 
     @Suppress("DEPRECATION")
     private fun vibrateStrong(context: Context) {
+        if (!allowed(context)) return
         val pattern = longArrayOf(0L, 500L, 180L, 500L, 180L, 900L)
         runCatching {
             val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -141,10 +147,9 @@ object HumanFactorAlarmV650 {
     }
 
     private fun playShortAlarm(context: Context) {
+        if (!allowed(context)) return
         runCatching { activeRingtone?.stop() }
-        val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
-            ?: return
+        val uri = AlertSoundPreferences.uri(context)
         runCatching {
             val ringtone = RingtoneManager.getRingtone(context, uri) ?: return@runCatching
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
