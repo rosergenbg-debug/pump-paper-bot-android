@@ -1,6 +1,8 @@
 package com.example.pumppaperbot
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.graphics.Color
 import android.os.Build
@@ -13,11 +15,13 @@ import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import java.util.Locale
 
-/** Clean V6.6 owner surface. Legacy screens remain in the APK only as dormant history/tools. */
+/** Clean V6.6 owner surface. Legacy strategy engines remain dormant and are not launched. */
 class V660DashboardActivity : AppCompatActivity() {
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var monitorButton: Button
@@ -41,6 +45,12 @@ class V660DashboardActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 660)
+        }
+
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(14), dp(12), dp(14), dp(18))
@@ -48,7 +58,7 @@ class V660DashboardActivity : AppCompatActivity() {
         }
         root.addView(label("PUMP V6.6", 28, "#F0F6FC", true))
         root.addView(label("3 AUTO + HUMAN • X-алгоритм • PAPER ONLY", 15, "#7EE787", true))
-        root.addView(label("Новые счета стартуют с €1000 и нулевой историей. Старые V6.5 стратегии не запускаются фоновым сервисом.", 13, "#8B949E", false))
+        root.addView(label("Все четыре счёта V6.6 стартуют с €1000 и нулевой историей. Старые V6.5 торговые движки больше не запускаются фоновым сервисом.", 13, "#8B949E", false))
 
         monitorButton = button("", "#238636").apply {
             setOnClickListener {
@@ -78,7 +88,7 @@ class V660DashboardActivity : AppCompatActivity() {
         root.addView(readinessText)
         contextText = label("", 14, "#C9D1D9", false)
         root.addView(contextText)
-        root.addView(label("Шкала не является отдельным BUY-сигналом: она показывает, насколько рынок постепенно приближается к точному T32/X setup. Автовход всё равно требует закрытую свечу и жёсткие условия.", 12, "#8B949E", false))
+        root.addView(label("Шкала — не отдельный BUY. Она постепенно показывает приближение рынка к точному T32/X setup; автовход всё равно требует закрытую свечу и жёсткие условия.", 12, "#8B949E", false))
 
         coreText = card(root, "AUTO CORE")
         btcText = card(root, "AUTO BTC GUARD")
@@ -106,12 +116,19 @@ class V660DashboardActivity : AppCompatActivity() {
             setOnClickListener { startActivity(Intent(this@V660DashboardActivity, AlertSettingsActivity::class.java)) }
         }
         root.addView(alertButton, LinearLayout.LayoutParams(-1, dp(56)).apply { topMargin = dp(12) })
+        root.addView(button("ТЕСТ HUMAN-ЗВОНКА СЕЙЧАС", "#B35C00").apply {
+            setOnClickListener {
+                val ok = HumanFactorAlarmV650.testOnce(this@V660DashboardActivity)
+                Toast.makeText(
+                    this@V660DashboardActivity,
+                    if (ok) "Тест отправлен: звук + вибрация. Расписание для ручного теста не применяется." else "Сначала включите общую кнопку ЗВОНКИ.",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }, LinearLayout.LayoutParams(-1, dp(54)).apply { topMargin = dp(8) })
         root.addView(button("4 ГРАФИКА • СРАВНИТЬ СЧЕТА", "#8250DF").apply {
             setOnClickListener { startActivity(Intent(this@V660DashboardActivity, CompetitionActivity::class.java)) }
         }, LinearLayout.LayoutParams(-1, dp(56)).apply { topMargin = dp(8) })
-        root.addView(button("РЫНОК / СТАРЫЙ ЭКРАН (ТОЛЬКО ПРОСМОТР)", "#30363D").apply {
-            setOnClickListener { startActivity(Intent(this@V660DashboardActivity, MainActivity::class.java)) }
-        }, LinearLayout.LayoutParams(-1, dp(52)).apply { topMargin = dp(8) })
         root.addView(label("AUTO: TP +2,5% NET • STOP −1,2% NET • TIME 120m • max 2 входа/UTC сутки. HUMAN: вход только после вашей кнопки, выход автоматический по тем же правилам.", 13, "#F0B72F", true))
 
         setContentView(ScrollView(this).apply { addView(root) })
