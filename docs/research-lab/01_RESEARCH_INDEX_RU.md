@@ -21,7 +21,8 @@
 
 - `research_cross_market_breath.js`;
 - `research_order_execution.js`;
-- `research_flow_absorption.js`.
+- `research_flow_absorption.js`;
+- `research_five_hypotheses.js`.
 
 ## Реестр результатов на 2026-08-28
 
@@ -47,6 +48,11 @@
 | Hard price-impact absorption | 30 дней | 3 train fills, 0 control fills | Слишком редко/зажато |
 | Approximate 4h volume node + flow | 30 дней | train +0,410% (8), control −0,023% (11) | Почти breakeven, выборка мала |
 | Three-regime policy | 30 дней | train +0,638% (7), control −0,543% (5) | Не воспроизводится |
+| Quiet entry: deep fall + ATR(5) compression + limit | 60 дней, 30/30 | early −0,683% (20), recent −0,303% (11) | Отвергнуто в текущем виде |
+| Fake breakout 60m resistance + pullback limit | 60 дней, 30/30 | early −0,503% (263), recent −0,370% (326) | Устойчивый минус; отвергнуто |
+| 60m volume cluster + SELL decay + BTC/SOL | 60 дней, 30/30 | early −0,362% (9), recent −0,632% (8) | Минус и малая выборка; отвергнуто |
+| BTC/SOL cross-impulse with PUMP lag | 60 дней, 30/30 | early −0,486% (19), recent −0,425% (42) | Lead edge не найден; отвергнуто |
+| UTC 09–15 + negative 4h + high ATR + red-run rebound | 60 дней, 30/30 | early −0,403% (45), recent +0,113% (62), PF 1,255 | Research/shadow; recent plus не воспроизведён early |
 
 ## Текущая лучшая следующая гипотеза
 
@@ -55,6 +61,12 @@
 `UTC 08–16 + negative 4h context + deep fall + near 4h volume node + relative strength + SELL decay + stop-limit entry with TTL + OCO +2%/-1.10% NET`.
 
 Она сформулирована после анализа текущих 30 дней, поэтому на этих же данных не может получить статус доказанной. Любой следующий тест должен сохранить формулу без подбора порогов на control.
+
+Дополнительный замороженный кандидат после пяти новых тестов:
+
+`UTC 09–15 + negative 4h + ATR(30) above causal 24h average + prior 3-red run + strong green close + stop-limit +0,05% TTL 1 + OCO +1,5%/-0,9% NET + 20m time-exit`.
+
+На recent/control он дал +0,113% среднего NET и PF 1,255 на 62 исполнениях, но на равном early-периоде дал −0,403% и PF 0,373. Поэтому это только отдельная forward-гипотеза, не кандидат на немедленное внедрение.
 
 ## Текущий честный итог
 
