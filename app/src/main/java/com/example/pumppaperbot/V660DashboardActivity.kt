@@ -68,9 +68,7 @@ class V660DashboardActivity : AppCompatActivity() {
                     HumanFactorAlarmV650.cancel(this@V660DashboardActivity)
                 } else {
                     PumpBotEngine.setRunning(this@V660DashboardActivity, true)
-                    val intent = Intent(this@V660DashboardActivity, PumpSignalService::class.java)
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) ContextCompat.startForegroundService(this@V660DashboardActivity, intent)
-                    else startService(intent)
+                    startMonitorService()
                 }
                 render()
             }
@@ -97,16 +95,10 @@ class V660DashboardActivity : AppCompatActivity() {
 
         val humanButtons = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         approveButton = button("ВОЙТИ HUMAN", "#238636").apply {
-            setOnClickListener {
-                HumanFactorStore.approve(this@V660DashboardActivity)
-                render()
-            }
+            setOnClickListener { HumanFactorStore.approve(this@V660DashboardActivity); render() }
         }
         rejectButton = button("ОТКЛОНИТЬ", "#8E1519").apply {
-            setOnClickListener {
-                HumanFactorStore.reject(this@V660DashboardActivity)
-                render()
-            }
+            setOnClickListener { HumanFactorStore.reject(this@V660DashboardActivity); render() }
         }
         humanButtons.addView(approveButton, LinearLayout.LayoutParams(0, dp(58), 1f))
         humanButtons.addView(rejectButton, LinearLayout.LayoutParams(0, dp(58), 1f).apply { leftMargin = dp(8) })
@@ -136,6 +128,9 @@ class V660DashboardActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        // Package update can kill a foreground service while preserving the user's running flag.
+        // Re-entering the launcher restores monitoring without requiring a manual OFF/ON toggle.
+        if (PumpBotEngine.isRunning(this)) startMonitorService()
         handler.removeCallbacks(refresh)
         handler.post(refresh)
     }
@@ -143,6 +138,12 @@ class V660DashboardActivity : AppCompatActivity() {
     override fun onPause() {
         handler.removeCallbacks(refresh)
         super.onPause()
+    }
+
+    private fun startMonitorService() {
+        val intent = Intent(this, PumpSignalService::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) ContextCompat.startForegroundService(this, intent)
+        else startService(intent)
     }
 
     private fun render() {
@@ -174,11 +175,8 @@ class V660DashboardActivity : AppCompatActivity() {
         humanText.text = String.format(
             Locale.GERMANY,
             "HUMAN SELECT\n€%.2f • %+.2f%% • %s • готовность %d/100\n%s",
-            human.value(price),
-            (human.value(price) / 1000.0 - 1.0) * 100.0,
-            if (human.inPosition) "В PUMP" else "В ЕВРО",
-            human.readiness,
-            human.reason.take(240)
+            human.value(price), (human.value(price) / 1000.0 - 1.0) * 100.0,
+            if (human.inPosition) "В PUMP" else "В ЕВРО", human.readiness, human.reason.take(240)
         )
         approveButton.isEnabled = human.pending && !human.inPosition
         approveButton.alpha = if (approveButton.isEnabled) 1f else 0.42f
@@ -195,12 +193,8 @@ class V660DashboardActivity : AppCompatActivity() {
         view.text = String.format(
             Locale.GERMANY,
             "%s\n€%.2f • %+.2f%% • %s • готовность %d/100\n%s",
-            view.tag as String,
-            value,
-            (value / 1000.0 - 1.0) * 100.0,
-            if (state.inPosition) "В PUMP" else "В ЕВРО",
-            state.readiness,
-            state.reason.take(240)
+            view.tag as String, value, (value / 1000.0 - 1.0) * 100.0,
+            if (state.inPosition) "В PUMP" else "В ЕВРО", state.readiness, state.reason.take(240)
         )
     }
 
