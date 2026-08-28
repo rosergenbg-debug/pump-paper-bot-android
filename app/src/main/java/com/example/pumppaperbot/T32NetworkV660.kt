@@ -62,9 +62,7 @@ internal object T32V660Policy {
 
     fun evaluate(context: Context): T32V660Setup {
         val minute = ChartSpeedStore.candles(context, ChartInterval.ONE_MINUTE)
-        if (minute.size < 61) {
-            return empty("Ждём не менее 60 минутных свечей")
-        }
+        if (minute.size < 61) return empty("Ждём не менее 60 минутных свечей")
         val displayRows = minute.takeLast(60)
         val closedRows = minute.dropLast(1).takeLast(60)
         if (closedRows.size < 60 || displayRows.size < 2) return empty("Минутная история ещё неполная")
@@ -89,7 +87,6 @@ internal object T32V660Policy {
         val displayBuy = buyShare(live)
         val displayPrevBuy = buyShare(livePrev)
         val buyDelta = displayBuy - displayPrevBuy
-
         val closedDeviation = (closed.close / closedVwap - 1.0) * 100.0
         val closedBuy = buyShare(closed)
         val closedPrevBuy = buyShare(closedPrev)
@@ -165,9 +162,7 @@ internal object T32V660Policy {
                     val close = row.optDouble(4, Double.NaN)
                     val high = row.optDouble(2, Double.NaN)
                     val time = row.optLong(6, 0L)
-                    if (close.isFinite() && high.isFinite() && close > 0.0 && high > 0.0 && time > 0L) {
-                        MarketPoint(time, high, close)
-                    } else null
+                    if (close.isFinite() && high.isFinite() && close > 0.0 && high > 0.0 && time > 0L) MarketPoint(time, high, close) else null
                 }
             }.sortedBy { it.closeTime }
         }.getOrDefault(emptyList())
@@ -201,7 +196,7 @@ internal object T32V660Policy {
     )
 }
 
-enum class T32V660Profile(val title: String, val agent: String) {
+internal enum class T32V660Profile(val title: String, val agent: String) {
     CORE("AUTO CORE", "V660_CORE"),
     BTC_GUARD("AUTO BTC GUARD", "V660_BTC_GUARD"),
     SOL_SELECT("AUTO SOL/BTC SELECT", "V660_SOL_SELECT");
@@ -337,9 +332,7 @@ private class T32V660AutoEngine(
         }
 
         val setup = T32V660Policy.evaluate(context)
-        if (s.pendingUntil > 0L && now > s.pendingUntil) {
-            s = s.copy(pendingLimit = 0.0, pendingUntil = 0L)
-        }
+        if (s.pendingUntil > 0L && now > s.pendingUntil) s = s.copy(pendingLimit = 0.0, pendingUntil = 0L)
 
         val dailyBlocked = s.entriesToday >= T32CostPolicyV660.MAX_ENTRIES_PER_UTC_DAY
         val profileAllowed = profile.allows(setup)
