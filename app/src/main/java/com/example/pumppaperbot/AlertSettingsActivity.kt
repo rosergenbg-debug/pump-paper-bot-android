@@ -34,8 +34,8 @@ class AlertSettingsActivity : AppCompatActivity() {
             setBackgroundColor(Color.parseColor("#0D1117"))
         }
         root.addView(button("← НАЗАД", "#30363D").apply { setOnClickListener { finish() } }, LinearLayout.LayoutParams(-1, dp(48)))
-        root.addView(label("ЗВОНКИ И РАСПИСАНИЕ • V5", 25, "#F0F6FC", true))
-        root.addView(label("APP, DeepSig и DeepSigX всегда продолжают анализ и виртуальные сделки. Эта кнопка управляет только пользовательскими сигналами, звуком и вибрацией.", 15, "#7EE787", true))
+        root.addView(label("ЗВОНКИ И РАСПИСАНИЕ • V6.6", 25, "#F0F6FC", true))
+        root.addView(label("Общая кнопка теперь управляет ВСЕМИ пользовательскими тревогами, включая ручной V6.6. Аналитика и paper-счета продолжают работать без звука.", 15, "#7EE787", true))
 
         masterButton = button("", "#8E1519").apply {
             setOnClickListener {
@@ -46,6 +46,7 @@ class AlertSettingsActivity : AppCompatActivity() {
                 } else {
                     EntryAlertReminderStore.clear(this@AlertSettingsActivity)
                     AlertSchedule.clearPending(this@AlertSettingsActivity)
+                    HumanFactorAlarmV650.cancel(this@AlertSettingsActivity)
                     PumpAlert.silenceUserAlerts(this@AlertSettingsActivity)
                 }
                 updateUi()
@@ -68,8 +69,8 @@ class AlertSettingsActivity : AppCompatActivity() {
         }
         root.addView(alwaysButton, LinearLayout.LayoutParams(-1, dp(58)).apply { topMargin = dp(8) })
 
-        root.addView(label("Расписание сохраняется независимо от общей кнопки. Его можно настроить заранее, даже когда звонки выключены.", 14, "#8B949E", false))
-        root.addView(label("Разрешённое время в рабочие дни", 17, "#F0F6FC", true))
+        root.addView(label("WORK: звонки только пн/вт/чт/пт в выбранное окно. DAILY: каждый день в окно. ALWAYS: звонки разрешены 24/7, в том числе ночью и в отпуске.", 14, "#8B949E", false))
+        root.addView(label("Разрешённое время", 17, "#F0F6FC", true))
         val hours = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         startButton = button("С 06:15", "#238636").apply { isEnabled = false }
         endButton = button("ДО 23:00", "#B62324").apply { isEnabled = false }
@@ -79,7 +80,7 @@ class AlertSettingsActivity : AppCompatActivity() {
 
         soundButton = button("МЕЛОДИЯ ЗВОНКА", "#1F6FEB").apply { setOnClickListener { chooseSound() } }
         root.addView(soundButton, LinearLayout.LayoutParams(-1, dp(58)).apply { topMargin = dp(12) })
-        root.addView(label("При включённых звонках мелодия используется только в разрешённое расписанием время. Вне него сообщения остаются без звука.", 14, "#F0B72F", true))
+        root.addView(label("Ручной V6.6 использует эту же мелодию, Alarm-аудиоканал и сильную вибрацию. Android DND/OEM всё ещё может ограничить звук на уровне системы.", 14, "#F0B72F", true))
 
         root.addView(label("ПРОВЕРКА ЗВУКОВЫХ КАНАЛОВ", 17, "#F0F6FC", true))
         val testRowOne = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -100,7 +101,7 @@ class AlertSettingsActivity : AppCompatActivity() {
         }, LinearLayout.LayoutParams(-1, dp(54)).apply { topMargin = dp(10) })
         status = label("", 15, "#58A6FF", true)
         root.addView(status)
-        root.addView(label("Результаты теста смотрите на экране виртуальных счетов. Эти действия не являются рекомендациями и не исполняются на бирже.", 14, "#C9D1D9", false))
+        root.addView(label("Paper-only: сигналы и виртуальные сделки не исполняют реальные ордера на бирже.", 14, "#C9D1D9", false))
         setContentView(ScrollView(this).apply { addView(root) })
         updateUi()
     }
@@ -128,7 +129,7 @@ class AlertSettingsActivity : AppCompatActivity() {
         status.text = if (alertsEnabled) {
             "ЗВОНКИ ВКЛЮЧЕНЫ\n${AlertSchedule.statusText(this)}"
         } else {
-            "ЗВОНКИ ВЫКЛЮЧЕНЫ • APP, DeepSig и DeepSigX продолжают анализ и виртуальные сделки без пользовательских тревог"
+            "ЗВОНКИ ВЫКЛЮЧЕНЫ • все пользовательские тревоги молчат; аналитика и paper-счета продолжают работу"
         }
     }
 
