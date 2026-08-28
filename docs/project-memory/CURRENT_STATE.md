@@ -1,15 +1,15 @@
 # PUMP / PumpBot — CURRENT STATE
 
-Обновлено: **2026-08-26**
+Обновлено: **2026-08-28**
 
 Это короткий снимок текущего состояния. Старую историю сюда не накапливать.
 
 ## VERSION / BRANCH
 
 - Canonical branch: `main`.
-- Current source version: **V6.0**, `versionCode 118`.
+- Current source version: **V6.2**, `versionCode 120`.
 - `applicationId`: `com.example.pumppaperbot.v8` — сохранён для совместимого update/data continuity.
-- V6.0 merged via PR **#85**, squash merge commit `33bf845d744d8fa9780a340ab8f2e3a0f0d1dae6`.
+- V6.2 is present on canonical `main` at merge commit `949fa1b`.
 - Full `main` build run **#423** (`33020059070`): **success** — unit tests, lint, assemble, APK package/version/activity/v2-signature/ZIP checks and artifact upload passed.
 
 ## BUILD / RELEASE STATUS
@@ -28,6 +28,16 @@
 ## V6.0 MATERIAL CHANGE
 
 V6.0 добавляет **shadow-only execution intelligence**, не меняя торговую власть V5.37 и не меняя PM entry/TP/SL thresholds.
+
+## UNRELEASED CROSS-MARKET RESEARCH
+
+- Причинный 14-дневный replay PUMP/BTC/SOL проверил BTC/SOL как внешнее подтверждение предполагаемого дна PUMP.
+- Одноминутная contemporaneous correlation заметна (BTC около 0,34, SOL около 0,43), но устойчивого опережения PUMP на 1–10 минут не найдено.
+- На контрольной части синхронный рост BTC/SOL изменил PM-like win rate только с 31,3% до 32,3%; другие turn-фильтры не улучшили результат.
+- Недельное улучшение 33,3% → 41,2% не воспроизвелось на 14 днях и считается коротким нестабильным эффектом.
+- Production entry authority не изменена; версия/сборка не создавались. Инструмент: `tools/research_cross_market_breath.js`; отчёты и постоянный реестр: `docs/research-lab/`.
+- Отдельный order-type replay (`tools/research_order_execution.js`) сравнил market/limit/stop-market/stop-limit/OCO/trailing. Все варианты остались отрицательными; лучший контрольный вход stop-limit дал 24,6% wins и −0,397% среднего NET при 38/99 незаполненных сигналах. Реальные ордера не добавлены.
+- 30-дневный flow/absorption replay (`tools/research_flow_absorption.js`) проверил taker SELL decay, buy-share/delta recovery, absorption, volume spike, relative strength, soft-score, ATR/time-stop, UTC sessions и 4h context. Европейская UTC-сессия и отрицательный 4h-контекст дали устойчивый lift, но ни одна заранее фиксированная гипотеза не получила положительный NET одновременно на train и control. Production не изменён.
 
 - Bitpanda Fusion сохраняет отдельные уровни стакана.
 - Считаются top-3/top-5 imbalance, microprice, spread, depth/slippage и execution cost floor.
