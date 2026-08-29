@@ -2,148 +2,99 @@
 
 Обновлено: **2026-08-29**
 
-Это короткий снимок текущего состояния. Исследовательские checkpoints хранятся в `X/`.
-
 ## VERSION / PRODUCTION
 
 - Canonical branch: `main`.
-- Current production source: **V6.6.1**, `versionCode 125`.
-- `applicationId`: `com.example.pumppaperbot.v8` — неизменён для update/data continuity.
-- V6.6.1 hotfix: PR **#89**, merge commit `68a807730cc09123fc092760f5cf3e58742b1981`.
-- Validated hotfix source head: `85263690e3620eb5055852578eb1dde7222cb51c`.
-- Green Android Build run: **33239864413** (`testDebugUnitTest + lintDebug + assembleDebug + APK checks`).
-- Real orders are not implemented. Production remains paper-only.
+- Current release line: **V6.7**, `versionCode 126`.
+- Candidate/verification PR: **#90**.
+- Stable restoration base: **V6.5**, commit `cbc10b4948bd22cbf5684b36596121ee562c8614`.
+- `applicationId`: `com.example.pumppaperbot.v8` — неизменён.
+- Launcher: `com.example.pumppaperbot.MainActivity`.
+- Real orders are not implemented. V6.7 is paper-only.
 
 ## MANDATORY STARTUP MEMORY
 
 Every new chat must read:
 
-`ИНСТРУКЦИЯ_1.md` → `AGENTS.md` → `X/README.md` → `docs/project-memory/*`
+`ИНСТРУКЦИЯ_1.md` → `AGENTS.md` → `X/README.md` → newest relevant `X/*` → `docs/project-memory/*`.
 
-For strategy work also read the newest files under `X/`.
+## WHY V6.7 EXISTS
 
-## V6.6.1 — OWNER NETWORK
+V6.6/V6.6.1 did not physically erase most Kotlin sources, but replaced the V6.5 launcher and central service with a narrow V6.6 dashboard/runtime. This hid and stopped much of the established app and made it appear deleted. V6.7 restores the complete V6.5 launcher, UI and service runtime, then adds the selected X lines as isolated stages.
 
-The permanent owner-facing network contains **six accounts**:
+The following V6.6 transfer errors are forbidden:
 
-1. `AUTO CORE`
-2. `AUTO BTC GUARD`
-3. `AUTO SOL/BTC SELECT`
-4. `HUMAN SELECT`
-5. `СЕРЖ`
-6. `APP`
+- comparing a Binance PUMP/USDT limit directly with a Bitpanda PUMP/EUR ask;
+- deriving the 12h entry context from a 30m/latest close instead of the causal closed Binance 1m series used by replay;
+- presenting a high win rate as profitability when Avg NET and PF are negative;
+- replacing the whole owner app/runtime to add one experiment.
 
-Only the first four are the fresh V6.6 experiment and start from **€1000 / zero trade history** in new V6.6 preferences.
+## OWNER NETWORK
 
-### PERMANENT ACCOUNTS
+The V6.7 owner-facing network contains five accounts:
 
-`СЕРЖ` and `APP` are permanent and MUST NOT be removed, hidden, reset, or migrated to fresh preferences when experimental algorithms are replaced.
+1. `AUTO X ECONOMY`
+2. `AUTO X52 SELECT`
+3. `HUMAN +2,0% NET`
+4. `СЕРЖ`
+5. `APP`
 
-- `СЕРЖ` continues to read the existing `UserPaperStore` state/history/P&L.
-- `APP` continues to read the existing `AppPaperStore` (`app_paper_v5_research`) state/history/P&L.
-- `APP` StrategyV2 background sync is active again in `PumpSignalService` via `AppPaperStore.syncWithAlerts()`.
-- Restoring APP does **not** reactivate the other retired V6.5 automatic research engines.
-- Dashboard and comparison screen both show all six accounts.
+`СЕРЖ` and `APP` keep their existing stores/history/P&L and may never be removed, hidden, reset or migrated to fresh preferences. Old V6.5 experimental stores are not erased, but their retired T32 automatic variants are not run by the V6.7 owner network.
 
-## THREE NEW AUTO PROFILES
+## TWO AUTONOMOUS X PAPER LINES
 
-All three share the same economic core:
+Shared causal entry core:
 
-- T32/VWAP-style entry context from protected X lineage;
-- `BELOW4_PEAK12H` context;
-- short discounted-limit entry intent;
-- **TP +2.5% NET**;
-- **STOP -1.2% NET**;
-- **TIME 120 minutes**;
-- **max 2 entries per UTC day**;
-- fee model **0.21% BUY + 0.21% SELL**.
+- raw Binance `PUMPUSDT` closed 1m candles;
+- exact T32/VWAP setup plus `BELOW4_PEAK12H`;
+- signal limit = signal close × 0.999, TTL 2 minutes;
+- paper execution only against a fresh executable Bitpanda `PUMP/EUR` ask;
+- fee model 0.21% BUY + 0.21% SELL;
+- STOP -1.2% NET;
+- maximum 2 entries per UTC day.
 
-They differ only by entry context:
+`AUTO X ECONOMY`:
 
-- `AUTO CORE`: frozen core conditions.
-- `AUTO BTC GUARD`: blocks strong recent BTC rise in the recent 1–3h context.
-- `AUTO SOL/BTC SELECT`: requires delayed relative strength around lag 6h (`SOL-BTC L6 >= +0.40 percentage points`).
+- fixed TP +2.5% NET;
+- TIME 120 minutes.
 
-## HUMAN SELECT
+`AUTO X52 SELECT`:
 
-- Same economic exit core as AUTO: `+2.5% NET / -1.2% NET / 120m`.
-- Entry is owner-confirmed only through `ВОЙТИ HUMAN`.
-- `ОТКЛОНИТЬ` suppresses the current setup until it decays/reset conditions are met.
-- Opportunity monitoring continues while a HUMAN position is already open.
-- A second HUMAN BUY cannot be opened while the current HUMAN position is open.
+- additionally requires delayed relative strength `SOL-BTC REL6 >= +0.40 percentage points`;
+- dynamic signal/VWAP exit;
+- TIME 90 minutes.
 
-## LIVE READINESS 0–100
+X52 is a selective, regime-dependent forward-paper hypothesis, not a profit guarantee.
 
-The owner-facing readiness score is continuous rather than a 0→95/100 last-second jump. It uses live one-minute context from:
+## HUMAN / APP / LEGACY RUNTIME
 
-- distance below VWAP;
-- 12h drawdown depth;
-- current taker BUY share;
-- candle recovery/body;
-- acceleration of BUY share.
+- HUMAN entry still requires owner confirmation; its established V6.5 +2.0% NET exit behavior remains.
+- APP StrategyV2 paper sync remains active.
+- Full V6.5 PumpMachine/Fusion/DeepSeek background runtime is restored for continuity; its older accounts remain hidden from the focused owner network.
+- One optional stage failure must not stop the independent service stages.
 
-Fast market path refreshes roughly every **30 seconds**. The gauge is informative only; AUTO BUY still requires the exact closed-candle setup and profile gate.
+## WHAT “57%” REALLY MEANS
 
-## ALERT / CALL LOGIC
-
-One master policy applies:
-
-- `OFF` = silence;
-- `WORK` = allowed work schedule only;
-- `DAILY` = every day in configured window;
-- `ALWAYS` = 24/7.
-
-Important behavior:
-
-- HUMAN opportunity alerts continue even if a HUMAN position is already open;
-- USER/HUMAN safety sounds respect master switch/schedule;
-- APP paper trading continues independently of whether sound is allowed; only APP notification delivery is gated by the alert policy;
-- dashboard includes immediate HUMAN sound/vibration test;
-- Android DND, manually muted notification channels, and OEM restrictions may still suppress delivery at OS level.
-
-## BACKGROUND SERVICE
-
-`PumpSignalService` V6.6.1 runs:
-
-- three V6.6 AUTO profiles;
-- HUMAN SELECT;
-- permanent APP StrategyV2 paper account;
-- existing personal-position safety warning for SERGE.
-
-Other legacy automatic research engines remain dormant.
+The original replay was reproduced twice. Stop -1.5% produced **57.36% win rate** (333 fills / 191 wins), but **Avg NET -0.297%** and **PF 0.533**. It is therefore not a profitable strategy and is not promoted as an autonomous V6.7 rule. V6.7 uses the more defensible economic/time and selective X candidates only as isolated forward-paper experiments.
 
 ## SIGNING / INSTALL CONTINUITY
 
 - Signing alias: `pump-signal-update`.
-- Expected certificate SHA-256:
+- Required certificate SHA-256:
   `1F:77:8C:42:91:C9:D1:1C:5F:89:F4:DE:87:73:BD:A3:5A:01:25:03:1A:DC:05:78:5D:AE:E2:3F:27:DC:78:23`
-- V6.6.1 signed APK certificate matches V6.5/V6.6 exactly and verifies with APK Signature Scheme **v2 + v3**.
-- V6.6.1 signed APK SHA-256:
-  `5b102b3976e74f54de1695cd352794be560238b2c88ae57689e19dfb386aed21`
-- Never create a replacement signing key and never commit JKS/password/recovery bundle.
-- Install updates **over** the existing app; never uninstall first.
-
-## RESEARCH BASIS / WHAT IS STILL UNPROVEN
-
-Protected `X/` remains the strategy source of truth:
-
-- original canary: `1772 signals / 974 fills / 318 positive = 32.65% WR`;
-- `BELOW4_PEAK12H` improved garbage filtering;
-- wider stop showed production `-0.8%` was too tight for the research line;
-- fixed `TP +2.5 / STOP -1.2` plus a 120–135m TIME plateau improved economics versus 90m;
-- 120m was selected conservatively;
-- BTC delayed context and SOL/BTC relative-strength context remain experimental forward-paper features, not proven profit guarantees.
+- Final CI must verify APK Signature Scheme v2 + v3, package, versionCode 126, versionName 6.7, launcher and ZIP integrity.
+- Never create a replacement signing key and never commit JKS/password/recovery material.
+- Install V6.7 over the existing app; never uninstall first.
 
 ## INVARIANTS
 
 1. Keep package/signing identity unchanged.
 2. Never uninstall the old app just to update.
-3. **SERGE and APP are permanent owner accounts: never remove, hide, reset, or replace their persisted stores.**
-4. New strategy experiments may reset only their own new portfolios unless the owner explicitly says otherwise.
-5. APP must keep its paper engine active unless the owner explicitly asks to stop it.
-6. No real-order authority without a separate explicit decision.
-7. Judge strategies by NET expectancy/PF and trade frequency, not win rate alone.
-8. Do not exceed three automatic experimental profiles without a new explicit decision.
-9. Keep HUMAN entry owner-confirmed.
-10. Before strategy research, read X and reproduce the relevant canary.
-11. Never erase older X checkpoints when a new result appears.
+3. SERGE and APP are permanent and retain their stores/history.
+4. Paper-only until a separate explicit real-order decision.
+5. Judge strategies by NET expectancy/PF and frequency, not win rate alone.
+6. Keep HUMAN entry owner-confirmed.
+7. Read and reproduce the relevant X canary before changing strategy authority.
+8. Never erase older X checkpoints.
+9. Cross-market filters remain experimental until forward evidence is representative.
+10. Add experiments as isolated stages; do not replace the central app/runtime.

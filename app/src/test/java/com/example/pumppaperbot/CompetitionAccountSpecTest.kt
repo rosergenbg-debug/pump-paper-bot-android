@@ -5,14 +5,13 @@ import org.junit.Test
 
 class CompetitionAccountSpecTest {
     @Test
-    fun comparisonContainsThreeAutosHumanSergeAndApp() {
-        assertEquals(6, CompetitionAccountSpec.COUNT)
+    fun comparisonContainsTwoXAutosHumanSergeAndApp() {
+        assertEquals(5, CompetitionAccountSpec.COUNT)
         assertEquals(
             listOf(
-                "AUTO CORE",
-                "AUTO BTC GUARD",
-                "AUTO SOL/BTC SELECT",
-                "HUMAN SELECT",
+                "AUTO X ECONOMY",
+                "AUTO X52 SELECT",
+                "HUMAN +2,0% NET",
                 "СЕРЖ",
                 "APP"
             ),

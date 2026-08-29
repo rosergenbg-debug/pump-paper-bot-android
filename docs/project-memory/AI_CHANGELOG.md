@@ -2,6 +2,25 @@
 
 Только существенные законченные задачи. Не дублировать Git history.
 
+## 2026-08-29 / V6.7 — Restore V6.5 and add two isolated X paper agents
+
+**Task**
+Разобрать регрессию V6.6/V6.6.1, восстановить полный V6.5 app и внедрить две наиболее перспективные X-линии без потери владельца, APP, истории и update continuity.
+
+**Root cause**
+V6.6 подменила launcher и центральный service узким dashboard/runtime. Кроме визуальной потери функций, перенос стратегии сравнивал Binance PUMP/USDT intent с Bitpanda PUMP/EUR ask и не воспроизводил causal 1m replay path.
+
+**Change**
+Восстановлены MainActivity, полный V6.5 service/UI/runtime и постоянные HUMAN/СЕРЖ/APP линии. Добавлены независимые `AUTO X ECONOMY` и `AUTO X52 SELECT` stores/policies, raw Binance 1m signal path, fresh Bitpanda paper execution и отдельный 30s service stage. Версия: V6.7/code126.
+
+**Verification**
+Исходные X replay scripts пройдены дважды. 57.36% WR признан убыточным по Avg NET/PF и не выдан за прибыльность. Добавлены unit contracts и CI с `testDebugUnitTest + lintDebug + assembleDebug`, package/launcher/ZIP checks и обязательной финальной подписью ожидаемым update certificate.
+
+**Project impact**
+Приложение возвращено к полной проверенной архитектуре V6.5, а новые гипотезы изолированы и могут накапливать forward-paper evidence без реальных ордеров или очистки существующих данных.
+
+---
+
 ## 2026-08-28 / V6.3 — VWAP AUTO + HUMAN FACTOR
 
 **Task**

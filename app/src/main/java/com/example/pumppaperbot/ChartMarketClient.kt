@@ -21,13 +21,14 @@ class ChartMarketClient {
     }
 
     fun sync(context: Context, interval: ChartInterval) {
+        val limit = if (interval == ChartInterval.ONE_MINUTE) 750 else 360
         val pool = Executors.newFixedThreadPool(2)
         try {
             val pump = pool.submit<String> {
-                fetch(PumpBotEngine.klineUrl(PumpBotEngine.pumpSymbol, interval.code, 360))
+                fetch(PumpBotEngine.klineUrl(PumpBotEngine.pumpSymbol, interval.code, limit))
             }
             val eur = pool.submit<String> {
-                fetch(PumpBotEngine.klineUrl(PumpBotEngine.eurSymbol, interval.code, 360))
+                fetch(PumpBotEngine.klineUrl(PumpBotEngine.eurSymbol, interval.code, limit))
             }
             val pumpJson = pump.get()
             val eurJson = eur.get()

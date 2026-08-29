@@ -152,7 +152,8 @@ object StrategyV2 {
                 closeTime = coin.closeTime,
                 quoteVolume = coin.quoteVolume,
                 tradeCount = coin.tradeCount,
-                takerBuyVolume = coin.takerBuyVolume
+                takerBuyVolume = coin.takerBuyVolume,
+                takerBuyQuoteVolume = coin.takerBuyQuoteVolume
             )
         }.sortedBy { it.closeTime }
     }

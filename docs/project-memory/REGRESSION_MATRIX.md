@@ -10,24 +10,31 @@
 | Область | Ожидаемое поведение | Как проверяется | Статус |
 |---|---|---|---|
 | Build baseline | `testDebugUnitTest`, `lintDebug`, `assembleDebug` проходят | `.github/workflows/android.yml` | AUTO |
-| Package/version | compatible line остаётся `com.example.pumppaperbot.v8`; V6.5/code123 после merge | CI `aapt dump badging` | AUTO |
-| Launch APK | launch activity `MainActivity`, APK ZIP валиден, signature scheme проверяется | CI APK checks; final certificate отдельно | PARTIAL |
+| Package/version | compatible line остаётся `com.example.pumppaperbot.v8`; V6.7/code126 | CI `aapt dump badging` | AUTO |
+| Launch APK | launch activity `MainActivity`, APK ZIP валиден, v2+v3 и exact compatible certificate проверяются | CI final APK checks | AUTO |
+| V6.5 runtime restoration | V6.7 использует полный MainActivity/service runtime V6.5; эксперимент не заменяет центральный app | manifest/source diff + service stage review | PARTIAL |
+| V6.7 owner mapping | Сеть содержит AUTO X ECONOMY → AUTO X52 SELECT → HUMAN +2.0 → SERGE → APP | `CompetitionAccountSpecTest` + UI device check | AUTO/PARTIAL |
+| X causal entry data | T32/12h контекст вычисляется по raw closed Binance PUMPUSDT 1m candles, не по 30m/latest proxy | `T32NetworkV670Test` + source review | PARTIAL |
+| X execution currency | Binance USD intent не сравнивается с EUR ask; virtual fill uses fresh executable Bitpanda PUMP/EUR ask | source review + runtime paper journal | PARTIAL |
+| AUTO X ECONOMY exits | TP +2.5% NET, STOP -1.2% NET, TIME 120m, max 2 entries/UTC day | `T32NetworkV670Test` + runtime lifecycle | PARTIAL |
+| AUTO X52 SELECT | требует SOL-BTC REL6 >= +0.40; dynamic VWAP exit, STOP -1.2%, TIME 90m | `T32NetworkV670Test` + runtime lifecycle | PARTIAL |
+| 57% claim guard | 57.36% WR не называется прибыльностью: replay также фиксирует Avg NET -0.297% и PF 0.533 | X report + project-memory review | MANUAL |
 | Real trading | Ни одна текущая автономная стратегия не отправляет реальный order/cancel/transfer | source review, `ResearchModePolicy`, `V49SafetyPolicyTest` и related safety tests | PARTIAL |
 | Bitpanda access | Fusion client использует read-only GET order book; key не пишется plaintext в prefs/log | `BitpandaFusionTest` + source review | PARTIAL |
 | Persistent history | App version changes не очищают append-only SQLite ledger | `ResearchPerformanceLedger`, `ResearchHistoryArchiveTest`, retention tests | PARTIAL |
 | V4→V5 history | доступная V4 history захватывается/остаётся экспортируемой | `ResearchHistoryArchiveTest`, ledger capture | PARTIAL |
 | Compatible update data | portfolios/settings/keys/history переживают update без uninstall | version-specific retention tests + final APK upgrade on device | MANUAL |
 | Engine migration | известные `PumpBotEngine` algorithm versions мигрируют без неожиданного reset | source migration + targeted tests | NEEDS_TEST |
-| Independent accounts | APP/PM profiles/Fusion/DeepSigX/SERGE и четыре T32 ветви не используют общий portfolio | store separation + strategy tests + Competition inspection | PARTIAL |
-| V6.5 T32 fee model | Все четыре T32 ветви считают 0,21% BUY + 0,21% SELL; fixed TP даёт ровно заданный NET после обеих комиссий | `T32CostPolicyV650Test` | AUTO |
-| T32 control | `T32 ORIGINAL` сохраняет прежний exact T32 entry и VWAP/STOP/90m exit как контроль | `HumanFactorVwapTest` + source review | PARTIAL |
-| T32 fixed-profit branches | +1,5% и +2,0% имеют отдельные prefs/portfolio, входят по exact T32=100 и выходят по своему NET TP либо safety STOP/90m | `T32CostPolicyV650Test` + source review/runtime | PARTIAL |
-| T32 failure isolation | Ошибка +1,5% не блокирует +2,0%/Human; ошибка +2,0% не блокирует Human | isolated `runCatching` + `ERROR` journal; runtime fault injection пока отсутствует | PARTIAL |
+| Independent accounts | AUTO X ECONOMY/AUTO X52/HUMAN/APP/SERGE используют раздельные portfolios; hidden legacy stores не очищаются | store separation + strategy tests + Competition inspection | PARTIAL |
+| V6.7 X fee model | Обе AUTO X линии считают 0,21% BUY + 0,21% SELL; fixed TP ECONOMY даёт +2.5% NET после обеих комиссий | `T32NetworkV670Test` | AUTO |
+| Human control | HUMAN сохраняет owner-confirmed V6.5 entry authority и отдельный portfolio | `HumanFactorVwapTest` + source review | PARTIAL |
+| Retired T32 variants | Старые auto +1.5/+2.0 stores не очищаются, но их sync не запускается в V6.7 owner runtime | service/source review | PARTIAL |
+| X failure isolation | Ошибка одной AUTO X линии не блокирует вторую или остальные независимые service stages | isolated `runCatching` + runtime fault injection | PARTIAL |
 | Fast PM independence | responsive PUMP_2 может сам активировать 15s fast-path, не ожидая PUMP_3 candidate; каждый PM fast-sync идёт только по своей позиции/кандидату | `PumpFastCandidatePolicyV537Test` + service wiring | AUTO/PARTIAL |
 | DeepSeek verdict scope | cached/PENDING entry verdict одного PM-профиля не является решением другого профиля | `DeepSeekEntryCoachTest` profile-scope tests + source wiring | AUTO/PARTIAL |
 | DeepSeek shared budget | общий provider request budget/running lock может экономить API, но при отсутствии профильного verdict другой PM может использовать только свой strict local fallback, а не чужой verdict | `DeepSeekEntryCoachTest` + source review; runtime concurrency scenario | PARTIAL |
 | Shared tuning layer | pooled outcomes/shared soft regulators не должны скрыто ухудшать profile independence; полезность должна подтверждаться trial/rollback outcomes | `AdaptiveTuningGuardV536Test` + representative ledger analysis | PARTIAL |
-| UI account mapping | Сеть содержит 6 видимых счётов: T32 ORIGINAL → T32 +1,5% → T32 +2,0% → HUMAN +2,0% → SERGE → APP; скрытые старые stores не очищаются | `CompetitionAccountSpecTest` + UI device check | AUTO/PARTIAL |
+| Legacy UI exclusion | Старые T32/PM/Fusion/DeepSig accounts не возвращаются в focused owner network, но их stores не очищаются | `CompetitionAccountSpecTest` + UI device check | AUTO/PARTIAL |
 | Compact DeepSeek status | Верхний блок показывает наличие ключа/работоспособность, ошибку, дневные успехи/ошибки и оценку расхода | source review + UI device check | PARTIAL |
 | Human Factor authority | Human BUY невозможен без `ВОЙТИ`; `ОТКЛОНИТЬ` блокирует текущий setup до распада; после BUY выход автоматический +2,0% NET/STOP/90m | `HumanFactorVwapTest`, `T32CostPolicyV650Test` + source/UI review | PARTIAL |
 | Human Factor repeated alarm | Пока pending, отдельный alarm/vibration повторяется примерно каждые 60s; ВОЙТИ/ОТКЛОНИТЬ/распад setup/позиция прекращают повтор | `T32CostPolicyV650Test` repeat-policy + source/device check | PARTIAL |

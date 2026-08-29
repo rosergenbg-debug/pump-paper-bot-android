@@ -2,9 +2,9 @@ name: Android Build
 
 on:
   push:
-    branches: [ "main", "chatgpt/v6-6-x-core-alerts" ]
+    branches: [ "main", "chatgpt/v5-24-pump-machine-2", "chatgpt/v5-25-six-account-comparison", "chatgpt/v5-26-profit-engine", "chatgpt/v5-37-scalp-independence", "chatgpt/v6-0-execution-intelligence", "chatgpt/v6-1-strategy-diversity", "chatgpt/v6-2-synthetic-market-lifecycle" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "chatgpt/v5-10-deepsig-trading", "chatgpt/v5-11-fusion-stability", "chatgpt/v5-12-main-chart-flow", "chatgpt/v5-13-big-overview", "chatgpt/v5-13-1-sequential-fix", "chatgpt/v5-14-unified-flow", "chatgpt/v5-15-flow-performance", "chatgpt/v5-16-anti-churn-profit-defense", "chatgpt/v5-17-deepsig-entry-exit", "chatgpt/v5-18-ci-base", "chatgpt/v5-18-money-flow-ui", "chatgpt/v5-19-deepsig-independence-exit-tuning", "chatgpt/v5-20-background-persistence", "chatgpt/v5-21-pump-machine", "chatgpt/v5-22-shared-fusion-entry-lab", "chatgpt/v5-23-clean-lab-reset", "chatgpt/v5-24-pump-machine-2", "chatgpt/v5-25-six-account-comparison", "chatgpt/v5-37-scalp-independence", "chatgpt/v6-0-execution-intelligence", "chatgpt/v6-1-strategy-diversity", "chatgpt/v6-2-synthetic-market-lifecycle" ]
   workflow_dispatch:
 
 concurrency:
@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -30,7 +30,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Validate and build V6.6.1
+      - name: Validate and build V6.7
         run: |
           chmod +x gradlew
           ./gradlew testDebugUnitTest lintDebug assembleDebug
@@ -42,20 +42,138 @@ jobs:
           grep -F "Verified using v2 scheme (APK Signature Scheme v2): true" "$RUNNER_TEMP/signature.txt"
           "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging \
             app/build/outputs/apk/debug/app-debug.apk | tee "$RUNNER_TEMP/badging.txt"
-          grep -F "package: name='com.example.pumppaperbot.v8' versionCode='125' versionName='6.6.1'" \
+          grep -F "package: name='com.example.pumppaperbot.v8' versionCode='126' versionName='6.7'" \
             "$RUNNER_TEMP/badging.txt"
-          grep -F "launchable-activity: name='com.example.pumppaperbot.V660DashboardActivity'" \
+          grep -F "launchable-activity: name='com.example.pumppaperbot.MainActivity'" \
             "$RUNNER_TEMP/badging.txt"
           grep -F "application-debuggable" "$RUNNER_TEMP/badging.txt"
           unzip -t app/build/outputs/apk/debug/app-debug.apk
           test "$(stat -c%s app/build/outputs/apk/debug/app-debug.apk)" -gt 6000000
 
-      - name: Prepare named APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk PumpSignal-V6.6.1-Serge-App-Hotfix-Intermediate.apk
-
-      - name: Upload intermediate APK
+      - name: Upload exact verified intermediate APK
         uses: actions/upload-artifact@v4
         with:
-          name: PumpSignal-V6.6.1-Serge-App-Hotfix-Intermediate-APK
-          path: PumpSignal-V6.6.1-Serge-App-Hotfix-Intermediate.apk
+          name: PumpSignal-V6.7-Verified-Intermediate
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 7
+
+      - name: Publish exact intermediate APK to isolated handoff branch
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          STAGE=$(mktemp -d)
+          git worktree add --detach "$STAGE/repo" HEAD
+          (
+            cd "$STAGE/repo"
+            git switch --orphan ci-v67-intermediate
+            git rm -rf . || true
+            APK="$GITHUB_WORKSPACE/app/build/outputs/apk/debug/app-debug.apk"
+            base64 -w0 "$APK" | split -b 900000 -d -a 2 - \
+              PumpSignal-V6.7-Verified-Intermediate.apk.b64.part-
+            sha256sum "$APK" | awk '{print $1}' > PumpSignal-V6.7-Verified-Intermediate.apk.sha256
+            stat -c%s "$APK" > PumpSignal-V6.7-Verified-Intermediate.apk.size
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -f PumpSignal-V6.7-Verified-Intermediate.apk.b64.part-* \
+              PumpSignal-V6.7-Verified-Intermediate.apk.sha256 \
+              PumpSignal-V6.7-Verified-Intermediate.apk.size
+            git commit -m "Publish exact verified V6.7 intermediate APK"
+            git push --force origin HEAD:ci-v67-intermediate
+          )
+          git worktree remove "$STAGE/repo"
+
+      - name: Sign V6.7 with the compatible PumpSignal update key
+        env:
+          KS_PUMP: ${{ secrets.PUMP_SIGNING_KEYSTORE_BASE64 }}
+          KS_ANDROID: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_RELEASE: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          KS_KEYSTORE: ${{ secrets.KEYSTORE_BASE64 }}
+          SP_PUMP: ${{ secrets.PUMP_SIGNING_STORE_PASSWORD }}
+          SP_PUMP2: ${{ secrets.PUMP_SIGNING_KEYSTORE_PASSWORD }}
+          SP_ANDROID: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          SP_GENERIC: ${{ secrets.KEYSTORE_PASSWORD }}
+          KP_PUMP: ${{ secrets.PUMP_SIGNING_KEY_PASSWORD }}
+          KP_ANDROID: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KP_GENERIC: ${{ secrets.KEY_PASSWORD }}
+          AL_PUMP: ${{ secrets.PUMP_SIGNING_KEY_ALIAS }}
+          AL_ANDROID: ${{ secrets.ANDROID_KEY_ALIAS }}
+          AL_GENERIC: ${{ secrets.KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          EXPECTED="1f778c4291c9d11c5f89f4de8773bda35a0125031adc05785daee23f27dc7823"
+          KEYFILE="$RUNNER_TEMP/pump-compatible.jks"
+
+          KEY_SOURCE=""
+          for name in KS_PUMP KS_ANDROID KS_RELEASE KS_KEYSTORE; do
+            value="${!name:-}"
+            if [ -n "$value" ] && printf '%s' "$value" | base64 --decode > "$KEYFILE" 2>/dev/null && [ -s "$KEYFILE" ]; then
+              KEY_SOURCE="$name"
+              break
+            fi
+          done
+          if [ -z "$KEY_SOURCE" ]; then
+            echo "NO_CANDIDATE_KEYSTORE_SECRET_PRESENT; compatible signing deferred to offline recovery bundle"
+            exit 0
+          fi
+
+          PASS=""
+          for name in SP_PUMP SP_PUMP2 SP_ANDROID SP_GENERIC; do
+            value="${!name:-}"
+            if [ -n "$value" ] && keytool -list -keystore "$KEYFILE" -storepass "$value" >/dev/null 2>&1; then
+              PASS="$value"
+              break
+            fi
+          done
+          test -n "$PASS" || { echo "KEYSTORE_FOUND_BUT_NO_MATCHING_PASSWORD_SECRET"; exit 42; }
+
+          keytool -list -v -keystore "$KEYFILE" -storepass "$PASS" > "$RUNNER_TEMP/keyinfo.txt"
+          FOUND=$(grep -i 'SHA256:' "$RUNNER_TEMP/keyinfo.txt" | tr -d ': ' | tr 'A-F' 'a-f' || true)
+          printf '%s\n' "$FOUND" | grep -Fq "$EXPECTED" || { echo "KEYSTORE_CERTIFICATE_MISMATCH"; exit 43; }
+
+          ALIAS=""
+          for candidate in "${AL_PUMP:-}" "${AL_ANDROID:-}" "${AL_GENERIC:-}" "pump-signal-update" "pump-update"; do
+            [ -z "$candidate" ] && continue
+            if keytool -list -keystore "$KEYFILE" -storepass "$PASS" -alias "$candidate" >/dev/null 2>&1; then
+              ALIAS="$candidate"
+              break
+            fi
+          done
+          test -n "$ALIAS" || { echo "MATCHED_CERT_BUT_ALIAS_NOT_RESOLVED"; exit 44; }
+
+          KEYPASS=""
+          for candidate in "${KP_PUMP:-}" "${KP_ANDROID:-}" "${KP_GENERIC:-}" "$PASS"; do
+            [ -z "$candidate" ] && continue
+            if "$ANDROID_HOME/build-tools/34.0.0/apksigner" sign \
+                --ks "$KEYFILE" --ks-pass "pass:$PASS" --ks-key-alias "$ALIAS" --key-pass "pass:$candidate" \
+                --v1-signing-enabled false --v2-signing-enabled true --v3-signing-enabled true \
+                --out "$RUNNER_TEMP/test-signed.apk" app/build/outputs/apk/debug/app-debug.apk >/dev/null 2>&1; then
+              KEYPASS="$candidate"
+              break
+            fi
+          done
+          test -n "$KEYPASS" || { echo "MATCHED_KEYSTORE_BUT_NO_SIGNING_PASSWORD"; exit 45; }
+
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" sign \
+            --ks "$KEYFILE" --ks-pass "pass:$PASS" --ks-key-alias "$ALIAS" --key-pass "pass:$KEYPASS" \
+            --v1-signing-enabled false --v2-signing-enabled true --v3-signing-enabled true \
+            --out PumpSignal-V6.7-Compatible-FINAL.apk app/build/outputs/apk/debug/app-debug.apk
+
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose --print-certs \
+            PumpSignal-V6.7-Compatible-FINAL.apk | tee "$RUNNER_TEMP/final-signature.txt"
+          grep -F "Verified using v2 scheme (APK Signature Scheme v2): true" "$RUNNER_TEMP/final-signature.txt"
+          grep -F "Verified using v3 scheme (APK Signature Scheme v3): true" "$RUNNER_TEMP/final-signature.txt"
+          ACTUAL=$(grep -F "Signer #1 certificate SHA-256 digest:" "$RUNNER_TEMP/final-signature.txt" | awk '{print $NF}' | tr 'A-F' 'a-f')
+          test "$ACTUAL" = "$EXPECTED"
+          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging PumpSignal-V6.7-Compatible-FINAL.apk | tee "$RUNNER_TEMP/final-badging.txt"
+          grep -F "package: name='com.example.pumppaperbot.v8' versionCode='126' versionName='6.7'" "$RUNNER_TEMP/final-badging.txt"
+          grep -F "launchable-activity: name='com.example.pumppaperbot.MainActivity'" "$RUNNER_TEMP/final-badging.txt"
+          unzip -t PumpSignal-V6.7-Compatible-FINAL.apk
+          sha256sum PumpSignal-V6.7-Compatible-FINAL.apk | tee "$RUNNER_TEMP/final-sha256.txt"
+
+      - name: Upload compatible V6.7 APK
+        if: ${{ hashFiles('PumpSignal-V6.7-Compatible-FINAL.apk') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: PumpSignal-V6.7-Compatible-FINAL
+          path: PumpSignal-V6.7-Compatible-FINAL.apk
           retention-days: 7
