@@ -1,6 +1,7 @@
 package com.example.pumppaperbot
 
 import kotlin.math.max
+import kotlin.math.min
 
 internal data class MainChartPriceWindow(
     val minPrice: Double,
@@ -24,8 +25,11 @@ internal object MainChartViewportPolicy {
         verticalShiftFraction: Float = 0f
     ): MainChartPriceWindow? {
         if (candles.isEmpty()) return null
-        val rawMin = candles.minOf { it.low }
-        val rawMax = candles.maxOf { it.high }
+        val guides = RangeGuidePolicy.levels(candles.last().close)
+        val candleMin = candles.minOf { it.low }
+        val candleMax = candles.maxOf { it.high }
+        val rawMin = min(candleMin, guides?.lower ?: candleMin)
+        val rawMax = max(candleMax, guides?.upper ?: candleMax)
         if (!rawMin.isFinite() || !rawMax.isFinite() || rawMin <= 0.0 || rawMax < rawMin) return null
         val rawSpan = max(rawMax - rawMin, rawMax * 0.006)
         val padding = rawSpan * 0.12
