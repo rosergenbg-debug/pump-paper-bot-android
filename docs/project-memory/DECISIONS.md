@@ -2,6 +2,19 @@
 
 Только существенные решения и причины. Не использовать как косметический changelog.
 
+## 2026-08-29 — V6.7 восстанавливает V6.5 и изолирует две X-линии
+
+**Decision**
+Восстановить полный launcher/UI/service runtime V6.5 и добавить две автономные paper-линии отдельным быстрым stage: `AUTO X ECONOMY` и `AUTO X52 SELECT`. Сохранить HUMAN с подтверждением, СЕРЖ и APP. Не переносить V6.6 dashboard/service как основу.
+
+**Reason**
+V6.6 скрыла/остановила значительную часть приложения заменой центрального runtime и допустила несопоставимое сравнение Binance USD limit с Bitpanda EUR ask. Повторный replay подтвердил 57.36% WR при stop -1.5%, но одновременно отрицательные Avg NET/PF, поэтому win rate не доказывает прибыльность.
+
+**Consequences**
+V6.7 остаётся paper-only и совместимым обновлением `.v8`. AUTO X ECONOMY использует TP +2.5% NET/STOP -1.2%/TIME 120m. AUTO X52 SELECT добавляет SOL-BTC REL6 >=0.40 и dynamic VWAP exit/STOP -1.2%/TIME 90m. Обе линии входят по causal Binance 1m setup, но виртуально исполняются по свежему Bitpanda PUMP/EUR ask; USD и EUR цены напрямую не сравниваются.
+
+---
+
 ## 2026-08-16 — V5: research-first и причинная проверка
 
 **Decision**  
