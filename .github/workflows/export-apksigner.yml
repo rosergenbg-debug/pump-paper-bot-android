@@ -1,0 +1,27 @@
+name: Export ApkSigner Tool
+
+on:
+  pull_request:
+    branches: [ "main" ]
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Stage apksigner
+        run: |
+          set -euo pipefail
+          mkdir -p tool-export/lib
+          cp "$ANDROID_HOME/build-tools/34.0.0/apksigner" tool-export/apksigner
+          cp "$ANDROID_HOME/build-tools/34.0.0/lib/apksigner.jar" tool-export/lib/apksigner.jar
+          chmod +x tool-export/apksigner
+          sha256sum tool-export/apksigner tool-export/lib/apksigner.jar
+      - name: Upload apksigner
+        uses: actions/upload-artifact@v4
+        with:
+          name: Android-ApkSigner-34
+          path: tool-export/
+          retention-days: 1
