@@ -67,11 +67,16 @@ jobs:
             cd "$STAGE/repo"
             git switch --orphan ci-v67-intermediate
             git rm -rf . || true
-            cp "$GITHUB_WORKSPACE/app/build/outputs/apk/debug/app-debug.apk" \
-              PumpSignal-V6.7-Verified-Intermediate.apk
+            APK="$GITHUB_WORKSPACE/app/build/outputs/apk/debug/app-debug.apk"
+            base64 -w0 "$APK" | split -b 900000 -d -a 2 - \
+              PumpSignal-V6.7-Verified-Intermediate.apk.b64.part-
+            sha256sum "$APK" | awk '{print $1}' > PumpSignal-V6.7-Verified-Intermediate.apk.sha256
+            stat -c%s "$APK" > PumpSignal-V6.7-Verified-Intermediate.apk.size
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add -f PumpSignal-V6.7-Verified-Intermediate.apk
+            git add -f PumpSignal-V6.7-Verified-Intermediate.apk.b64.part-* \
+              PumpSignal-V6.7-Verified-Intermediate.apk.sha256 \
+              PumpSignal-V6.7-Verified-Intermediate.apk.size
             git commit -m "Publish exact verified V6.7 intermediate APK"
             git push --force origin HEAD:ci-v67-intermediate
           )
