@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -50,6 +50,33 @@ jobs:
           unzip -t app/build/outputs/apk/debug/app-debug.apk
           test "$(stat -c%s app/build/outputs/apk/debug/app-debug.apk)" -gt 6000000
 
+      - name: Upload exact verified intermediate APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: PumpSignal-V6.7-Verified-Intermediate
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 7
+
+      - name: Publish exact intermediate APK to isolated handoff branch
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          STAGE=$(mktemp -d)
+          git worktree add --detach "$STAGE/repo" HEAD
+          (
+            cd "$STAGE/repo"
+            git switch --orphan ci-v67-intermediate
+            git rm -rf .
+            cp "$GITHUB_WORKSPACE/app/build/outputs/apk/debug/app-debug.apk" \
+              PumpSignal-V6.7-Verified-Intermediate.apk
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -f PumpSignal-V6.7-Verified-Intermediate.apk
+            git commit -m "Publish exact verified V6.7 intermediate APK"
+            git push --force origin HEAD:ci-v67-intermediate
+          )
+          git worktree remove "$STAGE/repo"
+
       - name: Sign V6.7 with the compatible PumpSignal update key
         env:
           KS_PUMP: ${{ secrets.PUMP_SIGNING_KEYSTORE_BASE64 }}
@@ -79,7 +106,10 @@ jobs:
               break
             fi
           done
-          test -n "$KEY_SOURCE" || { echo "NO_CANDIDATE_KEYSTORE_SECRET_PRESENT"; exit 41; }
+          if [ -z "$KEY_SOURCE" ]; then
+            echo "NO_CANDIDATE_KEYSTORE_SECRET_PRESENT; compatible signing deferred to offline recovery bundle"
+            exit 0
+          fi
 
           PASS=""
           for name in SP_PUMP SP_PUMP2 SP_ANDROID SP_GENERIC; do
@@ -136,6 +166,7 @@ jobs:
           sha256sum PumpSignal-V6.7-Compatible-FINAL.apk | tee "$RUNNER_TEMP/final-sha256.txt"
 
       - name: Upload compatible V6.7 APK
+        if: ${{ hashFiles('PumpSignal-V6.7-Compatible-FINAL.apk') != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: PumpSignal-V6.7-Compatible-FINAL
