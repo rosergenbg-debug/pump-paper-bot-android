@@ -50,12 +50,94 @@ jobs:
           unzip -t app/build/outputs/apk/debug/app-debug.apk
           test "$(stat -c%s app/build/outputs/apk/debug/app-debug.apk)" -gt 6000000
 
-      - name: Prepare named APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk PumpSignal-V6.7-Restored-X-Network-Intermediate.apk
+      - name: Sign V6.7 with the compatible PumpSignal update key
+        env:
+          KS_PUMP: ${{ secrets.PUMP_SIGNING_KEYSTORE_BASE64 }}
+          KS_ANDROID: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_RELEASE: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          KS_KEYSTORE: ${{ secrets.KEYSTORE_BASE64 }}
+          SP_PUMP: ${{ secrets.PUMP_SIGNING_STORE_PASSWORD }}
+          SP_PUMP2: ${{ secrets.PUMP_SIGNING_KEYSTORE_PASSWORD }}
+          SP_ANDROID: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          SP_GENERIC: ${{ secrets.KEYSTORE_PASSWORD }}
+          KP_PUMP: ${{ secrets.PUMP_SIGNING_KEY_PASSWORD }}
+          KP_ANDROID: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KP_GENERIC: ${{ secrets.KEY_PASSWORD }}
+          AL_PUMP: ${{ secrets.PUMP_SIGNING_KEY_ALIAS }}
+          AL_ANDROID: ${{ secrets.ANDROID_KEY_ALIAS }}
+          AL_GENERIC: ${{ secrets.KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          EXPECTED="1f778c4291c9d11c5f89f4de8773bda35a0125031adc05785daee23f27dc7823"
+          KEYFILE="$RUNNER_TEMP/pump-compatible.jks"
 
-      - name: Upload intermediate APK
+          KEY_SOURCE=""
+          for name in KS_PUMP KS_ANDROID KS_RELEASE KS_KEYSTORE; do
+            value="${!name:-}"
+            if [ -n "$value" ] && printf '%s' "$value" | base64 --decode > "$KEYFILE" 2>/dev/null && [ -s "$KEYFILE" ]; then
+              KEY_SOURCE="$name"
+              break
+            fi
+          done
+          test -n "$KEY_SOURCE" || { echo "NO_CANDIDATE_KEYSTORE_SECRET_PRESENT"; exit 41; }
+
+          PASS=""
+          for name in SP_PUMP SP_PUMP2 SP_ANDROID SP_GENERIC; do
+            value="${!name:-}"
+            if [ -n "$value" ] && keytool -list -keystore "$KEYFILE" -storepass "$value" >/dev/null 2>&1; then
+              PASS="$value"
+              break
+            fi
+          done
+          test -n "$PASS" || { echo "KEYSTORE_FOUND_BUT_NO_MATCHING_PASSWORD_SECRET"; exit 42; }
+
+          keytool -list -v -keystore "$KEYFILE" -storepass "$PASS" > "$RUNNER_TEMP/keyinfo.txt"
+          FOUND=$(grep -i 'SHA256:' "$RUNNER_TEMP/keyinfo.txt" | tr -d ': ' | tr 'A-F' 'a-f' || true)
+          printf '%s\n' "$FOUND" | grep -Fq "$EXPECTED" || { echo "KEYSTORE_CERTIFICATE_MISMATCH"; exit 43; }
+
+          ALIAS=""
+          for candidate in "${AL_PUMP:-}" "${AL_ANDROID:-}" "${AL_GENERIC:-}" "pump-signal-update" "pump-update"; do
+            [ -z "$candidate" ] && continue
+            if keytool -list -keystore "$KEYFILE" -storepass "$PASS" -alias "$candidate" >/dev/null 2>&1; then
+              ALIAS="$candidate"
+              break
+            fi
+          done
+          test -n "$ALIAS" || { echo "MATCHED_CERT_BUT_ALIAS_NOT_RESOLVED"; exit 44; }
+
+          KEYPASS=""
+          for candidate in "${KP_PUMP:-}" "${KP_ANDROID:-}" "${KP_GENERIC:-}" "$PASS"; do
+            [ -z "$candidate" ] && continue
+            if "$ANDROID_HOME/build-tools/34.0.0/apksigner" sign \
+                --ks "$KEYFILE" --ks-pass "pass:$PASS" --ks-key-alias "$ALIAS" --key-pass "pass:$candidate" \
+                --v1-signing-enabled false --v2-signing-enabled true --v3-signing-enabled true \
+                --out "$RUNNER_TEMP/test-signed.apk" app/build/outputs/apk/debug/app-debug.apk >/dev/null 2>&1; then
+              KEYPASS="$candidate"
+              break
+            fi
+          done
+          test -n "$KEYPASS" || { echo "MATCHED_KEYSTORE_BUT_NO_SIGNING_PASSWORD"; exit 45; }
+
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" sign \
+            --ks "$KEYFILE" --ks-pass "pass:$PASS" --ks-key-alias "$ALIAS" --key-pass "pass:$KEYPASS" \
+            --v1-signing-enabled false --v2-signing-enabled true --v3-signing-enabled true \
+            --out PumpSignal-V6.7-Compatible-FINAL.apk app/build/outputs/apk/debug/app-debug.apk
+
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose --print-certs \
+            PumpSignal-V6.7-Compatible-FINAL.apk | tee "$RUNNER_TEMP/final-signature.txt"
+          grep -F "Verified using v2 scheme (APK Signature Scheme v2): true" "$RUNNER_TEMP/final-signature.txt"
+          grep -F "Verified using v3 scheme (APK Signature Scheme v3): true" "$RUNNER_TEMP/final-signature.txt"
+          ACTUAL=$(grep -F "Signer #1 certificate SHA-256 digest:" "$RUNNER_TEMP/final-signature.txt" | awk '{print $NF}' | tr 'A-F' 'a-f')
+          test "$ACTUAL" = "$EXPECTED"
+          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging PumpSignal-V6.7-Compatible-FINAL.apk | tee "$RUNNER_TEMP/final-badging.txt"
+          grep -F "package: name='com.example.pumppaperbot.v8' versionCode='126' versionName='6.7'" "$RUNNER_TEMP/final-badging.txt"
+          grep -F "launchable-activity: name='com.example.pumppaperbot.MainActivity'" "$RUNNER_TEMP/final-badging.txt"
+          unzip -t PumpSignal-V6.7-Compatible-FINAL.apk
+          sha256sum PumpSignal-V6.7-Compatible-FINAL.apk | tee "$RUNNER_TEMP/final-sha256.txt"
+
+      - name: Upload compatible V6.7 APK
         uses: actions/upload-artifact@v4
         with:
-          name: PumpSignal-V6.7-Restored-X-Network-Intermediate-APK
-          path: PumpSignal-V6.7-Restored-X-Network-Intermediate.apk
+          name: PumpSignal-V6.7-Compatible-FINAL
+          path: PumpSignal-V6.7-Compatible-FINAL.apk
           retention-days: 7
