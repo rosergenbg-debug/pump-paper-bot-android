@@ -64,7 +64,7 @@ class CompetitionActivity : AppCompatActivity() {
             setPadding(dp(8), dp(6), dp(8), dp(6))
             textSize = 11f
         }
-        root.addView(archiveStatus, LinearLayout.LayoutParams(-1, dp(64)).apply { topMargin = dp(3) })
+        root.addView(archiveStatus, LinearLayout.LayoutParams(-1, dp(70)).apply { topMargin = dp(3) })
         val chartColumn = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         repeat(CompetitionAccountSpec.COUNT) { index ->
             val chart = CompetitionChartView(this).apply {
@@ -105,7 +105,7 @@ class CompetitionActivity : AppCompatActivity() {
     }
 
     private fun render() {
-        archiveStatus.text = "V6.6 • новые счета стартуют с €1000 и нулевой историей. Старые V6.5 данные не удаляются физически, но больше не участвуют в этой сети.\n" +
+        archiveStatus.text = "V6.6.1 • 3 AUTO + HUMAN стартуют с €1000. СЕРЖ и APP восстановлены из прежних хранилищ и НЕ обнуляются.\n" +
             "CORE / BTC GUARD / SOL-BTC SELECT: TP +2,5% • STOP -1,2% • TIME 120m • max2/day"
         val now = System.currentTimeMillis()
         val snapshot = PumpBotEngine.snapshot(this)
@@ -122,7 +122,7 @@ class CompetitionActivity : AppCompatActivity() {
         val core = V660CoreStore.state(this)
         setChart(0, CompetitionDataset(
             "AUTO CORE • X BASE",
-            summary(core.value(mark), (core.value(mark) / 1000.0 - 1.0) * 100.0, core.inPosition, core.readiness, core.reason),
+            summaryNew(core.value(mark), (core.value(mark) / 1000.0 - 1.0) * 100.0, core.inPosition, core.readiness, core.reason),
             candles,
             core.trades.map { CompetitionMarker(it.time, it.action, it.price, it.pnlEur) },
             T32CostPolicyV660.FEE_RATE
@@ -131,7 +131,7 @@ class CompetitionActivity : AppCompatActivity() {
         val btc = V660BtcGuardStore.state(this)
         setChart(1, CompetitionDataset(
             "AUTO BTC GUARD • БЛОК STRONG-UP",
-            summary(btc.value(mark), (btc.value(mark) / 1000.0 - 1.0) * 100.0, btc.inPosition, btc.readiness, btc.reason),
+            summaryNew(btc.value(mark), (btc.value(mark) / 1000.0 - 1.0) * 100.0, btc.inPosition, btc.readiness, btc.reason),
             candles,
             btc.trades.map { CompetitionMarker(it.time, it.action, it.price, it.pnlEur) },
             T32CostPolicyV660.FEE_RATE
@@ -140,7 +140,7 @@ class CompetitionActivity : AppCompatActivity() {
         val sol = V660SolSelectStore.state(this)
         setChart(2, CompetitionDataset(
             "AUTO SOL/BTC SELECT • REL6 ≥ +0,40 п.п.",
-            summary(sol.value(mark), (sol.value(mark) / 1000.0 - 1.0) * 100.0, sol.inPosition, sol.readiness, sol.reason),
+            summaryNew(sol.value(mark), (sol.value(mark) / 1000.0 - 1.0) * 100.0, sol.inPosition, sol.readiness, sol.reason),
             candles,
             sol.trades.map { CompetitionMarker(it.time, it.action, it.price, it.pnlEur) },
             T32CostPolicyV660.FEE_RATE
@@ -149,10 +149,29 @@ class CompetitionActivity : AppCompatActivity() {
         val human = HumanFactorStore.state(this)
         setChart(3, CompetitionDataset(
             "HUMAN SELECT • РУЧНОЙ ВХОД / AUTO EXIT",
-            summary(human.value(mark), (human.value(mark) / 1000.0 - 1.0) * 100.0, human.inPosition, human.readiness, human.reason),
+            summaryNew(human.value(mark), (human.value(mark) / 1000.0 - 1.0) * 100.0, human.inPosition, human.readiness, human.reason),
             candles,
             human.trades.map { CompetitionMarker(it.time, it.action, it.price, it.pnlEur) },
             T32CostPolicyV660.FEE_RATE
+        ))
+
+        val user = UserPaperStore.markToMarket(this, displayPrice)
+        setChart(4, CompetitionDataset(
+            "СЕРЖ • СОХРАНЁННЫЙ ЛИЧНЫЙ СЧЁТ",
+            summaryLegacy(user.value(displayPrice), user.profitPercent(displayPrice), user.inPosition),
+            candles,
+            user.trades.map { CompetitionMarker(it.time, it.action, it.price) },
+            0.0015
+        ))
+
+        val app = AppPaperStore.state(this)
+        setChart(5, CompetitionDataset(
+            "APP • СОХРАНЁННЫЙ АВТОСЧЁТ",
+            summaryLegacy(app.value(displayPrice), app.profitPercent(displayPrice), app.inPosition) +
+                String.format(Locale.GERMANY, " • закрыто %d • WR %.1f%%", app.closedTrades, app.winRatePercent),
+            candles,
+            app.trades.map { CompetitionMarker(it.candleTime, it.action, it.price, it.pnlEur) },
+            AppPaperTrader.FEE_RATE
         ))
     }
 
@@ -197,20 +216,27 @@ class CompetitionActivity : AppCompatActivity() {
     }
 
     private fun detailTradeText(dataset: CompetitionDataset): String {
-        if (dataset.markers.isEmpty()) return "Сделок пока нет — счёт стартовал с нуля."
+        if (dataset.markers.isEmpty()) return "Сделок пока нет."
         return dataset.markers.takeLast(120).asReversed().joinToString("\n\n") { marker ->
             buildString {
                 append(PumpBotEngine.formatDate(marker.time))
                 append("  •  ")
-                append(if (marker.action.startsWith("BUY")) "ВХОД" else "ВЫХОД")
+                append(when {
+                    marker.action.startsWith("BUY") -> "ВХОД"
+                    marker.action == "SELL_HALF" -> "½ ВЫХОД"
+                    else -> "ВЫХОД"
+                })
                 append(String.format(Locale.US, "  •  €%.8f", marker.price))
                 if (kotlin.math.abs(marker.pnlEur) >= 0.005) append(String.format(Locale.GERMANY, "  •  %+.2f €", marker.pnlEur))
             }
         }
     }
 
-    private fun summary(value: Double, percent: Double, inPosition: Boolean, readiness: Int, reason: String): String =
+    private fun summaryNew(value: Double, percent: Double, inPosition: Boolean, readiness: Int, reason: String): String =
         String.format(Locale.GERMANY, "€%.2f • %+.2f%% • %s • готовность %d/100\n%s", value, percent, if (inPosition) "В PUMP" else "В ЕВРО", readiness, reason.take(180))
+
+    private fun summaryLegacy(value: Double, percent: Double, inPosition: Boolean): String =
+        String.format(Locale.GERMANY, "€%.2f • %+.2f%% • %s", value, percent, if (inPosition) "В PUMP" else "В ЕВРО")
 
     private fun loadSixMonths() {
         executor.execute {
