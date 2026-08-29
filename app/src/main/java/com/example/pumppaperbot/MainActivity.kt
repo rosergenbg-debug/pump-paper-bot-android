@@ -492,7 +492,8 @@ class MainActivity : AppCompatActivity() {
             ?: GeminiPaperPortfolio()
         val sergeAccount = UserPaperStore.markToMarket(this, accountPrice)
         val human = HumanFactorStore.state(this)
-        val auto3265 = Vwap3265AutoStore.state(this)
+        val xEconomy = V670EconomyStore.state(this)
+        val x52Select = V670X52SelectStore.state(this)
         val fusionMarket = BitpandaFusionStore.state(this)
         val fusionAccount = FusionSimStore.state(this)
         val fusionPriority = FusionPriorityPolicy.plan(fusionAccount)
@@ -534,7 +535,7 @@ class MainActivity : AppCompatActivity() {
             fusionAccount.value(fusionMark),
             fusionAccount.profit(fusionMark) / FusionSimPortfolio.START_BALANCE * 100.0
         )
-        btnPumpMachine2?.text = "СЕТЬ • 4 СЧЁТА\nT32 • ЧЕЛОВЕК • СЕРЖ • APP"
+        btnPumpMachine2?.text = "СЕТЬ V6.7 • 5 СЧЕТОВ\n2 X AUTO • HUMAN • СЕРЖ • APP"
         tvStatus?.text = if (snapshot.running) {
             "V${BuildConfig.VERSION_NAME} PAPER‑ТЕСТ • монитор включён" +
                 (if (fusionPriority.active) " • FUSION: локальная защита" else "") +
@@ -546,7 +547,8 @@ class MainActivity : AppCompatActivity() {
             append("ЧЕЛОВЕЧЕСКИЙ ФАКТОР • VWAP 32,65\n")
             append(if(human.inPosition) String.format(Locale.GERMANY,"ПОЗИЦИЯ • €%.2f",human.value(accountPrice)) else "ГОТОВНОСТЬ ${human.readiness}/100")
             append("\n${human.reason}")
-            append(String.format(Locale.GERMANY,"\nAUTO 32,65: €%.2f • %s",auto3265.value(accountPrice),if(auto3265.inPosition)"В PUMP" else "В EUR"))
+            append(String.format(Locale.GERMANY,"\nX ECONOMY: €%.2f • %s",xEconomy.value(accountPrice),if(xEconomy.inPosition)"В PUMP" else "В EUR"))
+            append(String.format(Locale.GERMANY,"\nX52 SELECT: €%.2f • %s",x52Select.value(accountPrice),if(x52Select.inPosition)"В PUMP" else "В EUR"))
         }
         humanFactorActions?.visibility = if(human.pending&&!human.inPosition) View.VISIBLE else View.GONE
         val deepSeekPrimary = DeepSeekPrimaryStore.state(this)
@@ -574,7 +576,7 @@ class MainActivity : AppCompatActivity() {
         renderDeepSeekActionLevel(snapshot, deepSeekPrimary, now)
         renderLatestSignal()
         tvMode?.text = if (ResearchModePolicy.ENABLED) {
-            "V6.4 PAPER‑СЕТЬ • T32 | ЧЕЛОВЕК | СЕРЖ | APP"
+            "V6.7 PAPER‑СЕТЬ • X ECONOMY | X52 SELECT | HUMAN | СЕРЖ | APP"
         } else if (snapshot.rapidDrop.active) {
             String.format(Locale.GERMANY, "АВАРИЙНОЕ ПАДЕНИЕ −%.1f%% — ПРОВЕРЬТЕ РЫНОК", snapshot.rapidDrop.dropPercent)
         } else if (snapshot.lateEntryBlocked && snapshot.waitMode == "BUY") {

@@ -96,6 +96,16 @@ object ChartSpeedStore {
         return StrategyV2.synthesizeEur(pump, eur)
     }
 
+    /**
+     * Raw Binance PUMP/USDT candles used by the protected X/T32 replay lineage.
+     * Trading execution remains PUMP/EUR on Bitpanda; keeping the signal market raw avoids
+     * silently changing the historical evaluator through EUR conversion.
+     */
+    fun pumpUsdtCandles(context: Context, interval: ChartInterval): List<PumpCandle> {
+        val raw = prefs(context).getString(KEY_PUMP_PREFIX + interval.code, "").orEmpty()
+        return parseChartCandles(raw)
+    }
+
     fun chartBundle(
         context: Context,
         snapshot: LiveSnapshot,
@@ -180,7 +190,8 @@ object ChartSpeedStore {
                     closeTime = closeTime,
                     quoteVolume = row.optString(7).toDoubleOrNull() ?: 0.0,
                     tradeCount = row.optInt(8, 0),
-                    takerBuyVolume = row.optString(9).toDoubleOrNull() ?: 0.0
+                    takerBuyVolume = row.optString(9).toDoubleOrNull() ?: 0.0,
+                    takerBuyQuoteVolume = row.optString(10).toDoubleOrNull() ?: 0.0
                 )
             }.distinctBy { it.openTime }.sortedBy { it.openTime }
         }.getOrDefault(emptyList())

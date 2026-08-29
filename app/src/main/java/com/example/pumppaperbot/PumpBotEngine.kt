@@ -19,7 +19,8 @@ data class PumpCandle(
     val closeTime: Long,
     val quoteVolume: Double = 0.0,
     val tradeCount: Int = 0,
-    val takerBuyVolume: Double = 0.0
+    val takerBuyVolume: Double = 0.0,
+    val takerBuyQuoteVolume: Double = 0.0
 )
 
 data class TradeEvent(
@@ -986,7 +987,8 @@ object PumpBotEngine {
                         closeTime = closeTime,
                         quoteVolume = row.optString(7, "0").toDoubleOrNull() ?: 0.0,
                         tradeCount = row.optInt(8, 0),
-                        takerBuyVolume = row.optString(9, "0").toDoubleOrNull() ?: 0.0
+                        takerBuyVolume = row.optString(9, "0").toDoubleOrNull() ?: 0.0,
+                        takerBuyQuoteVolume = row.optString(10, "0").toDoubleOrNull() ?: 0.0
                     )
                 )
             }

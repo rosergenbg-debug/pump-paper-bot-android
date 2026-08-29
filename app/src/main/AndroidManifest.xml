@@ -25,29 +25,67 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/share_paths" />
         </provider>
+        <activity
+            android:name=".BitpandaFusionActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
         <service
             android:name=".PumpSignalService"
             android:exported="false"
             android:stopWithTask="false"
             android:foregroundServiceType="dataSync" />
-
-        <activity android:name=".BitpandaFusionActivity" android:exported="false" android:screenOrientation="portrait" />
-        <activity android:name=".BacktestResultActivity" android:exported="false" />
-        <activity android:name=".BacktestActivity" android:exported="false" />
-        <activity android:name=".BigOverviewActivity" android:exported="false" android:screenOrientation="portrait" />
-        <activity android:name=".ChartDetailActivity" android:exported="false" android:screenOrientation="portrait" />
-        <activity android:name=".AlertSettingsActivity" android:exported="false" />
-        <activity android:name=".EventRadarActivity" android:exported="false" android:screenOrientation="portrait" />
-        <activity android:name=".ApiCenterActivity" android:exported="false" android:screenOrientation="portrait" />
-        <activity android:name=".GeminiExperimentActivity" android:exported="false" android:screenOrientation="portrait" />
-        <activity android:name=".GeminiExitExperimentActivity" android:exported="false" android:screenOrientation="portrait" />
-        <activity android:name=".AppPaperActivity" android:exported="false" android:screenOrientation="portrait" />
-        <activity android:name=".CompetitionActivity" android:exported="false" android:screenOrientation="portrait" />
-        <activity android:name=".PumpMachineActivity" android:exported="false" android:screenOrientation="portrait" />
-        <activity android:name=".CriticalOverviewActivity" android:exported="false" android:screenOrientation="portrait" />
-        <activity android:name=".MainActivity" android:exported="false" android:screenOrientation="portrait" />
         <activity
-            android:name=".V660DashboardActivity"
+            android:name=".BacktestResultActivity"
+            android:exported="false" />
+        <activity
+            android:name=".BacktestActivity"
+            android:exported="false" />
+        <activity
+            android:name=".BigOverviewActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+        <activity
+            android:name=".ChartDetailActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+        <activity
+            android:name=".AlertSettingsActivity"
+            android:exported="false" />
+        <activity
+            android:name=".EventRadarActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+        <activity
+            android:name=".ApiCenterActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+        <activity
+            android:name=".GeminiExperimentActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+        <activity
+            android:name=".GeminiExitExperimentActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+        <activity
+            android:name=".AppPaperActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+        <activity
+            android:name=".CompetitionActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+        <activity
+            android:name=".PumpMachineActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+        <activity
+            android:name=".CriticalOverviewActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+        <!-- V6.7 deliberately restores the complete V6.5 owner surface as the launcher. -->
+        <activity
+            android:name=".MainActivity"
             android:exported="true"
             android:screenOrientation="portrait">
             <intent-filter>

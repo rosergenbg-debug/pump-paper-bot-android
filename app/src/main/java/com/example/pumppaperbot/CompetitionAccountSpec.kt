@@ -1,15 +1,14 @@
 package com.example.pumppaperbot
 
-/** V6.6.1 owner-facing network: three new autos + HUMAN, while SERGE and APP remain permanent. */
+/** V6.7: two X-derived autonomous accounts, preserved HUMAN, SERGE and APP. */
 internal object CompetitionAccountSpec {
-    const val COUNT = 6
-    const val SCREEN_TITLE = "←  V6.6.1 • 3 AUTO + HUMAN + СЕРЖ + APP"
+    const val COUNT = 5
+    const val SCREEN_TITLE = "←  V6.7 • 2 X AUTO + HUMAN + СЕРЖ + APP"
 
     val ORDER = listOf(
-        "AUTO CORE",
-        "AUTO BTC GUARD",
-        "AUTO SOL/BTC SELECT",
-        "HUMAN SELECT",
+        "AUTO X ECONOMY",
+        "AUTO X52 SELECT",
+        "HUMAN +2,0% NET",
         "СЕРЖ",
         "APP"
     )

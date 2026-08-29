@@ -135,7 +135,7 @@
                 android:layout_height="wrap_content"
                 android:gravity="center"
                 android:minHeight="82dp"
-                android:text="ЧЕЛОВЕЧЕСКИЙ ФАКТОР • VWAP 32,65\nожидает условия"
+                android:text="ЧЕЛОВЕЧЕСКИЙ ФАКТОР • РУЧНОЙ ВХОД\nожидает условия"
                 android:textColor="#7EE787"
                 android:textSize="17sp"
                 android:textStyle="bold" />
@@ -301,7 +301,7 @@
             android:layout_height="50dp"
             android:layout_marginTop="7dp"
             android:backgroundTint="#1F6FEB"
-            android:text="СЕТЬ • T32 | ЧЕЛОВЕК | СЕРЖ | APP"
+            android:text="СЕТЬ V6.7 • 2 X AUTO | HUMAN | СЕРЖ | APP"
             android:textColor="#FFFFFF"
             android:textSize="13sp"
             android:textStyle="bold" />
