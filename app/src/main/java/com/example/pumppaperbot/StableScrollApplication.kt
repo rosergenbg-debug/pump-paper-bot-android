@@ -48,6 +48,7 @@ class StableScrollApplication : Application() {
         stopMainChartPresentation(activity)
         val chart = activity.findViewById<StrategyChartView>(R.id.chart) ?: return
         chart.setMainViewportMode(true)
+        MainChartRangeGuideOverlay.install(chart)
         val updater = object : Runnable {
             override fun run() {
                 if (activity.isFinishing || activity.isDestroyed || !chart.isAttachedToWindow) return

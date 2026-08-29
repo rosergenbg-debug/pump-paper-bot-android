@@ -3,6 +3,7 @@ package com.example.pumppaperbot
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.DashPathEffect
 import android.graphics.Paint
 import android.graphics.Path
 import android.util.AttributeSet
@@ -32,6 +33,18 @@ class CompetitionChartView @JvmOverloads constructor(
         color = Color.parseColor("#79C0FF")
         style = Paint.Style.STROKE
         strokeWidth = dp(2f)
+    }
+    private val rangeGuide = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#FFD84D")
+        style = Paint.Style.STROKE
+        strokeWidth = dp(1.15f)
+        pathEffect = DashPathEffect(floatArrayOf(dp(5f), dp(3f)), 0f)
+    }
+    private val rangeGuideText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#FFD84D")
+        textSize = sp(8.5f)
+        textAlign = Paint.Align.RIGHT
+        isFakeBoldText = true
     }
     private val buy = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#32C789") }
     private val sell = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#FF4D6D") }
@@ -177,8 +190,13 @@ class CompetitionChartView @JvmOverloads constructor(
         val bottom = height - dp(12f)
         step = (right - left) / max(1, visible.size - 1)
 
+        val rangeLevels = RangeGuidePolicy.levels(visible.last().close)
         var low = visible.minOf { it.low }
         var high = visible.maxOf { it.high }
+        if (rangeLevels != null) {
+            low = min(low, rangeLevels.lower)
+            high = max(high, rangeLevels.upper)
+        }
         val padding = max((high - low) * 0.08, high * 0.001)
         low -= padding
         high += padding
@@ -187,8 +205,16 @@ class CompetitionChartView @JvmOverloads constructor(
         fun y(price: Double) = bottom - ((price - low) / range).toFloat() * (bottom - top)
 
         repeat(3) { index ->
-            val y = top + (bottom - top) * index / 2f
-            canvas.drawLine(left, y, right, y, grid)
+            val gy = top + (bottom - top) * index / 2f
+            canvas.drawLine(left, gy, right, gy, grid)
+        }
+        rangeLevels?.let { levels ->
+            val upperY = y(levels.upper)
+            val lowerY = y(levels.lower)
+            canvas.drawLine(left, upperY, right, upperY, rangeGuide)
+            canvas.drawLine(left, lowerY, right, lowerY, rangeGuide)
+            canvas.drawText("+1,5%", right - dp(3f), (upperY - dp(3f)).coerceAtLeast(top + rangeGuideText.textSize), rangeGuideText)
+            canvas.drawText("−1,5%", right - dp(3f), (lowerY - dp(3f)).coerceAtLeast(top + rangeGuideText.textSize), rangeGuideText)
         }
         val path = Path()
         visible.forEachIndexed { index, candle ->
