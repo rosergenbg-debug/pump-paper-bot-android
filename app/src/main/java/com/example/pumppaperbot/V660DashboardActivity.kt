@@ -21,7 +21,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import java.util.Locale
 
-/** Clean V6.6 owner surface. Legacy strategy engines remain dormant and are not launched. */
+/** V6.6.1 owner surface: three new autos + HUMAN while SERGE and APP remain permanent. */
 class V660DashboardActivity : AppCompatActivity() {
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var monitorButton: Button
@@ -32,6 +32,8 @@ class V660DashboardActivity : AppCompatActivity() {
     private lateinit var btcText: TextView
     private lateinit var solText: TextView
     private lateinit var humanText: TextView
+    private lateinit var sergeText: TextView
+    private lateinit var appText: TextView
     private lateinit var approveButton: Button
     private lateinit var rejectButton: Button
     private lateinit var alertButton: Button
@@ -48,7 +50,7 @@ class V660DashboardActivity : AppCompatActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 660)
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 661)
         }
 
         val root = LinearLayout(this).apply {
@@ -56,9 +58,12 @@ class V660DashboardActivity : AppCompatActivity() {
             setPadding(dp(14), dp(12), dp(14), dp(18))
             setBackgroundColor(Color.parseColor("#0D1117"))
         }
-        root.addView(label("PUMP V6.6", 28, "#F0F6FC", true))
-        root.addView(label("3 AUTO + HUMAN • X-алгоритм • PAPER ONLY", 15, "#7EE787", true))
-        root.addView(label("Все четыре счёта V6.6 стартуют с €1000 и нулевой историей. Старые V6.5 торговые движки больше не запускаются фоновым сервисом.", 13, "#8B949E", false))
+        root.addView(label("PUMP V6.6.1", 28, "#F0F6FC", true))
+        root.addView(label("3 AUTO + HUMAN + СЕРЖ + APP • PAPER ONLY", 15, "#7EE787", true))
+        root.addView(label(
+            "Новые 3 AUTO + HUMAN стартуют с €1000 и нулевой историей. СЕРЖ и APP НЕ сбрасываются: показываются их прежние сохранённые баланс, позиция и P/L.",
+            13, "#8B949E", false
+        ))
 
         monitorButton = button("", "#238636").apply {
             setOnClickListener {
@@ -86,7 +91,10 @@ class V660DashboardActivity : AppCompatActivity() {
         root.addView(readinessText)
         contextText = label("", 14, "#C9D1D9", false)
         root.addView(contextText)
-        root.addView(label("Шкала — не отдельный BUY. Она постепенно показывает приближение рынка к точному T32/X setup; автовход всё равно требует закрытую свечу и жёсткие условия.", 12, "#8B949E", false))
+        root.addView(label(
+            "Шкала — не отдельный BUY. Она постепенно показывает приближение рынка к точному T32/X setup; автовход всё равно требует закрытую свечу и жёсткие условия.",
+            12, "#8B949E", false
+        ))
 
         coreText = card(root, "AUTO CORE")
         btcText = card(root, "AUTO BTC GUARD")
@@ -104,6 +112,13 @@ class V660DashboardActivity : AppCompatActivity() {
         humanButtons.addView(rejectButton, LinearLayout.LayoutParams(0, dp(58), 1f).apply { leftMargin = dp(8) })
         root.addView(humanButtons, LinearLayout.LayoutParams(-1, dp(58)).apply { topMargin = dp(8) })
 
+        root.addView(label("ПОСТОЯННЫЕ СЧЕТА — НЕ ОБНУЛЯЮТСЯ", 16, "#F0B72F", true))
+        sergeText = card(root, "СЕРЖ")
+        appText = card(root, "APP").apply {
+            setOnClickListener { startActivity(Intent(this@V660DashboardActivity, AppPaperActivity::class.java)) }
+        }
+        root.addView(label("APP можно нажать для подробной истории. СЕРЖ показывает ваш прежний личный счёт и текущий P/L.", 12, "#8B949E", false))
+
         alertButton = button("ЗВОНКИ И РАСПИСАНИЕ", "#1F6FEB").apply {
             setOnClickListener { startActivity(Intent(this@V660DashboardActivity, AlertSettingsActivity::class.java)) }
         }
@@ -118,18 +133,19 @@ class V660DashboardActivity : AppCompatActivity() {
                 ).show()
             }
         }, LinearLayout.LayoutParams(-1, dp(54)).apply { topMargin = dp(8) })
-        root.addView(button("4 ГРАФИКА • СРАВНИТЬ СЧЕТА", "#8250DF").apply {
+        root.addView(button("6 ГРАФИКОВ • СРАВНИТЬ СЧЕТА", "#8250DF").apply {
             setOnClickListener { startActivity(Intent(this@V660DashboardActivity, CompetitionActivity::class.java)) }
         }, LinearLayout.LayoutParams(-1, dp(56)).apply { topMargin = dp(8) })
-        root.addView(label("AUTO: TP +2,5% NET • STOP −1,2% NET • TIME 120m • max 2 входа/UTC сутки. HUMAN: вход только после вашей кнопки, выход автоматический по тем же правилам.", 13, "#F0B72F", true))
+        root.addView(label(
+            "AUTO: TP +2,5% NET • STOP −1,2% NET • TIME 120m • max 2 входа/UTC сутки. HUMAN: вход только после вашей кнопки. СЕРЖ и APP сохраняют прежнюю историю.",
+            13, "#F0B72F", true
+        ))
 
         setContentView(ScrollView(this).apply { addView(root) })
     }
 
     override fun onResume() {
         super.onResume()
-        // Package update can kill a foreground service while preserving the user's running flag.
-        // Re-entering the launcher restores monitoring without requiring a manual OFF/ON toggle.
         if (PumpBotEngine.isRunning(this)) startMonitorService()
         handler.removeCallbacks(refresh)
         handler.post(refresh)
@@ -148,7 +164,7 @@ class V660DashboardActivity : AppCompatActivity() {
 
     private fun render() {
         val running = PumpBotEngine.isRunning(this)
-        monitorButton.text = if (running) "МОНИТОР V6.6: ВКЛЮЧЕН • НАЖАТЬ STOP" else "МОНИТОР V6.6: ВЫКЛЮЧЕН • НАЖАТЬ START"
+        monitorButton.text = if (running) "МОНИТОР V6.6.1: ВКЛЮЧЕН • НАЖАТЬ STOP" else "МОНИТОР V6.6.1: ВЫКЛЮЧЕН • НАЖАТЬ START"
         monitorButton.backgroundTintList = ColorStateList.valueOf(Color.parseColor(if (running) "#238636" else "#8E1519"))
 
         val setup = runCatching { T32V660Policy.evaluate(this) }.getOrNull()
@@ -164,24 +180,42 @@ class V660DashboardActivity : AppCompatActivity() {
         contextText.text = setup?.reason ?: "Нет готовых минутных данных"
 
         val now = System.currentTimeMillis()
+        val snapshot = PumpBotEngine.snapshot(this)
+        val displayPrice = PaperExecutionPolicy.displayPrice(snapshot, now)
         val venue = BitpandaFusionStore.state(this)
-        val fallback = PaperExecutionPolicy.displayPrice(PumpBotEngine.snapshot(this), now)
-        val price = venue.bid.takeIf { venue.fresh(now) } ?: fallback
-        renderAuto(coreText, V660CoreStore.state(this), price)
-        renderAuto(btcText, V660BtcGuardStore.state(this), price)
-        renderAuto(solText, V660SolSelectStore.state(this), price)
+        val t32Price = venue.bid.takeIf { venue.fresh(now) } ?: displayPrice
+        renderAuto(coreText, V660CoreStore.state(this), t32Price)
+        renderAuto(btcText, V660BtcGuardStore.state(this), t32Price)
+        renderAuto(solText, V660SolSelectStore.state(this), t32Price)
 
         val human = HumanFactorStore.state(this)
         humanText.text = String.format(
             Locale.GERMANY,
             "HUMAN SELECT\n€%.2f • %+.2f%% • %s • готовность %d/100\n%s",
-            human.value(price), (human.value(price) / 1000.0 - 1.0) * 100.0,
+            human.value(t32Price), (human.value(t32Price) / 1000.0 - 1.0) * 100.0,
             if (human.inPosition) "В PUMP" else "В ЕВРО", human.readiness, human.reason.take(240)
         )
         approveButton.isEnabled = human.pending && !human.inPosition
         approveButton.alpha = if (approveButton.isEnabled) 1f else 0.42f
         rejectButton.isEnabled = human.pending
         rejectButton.alpha = if (rejectButton.isEnabled) 1f else 0.42f
+
+        val serge = UserPaperStore.markToMarket(this, displayPrice)
+        sergeText.text = String.format(
+            Locale.GERMANY,
+            "СЕРЖ • СОХРАНЁН\n€%.2f • %+.2f%% • %s\nИстория: %d событий",
+            serge.value(displayPrice), serge.profitPercent(displayPrice),
+            if (serge.inPosition) "В PUMP" else "В ЕВРО", serge.trades.size
+        )
+
+        val app = AppPaperStore.state(this)
+        appText.text = String.format(
+            Locale.GERMANY,
+            "APP • СОХРАНЁН И РАБОТАЕТ\n€%.2f • %+.2f%% • %s\nЗакрыто: %d • WR %.1f%% • сделок %d",
+            app.value(displayPrice), app.profitPercent(displayPrice),
+            if (app.inPosition) "В PUMP" else "В ЕВРО",
+            app.closedTrades, app.winRatePercent, app.trades.size
+        )
 
         val enabled = ResearchModePolicy.alertsEnabled(this)
         alertButton.text = if (enabled) "ЗВОНКИ: ВКЛ • ${AlertSchedule.statusText(this)}" else "ЗВОНКИ: ВЫКЛ • НАЖАТЬ НАСТРОИТЬ"

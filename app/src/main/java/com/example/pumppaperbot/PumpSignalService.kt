@@ -11,8 +11,9 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * V6.6 focused foreground monitor.
- * Legacy automatic paper engines are deliberately dormant. Only three V6.6 autos + HUMAN run.
+ * V6.6.1 focused foreground monitor.
+ * Three new V6.6 autos + HUMAN run alongside the permanent preserved APP paper account.
+ * Other legacy automatic research engines remain dormant. SERGE is the owner's manual account.
  */
 class PumpSignalService : Service() {
     private val handler = Handler(Looper.getMainLooper())
@@ -38,7 +39,10 @@ class PumpSignalService : Service() {
         PumpAlert.ensureChannels(this)
         startForeground(
             PumpAlert.monitorId(),
-            PumpAlert.monitorNotification(this, "V${BuildConfig.VERSION_NAME}: X CORE + BTC GUARD + SOL/BTC SELECT + HUMAN. Paper-only.")
+            PumpAlert.monitorNotification(
+                this,
+                "V${BuildConfig.VERSION_NAME}: 3 X AUTO + HUMAN + preserved SERGE/APP. Paper-only."
+            )
         )
     }
 
@@ -87,7 +91,13 @@ class PumpSignalService : Service() {
                 runCatching { HumanFactorStore.sync(this, now) }
                     .onFailure { logError("V660_HUMAN", it) }
 
-                // Absolute sound gate for all surviving legacy safety-alert routes.
+                // APP is a permanent owner-facing paper account. Keep its original prefs/history
+                // and original StrategyV2 engine alive. This does NOT reactivate other V6.5 engines.
+                // Its alert delivery already honours the global master switch and schedule.
+                runCatching { AppPaperStore.syncWithAlerts(this) }
+                    .onFailure { logError("APP_PAPER", it) }
+
+                // Absolute sound gate for surviving personal safety-alert routes.
                 // HUMAN has the same master/schedule checks internally, including while a position is open.
                 val canRingNow = ResearchModePolicy.alertsEnabled(this) && AlertSchedule.isAllowedNow(this)
                 if (canRingNow) {
@@ -117,9 +127,9 @@ class PumpSignalService : Service() {
                     }
                 }
 
-                runCatching { UnifiedResearchLog.captureCycle(this, "V660_FOCUSED_30S", now) }
+                runCatching { UnifiedResearchLog.captureCycle(this, "V661_FOCUSED_30S", now) }
             } catch (error: Throwable) {
-                logError("V660_CYCLE", error)
+                logError("V661_CYCLE", error)
             } finally {
                 queuedOrRunning.set(false)
             }
