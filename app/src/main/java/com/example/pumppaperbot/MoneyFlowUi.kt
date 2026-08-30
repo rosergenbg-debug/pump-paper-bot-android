@@ -32,11 +32,14 @@ data class MoneyFlowPanelData(
     val oneMinute: MoneyFlowWindowUi,
     val fiveMinutes: MoneyFlowWindowUi,
     val fifteenMinutes: MoneyFlowWindowUi,
+    val thirtyMinutes: MoneyFlowWindowUi,
+    val sixtyMinutes: MoneyFlowWindowUi,
     val activityRatio: Double?,
     val flowScore15m: Int?,
     val state: String
 ) {
-    val windows: List<MoneyFlowWindowUi> get() = listOf(oneMinute, fiveMinutes, fifteenMinutes)
+    val windows: List<MoneyFlowWindowUi>
+        get() = listOf(oneMinute, fiveMinutes, fifteenMinutes, thirtyMinutes, sixtyMinutes)
 }
 
 object MoneyFlowPresentation {
@@ -49,7 +52,7 @@ object MoneyFlowPresentation {
         val fresh = micro.connected && micro.updatedAt > 0L && age <= 90_000L
         val history = micro.flowHistorySeconds
         val one = MoneyFlowWindowUi(
-            label = "1 МИН",
+            label = "СЕЙЧАС",
             minutes = 1,
             buyUsdt = micro.buyNotional60s.coerceAtLeast(0.0),
             sellUsdt = micro.sellNotional60s.coerceAtLeast(0.0),
@@ -69,6 +72,20 @@ object MoneyFlowPresentation {
             sellUsdt = micro.sellNotional15m.coerceAtLeast(0.0),
             ready = fresh && history >= 12L * 60L
         )
+        val thirty = MoneyFlowWindowUi(
+            label = "30 МИН",
+            minutes = 30,
+            buyUsdt = micro.buyNotional30m.coerceAtLeast(0.0),
+            sellUsdt = micro.sellNotional30m.coerceAtLeast(0.0),
+            ready = fresh && history >= 27L * 60L
+        )
+        val sixty = MoneyFlowWindowUi(
+            label = "1 ЧАС",
+            minutes = 60,
+            buyUsdt = micro.buyNotional60m.coerceAtLeast(0.0),
+            sellUsdt = micro.sellNotional60m.coerceAtLeast(0.0),
+            ready = fresh && history >= 57L * 60L
+        )
         val activityRatio = if (five.ready && fifteen.ready && fifteen.totalUsdt > 0.0) {
             val recentPerMinute = five.totalUsdt / 5.0
             val backgroundPerMinute = fifteen.totalUsdt / 15.0
@@ -86,7 +103,9 @@ object MoneyFlowPresentation {
             five.netUsdt < 0.0 -> "ДЕНЬГИ УМЕРЕННО ДАВЯТ В ПРОДАЖУ"
             else -> "ПОТОК СБАЛАНСИРОВАН"
         }
-        return MoneyFlowPanelData(fresh, one, five, fifteen, activityRatio, flowScore15m, state)
+        return MoneyFlowPanelData(
+            fresh, one, five, fifteen, thirty, sixty, activityRatio, flowScore15m, state
+        )
     }
 
     fun compactUsd(value: Double, signed: Boolean = false): String {
@@ -141,6 +160,9 @@ class MoneyFlowStripView(context: Context) : View(context) {
     private val value = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE; textSize = sp(10f); textAlign = Paint.Align.RIGHT; isFakeBoldText = true
     }
+    private val note = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#8B949E"); textSize = sp(8f)
+    }
     private val rect = RectF()
     private var data: MoneyFlowPanelData? = null
 
@@ -155,31 +177,40 @@ class MoneyFlowStripView(context: Context) : View(context) {
         super.onDraw(canvas)
         canvas.drawColor(bg.color)
         val d = data
-        canvas.drawText("ДЕНЕЖНЫЙ ПОТОК • BUY / SELL / НЕТТО", dp(8f), dp(15f), title)
+        canvas.drawText("PUMP • ВОШЛО / ВЫШЛО / БАЛАНС (USDT)", dp(8f), dp(15f), title)
         if (d == null) return
         val rows = d.windows
-        val left = dp(48f)
-        val right = width - dp(76f)
+        val left = dp(8f)
+        val right = width - dp(8f)
         val barWidth = max(dp(80f), right - left)
         rows.forEachIndexed { index, window ->
-            val y = dp(32f + index * 24f)
-            canvas.drawText(window.label.replace(" МИН", "м"), dp(7f), y + dp(4f), label)
-            rect.set(left, y - dp(7f), left + barWidth, y + dp(7f))
+            val y = dp(35f + index * 34f)
+            canvas.drawText(window.label, left, y, label)
+            value.textSize = sp(8.2f)
+            value.color = if (!window.ready) Color.parseColor("#8B949E") else Color.WHITE
+            val amounts = if (window.ready) {
+                "ВОШЛО ${MoneyFlowPresentation.compactUsd(window.buyUsdt)}  •  " +
+                    "ВЫШЛО ${MoneyFlowPresentation.compactUsd(window.sellUsdt)}  •  " +
+                    "БАЛАНС ${MoneyFlowPresentation.compactUsd(window.netUsdt, true)}"
+            } else "ДАННЫЕ НАКАПЛИВАЮТСЯ"
+            canvas.drawText(amounts, right, y, value)
+            rect.set(left, y + dp(7f), left + barWidth, y + dp(15f))
             canvas.drawRoundRect(rect, dp(3f), dp(3f), track)
             if (window.ready && window.totalUsdt > 0.0) {
                 val split = left + (barWidth * window.buyerShare).toFloat()
-                rect.set(left, y - dp(7f), split, y + dp(7f))
+                rect.set(left, y + dp(7f), split, y + dp(15f))
                 canvas.drawRoundRect(rect, dp(3f), dp(3f), buy)
-                rect.set(split, y - dp(7f), left + barWidth, y + dp(7f))
+                rect.set(split, y + dp(7f), left + barWidth, y + dp(15f))
                 canvas.drawRoundRect(rect, dp(3f), dp(3f), sell)
-                canvas.drawLine(left + barWidth / 2f, y - dp(9f), left + barWidth / 2f, y + dp(9f), divider)
-                value.color = if (window.netUsdt >= 0.0) buy.color else sell.color
-                canvas.drawText(MoneyFlowPresentation.compactUsd(window.netUsdt, true), width - dp(6f), y + dp(4f), value)
-            } else {
-                value.color = Color.parseColor("#8B949E")
-                canvas.drawText("накопл.", width - dp(6f), y + dp(4f), value)
+                canvas.drawLine(left + barWidth / 2f, y + dp(5f), left + barWidth / 2f, y + dp(17f), divider)
             }
         }
+        canvas.drawText(
+            "Исполненный taker-оборот; не сумма активов держателей.",
+            left,
+            height - dp(6f),
+            note
+        )
     }
 
     private fun dp(v: Float): Float = v * resources.displayMetrics.density

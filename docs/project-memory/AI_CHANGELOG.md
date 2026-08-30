@@ -2,6 +2,25 @@
 
 Только существенные законченные задачи. Не дублировать Git history.
 
+## 2026-08-30 / V6.9 — Надёжные 24h-логи и компактный рыночный экран
+
+**Task**
+Устранить вылеты JSON/TXT-экспорта за 24 часа, упростить главный экран и добавить точный наблюдаемый поток PUMP, BTC-контекст и линии ±1% без изменения торговых алгоритмов.
+
+**Root cause**
+Тяжёлый JSON/TXT собирался синхронно из UI-кнопок, а разбиение многократно пересобирало растущие payload. Перед Android share не проверялись размер, JSON-структура, безопасность и комплектность частей.
+
+**Change**
+Экспорт перенесён на отдельный executor, разбиение сделано линейным, каждая часть проверяется перед FileProvider/share. Главный экран сфокусирован на сделке и графиках; добавлены BTC 24h с 2/6/24h, исполненный PUMP/USDT BUY/SELL/NET за 1/5/15/30/60 минут и линии ±1% рядом с прежними ±1,5%. Версия V6.9/code129.
+
+**Verification**
+Добавлены три последовательных export reliability tests (пустой JSON, обычный multipart JSON, тяжёлый multipart TXT), presentation/coverage tests и обязательный CI `testDebugUnitTest + lintDebug + assembleDebug` с package/launcher/ZIP/signature checks.
+
+**Project impact**
+Экран и диагностика стали полезнее владельцу; stores, счета, ключи, package/signing identity и paper-only authority сохранены.
+
+---
+
 ## 2026-08-29 / V6.7 — Restore V6.5 and add two isolated X paper agents
 
 **Task**

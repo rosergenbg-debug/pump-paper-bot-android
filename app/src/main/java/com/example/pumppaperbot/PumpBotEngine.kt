@@ -888,6 +888,12 @@ object PumpBotEngine {
         )
     }
 
+    /** Closed BTC/USDT candles already persisted by the normal market sync; display-only access. */
+    fun btcCandles(context: Context): List<PumpCandle> {
+        ensureInitialized(context)
+        return parseSavedCandles(prefs(context).getString(keyBtcJson, "").orEmpty())
+    }
+
     fun alertKey(context: Context, snapshot: LiveSnapshot): String {
         val band = if (kotlin.math.abs(snapshot.readinessScore) >= 100) 100 else 99
         val profile = if (snapshot.aggressive) "AGGRESSIVE" else "CAREFUL"

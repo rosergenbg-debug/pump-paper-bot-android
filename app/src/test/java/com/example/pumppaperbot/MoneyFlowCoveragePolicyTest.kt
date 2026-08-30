@@ -34,4 +34,13 @@ class MoneyFlowCoveragePolicyTest {
 
         assertEquals(5L * 60L, MoneyFlowCoveragePolicy.continuousSeconds(keys, now))
     }
+
+    @Test
+    fun `one hour of continuous buckets is retained`() {
+        val currentKey = 50_000L
+        val now = currentKey * 60_000L + 59_000L
+        val keys = (currentKey - 59L..currentKey).toList()
+
+        assertEquals(60L * 60L - 1L, MoneyFlowCoveragePolicy.continuousSeconds(keys, now))
+    }
 }

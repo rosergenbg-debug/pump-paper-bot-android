@@ -10,7 +10,7 @@
 | Область | Ожидаемое поведение | Как проверяется | Статус |
 |---|---|---|---|
 | Build baseline | `testDebugUnitTest`, `lintDebug`, `assembleDebug` проходят | `.github/workflows/android.yml` | AUTO |
-| Package/version | compatible line остаётся `com.example.pumppaperbot.v8`; V6.7/code126 | CI `aapt dump badging` | AUTO |
+| Package/version | compatible line остаётся `com.example.pumppaperbot.v8`; V6.9/code129 | CI `aapt dump badging` | AUTO |
 | Launch APK | launch activity `MainActivity`, APK ZIP валиден, v2+v3 и exact compatible certificate проверяются | CI final APK checks | AUTO |
 | V6.5 runtime restoration | V6.7 использует полный MainActivity/service runtime V6.5; эксперимент не заменяет центральный app | manifest/source diff + service stage review | PARTIAL |
 | V6.7 owner mapping | Сеть содержит AUTO X ECONOMY → AUTO X52 SELECT → HUMAN +2.0 → SERGE → APP | `CompetitionAccountSpecTest` + UI device check | AUTO/PARTIAL |
@@ -40,6 +40,10 @@
 | Human Factor repeated alarm | Пока pending, отдельный alarm/vibration повторяется примерно каждые 60s; ВОЙТИ/ОТКЛОНИТЬ/распад setup/позиция прекращают повтор | `T32CostPolicyV650Test` repeat-policy + source/device check | PARTIAL |
 | Human Factor OS delivery | Приложение использует dedicated high-importance alarm channel, direct alarm ringtone и vibration; OS DND/manual mute всё равно могут переопределить звук | Android device test | MANUAL |
 | 24h T32 text log | TXT содержит current state всех 4 T32, BUY/SELL и raw T32 journal события включая Human ALERT/PENDING/REJECT/ERROR | `V6ScalpReport.kt` source + runtime export inspection | PARTIAL |
+| 24h JSON/TXT reliability | Создание идёт вне UI thread; части ≤900 KB, комплектны, читаемы и безопасны до открытия Android share | `SupportExportReliabilityTest` (3 passes) + CI | AUTO/PARTIAL |
+| Main PUMP flow | Показаны executed aggressive BUY/SELL/NET за 1/5/15/30/60m; это не выдаётся за assets held | `MoneyFlowPresentationTest`, `MoneyFlowCoveragePolicyTest` + UI check | AUTO/PARTIAL |
+| BTC mini context | BTC 24h path и causal 2h/6h/24h percentages не используют будущие candles | `BtcMiniPresentationTest` + UI check | AUTO/PARTIAL |
+| Chart range guides | Main и все comparison charts показывают ±1.0% и ±1.5% от reference/current price | `RangeGuidePolicyTest` + UI check | AUTO/PARTIAL |
 | PM UI 1 / PUMP_2 | +2.00% NET target, hard stop -1.10%, отдельный state | `PumpMachine2PolicyTest`, `PumpProfitEngineV526Test` | AUTO |
 | PM UI 2 / PUMP_3 | +3.00% NET target, hard stop -1.30%, отдельный state | `PumpMachinePolicyTest`, `PumpProfitEngineV526Test` | AUTO |
 | PM RETEST | Вход только после allowed candidate + bounded pullback/rebound; target +2/-1.10 | `PumpProfitEngineV526Test` + variant logic tests if present | PARTIAL |

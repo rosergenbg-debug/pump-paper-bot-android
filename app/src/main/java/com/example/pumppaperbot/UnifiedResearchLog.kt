@@ -337,16 +337,21 @@ object UnifiedResearchLog {
 internal object SupportLogSplitPolicy {
     fun split(base: JSONObject, journal: List<JSONObject>, maxBytes: Int): List<String> {
         require(maxBytes > 1_024) { "Слишком маленький предел файла" }
+        val emptyBytes = payload(base, emptyList(), 9_999, 9_999, journal.size).utf8Size()
+        require(emptyBytes <= maxBytes) { "Базовая часть JSON превышает безопасный размер" }
         val chunks = ArrayList<List<JSONObject>>()
         var current = ArrayList<JSONObject>()
+        var currentBytes = emptyBytes
         journal.forEach { event ->
-            val candidate = ArrayList(current).apply { add(event) }
-            if (payload(base, candidate, 9_999, 9_999, journal.size).utf8Size() <= maxBytes) {
-                current = candidate
+            val eventBytes = event.toString().utf8Size() + 1
+            require(emptyBytes + eventBytes <= maxBytes) { "Одна запись журнала превышает предел файла" }
+            if (currentBytes + eventBytes <= maxBytes) {
+                current += event
+                currentBytes += eventBytes
             } else {
-                require(current.isNotEmpty()) { "Одна запись журнала превышает предел файла" }
                 chunks += current
                 current = arrayListOf(event)
+                currentBytes = emptyBytes + eventBytes
             }
         }
         if (current.isNotEmpty() || chunks.isEmpty()) chunks += current

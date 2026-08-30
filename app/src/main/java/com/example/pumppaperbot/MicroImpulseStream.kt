@@ -47,6 +47,7 @@ class MicroImpulseStream(
     private var ignitionAt = 0L
     private var ignitionPrice = 0.0
     private var bitcoinPrice = 0.0
+    private var bitcoinUpdatedAt = 0L
 
     @Synchronized
     fun start() {
@@ -139,7 +140,7 @@ class MicroImpulseStream(
         moneyMinutes.peekLast()?.let { bucket ->
             if (aggressiveBuy) bucket.buyUsdt += notional else bucket.sellUsdt += notional
         }
-        val cutoffKey = key - 15L
+        val cutoffKey = key - 60L
         while (moneyMinutes.isNotEmpty() && moneyMinutes.peekFirst().minuteKey < cutoffKey) {
             moneyMinutes.removeFirst()
         }
@@ -166,6 +167,7 @@ class MicroImpulseStream(
         val at = data.optLong("T", System.currentTimeMillis())
         if (price <= 0.0 || quantity <= 0.0) return
         bitcoinPrice = price
+        bitcoinUpdatedAt = at
         bitcoinTrades.addLast(
             MicroTrade(at, price, price * quantity, aggressiveBuy = !data.optBoolean("m", true))
         )
@@ -209,8 +211,12 @@ class MicroImpulseStream(
         val currentMinuteKey = now / 60_000L
         val fiveMinuteKey = currentMinuteKey - 4L
         val fifteenMinuteKey = currentMinuteKey - 14L
+        val thirtyMinuteKey = currentMinuteKey - 29L
+        val sixtyMinuteKey = currentMinuteKey - 59L
         val fiveMinuteBuckets = moneyMinutes.filter { it.minuteKey >= fiveMinuteKey }
         val fifteenMinuteBuckets = moneyMinutes.filter { it.minuteKey >= fifteenMinuteKey }
+        val thirtyMinuteBuckets = moneyMinutes.filter { it.minuteKey >= thirtyMinuteKey }
+        val sixtyMinuteBuckets = moneyMinutes.filter { it.minuteKey >= sixtyMinuteKey }
         val buy5 = five.filter { it.aggressiveBuy }.sumOf { it.notional }
         val sell5 = five.filterNot { it.aggressiveBuy }.sumOf { it.notional }
         val buy15 = fifteen.filter { it.aggressiveBuy }.sumOf { it.notional }
@@ -223,6 +229,10 @@ class MicroImpulseStream(
         val moneySell5m = fiveMinuteBuckets.sumOf { it.sellUsdt }
         val buy15m = fifteenMinuteBuckets.sumOf { it.buyUsdt }
         val sell15m = fifteenMinuteBuckets.sumOf { it.sellUsdt }
+        val buy30m = thirtyMinuteBuckets.sumOf { it.buyUsdt }
+        val sell30m = thirtyMinuteBuckets.sumOf { it.sellUsdt }
+        val buy60m = sixtyMinuteBuckets.sumOf { it.buyUsdt }
+        val sell60m = sixtyMinuteBuckets.sumOf { it.sellUsdt }
         val moneyCoverageSeconds = MoneyFlowCoveragePolicy.continuousSeconds(
             moneyMinutes.map { it.minuteKey },
             now
@@ -309,6 +319,7 @@ class MicroImpulseStream(
             spreadPercent = spread,
             topBookImbalance = bookImbalance,
             bitcoinPriceUsdt = bitcoinPrice,
+            bitcoinUpdatedAt = bitcoinUpdatedAt,
             bitcoinAggressiveBuyPercent15s = ratio(btcBuy15, btcSell15) * 100.0,
             bitcoinAggressiveBuyPercent60s = ratio(btcBuy60, btcSell60) * 100.0,
             bitcoinPriceChange60sPercent = btcChange60,
@@ -319,6 +330,10 @@ class MicroImpulseStream(
             sellNotional5m = moneySell5m,
             buyNotional15m = buy15m,
             sellNotional15m = sell15m,
+            buyNotional30m = buy30m,
+            sellNotional30m = sell30m,
+            buyNotional60m = buy60m,
+            sellNotional60m = sell60m,
             flowHistorySeconds = flowHistorySeconds
         )
         MoneyFlowHistoryStore.save(appContext, moneyMinutes, now)
@@ -379,11 +394,11 @@ object MoneyFlowCoveragePolicy {
             else -> return 0L
         }
         var oldest = newest
-        while (newest - oldest < 15L && keys.contains(oldest - 1L)) oldest--
+        while (newest - oldest < 60L && keys.contains(oldest - 1L)) oldest--
         val tailSeconds = if (newest == current) {
             ((now % 60_000L) / 1_000L).coerceIn(0L, 59L)
         } else 60L
-        return (((newest - oldest) * 60L) + tailSeconds).coerceIn(0L, 15L * 60L)
+        return (((newest - oldest) * 60L) + tailSeconds).coerceIn(0L, 60L * 60L)
     }
 }
 
@@ -395,7 +410,7 @@ private object MoneyFlowHistoryStore {
         val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY, null) ?: return emptyList()
         return runCatching {
             val array = JSONArray(raw)
-            val cutoff = now / 60_000L - 15L
+            val cutoff = now / 60_000L - 60L
             buildList {
                 for (index in 0 until array.length()) {
                     val item = array.optJSONObject(index) ?: continue
@@ -409,18 +424,18 @@ private object MoneyFlowHistoryStore {
                         )
                     )
                 }
-            }.sortedBy { it.minuteKey }.takeLast(16)
+            }.sortedBy { it.minuteKey }.takeLast(61)
         }.getOrDefault(emptyList())
     }
 
     fun save(context: Context, buckets: Collection<MoneyMinuteBucket>, now: Long) {
-        val cutoff = now / 60_000L - 15L
+        val cutoff = now / 60_000L - 60L
         val array = JSONArray()
         buckets.asSequence()
             .filter { it.minuteKey >= cutoff }
             .sortedBy { it.minuteKey }
             .toList()
-            .takeLast(16)
+            .takeLast(61)
             .forEach { bucket ->
                 array.put(
                     JSONObject()
@@ -461,6 +476,7 @@ data class MicroImpulseSnapshot(
     val spreadPercent: Double? = null,
     val topBookImbalance: Double? = null,
     val bitcoinPriceUsdt: Double = 0.0,
+    val bitcoinUpdatedAt: Long = 0L,
     val bitcoinAggressiveBuyPercent15s: Double = 50.0,
     val bitcoinAggressiveBuyPercent60s: Double = 50.0,
     val bitcoinPriceChange60sPercent: Double = 0.0,
@@ -471,6 +487,10 @@ data class MicroImpulseSnapshot(
     val sellNotional5m: Double = 0.0,
     val buyNotional15m: Double = 0.0,
     val sellNotional15m: Double = 0.0,
+    val buyNotional30m: Double = 0.0,
+    val sellNotional30m: Double = 0.0,
+    val buyNotional60m: Double = 0.0,
+    val sellNotional60m: Double = 0.0,
     val flowHistorySeconds: Long = 0L
 )
 
@@ -498,6 +518,7 @@ object MicroImpulseStore {
             spreadPercent = p.nullableDouble("spread"),
             topBookImbalance = p.nullableDouble("book_imbalance"),
             bitcoinPriceUsdt = p.double("btc_price", 0.0),
+            bitcoinUpdatedAt = p.getLong("btc_updated_at", 0L),
             bitcoinAggressiveBuyPercent15s = p.double("btc_buy_15s", 50.0),
             bitcoinAggressiveBuyPercent60s = p.double("btc_buy_60s", 50.0),
             bitcoinPriceChange60sPercent = p.double("btc_change_60s", 0.0),
@@ -510,6 +531,10 @@ object MicroImpulseStore {
             sellNotional5m = p.double("sell_notional_5m", 0.0),
             buyNotional15m = p.double("buy_notional_15m", 0.0),
             sellNotional15m = p.double("sell_notional_15m", 0.0),
+            buyNotional30m = p.double("buy_notional_30m", 0.0),
+            sellNotional30m = p.double("sell_notional_30m", 0.0),
+            buyNotional60m = p.double("buy_notional_60m", 0.0),
+            sellNotional60m = p.double("sell_notional_60m", 0.0),
             flowHistorySeconds = p.getLong("flow_history_seconds", 0L)
         )
     }
@@ -534,6 +559,7 @@ object MicroImpulseStore {
             .putNullableDouble("spread", value.spreadPercent)
             .putNullableDouble("book_imbalance", value.topBookImbalance)
             .putDouble("btc_price", value.bitcoinPriceUsdt)
+            .putLong("btc_updated_at", value.bitcoinUpdatedAt)
             .putDouble("btc_buy_15s", value.bitcoinAggressiveBuyPercent15s)
             .putDouble("btc_buy_60s", value.bitcoinAggressiveBuyPercent60s)
             .putDouble("btc_change_60s", value.bitcoinPriceChange60sPercent)
@@ -544,6 +570,10 @@ object MicroImpulseStore {
             .putDouble("sell_notional_5m", value.sellNotional5m)
             .putDouble("buy_notional_15m", value.buyNotional15m)
             .putDouble("sell_notional_15m", value.sellNotional15m)
+            .putDouble("buy_notional_30m", value.buyNotional30m)
+            .putDouble("sell_notional_30m", value.sellNotional30m)
+            .putDouble("buy_notional_60m", value.buyNotional60m)
+            .putDouble("sell_notional_60m", value.sellNotional60m)
             .putLong("flow_history_seconds", value.flowHistorySeconds)
             .apply()
     }

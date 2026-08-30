@@ -446,7 +446,7 @@
                 android:gravity="center"
                 android:maxLines="4"
                 android:padding="3dp"
-                android:text="ЕДИНЫЙ ЛОГ&#10;4 АГЕНТА&#10;экспорт JSON"
+                android:text="ЛОГ 24 ЧАСА&#10;JSON"
                 android:textColor="#FFFFFF"
                 android:textSize="12sp"
                 android:textStyle="bold" />
@@ -461,7 +461,7 @@
             android:gravity="center"
             android:maxLines="3"
             android:padding="3dp"
-            android:text="ЛОГ ЗА 24 ЧАСА • КАЖДЫЙ ФАЙЛ МЕНЬШЕ 2 МБ"
+            android:text="ЛОГ 24 ЧАСА • TXT • ПРОВЕРКА ПЕРЕД ОТПРАВКОЙ"
             android:textColor="#FFFFFF"
             android:textSize="12sp"
             android:textStyle="bold" />

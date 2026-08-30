@@ -12,7 +12,7 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * V6.8 presentation overlay for the main PUMP/EUR chart.
+ * V6.9 presentation overlay for the main PUMP/EUR chart.
  * It does not change market data, strategy logic, chart history or execution authority.
  */
 internal object MainChartRangeGuideOverlay {
@@ -36,6 +36,12 @@ private class MainRangeGuideDrawable(
         textSize = sp(8.5f)
         textAlign = Paint.Align.RIGHT
         isFakeBoldText = true
+    }
+    private val innerLinePaint = Paint(linePaint).apply {
+        color = Color.parseColor("#79C0FF")
+        strokeWidth = dp(0.95f)
+        alpha = 185
+        pathEffect = android.graphics.DashPathEffect(floatArrayOf(dp(4f), dp(3f)), 0f)
     }
 
     override fun draw(canvas: Canvas) {
@@ -77,8 +83,10 @@ private class MainRangeGuideDrawable(
                 return top + fraction.toFloat() * (bottom - top)
             }
 
-            drawGuide(canvas, left, right, top, bottom, y(levels.upper), "+1,5%")
-            drawGuide(canvas, left, right, top, bottom, y(levels.lower), "−1,5%")
+            drawGuide(canvas, left, right, top, bottom, y(levels.outerUpper), "+1,5%", linePaint)
+            drawGuide(canvas, left, right, top, bottom, y(levels.innerUpper), "+1%", innerLinePaint)
+            drawGuide(canvas, left, right, top, bottom, y(levels.innerLower), "−1%", innerLinePaint)
+            drawGuide(canvas, left, right, top, bottom, y(levels.outerLower), "−1,5%", linePaint)
         }
     }
 
@@ -89,21 +97,24 @@ private class MainRangeGuideDrawable(
         top: Float,
         bottom: Float,
         guideY: Float,
-        label: String
+        label: String,
+        paint: Paint
     ) {
         if (guideY !in top..bottom) return
-        canvas.drawLine(left, guideY, right, guideY, linePaint)
+        canvas.drawLine(left, guideY, right, guideY, paint)
         val baseline = (guideY - dp(3f)).coerceIn(top + labelPaint.textSize, bottom - dp(2f))
         canvas.drawText(label, right - dp(3f), baseline, labelPaint)
     }
 
     override fun setAlpha(alpha: Int) {
         linePaint.alpha = alpha
+        innerLinePaint.alpha = alpha
         labelPaint.alpha = alpha
     }
 
     override fun setColorFilter(colorFilter: ColorFilter?) {
         linePaint.colorFilter = colorFilter
+        innerLinePaint.colorFilter = colorFilter
         labelPaint.colorFilter = colorFilter
     }
 

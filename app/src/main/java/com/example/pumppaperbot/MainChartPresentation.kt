@@ -28,8 +28,8 @@ internal object MainChartViewportPolicy {
         val guides = RangeGuidePolicy.levels(candles.last().close)
         val candleMin = candles.minOf { it.low }
         val candleMax = candles.maxOf { it.high }
-        val rawMin = min(candleMin, guides?.lower ?: candleMin)
-        val rawMax = max(candleMax, guides?.upper ?: candleMax)
+        val rawMin = min(candleMin, guides?.outerLower ?: candleMin)
+        val rawMax = max(candleMax, guides?.outerUpper ?: candleMax)
         if (!rawMin.isFinite() || !rawMax.isFinite() || rawMin <= 0.0 || rawMax < rawMin) return null
         val rawSpan = max(rawMax - rawMin, rawMax * 0.006)
         val padding = rawSpan * 0.12
