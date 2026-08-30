@@ -5,19 +5,27 @@
 ## VERSION / PRODUCTION
 
 - Canonical branch: `main`.
-- Current release candidate: **V6.9**, `versionCode 129`.
+- Current release candidate: **V6.9.1**, `versionCode 130`.
 - Verification PR: создаётся после локальной проверки.
 - Stable restoration base: **V6.5**, commit `cbc10b4948bd22cbf5684b36596121ee562c8614`.
 - `applicationId`: `com.example.pumppaperbot.v8` — неизменён.
 - Launcher: `com.example.pumppaperbot.MainActivity`.
-- Real orders are not implemented. V6.9 remains paper-only.
+- Real orders are not implemented. V6.9.1 remains paper-only.
+
+## V6.9.1 UI REGRESSION REPAIR
+
+- V6.9 incorrectly added a details toggle that set established V6.8.1 controls and information blocks to `GONE` on launch. V6.9.1 removes that mechanism completely: existing graphs, windows, buttons and functions remain visible in their original order.
+- Top status cards use smaller padding/text and lower minimum heights, but no status field or action is removed.
+- BTC 2h/6h/24h values are vertical overlays at the left of the BTC chart; the price curve starts to their right.
+- The chart grid uses integer ±1/±2/±3/±4 percent levels. ±1 is included in the viewport; farther levels render only when the graph's actual range reaches them. ±1.5 is removed from presentation guides.
+- The BOT network button is visually prominent; account mapping and click behavior are unchanged.
 
 ## V6.9 SUPPORT / DASHBOARD UPDATE
 
 - Both support buttons create bounded 24-hour reports on a background executor, validate every part before Android sharing, and preserve UTF-8 rows across splitting.
 - The main screen shows a compact BTC 24-hour chart with causal 2h/6h/24h change, the established PUMP chart, and executed PUMP/USDT aggressive BUY/SELL/NET flow for now, 5m, 15m, 30m and 1h.
 - Money flow is explicitly executed taker notional, not market cap or capital currently owned by all PUMP holders.
-- Main and comparison charts show presentation-only ±1.0% and ±1.5% guides from the current/reference price.
+- Main and comparison charts in V6.9.1 show presentation-only integer ±1/±2/±3/±4 guides from the current/reference price.
 - Existing stores, package, paper strategy authority, fees and thresholds are unchanged.
 
 ## MANDATORY STARTUP MEMORY
@@ -90,9 +98,9 @@ The original replay was reproduced twice. Stop -1.5% produced **57.36% win rate*
 - Signing alias: `pump-signal-update`.
 - Required certificate SHA-256:
   `1F:77:8C:42:91:C9:D1:1C:5F:89:F4:DE:87:73:BD:A3:5A:01:25:03:1A:DC:05:78:5D:AE:E2:3F:27:DC:78:23`
-- Final CI must verify APK Signature Scheme v2 + v3, package, versionCode 129, versionName 6.9, launcher and ZIP integrity.
+- Final CI must verify APK Signature Scheme v2 + v3, package, versionCode 130, versionName 6.9.1, launcher and ZIP integrity.
 - Never create a replacement signing key and never commit JKS/password/recovery material.
-- Install V6.9 over the existing app; never uninstall first.
+- Install V6.9.1 over the existing app; never uninstall first.
 
 ## INVARIANTS
 

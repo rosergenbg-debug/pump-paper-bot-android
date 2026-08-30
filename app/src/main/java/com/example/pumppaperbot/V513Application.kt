@@ -126,40 +126,10 @@ class V513Application : Application() {
 
 internal object V513MainUiInjector {
     private const val ROW_TAG = "v513_big_overview_row"
-    private const val DETAILS_TAG = "v690_details_toggle"
-    private val detailIds = intArrayOf(
-        R.id.tvDeepSeekPrimary,
-        R.id.tvDeepSeekActionLevel,
-        R.id.btnCriticalOverview,
-        R.id.tvBuyerBreathSummary,
-        R.id.tvLatestSignal,
-        R.id.tvMode,
-        R.id.tvReadiness,
-        R.id.tvPrice,
-        R.id.tvReason,
-        R.id.tvPosition,
-        R.id.tvPositionSupervisor,
-        R.id.tvBreathingState,
-        R.id.tvEnergy,
-        R.id.tvDirection,
-        R.id.tvConfidence,
-        R.id.tvLateRisk,
-        R.id.tvMicrostructure,
-        R.id.btnRisk30,
-        R.id.btnRisk35,
-        R.id.tvAlertStatus,
-        R.id.btnAlertSettings,
-        R.id.btnDeepSeekApi,
-        R.id.btnGeminiApi,
-        R.id.btnStart,
-        R.id.btnCheck,
-        R.id.btnReset
-    )
 
     fun install(activity: Activity) {
         if (activity !is MainActivity) return
 
-        installDetailsToggle(activity)
         installMoneyFlowStrip(activity)
         installBtcMiniChart(activity)
         activity.findViewById<StrategyChartView>(R.id.chart)?.setOnClickListener {
@@ -213,37 +183,6 @@ internal object V513MainUiInjector {
             }
         )
         parent.addView(row, index, rowParams)
-    }
-
-    private fun installDetailsToggle(activity: MainActivity) {
-        val title = activity.findViewById<TextView>(R.id.tvStatus) ?: return
-        val parent = title.parent as? LinearLayout ?: return
-        if (parent.findViewWithTag<View>(DETAILS_TAG) != null) return
-        var open = false
-        fun applyVisibility() {
-            detailIds.forEach { id -> activity.findViewById<View>(id)?.visibility = if (open) View.VISIBLE else View.GONE }
-        }
-        val toggle = Button(activity).apply {
-            tag = DETAILS_TAG
-            text = "ПОДРОБНОСТИ И УПРАВЛЕНИЕ ▼"
-            setTextColor(Color.WHITE)
-            setBackgroundColor(Color.parseColor("#30363D"))
-            textSize = 12f
-            isAllCaps = false
-            setOnClickListener {
-                open = !open
-                text = if (open) "СКРЫТЬ ПОДРОБНОСТИ ▲" else "ПОДРОБНОСТИ И УПРАВЛЕНИЕ ▼"
-                applyVisibility()
-            }
-        }
-        parent.addView(
-            toggle,
-            parent.indexOfChild(title) + 1,
-            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(activity, 46)).apply {
-                topMargin = dp(activity, 6)
-            }
-        )
-        applyVisibility()
     }
 
     fun updateMoneyFlow(activity: Activity, data: MoneyFlowPanelData) {

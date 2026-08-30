@@ -37,11 +37,8 @@ private class MainRangeGuideDrawable(
         textAlign = Paint.Align.RIGHT
         isFakeBoldText = true
     }
-    private val innerLinePaint = Paint(linePaint).apply {
-        color = Color.parseColor("#79C0FF")
-        strokeWidth = dp(0.95f)
-        alpha = 185
-        pathEffect = android.graphics.DashPathEffect(floatArrayOf(dp(4f), dp(3f)), 0f)
+    init {
+        linePaint.pathEffect = android.graphics.DashPathEffect(floatArrayOf(dp(4f), dp(3f)), 0f)
     }
 
     override fun draw(canvas: Canvas) {
@@ -83,10 +80,10 @@ private class MainRangeGuideDrawable(
                 return top + fraction.toFloat() * (bottom - top)
             }
 
-            drawGuide(canvas, left, right, top, bottom, y(levels.outerUpper), "+1,5%", linePaint)
-            drawGuide(canvas, left, right, top, bottom, y(levels.innerUpper), "+1%", innerLinePaint)
-            drawGuide(canvas, left, right, top, bottom, y(levels.innerLower), "−1%", innerLinePaint)
-            drawGuide(canvas, left, right, top, bottom, y(levels.outerLower), "−1,5%", linePaint)
+            levels.levels.forEach { level ->
+                drawGuide(canvas, left, right, top, bottom, y(level.upper), "+${level.percent}%", linePaint)
+                drawGuide(canvas, left, right, top, bottom, y(level.lower), "−${level.percent}%", linePaint)
+            }
         }
     }
 
@@ -108,13 +105,11 @@ private class MainRangeGuideDrawable(
 
     override fun setAlpha(alpha: Int) {
         linePaint.alpha = alpha
-        innerLinePaint.alpha = alpha
         labelPaint.alpha = alpha
     }
 
     override fun setColorFilter(colorFilter: ColorFilter?) {
         linePaint.colorFilter = colorFilter
-        innerLinePaint.colorFilter = colorFilter
         labelPaint.colorFilter = colorFilter
     }
 

@@ -24,13 +24,24 @@ jobs:
       - name: Verify canonical checked-in source
         run: git diff --check
 
+      - name: Guard full V6.8.1 main UI visibility
+        run: |
+          ! grep -Fq "installDetailsToggle" app/src/main/java/com/example/pumppaperbot/V513Application.kt
+          ! grep -Fq "v690_details_toggle" app/src/main/java/com/example/pumppaperbot/V513Application.kt
+          ! grep -Fq "detailIds" app/src/main/java/com/example/pumppaperbot/V513Application.kt
+          grep -Fq 'android:id="@+id/btnCompetition"' app/src/main/res/layout/activity_main.xml
+          grep -Fq 'android:id="@+id/manualPositionChart"' app/src/main/res/layout/activity_main.xml
+          grep -Fq 'android:id="@+id/chart"' app/src/main/res/layout/activity_main.xml
+          grep -Fq 'android:id="@+id/btnUnifiedLog"' app/src/main/res/layout/activity_main.xml
+          grep -Fq 'android:id="@+id/btnRecentLog"' app/src/main/res/layout/activity_main.xml
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Validate and build V6.9
+      - name: Validate and build V6.9.1
         run: |
           chmod +x gradlew
           ./gradlew testDebugUnitTest lintDebug assembleDebug
@@ -42,7 +53,7 @@ jobs:
           grep -F "Verified using v2 scheme (APK Signature Scheme v2): true" "$RUNNER_TEMP/signature.txt"
           "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging \
             app/build/outputs/apk/debug/app-debug.apk | tee "$RUNNER_TEMP/badging.txt"
-          grep -F "package: name='com.example.pumppaperbot.v8' versionCode='129' versionName='6.9'" \
+          grep -F "package: name='com.example.pumppaperbot.v8' versionCode='130' versionName='6.9.1'" \
             "$RUNNER_TEMP/badging.txt"
           grep -F "launchable-activity: name='com.example.pumppaperbot.MainActivity'" \
             "$RUNNER_TEMP/badging.txt"
@@ -53,7 +64,7 @@ jobs:
       - name: Upload exact verified intermediate APK
         uses: actions/upload-artifact@v4
         with:
-          name: PumpSignal-V6.9-Verified-Intermediate
+          name: PumpSignal-V6.9.1-Verified-Intermediate
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 7
 
@@ -65,24 +76,24 @@ jobs:
           git worktree add --detach "$STAGE/repo" HEAD
           (
             cd "$STAGE/repo"
-            git switch --orphan ci-v690-intermediate
+            git switch --orphan ci-v691-intermediate
             git rm -rf . || true
             APK="$GITHUB_WORKSPACE/app/build/outputs/apk/debug/app-debug.apk"
             base64 -w0 "$APK" | split -b 900000 -d -a 2 - \
-              PumpSignal-V6.9-Verified-Intermediate.apk.b64.part-
-            sha256sum "$APK" | awk '{print $1}' > PumpSignal-V6.9-Verified-Intermediate.apk.sha256
-            stat -c%s "$APK" > PumpSignal-V6.9-Verified-Intermediate.apk.size
+              PumpSignal-V6.9.1-Verified-Intermediate.apk.b64.part-
+            sha256sum "$APK" | awk '{print $1}' > PumpSignal-V6.9.1-Verified-Intermediate.apk.sha256
+            stat -c%s "$APK" > PumpSignal-V6.9.1-Verified-Intermediate.apk.size
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add -f PumpSignal-V6.9-Verified-Intermediate.apk.b64.part-* \
-              PumpSignal-V6.9-Verified-Intermediate.apk.sha256 \
-              PumpSignal-V6.9-Verified-Intermediate.apk.size
-            git commit -m "Publish exact verified V6.9 intermediate APK"
-            git push --force origin HEAD:ci-v690-intermediate
+            git add -f PumpSignal-V6.9.1-Verified-Intermediate.apk.b64.part-* \
+              PumpSignal-V6.9.1-Verified-Intermediate.apk.sha256 \
+              PumpSignal-V6.9.1-Verified-Intermediate.apk.size
+            git commit -m "Publish exact verified V6.9.1 intermediate APK"
+            git push --force origin HEAD:ci-v691-intermediate
           )
           git worktree remove "$STAGE/repo"
 
-      - name: Sign V6.9 with the compatible PumpSignal update key
+      - name: Sign V6.9.1 with the compatible PumpSignal update key
         env:
           KS_PUMP: ${{ secrets.PUMP_SIGNING_KEYSTORE_BASE64 }}
           KS_ANDROID: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -156,49 +167,49 @@ jobs:
           "$ANDROID_HOME/build-tools/34.0.0/apksigner" sign \
             --ks "$KEYFILE" --ks-pass "pass:$PASS" --ks-key-alias "$ALIAS" --key-pass "pass:$KEYPASS" \
             --v1-signing-enabled false --v2-signing-enabled true --v3-signing-enabled true \
-            --out PumpSignal-V6.9-Compatible-FINAL.apk app/build/outputs/apk/debug/app-debug.apk
+            --out PumpSignal-V6.9.1-Compatible-FINAL.apk app/build/outputs/apk/debug/app-debug.apk
 
           "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose --print-certs \
-            PumpSignal-V6.9-Compatible-FINAL.apk | tee "$RUNNER_TEMP/final-signature.txt"
+            PumpSignal-V6.9.1-Compatible-FINAL.apk | tee "$RUNNER_TEMP/final-signature.txt"
           grep -F "Verified using v2 scheme (APK Signature Scheme v2): true" "$RUNNER_TEMP/final-signature.txt"
           grep -F "Verified using v3 scheme (APK Signature Scheme v3): true" "$RUNNER_TEMP/final-signature.txt"
           ACTUAL=$(grep -F "Signer #1 certificate SHA-256 digest:" "$RUNNER_TEMP/final-signature.txt" | awk '{print $NF}' | tr 'A-F' 'a-f')
           test "$ACTUAL" = "$EXPECTED"
-          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging PumpSignal-V6.9-Compatible-FINAL.apk | tee "$RUNNER_TEMP/final-badging.txt"
-          grep -F "package: name='com.example.pumppaperbot.v8' versionCode='129' versionName='6.9'" "$RUNNER_TEMP/final-badging.txt"
+          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging PumpSignal-V6.9.1-Compatible-FINAL.apk | tee "$RUNNER_TEMP/final-badging.txt"
+          grep -F "package: name='com.example.pumppaperbot.v8' versionCode='130' versionName='6.9.1'" "$RUNNER_TEMP/final-badging.txt"
           grep -F "launchable-activity: name='com.example.pumppaperbot.MainActivity'" "$RUNNER_TEMP/final-badging.txt"
-          unzip -t PumpSignal-V6.9-Compatible-FINAL.apk
-          sha256sum PumpSignal-V6.9-Compatible-FINAL.apk | tee "$RUNNER_TEMP/final-sha256.txt"
+          unzip -t PumpSignal-V6.9.1-Compatible-FINAL.apk
+          sha256sum PumpSignal-V6.9.1-Compatible-FINAL.apk | tee "$RUNNER_TEMP/final-sha256.txt"
 
-      - name: Upload compatible V6.9 APK
-        if: ${{ hashFiles('PumpSignal-V6.9-Compatible-FINAL.apk') != '' }}
+      - name: Upload compatible V6.9.1 APK
+        if: ${{ hashFiles('PumpSignal-V6.9.1-Compatible-FINAL.apk') != '' }}
         uses: actions/upload-artifact@v4
         with:
-          name: PumpSignal-V6.9-Compatible-FINAL
-          path: PumpSignal-V6.9-Compatible-FINAL.apk
+          name: PumpSignal-V6.9.1-Compatible-FINAL
+          path: PumpSignal-V6.9.1-Compatible-FINAL.apk
           retention-days: 7
 
-      - name: Publish compatible V6.9 APK to isolated handoff branch
-        if: ${{ hashFiles('PumpSignal-V6.9-Compatible-FINAL.apk') != '' }}
+      - name: Publish compatible V6.9.1 APK to isolated handoff branch
+        if: ${{ hashFiles('PumpSignal-V6.9.1-Compatible-FINAL.apk') != '' }}
         run: |
           set -euo pipefail
           STAGE=$(mktemp -d)
           git worktree add --detach "$STAGE/repo" HEAD
           (
             cd "$STAGE/repo"
-            git switch --orphan ci-v690-final
+            git switch --orphan ci-v691-final
             git rm -rf . || true
-            APK="$GITHUB_WORKSPACE/PumpSignal-V6.9-Compatible-FINAL.apk"
+            APK="$GITHUB_WORKSPACE/PumpSignal-V6.9.1-Compatible-FINAL.apk"
             base64 -w0 "$APK" | split -b 900000 -d -a 2 - \
-              PumpSignal-V6.9-Compatible-FINAL.apk.b64.part-
-            sha256sum "$APK" | awk '{print $1}' > PumpSignal-V6.9-Compatible-FINAL.apk.sha256
-            stat -c%s "$APK" > PumpSignal-V6.9-Compatible-FINAL.apk.size
+              PumpSignal-V6.9.1-Compatible-FINAL.apk.b64.part-
+            sha256sum "$APK" | awk '{print $1}' > PumpSignal-V6.9.1-Compatible-FINAL.apk.sha256
+            stat -c%s "$APK" > PumpSignal-V6.9.1-Compatible-FINAL.apk.size
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add -f PumpSignal-V6.9-Compatible-FINAL.apk.b64.part-* \
-              PumpSignal-V6.9-Compatible-FINAL.apk.sha256 \
-              PumpSignal-V6.9-Compatible-FINAL.apk.size
-            git commit -m "Publish exact signed V6.9 APK"
-            git push --force origin HEAD:ci-v690-final
+            git add -f PumpSignal-V6.9.1-Compatible-FINAL.apk.b64.part-* \
+              PumpSignal-V6.9.1-Compatible-FINAL.apk.sha256 \
+              PumpSignal-V6.9.1-Compatible-FINAL.apk.size
+            git commit -m "Publish exact signed V6.9.1 APK"
+            git push --force origin HEAD:ci-v691-final
           )
           git worktree remove "$STAGE/repo"
