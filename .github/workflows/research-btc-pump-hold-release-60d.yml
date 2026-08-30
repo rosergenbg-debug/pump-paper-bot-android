@@ -1,0 +1,125 @@
+name: Research BTC-PUMP hold-release 60d
+on:
+  push:
+    branches: ["research/pump-flow-60d-20260830"]
+    paths: [".github/workflows/research-btc-pump-hold-release-60d.yml"]
+permissions:
+  contents: read
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Analyze BTC impulse, PUMP hold, BTC stabilization, PUMP release
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import urllib.request, urllib.parse, json, time, math, statistics
+          from datetime import datetime, timezone
+
+          NOW=int(time.time()*1000); START=NOW-60*86400000; STEP=300000
+          def load(sym):
+              rows=[]; cur=START
+              while cur<NOW:
+                  qs=urllib.parse.urlencode({'symbol':sym,'interval':'5m','limit':1000,'startTime':cur,'endTime':NOW})
+                  with urllib.request.urlopen('https://data-api.binance.vision/api/v3/klines?'+qs,timeout=30) as r: b=json.load(r)
+                  if not b: break
+                  rows += b; nxt=int(b[-1][0])+STEP
+                  if nxt<=cur: break
+                  cur=nxt; time.sleep(.035)
+              out={}
+              for r in rows:
+                  if int(r[6])>=NOW: continue
+                  q=float(r[7]); buy=float(r[10]); sell=max(0.0,q-buy)
+                  out[int(r[0])]={'o':float(r[1]),'h':float(r[2]),'l':float(r[3]),'c':float(r[4]),'q':q,'buy':buy,'sell':sell,'net':buy-sell,'share':buy/q if q else 0.0}
+              return out
+          p=load('PUMPUSDT'); b=load('BTCUSDT')
+          ts=sorted(set(p)&set(b)); P=[p[t] for t in ts]; B=[b[t] for t in ts]; n=len(ts)
+          def ret(x,a,z): return (x[z]['c']/x[a]['c']-1)*100
+          def rng(x,a,z): return (max(v['h'] for v in x[a:z+1])/min(v['l'] for v in x[a:z+1])-1)*100
+          def dd(x,a,z): return (min(v['l'] for v in x[a:z+1])/x[a]['c']-1)*100
+          def qtile(xs,p):
+              y=sorted(xs); q=(len(y)-1)*p; lo=int(math.floor(q)); hi=int(math.ceil(q)); return y[lo] if lo==hi else y[lo]*(hi-q)+y[hi]*(q-lo)
+          def fmt(x): return f'{x:.3f}'
+          samples=[]
+          for i in range(24,n-25):
+              # At i, only data through closed candle i is used. We split trailing 45m into prior BTC impulse 30m + stabilization 15m.
+              imp0=i-9; imp1=i-3; st0=i-2
+              btc_imp=ret(B,imp0,imp1); pump_imp=ret(P,imp0,imp1)
+              btc_st=ret(B,imp1,i); pump_st=ret(P,imp1,i)
+              btc_st_rng=rng(B,st0,i)
+              lag_imp=pump_imp-btc_imp
+              pump_low=dd(P,imp0,i)
+              q15=sum(P[j]['q'] for j in range(st0,i+1)); buy15=sum(P[j]['buy'] for j in range(st0,i+1)); sell15=sum(P[j]['sell'] for j in range(st0,i+1)); net15=buy15-sell15; sh15=buy15/q15 if q15 else 0
+              # past 30m PUMP flow/price response ending at i
+              q30=sum(P[j]['q'] for j in range(i-5,i+1)); buy30=sum(P[j]['buy'] for j in range(i-5,i+1)); sell30=q30-buy30; net30=buy30-sell30; sh30=buy30/q30 if q30 else 0
+              # outcomes
+              f12=P[i+1:i+13]; f24=P[i+1:i+25]
+              up60=(max(v['h'] for v in f12)/P[i]['c']-1)*100; r60=ret(P,i,i+12)
+              up120=(max(v['h'] for v in f24)/P[i]['c']-1)*100; r120=ret(P,i,i+24)
+              rel60=r60-ret(B,i,i+12); rel120=r120-ret(B,i,i+24)
+              samples.append(dict(i=i,btc_imp=btc_imp,pump_imp=pump_imp,lag=lag_imp,btc_st=btc_st,pump_st=pump_st,btc_rng=btc_st_rng,pump_low=pump_low,q15=q15,net15=net15,sh15=sh15,q30=q30,net30=net30,sh30=sh30,up60=up60,r60=r60,up120=up120,r120=r120,rel60=rel60,rel120=rel120))
+
+          base2=sum(s['up60']>=2 for s in samples)/len(samples); base1=sum(s['up60']>=1 for s in samples)/len(samples)
+          print('ROWS',n,'FROM',datetime.fromtimestamp(ts[0]/1000,timezone.utc).isoformat(),'TO',datetime.fromtimestamp(ts[-1]/1000,timezone.utc).isoformat())
+          print('BASE N',len(samples),'P_up1_60',fmt(base1),'P_up2_60',fmt(base2),'avgR60',fmt(sum(s['r60'] for s in samples)/len(samples)))
+
+          # Search causal hold-release signatures. Require a BTC rise, PUMP underperformance/hold, then BTC quieting.
+          candidates=[]
+          for bi in [.25,.40,.55,.70,.90]:
+            for lag in [-.20,-.35,-.50,-.70,-1.0]:
+              for bst in [.10,.15,.20,.25,.30]:
+                for br in [.25,.35,.45,.60]:
+                  z=[s for s in samples if s['btc_imp']>=bi and s['lag']<=lag and abs(s['btc_st'])<=bst and s['btc_rng']<=br and s['pump_low']>=-1.0]
+                  if len(z)<120: continue
+                  pup2=sum(s['up60']>=2 for s in z)/len(z); pup1=sum(s['up60']>=1 for s in z)/len(z)
+                  avg=sum(s['r60'] for s in z)/len(z); rel=sum(s['rel60'] for s in z)/len(z)
+                  candidates.append((pup2/base2,pup2,pup1,avg,rel,len(z),bi,lag,bst,br))
+          candidates.sort(reverse=True)
+          print('\n=== BEST CAUSAL BTC-UP -> PUMP-LAG/HOLD -> BTC-STABLE SIGNATURES ===')
+          for lift,p2,p1,av,rel,N,bi,lag,bst,br in candidates[:20]:
+              print('btcImp>=',bi,'lag<=',lag,'absBtc15<=',bst,'btcRange15<=',br,'N',N,'Pup1',fmt(p1),'Pup2',fmt(p2),'lift2',fmt(lift),'avgR60',fmt(av),'avgRel60',fmt(rel))
+
+          # Pick robust practical family and examine thresholds + PUMP absorption/flow.
+          families=[
+            ('LOOSE',.40,-.35,.25,.45),
+            ('MID',.55,-.50,.20,.45),
+            ('STRICT',.70,-.50,.20,.35),
+          ]
+          for name,bi,lag,bst,br in families:
+              z=[s for s in samples if s['btc_imp']>=bi and s['lag']<=lag and abs(s['btc_st'])<=bst and s['btc_rng']<=br and s['pump_low']>=-1.0]
+              print('\n===',name,'=== N',len(z))
+              if not z: continue
+              print('Pup1',fmt(sum(s['up60']>=1 for s in z)/len(z)),'Pup2',fmt(sum(s['up60']>=2 for s in z)/len(z)),'avgR60',fmt(sum(s['r60'] for s in z)/len(z)),'avgRel60',fmt(sum(s['rel60'] for s in z)/len(z)))
+              for key in ['btc_imp','pump_imp','lag','btc_st','pump_st','btc_rng','pump_low','q15','net15','sh15','q30','net30','sh30','r60','rel60']:
+                  vals=[s[key] for s in z]
+                  if key.startswith('q') or key.startswith('net'):
+                      print(key,'p25/med/p75',round(qtile(vals,.25)/1000,1),round(qtile(vals,.5)/1000,1),round(qtile(vals,.75)/1000,1),'kUSDT')
+                  elif key.startswith('sh'):
+                      print(key,'p25/med/p75',fmt(qtile(vals,.25)*100),fmt(qtile(vals,.5)*100),fmt(qtile(vals,.75)*100),'%')
+                  else:
+                      print(key,'p25/med/p75',fmt(qtile(vals,.25)),fmt(qtile(vals,.5)),fmt(qtile(vals,.75)))
+
+              # incremental usefulness of PUMP flow/absorption inside this BTC-context
+              sub=[]
+              for qshare in [.46,.48,.50,.52,.54]:
+                for qnet in [-50000,-20000,0,20000,50000]:
+                  zz=[s for s in z if s['sh15']>=qshare and s['net15']>=qnet]
+                  if len(zz)<50: continue
+                  p2=sum(s['up60']>=2 for s in zz)/len(zz); av=sum(s['r60'] for s in zz)/len(zz)
+                  sub.append((p2,av,len(zz),qshare,qnet))
+              sub.sort(reverse=True)
+              print('FLOW_SUBFILTERS')
+              for p2,av,N,qs,qn in sub[:10]: print('share15>=',qs,'net15>=',qn/1000,'k N',N,'Pup2',fmt(p2),'avgR60',fmt(av))
+
+          # Event-isolated version: one signal per 60m to reduce overlapping-sample illusion.
+          if candidates:
+              _,_,_,_,_,_,bi,lag,bst,br=candidates[0]
+              raw=[s for s in samples if s['btc_imp']>=bi and s['lag']<=lag and abs(s['btc_st'])<=bst and s['btc_rng']<=br and s['pump_low']>=-1.0]
+              iso=[]; last=-999
+              for s in raw:
+                  if s['i']-last>=12: iso.append(s); last=s['i']
+              print('\n=== ISOLATED BEST, >=60m APART ===')
+              print('params',bi,lag,bst,br,'N',len(iso))
+              if iso:
+                  print('Pup1',fmt(sum(s['up60']>=1 for s in iso)/len(iso)),'Pup2',fmt(sum(s['up60']>=2 for s in iso)/len(iso)),'avgR60',fmt(sum(s['r60'] for s in iso)/len(iso)),'avgRel60',fmt(sum(s['rel60'] for s in iso)/len(iso)))
+          PY
