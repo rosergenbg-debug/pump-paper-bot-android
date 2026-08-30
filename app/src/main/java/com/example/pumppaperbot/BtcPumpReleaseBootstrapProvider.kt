@@ -51,8 +51,13 @@ internal object BtcPumpReleaseLifecycle : Application.ActivityLifecycleCallbacks
 
     override fun onActivityResumed(activity: Activity) {
         if (activity !is MainActivity) return
-        activity.window?.decorView?.post {
-            start(activity)
+        val decor = activity.window?.decorView ?: return
+        // The real V513Application also posts its legacy BTC/money-flow injectors on resume.
+        // Double-post lets those existing views settle first, then places our panel between BTC and PUMP.
+        decor.post {
+            decor.post {
+                start(activity)
+            }
         }
     }
 
