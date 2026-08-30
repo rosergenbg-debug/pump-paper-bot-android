@@ -20,7 +20,7 @@ class MoneyFlowPresentationTest {
         )
     )
 
-    @Test fun `fresh mature snapshot exposes exact one five and fifteen minute money`() {
+    @Test fun `fresh mature snapshot exposes exact money through one hour`() {
         val now = 1_000_000L
         val data = MoneyFlowPresentation.from(
             MicroImpulseSnapshot(
@@ -32,7 +32,11 @@ class MoneyFlowPresentationTest {
                 sellNotional5m = 400.0,
                 buyNotional15m = 1_200.0,
                 sellNotional15m = 1_800.0,
-                flowHistorySeconds = 900L
+                buyNotional30m = 3_500.0,
+                sellNotional30m = 3_000.0,
+                buyNotional60m = 8_000.0,
+                sellNotional60m = 7_000.0,
+                flowHistorySeconds = 3_600L
             ),
             breathing,
             now
@@ -44,6 +48,8 @@ class MoneyFlowPresentationTest {
         assertEquals(40.0, data.oneMinute.netUsdt, 0.000001)
         assertEquals(200.0, data.fiveMinutes.netUsdt, 0.000001)
         assertEquals(-600.0, data.fifteenMinutes.netUsdt, 0.000001)
+        assertEquals(500.0, data.thirtyMinutes.netUsdt, 0.000001)
+        assertEquals(1_000.0, data.sixtyMinutes.netUsdt, 0.000001)
         assertEquals(1.0, data.activityRatio ?: 0.0, 0.000001)
         assertEquals(22, data.flowScore15m)
     }
@@ -69,6 +75,8 @@ class MoneyFlowPresentationTest {
         assertTrue(data.oneMinute.ready)
         assertTrue(data.fiveMinutes.ready)
         assertFalse(data.fifteenMinutes.ready)
+        assertFalse(data.thirtyMinutes.ready)
+        assertFalse(data.sixtyMinutes.ready)
         assertEquals(null, data.activityRatio)
     }
 

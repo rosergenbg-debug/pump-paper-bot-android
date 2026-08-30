@@ -69,10 +69,20 @@ class V513Application : Application() {
                 if (activity.isFinishing || activity.isDestroyed || !chart.isAttachedToWindow) return
                 val now = System.currentTimeMillis()
                 val breathing = LiveMarketBreathingStore.snapshot(activity, now)
+                val micro = MicroImpulseStore.state(activity)
                 chart.setFlowScores(MainChartFlowPresentation.from(breathing))
                 V513MainUiInjector.updateMoneyFlow(
                     activity,
-                    MoneyFlowPresentation.from(MicroImpulseStore.state(activity), breathing, now)
+                    MoneyFlowPresentation.from(micro, breathing, now)
+                )
+                V513MainUiInjector.updateBtc(
+                    activity,
+                    BtcMiniPresentation.from(
+                        PumpBotEngine.btcCandles(activity),
+                        micro.bitcoinPriceUsdt.takeIf { it > 0.0 },
+                        micro.bitcoinUpdatedAt,
+                        now
+                    )
                 )
                 chart.postDelayed(this, 2_000L)
             }
@@ -116,11 +126,42 @@ class V513Application : Application() {
 
 internal object V513MainUiInjector {
     private const val ROW_TAG = "v513_big_overview_row"
+    private const val DETAILS_TAG = "v690_details_toggle"
+    private val detailIds = intArrayOf(
+        R.id.tvDeepSeekPrimary,
+        R.id.tvDeepSeekActionLevel,
+        R.id.btnCriticalOverview,
+        R.id.tvBuyerBreathSummary,
+        R.id.tvLatestSignal,
+        R.id.tvMode,
+        R.id.tvReadiness,
+        R.id.tvPrice,
+        R.id.tvReason,
+        R.id.tvPosition,
+        R.id.tvPositionSupervisor,
+        R.id.tvBreathingState,
+        R.id.tvEnergy,
+        R.id.tvDirection,
+        R.id.tvConfidence,
+        R.id.tvLateRisk,
+        R.id.tvMicrostructure,
+        R.id.btnRisk30,
+        R.id.btnRisk35,
+        R.id.tvAlertStatus,
+        R.id.btnAlertSettings,
+        R.id.btnDeepSeekApi,
+        R.id.btnGeminiApi,
+        R.id.btnStart,
+        R.id.btnCheck,
+        R.id.btnReset
+    )
 
     fun install(activity: Activity) {
         if (activity !is MainActivity) return
 
+        installDetailsToggle(activity)
         installMoneyFlowStrip(activity)
+        installBtcMiniChart(activity)
         activity.findViewById<StrategyChartView>(R.id.chart)?.setOnClickListener {
             open(activity, false)
         }
@@ -174,10 +215,68 @@ internal object V513MainUiInjector {
         parent.addView(row, index, rowParams)
     }
 
+    private fun installDetailsToggle(activity: MainActivity) {
+        val title = activity.findViewById<TextView>(R.id.tvStatus) ?: return
+        val parent = title.parent as? LinearLayout ?: return
+        if (parent.findViewWithTag<View>(DETAILS_TAG) != null) return
+        var open = false
+        fun applyVisibility() {
+            detailIds.forEach { id -> activity.findViewById<View>(id)?.visibility = if (open) View.VISIBLE else View.GONE }
+        }
+        val toggle = Button(activity).apply {
+            tag = DETAILS_TAG
+            text = "ПОДРОБНОСТИ И УПРАВЛЕНИЕ ▼"
+            setTextColor(Color.WHITE)
+            setBackgroundColor(Color.parseColor("#30363D"))
+            textSize = 12f
+            isAllCaps = false
+            setOnClickListener {
+                open = !open
+                text = if (open) "СКРЫТЬ ПОДРОБНОСТИ ▲" else "ПОДРОБНОСТИ И УПРАВЛЕНИЕ ▼"
+                applyVisibility()
+            }
+        }
+        parent.addView(
+            toggle,
+            parent.indexOfChild(title) + 1,
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(activity, 46)).apply {
+                topMargin = dp(activity, 6)
+            }
+        )
+        applyVisibility()
+    }
+
     fun updateMoneyFlow(activity: Activity, data: MoneyFlowPanelData) {
         activity.window?.decorView
             ?.findViewWithTag<MoneyFlowStripView>(MoneyFlowStripView.VIEW_TAG)
             ?.setData(data)
+    }
+
+    fun updateBtc(activity: Activity, data: BtcMiniChartData) {
+        activity.window?.decorView
+            ?.findViewWithTag<BtcMiniChartView>(BtcMiniChartView.VIEW_TAG)
+            ?.setData(data)
+    }
+
+    private fun installBtcMiniChart(activity: MainActivity) {
+        val chart = activity.findViewById<StrategyChartView>(R.id.chart) ?: return
+        val root = chart.parent as? LinearLayout ?: return
+        if (root.findViewWithTag<BtcMiniChartView>(BtcMiniChartView.VIEW_TAG) != null) return
+        val index = root.indexOfChild(chart)
+        if (index < 0) return
+        root.addView(
+            BtcMiniChartView(activity).apply {
+                contentDescription = "График Bitcoin за 24 часа и изменения за 2, 6 и 24 часа"
+            },
+            index,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                dp(activity, 132)
+            ).apply {
+                topMargin = dp(activity, 8)
+                bottomMargin = dp(activity, 2)
+            }
+        )
     }
 
     private fun installMoneyFlowStrip(activity: MainActivity) {
@@ -187,15 +286,15 @@ internal object V513MainUiInjector {
         val index = root.indexOfChild(chart)
         if (index < 0) return
         val strip = MoneyFlowStripView(activity).apply {
-            minimumHeight = dp(activity, 104)
-            contentDescription = "Денежный поток за одну, пять и пятнадцать минут"
+            minimumHeight = dp(activity, 215)
+            contentDescription = "Денежный поток сейчас, за пять, пятнадцать, тридцать и шестьдесят минут"
         }
         root.addView(
             strip,
-            index,
+            (index + 1).coerceAtMost(root.childCount),
             LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                dp(activity, 104)
+                dp(activity, 215)
             ).apply {
                 topMargin = dp(activity, 8)
                 bottomMargin = dp(activity, 2)
@@ -238,7 +337,7 @@ internal object V518BigOverviewInjector {
             setPadding(dp(activity, 0), dp(activity, 4), dp(activity, 0), dp(activity, 4))
         }
         section.addView(TextView(activity).apply {
-            text = "ДЕНЕЖНАЯ МАССА • 1 / 5 / 15 МИН"
+            text = "ДЕНЕЖНЫЙ ПОТОК • СЕЙЧАС / 5 / 15 / 30 / 60 МИН"
             setTextColor(Color.parseColor("#F0F6FC"))
             textSize = 17f
             setTypeface(typeface, android.graphics.Typeface.BOLD)

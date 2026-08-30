@@ -267,14 +267,18 @@ object V6ScalpReportStore {
             appendLine("rowsInPart=${rows.size}; totalRows=${lines.size}; uploadAllParts=${count > 1}")
             rows.forEach { appendLine(it) }
         }
+        val fixedBytes = payload(emptyList()).toByteArray(Charsets.UTF_8).size
+        var currentBytes = fixedBytes
         lines.forEach { row ->
-            val candidate = ArrayList(current).apply { add(row) }
-            if (payload(candidate).toByteArray(Charsets.UTF_8).size <= maxBytes) {
-                current = candidate
+            val rowBytes = row.toByteArray(Charsets.UTF_8).size + 1
+            require(fixedBytes + rowBytes <= maxBytes) { "Одна строка V6 отчёта превысила лимит" }
+            if (currentBytes + rowBytes <= maxBytes) {
+                current += row
+                currentBytes += rowBytes
             } else {
-                require(current.isNotEmpty()) { "Одна строка V6 отчёта превысила лимит" }
                 groups += current
                 current = arrayListOf(row)
+                currentBytes = fixedBytes + rowBytes
             }
         }
         if (current.isNotEmpty() || groups.isEmpty()) groups += current

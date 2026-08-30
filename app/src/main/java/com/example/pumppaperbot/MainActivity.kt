@@ -35,6 +35,8 @@ class MainActivity : AppCompatActivity() {
     private val handler = Handler(Looper.getMainLooper())
     private val chartExecutor = Executors.newSingleThreadExecutor()
     private val chartSyncRunning = AtomicBoolean(false)
+    private val reportExecutor = Executors.newSingleThreadExecutor()
+    private val reportExportRunning = AtomicBoolean(false)
     private val refreshUi = object : Runnable {
         override fun run() {
             updateUi()
@@ -232,12 +234,10 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, BitpandaFusionActivity::class.java))
         }
         btnUnifiedLog?.setOnClickListener {
-            runCatching { UnifiedResearchLog.share(this) }
-                .onFailure { Toast.makeText(this, it.message ?: "Ошибка экспорта лога", Toast.LENGTH_LONG).show() }
+            exportSupportLog(SupportLogFormat.JSON)
         }
         btnRecentLog?.setOnClickListener {
-            runCatching { UnifiedResearchLog.shareRecent24h(this) }
-                .onFailure { Toast.makeText(this, it.message ?: "Ошибка экспорта 24-часового лога", Toast.LENGTH_LONG).show() }
+            exportSupportLog(SupportLogFormat.TEXT)
         }
         chart?.setOnClickListener { startActivity(Intent(this, ChartDetailActivity::class.java)) }
         chart?.setVisibleBarLimit(mainChartVisibleBarLimit())
@@ -261,8 +261,76 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         chartExecutor.shutdownNow()
+        reportExecutor.shutdownNow()
         super.onDestroy()
     }
+
+    private fun exportSupportLog(format: SupportLogFormat) {
+        if (!reportExportRunning.compareAndSet(false, true)) {
+            Toast.makeText(this, "Отчёт уже создаётся", Toast.LENGTH_SHORT).show()
+            return
+        }
+        btnUnifiedLog?.isEnabled = false
+        btnRecentLog?.isEnabled = false
+        val active = if (format == SupportLogFormat.JSON) btnUnifiedLog else btnRecentLog
+        active?.text = "СОБИРАЮ И ПРОВЕРЯЮ…"
+        val appContext = applicationContext
+        reportExecutor.execute {
+            val result = runCatching {
+                when (format) {
+                    SupportLogFormat.JSON -> UnifiedResearchLog.exportRecent24h(appContext).also {
+                        SupportExportValidator.validateJsonFiles(it)
+                    }
+                    SupportLogFormat.TEXT -> V6ScalpReportStore.exportRecent(appContext, 24).also {
+                        SupportExportValidator.validateTextFiles(it)
+                    }
+                }
+            }
+            runOnUiThread {
+                reportExportRunning.set(false)
+                restoreReportButtons()
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                result.onSuccess { files ->
+                    runCatching {
+                        SupportReportDelivery.share(
+                            this,
+                            files,
+                            if (format == SupportLogFormat.JSON) "application/json" else "text/plain",
+                            "PumpSignal V${BuildConfig.VERSION_NAME} — лог за 24 часа",
+                            "Сохранить или отправить лог за 24 часа"
+                        )
+                    }.onFailure { error -> showReportError(error) }
+                }.onFailure(::showReportError)
+            }
+        }
+    }
+
+    private fun restoreReportButtons() {
+        btnUnifiedLog?.apply {
+            isEnabled = true
+            text = "ЛОГ 24 ЧАСА\nJSON"
+        }
+        btnRecentLog?.apply {
+            isEnabled = true
+            text = "ЛОГ 24 ЧАСА • TXT • ПРОВЕРКА ПЕРЕД ОТПРАВКОЙ"
+        }
+    }
+
+    private fun showReportError(error: Throwable) {
+        UnifiedResearchLog.record(
+            this,
+            "SUPPORT_EXPORT",
+            "ERROR",
+            error.message ?: error.javaClass.simpleName
+        )
+        Toast.makeText(
+            this,
+            "Лог не создан: ${error.message ?: "неизвестная ошибка"}",
+            Toast.LENGTH_LONG
+        ).show()
+    }
+
+    private enum class SupportLogFormat { JSON, TEXT }
 
     private fun startMonitor() {
         PumpBotEngine.setRunning(this, true)
