@@ -51,6 +51,7 @@ class StableScrollApplication : Application() {
         MainChartRangeGuideOverlay.install(chart)
         // V6.9.2: additive, presentation-only BTC→PUMP context. No existing view is moved or hidden.
         val releaseGauge = BtcPumpReleasePanelInstaller.install(chart)
+        var lastReleaseRefreshAt = 0L
         val updater = object : Runnable {
             override fun run() {
                 if (activity.isFinishing || activity.isDestroyed || !chart.isAttachedToWindow) return
@@ -60,12 +61,16 @@ class StableScrollApplication : Application() {
                         LiveMarketBreathingStore.snapshot(activity, now)
                     )
                 )
-                releaseGauge?.setData(
-                    BtcPumpReleasePolicy.evaluate(
-                        BtcPumpReleaseLiveSource.recentMinuteSamples(activity, now),
-                        now
+                // Tail CSV parsing is intentionally throttled; the existing 2s chart animation stays light.
+                if (releaseGauge != null && now - lastReleaseRefreshAt >= 10_000L) {
+                    releaseGauge.setData(
+                        BtcPumpReleasePolicy.evaluate(
+                            BtcPumpReleaseLiveSource.recentMinuteSamples(activity, now),
+                            now
+                        )
                     )
-                )
+                    lastReleaseRefreshAt = now
+                }
                 chart.postDelayed(this, 2_000L)
             }
         }
