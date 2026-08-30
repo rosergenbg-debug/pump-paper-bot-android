@@ -25,6 +25,12 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/share_paths" />
         </provider>
+        <!-- V6.9.3: startup bootstrap for the additive BTC→PUMP research panel. -->
+        <provider
+            android:name=".BtcPumpReleaseBootstrapProvider"
+            android:authorities="${applicationId}.btc-pump-release-bootstrap"
+            android:exported="false"
+            android:initOrder="100" />
         <activity
             android:name=".BitpandaFusionActivity"
             android:exported="false"
