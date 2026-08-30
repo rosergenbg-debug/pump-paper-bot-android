@@ -1,0 +1,49 @@
+name: Patch V6.9.3 Main CI Temp
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - '.github/workflows/patch-v693-main-ci-temp.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Patch canonical Android workflow to V6.9.3
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('.github/workflows/android.yml')
+          s = p.read_text()
+          s = s.replace('V6.9.2', 'V6.9.3')
+          s = s.replace('6.9.2', '6.9.3')
+          s = s.replace('v692', 'v693')
+          s = s.replace("versionCode='131'", "versionCode='132'")
+          anchor = "          grep -Fq 'НЕ BUY-СИГНАЛ' app/src/main/java/com/example/pumppaperbot/BtcPumpReleaseGaugeView.kt\n"
+          guard = (
+              "          grep -Fq 'android:name=\".BtcPumpReleaseBootstrapProvider\"' app/src/main/AndroidManifest.xml\n"
+              "          grep -Fq 'installImmediatelyBeforeMainPumpChart' app/src/main/java/com/example/pumppaperbot/BtcPumpReleaseBootstrapProvider.kt\n"
+          )
+          if 'installImmediatelyBeforeMainPumpChart' not in s:
+              if anchor not in s:
+                  raise SystemExit('expected guard anchor missing')
+              s = s.replace(anchor, anchor + guard, 1)
+          p.write_text(s)
+          PY
+          git diff --check
+          grep -Fq 'Validate and build V6.9.3' .github/workflows/android.yml
+          grep -Fq "versionCode='132' versionName='6.9.3'" .github/workflows/android.yml
+          grep -Fq 'BtcPumpReleaseBootstrapProvider' .github/workflows/android.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/android.yml
+          git commit -m "CI: align canonical Android build with V6.9.3"
+          git push origin HEAD:main
