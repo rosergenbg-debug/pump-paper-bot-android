@@ -49,12 +49,21 @@ class StableScrollApplication : Application() {
         val chart = activity.findViewById<StrategyChartView>(R.id.chart) ?: return
         chart.setMainViewportMode(true)
         MainChartRangeGuideOverlay.install(chart)
+        // V6.9.2: additive, presentation-only BTC→PUMP context. No existing view is moved or hidden.
+        val releaseGauge = BtcPumpReleasePanelInstaller.install(chart)
         val updater = object : Runnable {
             override fun run() {
                 if (activity.isFinishing || activity.isDestroyed || !chart.isAttachedToWindow) return
+                val now = System.currentTimeMillis()
                 chart.setFlowScores(
                     MainChartFlowPresentation.from(
-                        LiveMarketBreathingStore.snapshot(activity, System.currentTimeMillis())
+                        LiveMarketBreathingStore.snapshot(activity, now)
+                    )
+                )
+                releaseGauge?.setData(
+                    BtcPumpReleasePolicy.evaluate(
+                        BtcPumpReleaseLiveSource.recentMinuteSamples(activity, now),
+                        now
                     )
                 )
                 chart.postDelayed(this, 2_000L)
