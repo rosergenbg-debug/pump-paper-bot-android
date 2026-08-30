@@ -71,7 +71,7 @@ class BtcMiniChartView(context: Context) : View(context) {
         color = Color.parseColor("#F0F6FC"); textSize = sp(11f); isFakeBoldText = true
     }
     private val metric = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#C9D1D9"); textSize = sp(9.5f); textAlign = Paint.Align.RIGHT
+        color = Color.parseColor("#C9D1D9"); textSize = sp(9.5f); textAlign = Paint.Align.LEFT
     }
     private val stale = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.parseColor("#FF7B72"); textSize = sp(9f); textAlign = Paint.Align.RIGHT
@@ -92,17 +92,19 @@ class BtcMiniChartView(context: Context) : View(context) {
         val price = d?.currentPrice?.let { String.format(Locale.GERMANY, "$%,.0f", it) } ?: "$—"
         canvas.drawText("BITCOIN • 24 ЧАСА • $price", dp(8f), dp(17f), title)
         if (d != null) {
-            val metrics = "2ч ${BtcMiniPresentation.signedPercent(d.change2h)}   " +
-                "6ч ${BtcMiniPresentation.signedPercent(d.change6h)}   " +
-                "24ч ${BtcMiniPresentation.signedPercent(d.change24h)}"
-            canvas.drawText(metrics, width - dp(8f), dp(17f), metric)
-            if (!d.fresh) canvas.drawText("ДАННЫЕ НЕ СВЕЖИЕ", width - dp(8f), dp(34f), stale)
+            drawMetric(canvas, "2ч", d.change2h, dp(39f))
+            drawMetric(canvas, "6ч", d.change6h, dp(58f))
+            drawMetric(canvas, "24ч", d.change24h, dp(77f))
+            if (!d.fresh) {
+                stale.textAlign = Paint.Align.LEFT
+                canvas.drawText("НЕ СВЕЖИЕ", dp(8f), height - dp(9f), stale)
+            }
         }
         val points = d?.points.orEmpty()
         if (points.size < 2) return
-        val left = dp(8f)
+        val left = dp(82f)
         val right = width - dp(8f)
-        val top = dp(35f)
+        val top = dp(28f)
         val bottom = height - dp(8f)
         val low = points.minOf { it.second }
         val high = points.maxOf { it.second }
@@ -120,6 +122,16 @@ class BtcMiniChartView(context: Context) : View(context) {
             else -> Color.parseColor("#F0B72F")
         }
         canvas.drawPath(path, line)
+    }
+
+    private fun drawMetric(canvas: Canvas, period: String, value: Double?, baseline: Float) {
+        metric.color = when {
+            value == null -> Color.parseColor("#8B949E")
+            value > 0.0 -> Color.parseColor("#3FB950")
+            value < 0.0 -> Color.parseColor("#F85149")
+            else -> Color.parseColor("#C9D1D9")
+        }
+        canvas.drawText("$period ${BtcMiniPresentation.signedPercent(value)}", dp(8f), baseline, metric)
     }
 
     private fun dp(value: Float): Float = value * resources.displayMetrics.density

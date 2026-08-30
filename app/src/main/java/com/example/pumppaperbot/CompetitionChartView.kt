@@ -46,12 +46,6 @@ class CompetitionChartView @JvmOverloads constructor(
         textAlign = Paint.Align.RIGHT
         isFakeBoldText = true
     }
-    private val innerRangeGuide = Paint(rangeGuide).apply {
-        color = Color.parseColor("#FFF0A6")
-        strokeWidth = dp(0.9f)
-        alpha = 190
-        pathEffect = DashPathEffect(floatArrayOf(dp(3f), dp(3f)), 0f)
-    }
     private val buy = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#32C789") }
     private val sell = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#FF4D6D") }
     private val tradeWin = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -199,9 +193,9 @@ class CompetitionChartView @JvmOverloads constructor(
         val rangeLevels = RangeGuidePolicy.levels(visible.last().close)
         var low = visible.minOf { it.low }
         var high = visible.maxOf { it.high }
-        if (rangeLevels != null) {
-            low = min(low, rangeLevels.outerLower)
-            high = max(high, rangeLevels.outerUpper)
+        rangeLevels?.levels?.firstOrNull()?.let { nearest ->
+            low = min(low, nearest.lower)
+            high = max(high, nearest.upper)
         }
         val padding = max((high - low) * 0.08, high * 0.001)
         low -= padding
@@ -215,10 +209,10 @@ class CompetitionChartView @JvmOverloads constructor(
             canvas.drawLine(left, gy, right, gy, grid)
         }
         rangeLevels?.let { levels ->
-            drawRangeGuide(canvas, left, right, top, y(levels.outerUpper), "+1,5%", rangeGuide)
-            drawRangeGuide(canvas, left, right, top, y(levels.innerUpper), "+1%", innerRangeGuide)
-            drawRangeGuide(canvas, left, right, top, y(levels.innerLower), "−1%", innerRangeGuide)
-            drawRangeGuide(canvas, left, right, top, y(levels.outerLower), "−1,5%", rangeGuide)
+            levels.levels.forEach { level ->
+                drawRangeGuide(canvas, left, right, top, bottom, y(level.upper), "+${level.percent}%")
+                drawRangeGuide(canvas, left, right, top, bottom, y(level.lower), "−${level.percent}%")
+            }
         }
         val path = Path()
         visible.forEachIndexed { index, candle ->
@@ -331,11 +325,12 @@ class CompetitionChartView @JvmOverloads constructor(
         left: Float,
         right: Float,
         top: Float,
+        bottom: Float,
         guideY: Float,
-        text: String,
-        paint: Paint
+        text: String
     ) {
-        canvas.drawLine(left, guideY, right, guideY, paint)
+        if (guideY !in top..bottom) return
+        canvas.drawLine(left, guideY, right, guideY, rangeGuide)
         canvas.drawText(
             text,
             right - dp(3f),

@@ -6,14 +6,11 @@ import org.junit.Test
 
 class RangeGuidePolicyTest {
     @Test
-    fun `inner and outer ranges are exactly one and one point five percent`() {
+    fun `grid uses exact integer percentages one through four`() {
         val levels = RangeGuidePolicy.levels(100.0)!!
-        assertEquals(101.5, levels.outerUpper, 0.000000001)
-        assertEquals(101.0, levels.innerUpper, 0.000000001)
-        assertEquals(99.0, levels.innerLower, 0.000000001)
-        assertEquals(98.5, levels.outerLower, 0.000000001)
-        assertEquals(3.0, levels.outerUpper - levels.outerLower, 0.000000001)
-        assertEquals(2.0, levels.innerUpper - levels.innerLower, 0.000000001)
+        assertEquals(listOf(1, 2, 3, 4), levels.levels.map { it.percent })
+        assertEquals(listOf(101.0, 102.0, 103.0, 104.0), levels.levels.map { it.upper })
+        assertEquals(listOf(99.0, 98.0, 97.0, 96.0), levels.levels.map { it.lower })
     }
 
     @Test

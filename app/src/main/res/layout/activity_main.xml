@@ -35,11 +35,11 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="7dp"
             android:background="#10251C"
-            android:minHeight="44dp"
-            android:padding="7dp"
+            android:minHeight="38dp"
+            android:padding="5dp"
             android:text="DEEPSEEK АНАЛИТИК • ожидает первый анализ"
             android:textColor="#7EE787"
-            android:textSize="12sp"
+            android:textSize="11sp"
             android:textStyle="bold" />
 
         <TextView
@@ -49,17 +49,17 @@
             android:layout_marginTop="7dp"
             android:background="#3A171A"
             android:gravity="center"
-            android:minHeight="66dp"
-            android:padding="7dp"
+            android:minHeight="52dp"
+            android:padding="5dp"
             android:text="DEEPSEEK АНАЛИТИК • РЫНОЧНЫЙ КОНТЕКСТ\nне управляет счётом Pump Machine"
             android:textColor="#FF7B72"
-            android:textSize="14sp"
+            android:textSize="12sp"
             android:textStyle="bold" />
 
         <Button
             android:id="@+id/btnCriticalOverview"
             android:layout_width="match_parent"
-            android:layout_height="56dp"
+            android:layout_height="48dp"
             android:layout_marginTop="7dp"
             android:backgroundTint="#9A6700"
             android:text="КРИТИЧЕСКИЙ ОБЗОР • ДЫХАНИЕ | СТАКАН | BTC"
@@ -73,12 +73,12 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="7dp"
             android:background="#161B22"
-            android:lineSpacingExtra="2dp"
-            android:minHeight="106dp"
-            android:padding="11dp"
+            android:lineSpacingExtra="1dp"
+            android:minHeight="74dp"
+            android:padding="8dp"
             android:text="ДЫХАНИЕ РЫНКА • ждём живой поток\nНажмите, чтобы открыть общий критический обзор"
             android:textColor="#C9D1D9"
-            android:textSize="14sp"
+            android:textSize="12sp"
             android:textStyle="bold" />
 
         <TextView
@@ -87,29 +87,29 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="9dp"
             android:background="#172033"
-            android:minHeight="86dp"
-            android:padding="10dp"
+            android:minHeight="68dp"
+            android:padding="8dp"
             android:text="ПОСЛЕДНИЙ СИГНАЛ\nПока сигналов нет"
             android:textColor="#DDE7F7"
-            android:textSize="14sp"
+            android:textSize="12sp"
             android:textStyle="bold" />
 
         <TextView
             android:id="@+id/tvMode"
             android:layout_width="match_parent"
-            android:layout_height="52dp"
+            android:layout_height="44dp"
             android:layout_marginTop="12dp"
             android:background="#30363D"
             android:gravity="center"
             android:text="ЖДЁМ НОВЫЙ ВХОД СНИЗУ"
             android:textColor="#C9D1D9"
-            android:textSize="16sp"
+            android:textSize="14sp"
             android:textStyle="bold" />
 
         <TextView
             android:id="@+id/tvReadiness"
             android:layout_width="match_parent"
-            android:layout_height="98dp"
+            android:layout_height="72dp"
             android:layout_marginTop="10dp"
             android:background="#161B22"
             android:gravity="center"
@@ -117,7 +117,7 @@
             android:text="ГОТОВНОСТЬ СИГНАЛА 0/100"
             android:textColor="#C9D1D9"
             android:maxLines="3"
-            android:textSize="18sp"
+            android:textSize="15sp"
             android:textStyle="bold" />
 
         <LinearLayout
@@ -298,12 +298,13 @@
         <Button
             android:id="@+id/btnCompetition"
             android:layout_width="match_parent"
-            android:layout_height="50dp"
-            android:layout_marginTop="7dp"
-            android:backgroundTint="#1F6FEB"
-            android:text="СЕТЬ V6.7 • 2 X AUTO | HUMAN | СЕРЖ | APP"
+            android:layout_height="64dp"
+            android:layout_marginTop="10dp"
+            android:backgroundTint="#8250DF"
+            android:gravity="center"
+            android:text="БОТЫ • 2 X AUTO | HUMAN | СЕРЖ | APP&#10;НАЖАТЬ — ОТКРЫТЬ ВСЕ ГРАФИКИ"
             android:textColor="#FFFFFF"
-            android:textSize="13sp"
+            android:textSize="14sp"
             android:textStyle="bold" />
 
         <LinearLayout
