@@ -1,0 +1,61 @@
+name: Android V6.9.3 Visible Panel Temp
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - '.github/workflows/android-v693-visible-panel-temp.yml'
+      - 'app/build.gradle'
+      - 'app/src/main/AndroidManifest.xml'
+      - 'app/src/main/java/com/example/pumppaperbot/BtcPumpReleaseBootstrapProvider.kt'
+      - 'app/src/main/java/com/example/pumppaperbot/BtcPumpReleaseGaugeView.kt'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Guard actual runtime wiring
+        run: |
+          set -euo pipefail
+          grep -Fq 'android:name=".V513Application"' app/src/main/AndroidManifest.xml
+          grep -Fq 'android:name=".BtcPumpReleaseBootstrapProvider"' app/src/main/AndroidManifest.xml
+          grep -Fq 'BtcPumpReleaseLifecycle' app/src/main/java/com/example/pumppaperbot/BtcPumpReleaseBootstrapProvider.kt
+          grep -Fq 'installImmediatelyBeforeMainPumpChart' app/src/main/java/com/example/pumppaperbot/BtcPumpReleaseBootstrapProvider.kt
+          grep -Fq 'BtcPumpReleaseGaugeView' app/src/main/java/com/example/pumppaperbot/BtcPumpReleaseBootstrapProvider.kt
+          grep -Fq 'versionCode 132' app/build.gradle
+          grep -Fq 'versionName "6.9.3"' app/build.gradle
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Test lint and build V6.9.3
+        run: |
+          chmod +x gradlew
+          ./gradlew testDebugUnitTest lintDebug assembleDebug
+
+      - name: Verify exact APK identity
+        run: |
+          set -euo pipefail
+          APK=app/build/outputs/apk/debug/app-debug.apk
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose --print-certs "$APK"
+          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging "$APK" | tee "$RUNNER_TEMP/badging.txt"
+          grep -F "package: name='com.example.pumppaperbot.v8' versionCode='132' versionName='6.9.3'" "$RUNNER_TEMP/badging.txt"
+          grep -F "launchable-activity: name='com.example.pumppaperbot.MainActivity'" "$RUNNER_TEMP/badging.txt"
+          unzip -t "$APK"
+          test "$(stat -c%s "$APK")" -gt 6000000
+
+      - name: Upload verified V6.9.3 intermediate
+        uses: actions/upload-artifact@v4
+        with:
+          name: PumpSignal-V6.9.3-Verified-Intermediate
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 7
