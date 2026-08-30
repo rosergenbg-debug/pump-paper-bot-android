@@ -1,0 +1,105 @@
+name: Research BTC-PUMP compression-release 60d
+on:
+  push:
+    branches: ["research/pump-flow-60d-20260830"]
+    paths: [".github/workflows/research-btc-pump-compression-release-60d.yml"]
+permissions:
+  contents: read
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test flat PUMP absorption while BTC rises then stabilizes
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import urllib.request,urllib.parse,json,time,math
+          from datetime import datetime,timezone
+          NOW=int(time.time()*1000); START=NOW-60*86400000; STEP=300000
+          def load(sym):
+            out={}; cur=START
+            while cur<NOW:
+              qs=urllib.parse.urlencode({'symbol':sym,'interval':'5m','limit':1000,'startTime':cur,'endTime':NOW})
+              with urllib.request.urlopen('https://data-api.binance.vision/api/v3/klines?'+qs,timeout=30) as r:b=json.load(r)
+              if not b:break
+              for x in b:
+                if int(x[6])>=NOW:continue
+                q=float(x[7]); buy=float(x[10]); sell=max(0.0,q-buy)
+                out[int(x[0])]=dict(o=float(x[1]),h=float(x[2]),l=float(x[3]),c=float(x[4]),q=q,buy=buy,sell=sell,net=buy-sell)
+              nxt=int(b[-1][0])+STEP
+              if nxt<=cur:break
+              cur=nxt; time.sleep(.03)
+            return out
+          p=load('PUMPUSDT'); b=load('BTCUSDT'); ts=sorted(set(p)&set(b)); P=[p[t] for t in ts]; B=[b[t] for t in ts]; n=len(ts)
+          def ret(A,a,z):return (A[z]['c']/A[a]['c']-1)*100
+          def rng(A,a,z):return (max(x['h'] for x in A[a:z+1])/min(x['l'] for x in A[a:z+1])-1)*100
+          def qtl(xs,p):
+            y=sorted(xs); q=(len(y)-1)*p; a=int(math.floor(q)); z=int(math.ceil(q)); return y[a] if a==z else y[a]*(z-q)+y[z]*(q-a)
+          S=[]
+          for i in range(24,n-25):
+            a=i-9; m=i-3
+            bi=ret(B,a,m); pi=ret(P,a,m); lag=pi-bi
+            bs=ret(B,m,i); br=rng(B,i-2,i); ps=ret(P,m,i); pr=rng(P,a,i)
+            pmin=(min(x['l'] for x in P[a:i+1])/P[a]['c']-1)*100
+            q15=sum(x['q'] for x in P[i-2:i+1]); buy15=sum(x['buy'] for x in P[i-2:i+1]); net15=2*buy15-q15; sh15=buy15/q15 if q15 else 0
+            q30=sum(x['q'] for x in P[i-5:i+1]); buy30=sum(x['buy'] for x in P[i-5:i+1]); net30=2*buy30-q30; sh30=buy30/q30 if q30 else 0
+            fut=P[i+1:i+13]; up=(max(x['h'] for x in fut)/P[i]['c']-1)*100; r=ret(P,i,i+12); rb=ret(B,i,i+12); rel=r-rb
+            S.append(dict(i=i,bi=bi,pi=pi,lag=lag,bs=bs,br=br,ps=ps,pr=pr,pmin=pmin,q15=q15,net15=net15,sh15=sh15,q30=q30,net30=net30,sh30=sh30,up=up,r=r,rel=rel))
+          base2=sum(x['up']>=2 for x in S)/len(S); base1=sum(x['up']>=1 for x in S)/len(S)
+          print('ROWS',n,'BASE up1',round(base1,3),'up2',round(base2,3),'avgR',round(sum(x['r'] for x in S)/len(S),3))
+          # Honest concept grid: BTC prior impulse; PUMP stayed approximately flat; BTC stabilized; PUMP remained contained.
+          C=[]
+          for bi in [.25,.35,.45,.55,.70]:
+            for flat in [.10,.20,.30,.40]:
+              for lag in [-.25,-.35,-.50]:
+                for bst in [.10,.15,.20]:
+                  for br in [.25,.35,.45]:
+                    for turn in [-.15,-.05,0,.05,.10]:
+                      z=[x for x in S if x['bi']>=bi and abs(x['pi'])<=flat and x['lag']<=lag and abs(x['bs'])<=bst and x['br']<=br and x['ps']>=turn and x['pmin']>=-.75]
+                      if len(z)<40:continue
+                      p1=sum(x['up']>=1 for x in z)/len(z); p2=sum(x['up']>=2 for x in z)/len(z); av=sum(x['r'] for x in z)/len(z); rel=sum(x['rel'] for x in z)/len(z)
+                      C.append((p2/base2,p2,p1,av,rel,len(z),bi,flat,lag,bst,br,turn))
+          C.sort(reverse=True)
+          print('\n=== TOP COMPRESSION-RELEASE FAMILIES ===')
+          for row in C[:30]:
+            lift,p2,p1,av,rel,N,bi,flat,lag,bst,br,turn=row
+            print('N',N,'btcImp',bi,'pumpFlat',flat,'lag',lag,'btcAbs15',bst,'btcRange15',br,'pumpTurn15',turn,'up1',round(p1,3),'up2',round(p2,3),'lift2',round(lift,2),'avgR',round(av,3),'rel',round(rel,3))
+          # Robust named rule based on broad, interpretable thresholds, not top overfit cell.
+          rules=[
+            ('A',.35,.30,-.35,.20,.45,-.05),
+            ('B',.35,.30,-.35,.15,.35,0.0),
+            ('C',.45,.30,-.35,.20,.45,0.0),
+            ('D',.35,.20,-.35,.20,.45,0.0),
+          ]
+          def select(par, arr=S):
+            _,bi,flat,lag,bst,br,turn=par
+            return [x for x in arr if x['bi']>=bi and abs(x['pi'])<=flat and x['lag']<=lag and abs(x['bs'])<=bst and x['br']<=br and x['ps']>=turn and x['pmin']>=-.75]
+          mid=len(S)//2
+          for rule in rules:
+            name=rule[0]; z=select(rule); e=select(rule,S[:mid]); r=select(rule,S[mid:])
+            print('\nRULE',name,rule[1:])
+            for lab,g in [('ALL',z),('EARLY30',e),('RECENT30',r)]:
+              if not g:print(lab,'N0');continue
+              # isolated >=60m apart within each sequence
+              iso=[]; last=-999
+              for x in g:
+                if x['i']-last>=12:iso.append(x); last=x['i']
+              def out(h):
+                if not h:return 'N0'
+                return f"N {len(h)} up1 {sum(x['up']>=1 for x in h)/len(h):.3f} up2 {sum(x['up']>=2 for x in h)/len(h):.3f} avgR {sum(x['r'] for x in h)/len(h):.3f} rel {sum(x['rel'] for x in h)/len(h):.3f}"
+              print(lab,'raw',out(g),'ISO',out(iso))
+            # flow characterization for ALL raw
+            if z:
+              print('FLOW med q15k',round(qtl([x['q15'] for x in z],.5)/1000,1),'net15k',round(qtl([x['net15'] for x in z],.5)/1000,1),'share15',round(qtl([x['sh15'] for x in z],.5)*100,1),'q30k',round(qtl([x['q30'] for x in z],.5)/1000,1),'net30k',round(qtl([x['net30'] for x in z],.5)/1000,1),'share30',round(qtl([x['sh30'] for x in z],.5)*100,1))
+          # Test whether high PUMP activity / flow improves broad Rule A without claiming causality.
+          za=select(rules[0]); qs=[x['q30'] for x in S]; q50=qtl(qs,.5); q70=qtl(qs,.7)
+          print('\n=== RULE A + ACTIVITY/FLOW === q30 thresholds k',round(q50/1000,1),round(q70/1000,1))
+          for qth in [0,q50,q70]:
+            for sh in [.46,.48,.50,.52,.54]:
+              zz=[x for x in za if x['q30']>=qth and x['sh15']>=sh]
+              if len(zz)<20:continue
+              iso=[];last=-999
+              for x in zz:
+                if x['i']-last>=12:iso.append(x);last=x['i']
+              print('q30>=',round(qth/1000,1),'share15>=',sh,'rawN',len(zz),'up2',round(sum(x['up']>=2 for x in zz)/len(zz),3),'avgR',round(sum(x['r'] for x in zz)/len(zz),3),'isoN',len(iso),'isoUp2',round(sum(x['up']>=2 for x in iso)/len(iso),3) if iso else None,'isoAvgR',round(sum(x['r'] for x in iso)/len(iso),3) if iso else None)
+          PY
