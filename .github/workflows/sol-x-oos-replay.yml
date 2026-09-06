@@ -1,0 +1,30 @@
+name: SOL X OOS Replay
+
+on:
+  push:
+    branches: [ "research/sol-x-oos-2026-02" ]
+    paths:
+      - "tools/sol_x_oos_replay.py"
+      - ".github/workflows/sol-x-oos-replay.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run frozen X replay on SOL Feb 2026
+        run: python tools/sol_x_oos_replay.py | tee sol_x_oos_summary.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sol-x-oos-2026-02
+          path: |
+            sol_x_oos_result.json
+            sol_x_oos_summary.txt
