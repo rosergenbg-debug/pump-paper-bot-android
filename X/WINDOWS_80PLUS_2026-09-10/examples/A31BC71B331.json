@@ -1,0 +1,581 @@
+{
+  "candidate_id": "A31BC71B331",
+  "config_sha256": "31bc71b331335d230e652211390d88b724b52601fac9a804b31537f9e79b90c9",
+  "decoded": {
+    "candidate_id": "A31BC71B331",
+    "config": {
+      "adverse_slippage": 0.0008,
+      "atr_period_minutes": 720,
+      "breakeven_trigger_net": 0.0,
+      "btc_context_rule": "ANY",
+      "btc_return_window_minutes": 1,
+      "buy_flow_window_minutes": 240,
+      "client_cancel_latency_minutes": 1,
+      "drawdown_gate": -0.012,
+      "drawdown_window_minutes": 360,
+      "entry_latency_minutes": 0,
+      "entry_order_type": "MARKET",
+      "entry_trigger_offset": 0.03,
+      "exit_distance_mode": "PERCENT",
+      "fee_rate": 0.0021,
+      "limit_discount": 0.001,
+      "limit_ttl_minutes": 1,
+      "max_atr_ratio": 1.0,
+      "max_btc_return": 1.0,
+      "max_entries_per_utc_day": 2,
+      "max_hold_minutes": 10080,
+      "max_pump_return": 0.06,
+      "max_rebound_from_low": 1.0,
+      "max_relative_btc_return": 1.0,
+      "max_relative_sol_return": 0.3,
+      "max_rsi": 100.0,
+      "max_sol_return": 0.25,
+      "min_atr_ratio": 0.0,
+      "min_btc_return": -1.0,
+      "min_buy_flow_mean": 0.0,
+      "min_buy_flow_slope": -0.1,
+      "min_buy_share": 0.0,
+      "min_buy_share_delta": -0.05,
+      "min_green_candle_return": -0.04,
+      "min_hours_between_entries": 6,
+      "min_pump_return": -0.04,
+      "min_rebound_from_low": 0.0,
+      "min_relative_btc_return": -1.0,
+      "min_relative_sol_return": -1.0,
+      "min_rsi": 20.0,
+      "min_sol_return": -0.25,
+      "min_volume_ratio_20m": 0.0,
+      "pump_return_window_minutes": 240,
+      "rsi_period_minutes": 21,
+      "sol_context_rule": "ANY",
+      "sol_return_window_minutes": 10080,
+      "spread_rate": 0.0,
+      "stop_atr_multiple": 6.0,
+      "stop_exit_order_type": "STOP_LIMIT",
+      "stop_limit_buffer": 0.005,
+      "stop_net": -0.2,
+      "structure_window_minutes": 180,
+      "target_atr_multiple": 4.0,
+      "target_net": 0.03,
+      "trailing_stop_fraction": 0.0,
+      "utc_end_hour": 24,
+      "utc_start_hour": 0,
+      "volume_window_minutes": 60,
+      "vwap_deviation_gate": -0.025,
+      "vwap_window_minutes": 240
+    },
+    "config_json": "{\"fee_rate\":0.0021,\"limit_discount\":0.001,\"limit_ttl_minutes\":1,\"target_net\":0.03,\"stop_net\":-0.2,\"max_hold_minutes\":10080,\"adverse_slippage\":0.0008,\"max_entries_per_utc_day\":2,\"min_hours_between_entries\":6,\"drawdown_gate\":-0.012,\"spread_rate\":0.0,\"entry_latency_minutes\":0,\"btc_context_rule\":\"ANY\",\"sol_context_rule\":\"ANY\",\"vwap_deviation_gate\":-0.025,\"min_buy_share\":0.0,\"min_buy_share_delta\":-0.05,\"min_green_candle_return\":-0.04,\"min_volume_ratio_20m\":0.0,\"vwap_window_minutes\":240,\"drawdown_window_minutes\":360,\"volume_window_minutes\":60,\"pump_return_window_minutes\":240,\"min_pump_return\":-0.04,\"max_pump_return\":0.06,\"rsi_period_minutes\":21,\"min_rsi\":20.0,\"max_rsi\":100.0,\"atr_period_minutes\":720,\"min_atr_ratio\":0.0,\"max_atr_ratio\":1.0,\"btc_return_window_minutes\":1,\"min_btc_return\":-1.0,\"max_btc_return\":1.0,\"sol_return_window_minutes\":10080,\"min_sol_return\":-0.25,\"max_sol_return\":0.25,\"utc_start_hour\":0,\"utc_end_hour\":24,\"trailing_stop_fraction\":0.0,\"breakeven_trigger_net\":0.0,\"entry_order_type\":\"MARKET\",\"stop_exit_order_type\":\"STOP_LIMIT\",\"entry_trigger_offset\":0.03,\"stop_limit_buffer\":0.005,\"client_cancel_latency_minutes\":1,\"exit_distance_mode\":\"PERCENT\",\"target_atr_multiple\":4.0,\"stop_atr_multiple\":6.0,\"structure_window_minutes\":180,\"min_rebound_from_low\":0.0,\"max_rebound_from_low\":1.0,\"buy_flow_window_minutes\":240,\"min_buy_flow_mean\":0.0,\"min_buy_flow_slope\":-0.1,\"min_relative_btc_return\":-1.0,\"max_relative_btc_return\":1.0,\"min_relative_sol_return\":-1.0,\"max_relative_sol_return\":0.3}",
+    "development_compound": 0.806111234669415,
+    "eligible": 1,
+    "first_generation": 14,
+    "first_seen_utc": "2026-09-02T06:57:57.605058+00:00",
+    "last_generation": 14,
+    "last_seen_utc": "2026-09-02T06:57:57.605058+00:00",
+    "max_drawdown": 0.0,
+    "preview": {
+      "final": 1449.4123734689704,
+      "initial": 1000.0,
+      "metrics": {
+        "average_net": 0.01916688042892561,
+        "compound_net": 0.44941237346897056,
+        "cvar_5": -0.08374775549628144,
+        "exits": {
+          "STOP_LIMIT_FILLED": 1,
+          "TP": 20
+        },
+        "fills": 21,
+        "max_drawdown": 0.1974955109925629,
+        "profit_factor": 3.038043735700884,
+        "signals": 33,
+        "trades_per_day": 0.19534757527406152,
+        "win_rate": 0.9523809523809523,
+        "wins": 20
+      },
+      "timeline": [
+        {
+          "capital": 1000.0,
+          "event": "START",
+          "time_ms": 1772686920000
+        },
+        {
+          "capital": 1030.0,
+          "event": "TP",
+          "time_ms": 1773695520000
+        },
+        {
+          "capital": 1060.9,
+          "event": "TP",
+          "time_ms": 1773804300000
+        },
+        {
+          "capital": 1092.727,
+          "event": "TP",
+          "time_ms": 1774263960000
+        },
+        {
+          "capital": 1125.50881,
+          "event": "TP",
+          "time_ms": 1775219400000
+        },
+        {
+          "capital": 1159.2740743000002,
+          "event": "TP",
+          "time_ms": 1776277980000
+        },
+        {
+          "capital": 1194.0522965290004,
+          "event": "TP",
+          "time_ms": 1776353820000
+        },
+        {
+          "capital": 1229.8738654248705,
+          "event": "TP",
+          "time_ms": 1777410060000
+        },
+        {
+          "capital": 1266.7700813876165,
+          "event": "TP",
+          "time_ms": 1777421220000
+        },
+        {
+          "capital": 1304.773183829245,
+          "event": "TP",
+          "time_ms": 1778032320000
+        },
+        {
+          "capital": 1343.9163793441223,
+          "event": "TP",
+          "time_ms": 1778219100000
+        },
+        {
+          "capital": 1078.4989272742798,
+          "event": "STOP_LIMIT_FILLED",
+          "time_ms": 1778915640000
+        },
+        {
+          "capital": 1110.8538950925083,
+          "event": "TP",
+          "time_ms": 1779884880000
+        },
+        {
+          "capital": 1144.1795119452836,
+          "event": "TP",
+          "time_ms": 1779895440000
+        },
+        {
+          "capital": 1178.504897303642,
+          "event": "TP",
+          "time_ms": 1780339020000
+        },
+        {
+          "capital": 1213.8600442227514,
+          "event": "TP",
+          "time_ms": 1780372920000
+        },
+        {
+          "capital": 1250.275845549434,
+          "event": "TP",
+          "time_ms": 1780499040000
+        },
+        {
+          "capital": 1287.7841209159171,
+          "event": "TP",
+          "time_ms": 1780516020000
+        },
+        {
+          "capital": 1326.4176445433948,
+          "event": "TP",
+          "time_ms": 1780543920000
+        },
+        {
+          "capital": 1366.2101738796966,
+          "event": "TP",
+          "time_ms": 1780588620000
+        },
+        {
+          "capital": 1407.1964790960876,
+          "event": "TP",
+          "time_ms": 1780923540000
+        },
+        {
+          "capital": 1449.4123734689704,
+          "event": "TP",
+          "time_ms": 1781200140000
+        }
+      ],
+      "trades": [
+        {
+          "buy_fee_rate": 0.0021,
+          "entry": 0.0020856672,
+          "exit": 0.0021572787996328286,
+          "exit_time_ms": 1773695520000,
+          "fill_time_ms": 1773414240000,
+          "gross_return": 0.034335103717807236,
+          "net_return": 0.030000000000000027,
+          "reason": "TP",
+          "sell_fee_rate": 0.0021,
+          "signal_time_ms": 1773414180000,
+          "slippage_rate": 0.0
+        },
+        {
+          "buy_fee_rate": 0.0021,
+          "entry": 0.0020736576,
+          "exit": 0.0021448568487712196,
+          "exit_time_ms": 1773804300000,
+          "fill_time_ms": 1773722040000,
+          "gross_return": 0.03433510371780746,
+          "net_return": 0.030000000000000027,
+          "reason": "TP",
+          "sell_fee_rate": 0.0021,
+          "signal_time_ms": 1773721980000,
+          "slippage_rate": 0.0
+        },
+        {
+          "buy_fee_rate": 0.0021,
+          "entry": 0.0017524007999999997,
+          "exit": 0.0018125696632231684,
+          "exit_time_ms": 1774263960000,
+          "fill_time_ms": 1774250580000,
+          "gross_return": 0.03433510371780746,
+          "net_return": 0.030000000000000027,
+          "reason": "TP",
+          "sell_fee_rate": 0.0021,
+          "signal_time_ms": 1774250520000,
+          "slippage_rate": 0.0
+        },
+        {
+          "buy_fee_rate": 0.0021,
+          "entry": 0.0016283015999999997,
+          "exit": 0.0016842095043198713,
+          "exit_time_ms": 1775219400000,
+          "fill_time_ms": 1775096460000,
+          "gross_return": 0.034335103717807236,
+          "net_return": 0.030000000000000027,
+          "reason": "TP",
+          "sell_fee_rate": 0.0021,
+          "signal_time_ms": 1775096400000,
+          "slippage_rate": 0.0
+        },
+        {
+          "buy_fee_rate": 0.0021,
+          "entry": 0.0018654911999999998,
+          "exit": 0.001929543033836657,
+          "exit_time_ms": 1776277980000,
+          "fill_time_ms": 1776185640000,
+          "gross_return": 0.03433510371780746,
+          "net_return": 0.030000000000000027,
+          "reason": "TP",
+          "sell_fee_rate": 0.0021,
+          "signal_time_ms": 1776185580000,
+          "slippage_rate": 0.0
+        },
+        {
+          "buy_fee_rate": 0.0021,
+          "entry": 0.0018895103999999998,
+          "exit": 0.001954386935559876,
+          "exit_time_ms": 1776353820000,
+          "fill_time_ms": 1776349500000,
+          "gross_return": 0.03433510371780768,
+          "net_return": 0.03000000000000025,
+          "reason": "TP",
+          "sell_fee_rate": 0.0021,
+          "signal_time_ms": 1776349440000,
+          "slippage_rate": 0.0
+        },
+        {
+          "buy_fee_rate": 0.0021,
+          "entry": 0.0017704151999999999,
+          "exit": 0.0018312025895155827,
+          "exit_time_ms": 1777410060000,
+          "fill_time_ms": 1777271580000,
+          "gross_return": 0.03433510371780746,
+          "net_return": 0.030000000000000027,
+          "reason": "TP",
+          "sell_fee_rate": 0.0021,
+          "signal_time_ms": 1777271520000,
+          "slippage_rate": 0.0
+        },
+        {
+          "buy_fee_rate": 0.0021,
+          "entry": 0.0018664919999999998,
+          "exit": 0.0019305781964084575,
+          "exit_time_ms": 1777421220000,
+          "fill_time_ms": 1777410720000,
+          "gross_return": 0.03433510371780746,
+          "net_return": 0.030000000000000027,
+          "reason": "TP",
+          "sell_fee_rate": 0.0021,
+          "signal_time_ms": 1777410660000,
+          "slippage_rate": 0.0
+        },
+        {
+          "buy_fee_rate": 0.0021,
+          "entry": 0.0018234575999999999,
+          "exit": 0.0018860662058210241,
+          "exit_time_ms": 1778032320000,
+          "fill_time_ms": 1777465680000,
+          "gross_return": 0.03433510371780746,
+          "net_return": 0.030000000000000027,
+          "reason": "TP",
+          "sell_fee_rate": 0.0021,
+          "signal_time_ms": 1777465620000,
+          "slippage_rate": 0.0
+        },
+        {
+          "buy_fee_rate": 0.0021,
+          "entry": 0.0019845863999999997,
+          "exit": 0.0020527273798809495,
+          "exit_time_ms": 1778219100000,
+          "fill_time_ms": 1778164860000,
+          "gross_return": 0.034335103717807236,
+          "net_return": 0.030000000000000027,
+          "reason": "TP",
+          "sell_fee_rate": 0.0021,
+          "signal_time_ms": 1778164800000,
+          "slippage_rate": 0.0
+        },
+        {
+          "buy_fee_rate": 0.0021,
+          "entry": 0.002146716,
+          "exit": 0.00173,
+          "exit_time_ms": 1778915640000,
+          "fill_time_ms": 1778446440000,
+          "gross_return": -0.19411789915387034,
+          "net_return": -0.1974955109925629,
+          "reason": "STOP_LIMIT_FILLED",
+          "sell_fee_rate": 0.0021,
+          "signal_time_ms": 1778446380000,
+          "slippage_rate": 0.0
+        },
+        {
+          "buy_fee_rate": 0.0021,
+          "entry": 0.0017794223999999998,
+          "exit": 0.0018405190526617897,
+          "exit_time_ms": 1779884880000,
+          "fill_time_ms": 1779816960000,
+          "gross_return": 0.03433510371780746,
+          "net_return": 0.030000000000000027,
+          "reason": "TP",
+          "sell_fee_rate": 0.0021,
+          "signal_time_ms": 1779816900000,
+          "slippage_rate": 0.0
+        },
+        {
+          "buy_fee_rate": 0.0021,
+          "entry": 0.0017854271999999999,
+          "exit": 0.0018467300280925944,
+          "exit_time_ms": 1779895440000,
+          "fill_time_ms": 1779889440000,
+          "gross_return": 0.03433510371780746,
+          "net_return": 0.030000000000000027,
+          "reason": "TP",
+          "sell_fee_rate": 0.0021,
+          "signal_time_ms": 1779889380000,
+          "slippage_rate": 0.0
+        },
+        {
+          "buy_fee_rate": 0.0021,
+          "entry": 0.0017714159999999998,
+          "exit": 0.0018322377520873833,
+          "exit_time_ms": 1780339020000,
+          "fill_time_ms": 1779919260000,
+          "gross_return": 0.03433510371780746,
+          "net_return": 0.030000000000000027,
+          "reason": "TP",
+          "sell_fee_rate": 0.0021,
+          "signal_time_ms": 1779919200000,
+          "slippage_rate": 0.0
+        },
+        {
+          "buy_fee_rate": 0.0021,
+          "entry": 0.0017904312,
+          "exit": 0.0018519058409515983,
+          "exit_time_ms": 1780372920000,
+          "fill_time_ms": 1780365960000,
+          "gross_return": 0.03433510371780746,
+          "net_return": 0.030000000000000027,
+          "reason": "TP",
+          "sell_fee_rate": 0.0021,
+          "signal_time_ms": 1780365900000,
+          "slippage_rate": 0.0
+        },
+        {
+          "buy_fee_rate": 0.0021,
+          "entry": 0.0017483975999999998,
+          "exit": 0.0018084290129359653,
+          "exit_time_ms": 1780499040000,
+          "fill_time_ms": 1780410300000,
+          "gross_return": 0.03433510371780746,
+          "net_return": 0.030000000000000027,
+          "reason": "TP",
+          "sell_fee_rate": 0.0021,
+          "signal_time_ms": 1780410240000,
+          "slippage_rate": 0.0
+        },
+        {
+          "buy_fee_rate": 0.0021,
+          "entry": 0.0017463959999999999,
+          "exit": 0.0018063586877923637,
+          "exit_time_ms": 1780516020000,
+          "fill_time_ms": 1780503240000,
+          "gross_return": 0.034335103717807236,
+          "net_return": 0.030000000000000027,
+          "reason": "TP",
+          "sell_fee_rate": 0.0021,
+          "signal_time_ms": 1780503180000,
+          "slippage_rate": 0.0
+        },
+        {
+          "buy_fee_rate": 0.0021,
+          "entry": 0.0017153711999999999,
+          "exit": 0.0017742686480665395,
+          "exit_time_ms": 1780543920000,
+          "fill_time_ms": 1780535880000,
+          "gross_return": 0.034335103717807236,
+          "net_return": 0.030000000000000027,
+          "reason": "TP",
+          "sell_fee_rate": 0.0021,
+          "signal_time_ms": 1780535820000,
+          "slippage_rate": 0.0
+        },
+        {
+          "buy_fee_rate": 0.0021,
+          "entry": 0.0016833455999999997,
+          "exit": 0.0017411434457689145,
+          "exit_time_ms": 1780588620000,
+          "fill_time_ms": 1780561980000,
+          "gross_return": 0.03433510371780746,
+          "net_return": 0.030000000000000027,
+          "reason": "TP",
+          "sell_fee_rate": 0.0021,
+          "signal_time_ms": 1780561920000,
+          "slippage_rate": 0.0
+        },
+        {
+          "buy_fee_rate": 0.0021,
+          "entry": 0.001591272,
+          "exit": 0.0016459084891632426,
+          "exit_time_ms": 1780923540000,
+          "fill_time_ms": 1780631640000,
+          "gross_return": 0.03433510371780746,
+          "net_return": 0.030000000000000027,
+          "reason": "TP",
+          "sell_fee_rate": 0.0021,
+          "signal_time_ms": 1780631580000,
+          "slippage_rate": 0.0
+        },
+        {
+          "buy_fee_rate": 0.0021,
+          "entry": 0.0014271407999999998,
+          "exit": 0.0014761418273879143,
+          "exit_time_ms": 1781200140000,
+          "fill_time_ms": 1781110020000,
+          "gross_return": 0.034335103717807236,
+          "net_return": 0.030000000000000027,
+          "reason": "TP",
+          "sell_fee_rate": 0.0021,
+          "signal_time_ms": 1781109960000,
+          "slippage_rate": 0.0
+        }
+      ]
+    },
+    "preview_json": "{\"initial\":1000.0,\"final\":1449.4123734689704,\"timeline\":[{\"time_ms\":1772686920000,\"capital\":1000.0,\"event\":\"START\"},{\"time_ms\":1773695520000,\"capital\":1030.0,\"event\":\"TP\"},{\"time_ms\":1773804300000,\"capital\":1060.9,\"event\":\"TP\"},{\"time_ms\":1774263960000,\"capital\":1092.727,\"event\":\"TP\"},{\"time_ms\":1775219400000,\"capital\":1125.50881,\"event\":\"TP\"},{\"time_ms\":1776277980000,\"capital\":1159.2740743000002,\"event\":\"TP\"},{\"time_ms\":1776353820000,\"capital\":1194.0522965290004,\"event\":\"TP\"},{\"time_ms\":1777410060000,\"capital\":1229.8738654248705,\"event\":\"TP\"},{\"time_ms\":1777421220000,\"capital\":1266.7700813876165,\"event\":\"TP\"},{\"time_ms\":1778032320000,\"capital\":1304.773183829245,\"event\":\"TP\"},{\"time_ms\":1778219100000,\"capital\":1343.9163793441223,\"event\":\"TP\"},{\"time_ms\":1778915640000,\"capital\":1078.4989272742798,\"event\":\"STOP_LIMIT_FILLED\"},{\"time_ms\":1779884880000,\"capital\":1110.8538950925083,\"event\":\"TP\"},{\"time_ms\":1779895440000,\"capital\":1144.1795119452836,\"event\":\"TP\"},{\"time_ms\":1780339020000,\"capital\":1178.504897303642,\"event\":\"TP\"},{\"time_ms\":1780372920000,\"capital\":1213.8600442227514,\"event\":\"TP\"},{\"time_ms\":1780499040000,\"capital\":1250.275845549434,\"event\":\"TP\"},{\"time_ms\":1780516020000,\"capital\":1287.7841209159171,\"event\":\"TP\"},{\"time_ms\":1780543920000,\"capital\":1326.4176445433948,\"event\":\"TP\"},{\"time_ms\":1780588620000,\"capital\":1366.2101738796966,\"event\":\"TP\"},{\"time_ms\":1780923540000,\"capital\":1407.1964790960876,\"event\":\"TP\"},{\"time_ms\":1781200140000,\"capital\":1449.4123734689704,\"event\":\"TP\"}],\"trades\":[{\"signal_time_ms\":1773414180000,\"fill_time_ms\":1773414240000,\"exit_time_ms\":1773695520000,\"entry\":0.0020856672,\"exit\":0.0021572787996328286,\"reason\":\"TP\",\"gross_return\":0.034335103717807236,\"net_return\":0.030000000000000027,\"buy_fee_rate\":0.0021,\"sell_fee_rate\":0.0021,\"slippage_rate\":0.0},{\"signal_time_ms\":1773721980000,\"fill_time_ms\":1773722040000,\"exit_time_ms\":1773804300000,\"entry\":0.0020736576,\"exit\":0.0021448568487712196,\"reason\":\"TP\",\"gross_return\":0.03433510371780746,\"net_return\":0.030000000000000027,\"buy_fee_rate\":0.0021,\"sell_fee_rate\":0.0021,\"slippage_rate\":0.0},{\"signal_time_ms\":1774250520000,\"fill_time_ms\":1774250580000,\"exit_time_ms\":1774263960000,\"entry\":0.0017524007999999997,\"exit\":0.0018125696632231684,\"reason\":\"TP\",\"gross_return\":0.03433510371780746,\"net_return\":0.030000000000000027,\"buy_fee_rate\":0.0021,\"sell_fee_rate\":0.0021,\"slippage_rate\":0.0},{\"signal_time_ms\":1775096400000,\"fill_time_ms\":1775096460000,\"exit_time_ms\":1775219400000,\"entry\":0.0016283015999999997,\"exit\":0.0016842095043198713,\"reason\":\"TP\",\"gross_return\":0.034335103717807236,\"net_return\":0.030000000000000027,\"buy_fee_rate\":0.0021,\"sell_fee_rate\":0.0021,\"slippage_rate\":0.0},{\"signal_time_ms\":1776185580000,\"fill_time_ms\":1776185640000,\"exit_time_ms\":1776277980000,\"entry\":0.0018654911999999998,\"exit\":0.001929543033836657,\"reason\":\"TP\",\"gross_return\":0.03433510371780746,\"net_return\":0.030000000000000027,\"buy_fee_rate\":0.0021,\"sell_fee_rate\":0.0021,\"slippage_rate\":0.0},{\"signal_time_ms\":1776349440000,\"fill_time_ms\":1776349500000,\"exit_time_ms\":1776353820000,\"entry\":0.0018895103999999998,\"exit\":0.001954386935559876,\"reason\":\"TP\",\"gross_return\":0.03433510371780768,\"net_return\":0.03000000000000025,\"buy_fee_rate\":0.0021,\"sell_fee_rate\":0.0021,\"slippage_rate\":0.0},{\"signal_time_ms\":1777271520000,\"fill_time_ms\":1777271580000,\"exit_time_ms\":1777410060000,\"entry\":0.0017704151999999999,\"exit\":0.0018312025895155827,\"reason\":\"TP\",\"gross_return\":0.03433510371780746,\"net_return\":0.030000000000000027,\"buy_fee_rate\":0.0021,\"sell_fee_rate\":0.0021,\"slippage_rate\":0.0},{\"signal_time_ms\":1777410660000,\"fill_time_ms\":1777410720000,\"exit_time_ms\":1777421220000,\"entry\":0.0018664919999999998,\"exit\":0.0019305781964084575,\"reason\":\"TP\",\"gross_return\":0.03433510371780746,\"net_return\":0.030000000000000027,\"buy_fee_rate\":0.0021,\"sell_fee_rate\":0.0021,\"slippage_rate\":0.0},{\"signal_time_ms\":1777465620000,\"fill_time_ms\":1777465680000,\"exit_time_ms\":1778032320000,\"entry\":0.0018234575999999999,\"exit\":0.0018860662058210241,\"reason\":\"TP\",\"gross_return\":0.03433510371780746,\"net_return\":0.030000000000000027,\"buy_fee_rate\":0.0021,\"sell_fee_rate\":0.0021,\"slippage_rate\":0.0},{\"signal_time_ms\":1778164800000,\"fill_time_ms\":1778164860000,\"exit_time_ms\":1778219100000,\"entry\":0.0019845863999999997,\"exit\":0.0020527273798809495,\"reason\":\"TP\",\"gross_return\":0.034335103717807236,\"net_return\":0.030000000000000027,\"buy_fee_rate\":0.0021,\"sell_fee_rate\":0.0021,\"slippage_rate\":0.0},{\"signal_time_ms\":1778446380000,\"fill_time_ms\":1778446440000,\"exit_time_ms\":1778915640000,\"entry\":0.002146716,\"exit\":0.00173,\"reason\":\"STOP_LIMIT_FILLED\",\"gross_return\":-0.19411789915387034,\"net_return\":-0.1974955109925629,\"buy_fee_rate\":0.0021,\"sell_fee_rate\":0.0021,\"slippage_rate\":0.0},{\"signal_time_ms\":1779816900000,\"fill_time_ms\":1779816960000,\"exit_time_ms\":1779884880000,\"entry\":0.0017794223999999998,\"exit\":0.0018405190526617897,\"reason\":\"TP\",\"gross_return\":0.03433510371780746,\"net_return\":0.030000000000000027,\"buy_fee_rate\":0.0021,\"sell_fee_rate\":0.0021,\"slippage_rate\":0.0},{\"signal_time_ms\":1779889380000,\"fill_time_ms\":1779889440000,\"exit_time_ms\":1779895440000,\"entry\":0.0017854271999999999,\"exit\":0.0018467300280925944,\"reason\":\"TP\",\"gross_return\":0.03433510371780746,\"net_return\":0.030000000000000027,\"buy_fee_rate\":0.0021,\"sell_fee_rate\":0.0021,\"slippage_rate\":0.0},{\"signal_time_ms\":1779919200000,\"fill_time_ms\":1779919260000,\"exit_time_ms\":1780339020000,\"entry\":0.0017714159999999998,\"exit\":0.0018322377520873833,\"reason\":\"TP\",\"gross_return\":0.03433510371780746,\"net_return\":0.030000000000000027,\"buy_fee_rate\":0.0021,\"sell_fee_rate\":0.0021,\"slippage_rate\":0.0},{\"signal_time_ms\":1780365900000,\"fill_time_ms\":1780365960000,\"exit_time_ms\":1780372920000,\"entry\":0.0017904312,\"exit\":0.0018519058409515983,\"reason\":\"TP\",\"gross_return\":0.03433510371780746,\"net_return\":0.030000000000000027,\"buy_fee_rate\":0.0021,\"sell_fee_rate\":0.0021,\"slippage_rate\":0.0},{\"signal_time_ms\":1780410240000,\"fill_time_ms\":1780410300000,\"exit_time_ms\":1780499040000,\"entry\":0.0017483975999999998,\"exit\":0.0018084290129359653,\"reason\":\"TP\",\"gross_return\":0.03433510371780746,\"net_return\":0.030000000000000027,\"buy_fee_rate\":0.0021,\"sell_fee_rate\":0.0021,\"slippage_rate\":0.0},{\"signal_time_ms\":1780503180000,\"fill_time_ms\":1780503240000,\"exit_time_ms\":1780516020000,\"entry\":0.0017463959999999999,\"exit\":0.0018063586877923637,\"reason\":\"TP\",\"gross_return\":0.034335103717807236,\"net_return\":0.030000000000000027,\"buy_fee_rate\":0.0021,\"sell_fee_rate\":0.0021,\"slippage_rate\":0.0},{\"signal_time_ms\":1780535820000,\"fill_time_ms\":1780535880000,\"exit_time_ms\":1780543920000,\"entry\":0.0017153711999999999,\"exit\":0.0017742686480665395,\"reason\":\"TP\",\"gross_return\":0.034335103717807236,\"net_return\":0.030000000000000027,\"buy_fee_rate\":0.0021,\"sell_fee_rate\":0.0021,\"slippage_rate\":0.0},{\"signal_time_ms\":1780561920000,\"fill_time_ms\":1780561980000,\"exit_time_ms\":1780588620000,\"entry\":0.0016833455999999997,\"exit\":0.0017411434457689145,\"reason\":\"TP\",\"gross_return\":0.03433510371780746,\"net_return\":0.030000000000000027,\"buy_fee_rate\":0.0021,\"sell_fee_rate\":0.0021,\"slippage_rate\":0.0},{\"signal_time_ms\":1780631580000,\"fill_time_ms\":1780631640000,\"exit_time_ms\":1780923540000,\"entry\":0.001591272,\"exit\":0.0016459084891632426,\"reason\":\"TP\",\"gross_return\":0.03433510371780746,\"net_return\":0.030000000000000027,\"buy_fee_rate\":0.0021,\"sell_fee_rate\":0.0021,\"slippage_rate\":0.0},{\"signal_time_ms\":1781109960000,\"fill_time_ms\":1781110020000,\"exit_time_ms\":1781200140000,\"entry\":0.0014271407999999998,\"exit\":0.0014761418273879143,\"reason\":\"TP\",\"gross_return\":0.034335103717807236,\"net_return\":0.030000000000000027,\"buy_fee_rate\":0.0021,\"sell_fee_rate\":0.0021,\"slippage_rate\":0.0}],\"metrics\":{\"signals\":33,\"fills\":21,\"wins\":20,\"win_rate\":0.9523809523809523,\"average_net\":0.01916688042892561,\"profit_factor\":3.038043735700884,\"compound_net\":0.44941237346897056,\"trades_per_day\":0.19534757527406152,\"exits\":{\"TP\":20,\"STOP_LIMIT_FILLED\":1},\"max_drawdown\":0.1974955109925629,\"cvar_5\":-0.08374775549628144}}",
+    "rejection_reasons": [],
+    "rejection_reasons_json": "[]",
+    "source": "completed-generation",
+    "tags": [
+      "PROFIT_RECORD:exact:20"
+    ],
+    "tags_json": "[\"PROFIT_RECORD:exact:20\"]",
+    "total_fills": 20,
+    "train": {
+      "average_net": 0.030000000000000027,
+      "compound_net": 0.12550881000000014,
+      "cvar_5": 0.030000000000000027,
+      "exits": {
+        "TP": 4
+      },
+      "fills": 4,
+      "max_drawdown": 0.0,
+      "profit_factor": null,
+      "signals": 4,
+      "trades_per_day": 0.11267385223293755,
+      "win_rate": 1.0,
+      "wins": 4
+    },
+    "train_json": "{\"signals\":4,\"fills\":4,\"wins\":4,\"win_rate\":1.0,\"average_net\":0.030000000000000027,\"profit_factor\":null,\"compound_net\":0.12550881000000014,\"trades_per_day\":0.11267385223293755,\"exits\":{\"TP\":4},\"max_drawdown\":0.0,\"cvar_5\":0.030000000000000027}",
+    "validation_a": {
+      "average_net": 0.030000000000000065,
+      "compound_net": 0.19405229652900036,
+      "cvar_5": 0.030000000000000027,
+      "exits": {
+        "TP": 6
+      },
+      "fills": 6,
+      "max_drawdown": 0.0,
+      "profit_factor": null,
+      "signals": 6,
+      "trades_per_day": 0.16666666666666666,
+      "win_rate": 1.0,
+      "wins": 6
+    },
+    "validation_a_json": "{\"signals\":6,\"fills\":6,\"wins\":6,\"win_rate\":1.0,\"average_net\":0.030000000000000065,\"profit_factor\":null,\"compound_net\":0.19405229652900036,\"trades_per_day\":0.16666666666666666,\"exits\":{\"TP\":6},\"max_drawdown\":0.0,\"cvar_5\":0.030000000000000027}",
+    "validation_b": {
+      "average_net": 0.030000000000000027,
+      "compound_net": 0.3439163793441222,
+      "cvar_5": 0.030000000000000027,
+      "exits": {
+        "TP": 10
+      },
+      "fills": 10,
+      "max_drawdown": 0.0,
+      "profit_factor": null,
+      "signals": 22,
+      "trades_per_day": 0.2777777777777778,
+      "win_rate": 1.0,
+      "wins": 10
+    },
+    "validation_b_json": "{\"signals\":22,\"fills\":10,\"wins\":10,\"win_rate\":1.0,\"average_net\":0.030000000000000027,\"profit_factor\":null,\"compound_net\":0.3439163793441222,\"trades_per_day\":0.2777777777777778,\"exits\":{\"TP\":10},\"max_drawdown\":0.0,\"cvar_5\":0.030000000000000027}",
+    "validation_fills": 16,
+    "worst_average_net": 0.030000000000000027
+  },
+  "full_detail": true,
+  "original_row": {
+    "candidate_id": "A31BC71B331",
+    "config_json": "{\"fee_rate\":0.0021,\"limit_discount\":0.001,\"limit_ttl_minutes\":1,\"target_net\":0.03,\"stop_net\":-0.2,\"max_hold_minutes\":10080,\"adverse_slippage\":0.0008,\"max_entries_per_utc_day\":2,\"min_hours_between_entries\":6,\"drawdown_gate\":-0.012,\"spread_rate\":0.0,\"entry_latency_minutes\":0,\"btc_context_rule\":\"ANY\",\"sol_context_rule\":\"ANY\",\"vwap_deviation_gate\":-0.025,\"min_buy_share\":0.0,\"min_buy_share_delta\":-0.05,\"min_green_candle_return\":-0.04,\"min_volume_ratio_20m\":0.0,\"vwap_window_minutes\":240,\"drawdown_window_minutes\":360,\"volume_window_minutes\":60,\"pump_return_window_minutes\":240,\"min_pump_return\":-0.04,\"max_pump_return\":0.06,\"rsi_period_minutes\":21,\"min_rsi\":20.0,\"max_rsi\":100.0,\"atr_period_minutes\":720,\"min_atr_ratio\":0.0,\"max_atr_ratio\":1.0,\"btc_return_window_minutes\":1,\"min_btc_return\":-1.0,\"max_btc_return\":1.0,\"sol_return_window_minutes\":10080,\"min_sol_return\":-0.25,\"max_sol_return\":0.25,\"utc_start_hour\":0,\"utc_end_hour\":24,\"trailing_stop_fraction\":0.0,\"breakeven_trigger_net\":0.0,\"entry_order_type\":\"MARKET\",\"stop_exit_order_type\":\"STOP_LIMIT\",\"entry_trigger_offset\":0.03,\"stop_limit_buffer\":0.005,\"client_cancel_latency_minutes\":1,\"exit_distance_mode\":\"PERCENT\",\"target_atr_multiple\":4.0,\"stop_atr_multiple\":6.0,\"structure_window_minutes\":180,\"min_rebound_from_low\":0.0,\"max_rebound_from_low\":1.0,\"buy_flow_window_minutes\":240,\"min_buy_flow_mean\":0.0,\"min_buy_flow_slope\":-0.1,\"min_relative_btc_return\":-1.0,\"max_relative_btc_return\":1.0,\"min_relative_sol_return\":-1.0,\"max_relative_sol_return\":0.3}",
+    "development_compound": 0.806111234669415,
+    "eligible": 1,
+    "first_generation": 14,
+    "first_seen_utc": "2026-09-02T06:57:57.605058+00:00",
+    "last_generation": 14,
+    "last_seen_utc": "2026-09-02T06:57:57.605058+00:00",
+    "max_drawdown": 0.0,
+    "preview_json": "{\"initial\":1000.0,\"final\":1449.4123734689704,\"timeline\":[{\"time_ms\":1772686920000,\"capital\":1000.0,\"event\":\"START\"},{\"time_ms\":1773695520000,\"capital\":1030.0,\"event\":\"TP\"},{\"time_ms\":1773804300000,\"capital\":1060.9,\"event\":\"TP\"},{\"time_ms\":1774263960000,\"capital\":1092.727,\"event\":\"TP\"},{\"time_ms\":1775219400000,\"capital\":1125.50881,\"event\":\"TP\"},{\"time_ms\":1776277980000,\"capital\":1159.2740743000002,\"event\":\"TP\"},{\"time_ms\":1776353820000,\"capital\":1194.0522965290004,\"event\":\"TP\"},{\"time_ms\":1777410060000,\"capital\":1229.8738654248705,\"event\":\"TP\"},{\"time_ms\":1777421220000,\"capital\":1266.7700813876165,\"event\":\"TP\"},{\"time_ms\":1778032320000,\"capital\":1304.773183829245,\"event\":\"TP\"},{\"time_ms\":1778219100000,\"capital\":1343.9163793441223,\"event\":\"TP\"},{\"time_ms\":1778915640000,\"capital\":1078.4989272742798,\"event\":\"STOP_LIMIT_FILLED\"},{\"time_ms\":1779884880000,\"capital\":1110.8538950925083,\"event\":\"TP\"},{\"time_ms\":1779895440000,\"capital\":1144.1795119452836,\"event\":\"TP\"},{\"time_ms\":1780339020000,\"capital\":1178.504897303642,\"event\":\"TP\"},{\"time_ms\":1780372920000,\"capital\":1213.8600442227514,\"event\":\"TP\"},{\"time_ms\":1780499040000,\"capital\":1250.275845549434,\"event\":\"TP\"},{\"time_ms\":1780516020000,\"capital\":1287.7841209159171,\"event\":\"TP\"},{\"time_ms\":1780543920000,\"capital\":1326.4176445433948,\"event\":\"TP\"},{\"time_ms\":1780588620000,\"capital\":1366.2101738796966,\"event\":\"TP\"},{\"time_ms\":1780923540000,\"capital\":1407.1964790960876,\"event\":\"TP\"},{\"time_ms\":1781200140000,\"capital\":1449.4123734689704,\"event\":\"TP\"}],\"trades\":[{\"signal_time_ms\":1773414180000,\"fill_time_ms\":1773414240000,\"exit_time_ms\":1773695520000,\"entry\":0.0020856672,\"exit\":0.0021572787996328286,\"reason\":\"TP\",\"gross_return\":0.034335103717807236,\"net_return\":0.030000000000000027,\"buy_fee_rate\":0.0021,\"sell_fee_rate\":0.0021,\"slippage_rate\":0.0},{\"signal_time_ms\":1773721980000,\"fill_time_ms\":1773722040000,\"exit_time_ms\":1773804300000,\"entry\":0.0020736576,\"exit\":0.0021448568487712196,\"reason\":\"TP\",\"gross_return\":0.03433510371780746,\"net_return\":0.030000000000000027,\"buy_fee_rate\":0.0021,\"sell_fee_rate\":0.0021,\"slippage_rate\":0.0},{\"signal_time_ms\":1774250520000,\"fill_time_ms\":1774250580000,\"exit_time_ms\":1774263960000,\"entry\":0.0017524007999999997,\"exit\":0.0018125696632231684,\"reason\":\"TP\",\"gross_return\":0.03433510371780746,\"net_return\":0.030000000000000027,\"buy_fee_rate\":0.0021,\"sell_fee_rate\":0.0021,\"slippage_rate\":0.0},{\"signal_time_ms\":1775096400000,\"fill_time_ms\":1775096460000,\"exit_time_ms\":1775219400000,\"entry\":0.0016283015999999997,\"exit\":0.0016842095043198713,\"reason\":\"TP\",\"gross_return\":0.034335103717807236,\"net_return\":0.030000000000000027,\"buy_fee_rate\":0.0021,\"sell_fee_rate\":0.0021,\"slippage_rate\":0.0},{\"signal_time_ms\":1776185580000,\"fill_time_ms\":1776185640000,\"exit_time_ms\":1776277980000,\"entry\":0.0018654911999999998,\"exit\":0.001929543033836657,\"reason\":\"TP\",\"gross_return\":0.03433510371780746,\"net_return\":0.030000000000000027,\"buy_fee_rate\":0.0021,\"sell_fee_rate\":0.0021,\"slippage_rate\":0.0},{\"signal_time_ms\":1776349440000,\"fill_time_ms\":1776349500000,\"exit_time_ms\":1776353820000,\"entry\":0.0018895103999999998,\"exit\":0.001954386935559876,\"reason\":\"TP\",\"gross_return\":0.03433510371780768,\"net_return\":0.03000000000000025,\"buy_fee_rate\":0.0021,\"sell_fee_rate\":0.0021,\"slippage_rate\":0.0},{\"signal_time_ms\":1777271520000,\"fill_time_ms\":1777271580000,\"exit_time_ms\":1777410060000,\"entry\":0.0017704151999999999,\"exit\":0.0018312025895155827,\"reason\":\"TP\",\"gross_return\":0.03433510371780746,\"net_return\":0.030000000000000027,\"buy_fee_rate\":0.0021,\"sell_fee_rate\":0.0021,\"slippage_rate\":0.0},{\"signal_time_ms\":1777410660000,\"fill_time_ms\":1777410720000,\"exit_time_ms\":1777421220000,\"entry\":0.0018664919999999998,\"exit\":0.0019305781964084575,\"reason\":\"TP\",\"gross_return\":0.03433510371780746,\"net_return\":0.030000000000000027,\"buy_fee_rate\":0.0021,\"sell_fee_rate\":0.0021,\"slippage_rate\":0.0},{\"signal_time_ms\":1777465620000,\"fill_time_ms\":1777465680000,\"exit_time_ms\":1778032320000,\"entry\":0.0018234575999999999,\"exit\":0.0018860662058210241,\"reason\":\"TP\",\"gross_return\":0.03433510371780746,\"net_return\":0.030000000000000027,\"buy_fee_rate\":0.0021,\"sell_fee_rate\":0.0021,\"slippage_rate\":0.0},{\"signal_time_ms\":1778164800000,\"fill_time_ms\":1778164860000,\"exit_time_ms\":1778219100000,\"entry\":0.0019845863999999997,\"exit\":0.0020527273798809495,\"reason\":\"TP\",\"gross_return\":0.034335103717807236,\"net_return\":0.030000000000000027,\"buy_fee_rate\":0.0021,\"sell_fee_rate\":0.0021,\"slippage_rate\":0.0},{\"signal_time_ms\":1778446380000,\"fill_time_ms\":1778446440000,\"exit_time_ms\":1778915640000,\"entry\":0.002146716,\"exit\":0.00173,\"reason\":\"STOP_LIMIT_FILLED\",\"gross_return\":-0.19411789915387034,\"net_return\":-0.1974955109925629,\"buy_fee_rate\":0.0021,\"sell_fee_rate\":0.0021,\"slippage_rate\":0.0},{\"signal_time_ms\":1779816900000,\"fill_time_ms\":1779816960000,\"exit_time_ms\":1779884880000,\"entry\":0.0017794223999999998,\"exit\":0.0018405190526617897,\"reason\":\"TP\",\"gross_return\":0.03433510371780746,\"net_return\":0.030000000000000027,\"buy_fee_rate\":0.0021,\"sell_fee_rate\":0.0021,\"slippage_rate\":0.0},{\"signal_time_ms\":1779889380000,\"fill_time_ms\":1779889440000,\"exit_time_ms\":1779895440000,\"entry\":0.0017854271999999999,\"exit\":0.0018467300280925944,\"reason\":\"TP\",\"gross_return\":0.03433510371780746,\"net_return\":0.030000000000000027,\"buy_fee_rate\":0.0021,\"sell_fee_rate\":0.0021,\"slippage_rate\":0.0},{\"signal_time_ms\":1779919200000,\"fill_time_ms\":1779919260000,\"exit_time_ms\":1780339020000,\"entry\":0.0017714159999999998,\"exit\":0.0018322377520873833,\"reason\":\"TP\",\"gross_return\":0.03433510371780746,\"net_return\":0.030000000000000027,\"buy_fee_rate\":0.0021,\"sell_fee_rate\":0.0021,\"slippage_rate\":0.0},{\"signal_time_ms\":1780365900000,\"fill_time_ms\":1780365960000,\"exit_time_ms\":1780372920000,\"entry\":0.0017904312,\"exit\":0.0018519058409515983,\"reason\":\"TP\",\"gross_return\":0.03433510371780746,\"net_return\":0.030000000000000027,\"buy_fee_rate\":0.0021,\"sell_fee_rate\":0.0021,\"slippage_rate\":0.0},{\"signal_time_ms\":1780410240000,\"fill_time_ms\":1780410300000,\"exit_time_ms\":1780499040000,\"entry\":0.0017483975999999998,\"exit\":0.0018084290129359653,\"reason\":\"TP\",\"gross_return\":0.03433510371780746,\"net_return\":0.030000000000000027,\"buy_fee_rate\":0.0021,\"sell_fee_rate\":0.0021,\"slippage_rate\":0.0},{\"signal_time_ms\":1780503180000,\"fill_time_ms\":1780503240000,\"exit_time_ms\":1780516020000,\"entry\":0.0017463959999999999,\"exit\":0.0018063586877923637,\"reason\":\"TP\",\"gross_return\":0.034335103717807236,\"net_return\":0.030000000000000027,\"buy_fee_rate\":0.0021,\"sell_fee_rate\":0.0021,\"slippage_rate\":0.0},{\"signal_time_ms\":1780535820000,\"fill_time_ms\":1780535880000,\"exit_time_ms\":1780543920000,\"entry\":0.0017153711999999999,\"exit\":0.0017742686480665395,\"reason\":\"TP\",\"gross_return\":0.034335103717807236,\"net_return\":0.030000000000000027,\"buy_fee_rate\":0.0021,\"sell_fee_rate\":0.0021,\"slippage_rate\":0.0},{\"signal_time_ms\":1780561920000,\"fill_time_ms\":1780561980000,\"exit_time_ms\":1780588620000,\"entry\":0.0016833455999999997,\"exit\":0.0017411434457689145,\"reason\":\"TP\",\"gross_return\":0.03433510371780746,\"net_return\":0.030000000000000027,\"buy_fee_rate\":0.0021,\"sell_fee_rate\":0.0021,\"slippage_rate\":0.0},{\"signal_time_ms\":1780631580000,\"fill_time_ms\":1780631640000,\"exit_time_ms\":1780923540000,\"entry\":0.001591272,\"exit\":0.0016459084891632426,\"reason\":\"TP\",\"gross_return\":0.03433510371780746,\"net_return\":0.030000000000000027,\"buy_fee_rate\":0.0021,\"sell_fee_rate\":0.0021,\"slippage_rate\":0.0},{\"signal_time_ms\":1781109960000,\"fill_time_ms\":1781110020000,\"exit_time_ms\":1781200140000,\"entry\":0.0014271407999999998,\"exit\":0.0014761418273879143,\"reason\":\"TP\",\"gross_return\":0.034335103717807236,\"net_return\":0.030000000000000027,\"buy_fee_rate\":0.0021,\"sell_fee_rate\":0.0021,\"slippage_rate\":0.0}],\"metrics\":{\"signals\":33,\"fills\":21,\"wins\":20,\"win_rate\":0.9523809523809523,\"average_net\":0.01916688042892561,\"profit_factor\":3.038043735700884,\"compound_net\":0.44941237346897056,\"trades_per_day\":0.19534757527406152,\"exits\":{\"TP\":20,\"STOP_LIMIT_FILLED\":1},\"max_drawdown\":0.1974955109925629,\"cvar_5\":-0.08374775549628144}}",
+    "rejection_reasons_json": "[]",
+    "source": "completed-generation",
+    "tags_json": "[\"PROFIT_RECORD:exact:20\"]",
+    "total_fills": 20,
+    "train_json": "{\"signals\":4,\"fills\":4,\"wins\":4,\"win_rate\":1.0,\"average_net\":0.030000000000000027,\"profit_factor\":null,\"compound_net\":0.12550881000000014,\"trades_per_day\":0.11267385223293755,\"exits\":{\"TP\":4},\"max_drawdown\":0.0,\"cvar_5\":0.030000000000000027}",
+    "validation_a_json": "{\"signals\":6,\"fills\":6,\"wins\":6,\"win_rate\":1.0,\"average_net\":0.030000000000000065,\"profit_factor\":null,\"compound_net\":0.19405229652900036,\"trades_per_day\":0.16666666666666666,\"exits\":{\"TP\":6},\"max_drawdown\":0.0,\"cvar_5\":0.030000000000000027}",
+    "validation_b_json": "{\"signals\":22,\"fills\":10,\"wins\":10,\"win_rate\":1.0,\"average_net\":0.030000000000000027,\"profit_factor\":null,\"compound_net\":0.3439163793441222,\"trades_per_day\":0.2777777777777778,\"exits\":{\"TP\":10},\"max_drawdown\":0.0,\"cvar_5\":0.030000000000000027}",
+    "validation_fills": 16,
+    "worst_average_net": 0.030000000000000027
+  },
+  "qualifies_80_any_recorded_return": true,
+  "record_sha256": "56908d0c1209cc820b987428f94e8d4f7c200f7b6b376a2274f772b48777edb2",
+  "recorded_returns_fraction": {
+    "development_compound": 0.806111234669415,
+    "preview_return": 0.44941237346897034
+  },
+  "provenance": [
+    {
+      "source": "legacy-c/checkpoints/automatic-6m-e6afcb8f64205d76-interesting.sqlite3",
+      "table": "candidates"
+    },
+    {
+      "source": "live/checkpoints/automatic-6m-e6afcb8f64205d76-interesting.sqlite3",
+      "table": "candidates"
+    }
+  ],
+  "selection_reason": "RETURN_GE_80_PERCENT"
+}

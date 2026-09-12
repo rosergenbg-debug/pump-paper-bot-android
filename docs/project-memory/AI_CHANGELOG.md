@@ -218,3 +218,8 @@ V5.37 готов как совместимый signed handoff APK для уст�
 
 **Project impact**
 Уменьшен визуальный шум без изменения торговой логики, истории, счетов, API-ключей или paper-only ограничений.
+
+
+## 2026-09-12 — Preserve Windows research results >=80% in X
+
+Added immutable archival evidence from live SQLite snapshots, pre-cleanup backup and legacy C: copy. Preserved parameters, original rows, context, exact data, compiled references and restore tools. Verified an isolated V16 replay against archived metrics; headline/preview discrepancies and unavailable legacy provenance remain explicit. Android implementation and old X files are preserved.

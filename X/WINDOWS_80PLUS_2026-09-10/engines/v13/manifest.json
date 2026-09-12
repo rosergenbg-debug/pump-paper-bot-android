@@ -1,0 +1,218 @@
+{
+  "version": "V13",
+  "python": "3.13",
+  "status": "COMPILED_REFERENCE_NOT_EDITABLE_SOURCE",
+  "source_archive_sha256": "f303230672f18558bd5bd1c7422e8bfd14dbed2bf479eadb7d0de8c8ba600df5",
+  "modules": [
+    {
+      "module": "pump_research_lab",
+      "path": "pump_research_lab/__init__.pyc",
+      "sha256": "ba12d53ae584b5f8aa76276c9bab923f5bea83ebac834f257becc68ee50720cc",
+      "original_source": "pump_research_lab\\__init__.py",
+      "package": true
+    },
+    {
+      "module": "pump_research_lab.adaptive_features",
+      "path": "pump_research_lab/adaptive_features.pyc",
+      "sha256": "bce75a4336f176e469b1d524feb4ba0b9ea8c7b69bd1eaddd100e681cad3db15",
+      "original_source": "pump_research_lab\\adaptive_features.py",
+      "package": false
+    },
+    {
+      "module": "pump_research_lab.adaptive_optimizer",
+      "path": "pump_research_lab/adaptive_optimizer.pyc",
+      "sha256": "19a0fe0ecf2d3f28f2c29870ef370b1ee3e91218400e31233d148845e613551a",
+      "original_source": "pump_research_lab\\adaptive_optimizer.py",
+      "package": false
+    },
+    {
+      "module": "pump_research_lab.automation",
+      "path": "pump_research_lab/automation.pyc",
+      "sha256": "561a8dd1a3ae2cb2a4c54179a7b5fa866f082c7452dcc88fd387f34b01062ad2",
+      "original_source": "pump_research_lab\\automation.py",
+      "package": false
+    },
+    {
+      "module": "pump_research_lab.baseline_x",
+      "path": "pump_research_lab/baseline_x.pyc",
+      "sha256": "e431b29ea1e7fd0d052c9c5b803f9d3ae133c818253ca792caff2dc1a57cad7a",
+      "original_source": "pump_research_lab\\baseline_x.py",
+      "package": false
+    },
+    {
+      "module": "pump_research_lab.candidate_archive",
+      "path": "pump_research_lab/candidate_archive.pyc",
+      "sha256": "169d541ce2f9cd1c70d37602ff8e2799254b0ed2c8024eb15d0e7a55a4bcfcbb",
+      "original_source": "pump_research_lab\\candidate_archive.py",
+      "package": false
+    },
+    {
+      "module": "pump_research_lab.catalog",
+      "path": "pump_research_lab/catalog.pyc",
+      "sha256": "5880494f3b6b6c4161677a38053114490ee0c4ca00ad29ddfd405fd89eb296aa",
+      "original_source": "pump_research_lab\\catalog.py",
+      "package": false
+    },
+    {
+      "module": "pump_research_lab.contexts_v13",
+      "path": "pump_research_lab/contexts_v13.pyc",
+      "sha256": "8ef4bafe5d6ec01d4a58254cdaf159864824ce9fba0fdefd8cbda6f0a5bae491",
+      "original_source": "pump_research_lab\\contexts_v13.py",
+      "package": false
+    },
+    {
+      "module": "pump_research_lab.data_manager",
+      "path": "pump_research_lab/data_manager.pyc",
+      "sha256": "8cfe0d63a66725d8d1b1535b121f2efd94809d03e31859d8d1074b6d087a6540",
+      "original_source": "pump_research_lab\\data_manager.py",
+      "package": false
+    },
+    {
+      "module": "pump_research_lab.demo",
+      "path": "pump_research_lab/demo.pyc",
+      "sha256": "062a33cb56f475ec1600b050697e33d78e6735c94da6e64e7141d862375ce0f8",
+      "original_source": "pump_research_lab\\demo.py",
+      "package": false
+    },
+    {
+      "module": "pump_research_lab.domain",
+      "path": "pump_research_lab/domain.pyc",
+      "sha256": "df14d1c498f9814fe82c4657b7dff7d819505994a361cbaf2917e00b54fff1a3",
+      "original_source": "pump_research_lab\\domain.py",
+      "package": false
+    },
+    {
+      "module": "pump_research_lab.evaluation_v12",
+      "path": "pump_research_lab/evaluation_v12.pyc",
+      "sha256": "b72f7c3e6a8c459c22ddc90756ddfcade652d4c4d5c7a9dd65117dac1ddf7c4d",
+      "original_source": "pump_research_lab\\evaluation_v12.py",
+      "package": false
+    },
+    {
+      "module": "pump_research_lab.evaluation_v13",
+      "path": "pump_research_lab/evaluation_v13.pyc",
+      "sha256": "0394c7844f64fceded90e15f202d983a41ce487c31bd304d6b19daff4934a1f9",
+      "original_source": "pump_research_lab\\evaluation_v13.py",
+      "package": false
+    },
+    {
+      "module": "pump_research_lab.fusion_execution",
+      "path": "pump_research_lab/fusion_execution.pyc",
+      "sha256": "ab76828fc91871fbcb6a5b5eb2c71186ebd7b6dd0700238fbaf0d75fdcff6085",
+      "original_source": "pump_research_lab\\fusion_execution.py",
+      "package": false
+    },
+    {
+      "module": "pump_research_lab.gui",
+      "path": "pump_research_lab/gui.pyc",
+      "sha256": "34e6440cdbbda23aeb707ca1faff6393a4bcd43b2ab953b8dc24d956a0428077",
+      "original_source": "pump_research_lab\\gui.py",
+      "package": false
+    },
+    {
+      "module": "pump_research_lab.gui_v12",
+      "path": "pump_research_lab/gui_v12.pyc",
+      "sha256": "6f361345aa0fdf227410720be67416642020350ffccd859e075be5c5cba2de1d",
+      "original_source": "pump_research_lab\\gui_v12.py",
+      "package": false
+    },
+    {
+      "module": "pump_research_lab.hardware",
+      "path": "pump_research_lab/hardware.pyc",
+      "sha256": "9313e05fc0fe12391f3453f61255d2978e5840183fb3de3a077047c0056f899d",
+      "original_source": "pump_research_lab\\hardware.py",
+      "package": false
+    },
+    {
+      "module": "pump_research_lab.holdout",
+      "path": "pump_research_lab/holdout.pyc",
+      "sha256": "4a0a9fec62f4c071c041c442c8083f142a31a33e1214fef44c4bd96e3622378e",
+      "original_source": "pump_research_lab\\holdout.py",
+      "package": false
+    },
+    {
+      "module": "pump_research_lab.io",
+      "path": "pump_research_lab/io.pyc",
+      "sha256": "2b906bf145dcea5b68261e280322d16ab3d40641fea7bcfad84952a767f5981f",
+      "original_source": "pump_research_lab\\io.py",
+      "package": false
+    },
+    {
+      "module": "pump_research_lab.local_ai",
+      "path": "pump_research_lab/local_ai.pyc",
+      "sha256": "cd0b92d6814a3d7d3dceb4e0d42d320fea63bded1f96a17d78b941282cf7fc78",
+      "original_source": "pump_research_lab\\local_ai.py",
+      "package": false
+    },
+    {
+      "module": "pump_research_lab.optimizer",
+      "path": "pump_research_lab/optimizer.pyc",
+      "sha256": "8928a83bf37802de4b4dc801ff802b07cede6dbead8b642e7b2eda70f3e85aeb",
+      "original_source": "pump_research_lab\\optimizer.py",
+      "package": false
+    },
+    {
+      "module": "pump_research_lab.regime_lab",
+      "path": "pump_research_lab/regime_lab.pyc",
+      "sha256": "55a5098c5bc4b3d1dd91da4cf25d432be0ff70e5c42ffa2ff875e5f77301eed2",
+      "original_source": "pump_research_lab\\regime_lab.py",
+      "package": false
+    },
+    {
+      "module": "pump_research_lab.reporting",
+      "path": "pump_research_lab/reporting.pyc",
+      "sha256": "0e0c2b54451d08c0d71450402a4226db146a96b91467a1fa25df41a3fcdc6f5b",
+      "original_source": "pump_research_lab\\reporting.py",
+      "package": false
+    },
+    {
+      "module": "pump_research_lab.research_v12",
+      "path": "pump_research_lab/research_v12.pyc",
+      "sha256": "59596e94d908c01d85de675842f700fcee0fcb22145569dc66213fc139aaece6",
+      "original_source": "pump_research_lab\\research_v12.py",
+      "package": false
+    },
+    {
+      "module": "pump_research_lab.safety_v12",
+      "path": "pump_research_lab/safety_v12.pyc",
+      "sha256": "a0177ed4be62163ac6b3425cf96e6d52217073ee4f4c56e7785d8c9f23c16b22",
+      "original_source": "pump_research_lab\\safety_v12.py",
+      "package": false
+    },
+    {
+      "module": "pump_research_lab.scenarios",
+      "path": "pump_research_lab/scenarios.pyc",
+      "sha256": "31c54cb5dd05ca2c20351f063003c0c3c46944c5f78e6918dc2f8ddef2fc7838",
+      "original_source": "pump_research_lab\\scenarios.py",
+      "package": false
+    },
+    {
+      "module": "pump_research_lab.storage_v13",
+      "path": "pump_research_lab/storage_v13.pyc",
+      "sha256": "8cf4d14296a60aa8c1f60cdce370ee5d19dd2797899050b80c2865ff4032f91d",
+      "original_source": "pump_research_lab\\storage_v13.py",
+      "package": false
+    },
+    {
+      "module": "pump_research_lab.strategy_library",
+      "path": "pump_research_lab/strategy_library.pyc",
+      "sha256": "c0e105c685b9eff3279ae8a93c86fdd9bf3b531a89bb6e3d7748a24cd88e0083",
+      "original_source": "pump_research_lab\\strategy_library.py",
+      "package": false
+    },
+    {
+      "module": "pump_research_lab.telemetry",
+      "path": "pump_research_lab/telemetry.pyc",
+      "sha256": "38ef37c1f5e0d8075b26d1508772c7d8b1689451f778b0e90c722d4d8b96c091",
+      "original_source": "pump_research_lab\\telemetry.py",
+      "package": false
+    },
+    {
+      "module": "pump_research_lab.validation",
+      "path": "pump_research_lab/validation.pyc",
+      "sha256": "22da8b9dcea68313dd65746f3f0ab0ee498727511dc85cafa504baa5cc834df2",
+      "original_source": "pump_research_lab\\validation.py",
+      "package": false
+    }
+  ]
+}

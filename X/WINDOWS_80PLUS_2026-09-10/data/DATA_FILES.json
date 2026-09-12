@@ -1,0 +1,548 @@
+[
+  {
+    "original_relative_path": "data/raw/binance_spot/BTCUSDT/1m/1757980800000-1773532740000.jsonl",
+    "blob": "data/blobs/0bb13f62b9e4ba612b25b5e8294da3ef1198776e81f824a024174e661f8f8e41.jsonl.gz",
+    "sha256": "0bb13f62b9e4ba612b25b5e8294da3ef1198776e81f824a024174e661f8f8e41",
+    "bytes": 82376553,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/raw/binance_spot/BTCUSDT/1m/1757980800000-1773532740000.manifest.json",
+    "blob": "data/blobs/9f7d99906f4d578ed1e991aa585b570fba8832036e3f797c5924cb217c72a937.json.gz",
+    "sha256": "9f7d99906f4d578ed1e991aa585b570fba8832036e3f797c5924cb217c72a937",
+    "bytes": 612,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/raw/binance_spot/BTCUSDT/1m/1759276800000-1774828740000.jsonl",
+    "blob": "data/blobs/046f8eae830fb825c505f137f5e6c34e74bd132651b1afab49f5ac9e8ac7faa9.jsonl.gz",
+    "sha256": "046f8eae830fb825c505f137f5e6c34e74bd132651b1afab49f5ac9e8ac7faa9",
+    "bytes": 82303603,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/raw/binance_spot/BTCUSDT/1m/1759276800000-1774828740000.manifest.json",
+    "blob": "data/blobs/13bd4232cbe8c0d62d0e9ad03e4be6ac1abb5b00ae17e196ed44cfef5bfa659e.json.gz",
+    "sha256": "13bd4232cbe8c0d62d0e9ad03e4be6ac1abb5b00ae17e196ed44cfef5bfa659e",
+    "bytes": 612,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/raw/binance_spot/BTCUSDT/1m/1764547200000-1780099140000.jsonl",
+    "blob": "data/blobs/12fc57d23433c778512e890c53260a3bf95125d62c033e910469ceddb2bacf40.jsonl.gz",
+    "sha256": "12fc57d23433c778512e890c53260a3bf95125d62c033e910469ceddb2bacf40",
+    "bytes": 81936082,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/raw/binance_spot/BTCUSDT/1m/1764547200000-1780099140000.manifest.json",
+    "blob": "data/blobs/f0c23e7193ae3f8f2b98cbe19aa2de0027478506a18886a5b1705b50fa13d833.json.gz",
+    "sha256": "f0c23e7193ae3f8f2b98cbe19aa2de0027478506a18886a5b1705b50fa13d833",
+    "bytes": 612,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/raw/binance_spot/BTCUSDT/1m/1767225600000-1782777540000.jsonl",
+    "blob": "data/blobs/a73af5d448468550e05ec254168d1cc08f9a96001f1afd7530d0984b0208bf42.jsonl.gz",
+    "sha256": "a73af5d448468550e05ec254168d1cc08f9a96001f1afd7530d0984b0208bf42",
+    "bytes": 81912135,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/raw/binance_spot/BTCUSDT/1m/1767225600000-1782777540000.manifest.json",
+    "blob": "data/blobs/9d77657fbc99f0e04cac887134a56e1d9b8016cd6a94bd756dc54c3fcaa2c4f6.json.gz",
+    "sha256": "9d77657fbc99f0e04cac887134a56e1d9b8016cd6a94bd756dc54c3fcaa2c4f6",
+    "bytes": 612,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/raw/binance_spot/BTCUSDT/1m/1770249600000-1785801540000.jsonl",
+    "blob": "data/blobs/ab405020c7fb295e8a55a1fd7ac9b2a2418560d520c5e6d3ad81407cc99bc738.jsonl.gz",
+    "sha256": "ab405020c7fb295e8a55a1fd7ac9b2a2418560d520c5e6d3ad81407cc99bc738",
+    "bytes": 81857784,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/raw/binance_spot/BTCUSDT/1m/1770249600000-1785801540000.manifest.json",
+    "blob": "data/blobs/3d52ff52000f7c905191aa6f7a67cd06e2bb99bae25c1c5e0067424f99314706.json.gz",
+    "sha256": "3d52ff52000f7c905191aa6f7a67cd06e2bb99bae25c1c5e0067424f99314706",
+    "bytes": 612,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/raw/binance_spot/BTCUSDT/1m/1771977600000-1787529540000.jsonl",
+    "blob": "data/blobs/265fb1be8a274940555097b613f99d7170b5778ee28719ce2272728208e16e4d.jsonl.gz",
+    "sha256": "265fb1be8a274940555097b613f99d7170b5778ee28719ce2272728208e16e4d",
+    "bytes": 81805271,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/raw/binance_spot/BTCUSDT/1m/1771977600000-1787529540000.manifest.json",
+    "blob": "data/blobs/a8c2610ed23369a9962f9c9fa4fb2c2274d4114093c49bd48717b103a3589c99.json.gz",
+    "sha256": "a8c2610ed23369a9962f9c9fa4fb2c2274d4114093c49bd48717b103a3589c99",
+    "bytes": 612,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/raw/binance_spot/PUMPUSDT/1m/1757980800000-1773532740000.jsonl",
+    "blob": "data/blobs/f8ccb2a670bc977c63593123d6934a56b4f7b65737f49700c8c6fd3062f3a355.jsonl.gz",
+    "sha256": "f8ccb2a670bc977c63593123d6934a56b4f7b65737f49700c8c6fd3062f3a355",
+    "bytes": 81303728,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/raw/binance_spot/PUMPUSDT/1m/1757980800000-1773532740000.manifest.json",
+    "blob": "data/blobs/47ce936957142c48902122a82c849d0c45a68be73034323eb1d08c7023bae1fb.json.gz",
+    "sha256": "47ce936957142c48902122a82c849d0c45a68be73034323eb1d08c7023bae1fb",
+    "bytes": 615,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/raw/binance_spot/PUMPUSDT/1m/1759276800000-1774828740000.jsonl",
+    "blob": "data/blobs/bf5fa11814ffc1843cf560504f8f46980bbacec2757fc3963651438a351e1e1a.jsonl.gz",
+    "sha256": "bf5fa11814ffc1843cf560504f8f46980bbacec2757fc3963651438a351e1e1a",
+    "bytes": 81137282,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/raw/binance_spot/PUMPUSDT/1m/1759276800000-1774828740000.manifest.json",
+    "blob": "data/blobs/de746b324fc5000e0d3cafa1fd689a5d1e049f24fb25e3d7f274e61b4c3aec4c.json.gz",
+    "sha256": "de746b324fc5000e0d3cafa1fd689a5d1e049f24fb25e3d7f274e61b4c3aec4c",
+    "bytes": 615,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/raw/binance_spot/PUMPUSDT/1m/1764547200000-1780099140000.jsonl",
+    "blob": "data/blobs/5570dc0f6349d872d199cdc0f4e65ec0fd79e4eb4309866eaa613ed50fe7fae4.jsonl.gz",
+    "sha256": "5570dc0f6349d872d199cdc0f4e65ec0fd79e4eb4309866eaa613ed50fe7fae4",
+    "bytes": 80392556,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/raw/binance_spot/PUMPUSDT/1m/1764547200000-1780099140000.manifest.json",
+    "blob": "data/blobs/7b25ebde872b75edef70bbd3da10bf34bec57afd5dd0c4028bab3358714e46bd.json.gz",
+    "sha256": "7b25ebde872b75edef70bbd3da10bf34bec57afd5dd0c4028bab3358714e46bd",
+    "bytes": 615,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/raw/binance_spot/PUMPUSDT/1m/1767225600000-1782777540000.jsonl",
+    "blob": "data/blobs/9c789cb81aa30d84975c2c0eb33eec7f3fcfefb4cbb7f36e5c6051e99e744f92.jsonl.gz",
+    "sha256": "9c789cb81aa30d84975c2c0eb33eec7f3fcfefb4cbb7f36e5c6051e99e744f92",
+    "bytes": 80324944,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/raw/binance_spot/PUMPUSDT/1m/1767225600000-1782777540000.manifest.json",
+    "blob": "data/blobs/895e395dc6bc17866e53bb1823c0f902577d6be2061691e5c15f81352490a46d.json.gz",
+    "sha256": "895e395dc6bc17866e53bb1823c0f902577d6be2061691e5c15f81352490a46d",
+    "bytes": 615,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/raw/binance_spot/PUMPUSDT/1m/1770249600000-1785801540000.jsonl",
+    "blob": "data/blobs/89a6bc1ebd83d60a0cad9203b95dd2cc2408ac09e6e460e018b255e6d4e88982.jsonl.gz",
+    "sha256": "89a6bc1ebd83d60a0cad9203b95dd2cc2408ac09e6e460e018b255e6d4e88982",
+    "bytes": 80121724,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/raw/binance_spot/PUMPUSDT/1m/1770249600000-1785801540000.manifest.json",
+    "blob": "data/blobs/009bb9370a8b51bf8abc4df1c1cf1e55b363425e573da24a64823882a9bf09ab.json.gz",
+    "sha256": "009bb9370a8b51bf8abc4df1c1cf1e55b363425e573da24a64823882a9bf09ab",
+    "bytes": 615,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/raw/binance_spot/PUMPUSDT/1m/1771977600000-1787529540000.jsonl",
+    "blob": "data/blobs/57a784f115fbb6d55f371a9a4dbb02eb6387171d939466d759a153960fe0cebb.jsonl.gz",
+    "sha256": "57a784f115fbb6d55f371a9a4dbb02eb6387171d939466d759a153960fe0cebb",
+    "bytes": 80150865,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/raw/binance_spot/PUMPUSDT/1m/1771977600000-1787529540000.manifest.json",
+    "blob": "data/blobs/c9327112d7182898701c6f277b269ef92d8e100822a1de9823f38966806c1ab2.json.gz",
+    "sha256": "c9327112d7182898701c6f277b269ef92d8e100822a1de9823f38966806c1ab2",
+    "bytes": 615,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/raw/binance_spot/SOLUSDT/1m/1757980800000-1773532740000.jsonl",
+    "blob": "data/blobs/2ef9f818ec54496a3317f0f5b3049a1b2c776d061ec4c5c872bca2879fd00953.jsonl.gz",
+    "sha256": "2ef9f818ec54496a3317f0f5b3049a1b2c776d061ec4c5c872bca2879fd00953",
+    "bytes": 78482546,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/raw/binance_spot/SOLUSDT/1m/1757980800000-1773532740000.manifest.json",
+    "blob": "data/blobs/9049914ff8d1b303c8db9e9c240abe43cffdf67f0305c65d262e5acbc8633089.json.gz",
+    "sha256": "9049914ff8d1b303c8db9e9c240abe43cffdf67f0305c65d262e5acbc8633089",
+    "bytes": 612,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/raw/binance_spot/SOLUSDT/1m/1759276800000-1774828740000.jsonl",
+    "blob": "data/blobs/9c72ed10aec46a91d62f2814d7cef05ef51b219e38f6c43079ef7052a238804d.jsonl.gz",
+    "sha256": "9c72ed10aec46a91d62f2814d7cef05ef51b219e38f6c43079ef7052a238804d",
+    "bytes": 78354156,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/raw/binance_spot/SOLUSDT/1m/1759276800000-1774828740000.manifest.json",
+    "blob": "data/blobs/48e85505f49550a18d04b9811caf4eff7f6c56912bbfdf6d190ca3c6c1236775.json.gz",
+    "sha256": "48e85505f49550a18d04b9811caf4eff7f6c56912bbfdf6d190ca3c6c1236775",
+    "bytes": 612,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/raw/binance_spot/SOLUSDT/1m/1764547200000-1780099140000.jsonl",
+    "blob": "data/blobs/643131c6ddc35855328064fb5f4ccfd0661781e7209f614dd322f3882e69dee6.jsonl.gz",
+    "sha256": "643131c6ddc35855328064fb5f4ccfd0661781e7209f614dd322f3882e69dee6",
+    "bytes": 77790850,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/raw/binance_spot/SOLUSDT/1m/1764547200000-1780099140000.manifest.json",
+    "blob": "data/blobs/ffe5608ef54aa71b3c1e4b6a235ef041b7fbcb16883a1404d07feb5b273ffe3c.json.gz",
+    "sha256": "ffe5608ef54aa71b3c1e4b6a235ef041b7fbcb16883a1404d07feb5b273ffe3c",
+    "bytes": 612,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/raw/binance_spot/SOLUSDT/1m/1767225600000-1782777540000.jsonl",
+    "blob": "data/blobs/f630d88a073f7c6ca6921df2178f00cd68dc88a68e4183050ef070eddcd63703.jsonl.gz",
+    "sha256": "f630d88a073f7c6ca6921df2178f00cd68dc88a68e4183050ef070eddcd63703",
+    "bytes": 77580499,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/raw/binance_spot/SOLUSDT/1m/1767225600000-1782777540000.manifest.json",
+    "blob": "data/blobs/ef7aa8f326bfb84ce8f9d5d37abf6064052a94da179c57f499e07d75c03a81b1.json.gz",
+    "sha256": "ef7aa8f326bfb84ce8f9d5d37abf6064052a94da179c57f499e07d75c03a81b1",
+    "bytes": 612,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/raw/binance_spot/SOLUSDT/1m/1770249600000-1785801540000.jsonl",
+    "blob": "data/blobs/84df4cff46d2ff9281a0d202dceb50b0ffad29be208a69372488642667277d2b.jsonl.gz",
+    "sha256": "84df4cff46d2ff9281a0d202dceb50b0ffad29be208a69372488642667277d2b",
+    "bytes": 77296138,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/raw/binance_spot/SOLUSDT/1m/1770249600000-1785801540000.manifest.json",
+    "blob": "data/blobs/142d6fa8ceb9c3d78f2a34cd59a1d48e1a63731388e4bbddd43716b64be3db12.json.gz",
+    "sha256": "142d6fa8ceb9c3d78f2a34cd59a1d48e1a63731388e4bbddd43716b64be3db12",
+    "bytes": 612,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/raw/binance_spot/SOLUSDT/1m/1771977600000-1787529540000.jsonl",
+    "blob": "data/blobs/0a6663e0d2722fca51aaef1db60373f5bd6e214cf7607a542daf6c9d3698c614.jsonl.gz",
+    "sha256": "0a6663e0d2722fca51aaef1db60373f5bd6e214cf7607a542daf6c9d3698c614",
+    "bytes": 77235002,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/raw/binance_spot/SOLUSDT/1m/1771977600000-1787529540000.manifest.json",
+    "blob": "data/blobs/1817fc6a573e097d9625551145c21d51e32d464127c20dd8ecc2c732f9141122.json.gz",
+    "sha256": "1817fc6a573e097d9625551145c21d51e32d464127c20dd8ecc2c732f9141122",
+    "bytes": 612,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/prepared/research-base-1m-sideways.json",
+    "blob": "data/blobs/5e945155aabadd55e7264c954e149f1f6b698c9ad85791e610aa22fd80d443c8.json.gz",
+    "sha256": "5e945155aabadd55e7264c954e149f1f6b698c9ad85791e610aa22fd80d443c8",
+    "bytes": 2370,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/prepared/research-base-1m.json",
+    "blob": "data/blobs/4ec8c94b570dbb09913bb5b3a5fe122e33bd83f07dd61f37d70b6a28edf40c18.json.gz",
+    "sha256": "4ec8c94b570dbb09913bb5b3a5fe122e33bd83f07dd61f37d70b6a28edf40c18",
+    "bytes": 1906,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/prepared/research-base-6m-bear.json",
+    "blob": "data/blobs/0321c9d4679ec26693c2f22829b592a04f9b826a4f68524592186f5a3250af41.json.gz",
+    "sha256": "0321c9d4679ec26693c2f22829b592a04f9b826a4f68524592186f5a3250af41",
+    "bytes": 2194,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/prepared/research-base-6m-bull.json",
+    "blob": "data/blobs/fd85dadc75f1f17931684c44ca3f3d8d6ab320c6f109899b31c9c4732fd17e03.json.gz",
+    "sha256": "fd85dadc75f1f17931684c44ca3f3d8d6ab320c6f109899b31c9c4732fd17e03",
+    "bytes": 2188,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/prepared/research-base-6m-sideways.json",
+    "blob": "data/blobs/8ae9fe71fe48588974bc542557ecf94aa8cb4b747f6b391cbb3a8e9e94c4581e.json.gz",
+    "sha256": "8ae9fe71fe48588974bc542557ecf94aa8cb4b747f6b391cbb3a8e9e94c4581e",
+    "bytes": 2205,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/prepared/research-base-6m.json",
+    "blob": "data/blobs/d416525f24f5e201796e56505444fc66fddc22834282c44614680c5124a5de35.json.gz",
+    "sha256": "d416525f24f5e201796e56505444fc66fddc22834282c44614680c5124a5de35",
+    "bytes": 1892,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/development/04329a22d3c8eab3989a/development.jsonl",
+    "blob": "data/blobs/57659d7ac13ffa51524ecd7bd85352f6cf6e1abae1c9772906d55a773f018de0.jsonl.gz",
+    "sha256": "57659d7ac13ffa51524ecd7bd85352f6cf6e1abae1c9772906d55a773f018de0",
+    "bytes": 2176917,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/development/043c1c54ceeb5a4872cd/development.jsonl",
+    "blob": "data/blobs/591a3159ea3f046f89ca4ad0c716774ed4718997d7e898e67360ca538b7ea8cf.jsonl.gz",
+    "sha256": "591a3159ea3f046f89ca4ad0c716774ed4718997d7e898e67360ca538b7ea8cf",
+    "bytes": 10619547,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/development/0c849b088271b148cfcf/development.jsonl",
+    "blob": "data/blobs/3201999c5801eb4cf256d6122f55bb7c0e7ac7e4f7be64d0f1fbde86894a567d.jsonl.gz",
+    "sha256": "3201999c5801eb4cf256d6122f55bb7c0e7ac7e4f7be64d0f1fbde86894a567d",
+    "bytes": 32147803,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/development/57a784f115fbb6d55f37/development.jsonl",
+    "blob": "data/blobs/f3ce5762f61f997d269eda60c13f45643f21df68e202308e117c80aaf6dce275.jsonl.gz",
+    "sha256": "f3ce5762f61f997d269eda60c13f45643f21df68e202308e117c80aaf6dce275",
+    "bytes": 64003646,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/development/5a9c117a0dede6111cde/development.jsonl",
+    "blob": "data/blobs/8b3752bb811c5b26acad661edbb418a878ddfe8cab1668e0a92a7412c178e99d.jsonl.gz",
+    "sha256": "8b3752bb811c5b26acad661edbb418a878ddfe8cab1668e0a92a7412c178e99d",
+    "bytes": 8609379,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/development/6cd1a885f8715ca89cd1/development.jsonl",
+    "blob": "data/blobs/5a9c117a0dede6111cdecd9e4fe8179574bfef22efa22d1809666b69af9bc732.jsonl.gz",
+    "sha256": "5a9c117a0dede6111cdecd9e4fe8179574bfef22efa22d1809666b69af9bc732",
+    "bytes": 10795682,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/development/89a6bc1ebd83d60a0cad/development.jsonl",
+    "blob": "data/blobs/c148e9e84d11526686dd42633676ecf1fb0717cd1986ce7b58c9c73fa3148a13.jsonl.gz",
+    "sha256": "c148e9e84d11526686dd42633676ecf1fb0717cd1986ce7b58c9c73fa3148a13",
+    "bytes": 64067290,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/development/8b3752bb811c5b26acad/development.jsonl",
+    "blob": "data/blobs/514fce45f309e8e01b1d218b76a67579f2c600927dd0a2e2ea06cea63c34e6cb.jsonl.gz",
+    "sha256": "514fce45f309e8e01b1d218b76a67579f2c600927dd0a2e2ea06cea63c34e6cb",
+    "bytes": 6880849,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/development/94b898b8c196923416fc/development.jsonl",
+    "blob": "data/blobs/020cbffe3584ad3648ebac4f20ed049f2fb35b09f7918a67fd82993b8695ac06.jsonl.gz",
+    "sha256": "020cbffe3584ad3648ebac4f20ed049f2fb35b09f7918a67fd82993b8695ac06",
+    "bytes": 10800928,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/development/ab9767049bbb5f671e53/development.jsonl",
+    "blob": "data/blobs/dee183c1d71e8523b2d8b63b4fbc3a67bc503759af3c3d6f5a814c1f260b42e3.jsonl.gz",
+    "sha256": "dee183c1d71e8523b2d8b63b4fbc3a67bc503759af3c3d6f5a814c1f260b42e3",
+    "bytes": 10800837,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/development/e6afcb8f64205d76980d/development.jsonl",
+    "blob": "data/blobs/554996ea88cf05bf01db30e0c5705ee14b572eef9ab6867858704beb4c46fbbb.jsonl.gz",
+    "sha256": "554996ea88cf05bf01db30e0c5705ee14b572eef9ab6867858704beb4c46fbbb",
+    "bytes": 63966813,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/development/f8ccb2a670bc977c6359/development.jsonl",
+    "blob": "data/blobs/34eaaa57dee1220e8408783427fdc5a87572b91a73f61c50ab283d42fc1b7c14.jsonl.gz",
+    "sha256": "34eaaa57dee1220e8408783427fdc5a87572b91a73f61c50ab283d42fc1b7c14",
+    "bytes": 65165827,
+    "opaque_holdout": false
+  },
+  {
+    "original_relative_path": "data/immutable_test/04329a22d3c8eab3989a/holdout.jsonl",
+    "blob": "data/blobs/707a27be499a6e3b50204181fa55bb5929777fc3d793a0cbc46b2bddcd73785e.jsonl.gz",
+    "sha256": "707a27be499a6e3b50204181fa55bb5929777fc3d793a0cbc46b2bddcd73785e",
+    "bytes": 542998,
+    "opaque_holdout": true
+  },
+  {
+    "original_relative_path": "data/immutable_test/04329a22d3c8eab3989a/holdout.manifest.json",
+    "blob": "data/blobs/903c1097915d531cdf9649f9dd6e4327217aa60fa665d8763ae0c21e4f9d69fa.json.gz",
+    "sha256": "903c1097915d531cdf9649f9dd6e4327217aa60fa665d8763ae0c21e4f9d69fa",
+    "bytes": 923,
+    "opaque_holdout": true
+  },
+  {
+    "original_relative_path": "data/immutable_test/043c1c54ceeb5a4872cd/holdout.jsonl",
+    "blob": "data/blobs/e662932297a97852d46d798ff8f5101d0f30af73409aebfc667623fe86df9f8e.jsonl.gz",
+    "sha256": "e662932297a97852d46d798ff8f5101d0f30af73409aebfc667623fe86df9f8e",
+    "bytes": 2663974,
+    "opaque_holdout": true
+  },
+  {
+    "original_relative_path": "data/immutable_test/043c1c54ceeb5a4872cd/holdout.manifest.json",
+    "blob": "data/blobs/4b30e5086527e91025d5a21f9c343313b4fc34b6ef2c301e3e71f78a550e100f.json.gz",
+    "sha256": "4b30e5086527e91025d5a21f9c343313b4fc34b6ef2c301e3e71f78a550e100f",
+    "bytes": 942,
+    "opaque_holdout": true
+  },
+  {
+    "original_relative_path": "data/immutable_test/0c849b088271b148cfcf/holdout.jsonl",
+    "blob": "data/blobs/9e80129a087d81b153e803116ffdc4d78430712502b32583b1f77c7322ce6f52.jsonl.gz",
+    "sha256": "9e80129a087d81b153e803116ffdc4d78430712502b32583b1f77c7322ce6f52",
+    "bytes": 8135533,
+    "opaque_holdout": true
+  },
+  {
+    "original_relative_path": "data/immutable_test/0c849b088271b148cfcf/holdout.manifest.json",
+    "blob": "data/blobs/9ea03f139f5bb737c316c1b4dc22bf3a1fb62f82853454a9e66578587d0170b9.json.gz",
+    "sha256": "9ea03f139f5bb737c316c1b4dc22bf3a1fb62f82853454a9e66578587d0170b9",
+    "bytes": 941,
+    "opaque_holdout": true
+  },
+  {
+    "original_relative_path": "data/immutable_test/57a784f115fbb6d55f37/holdout.jsonl",
+    "blob": "data/blobs/e9a35893c4b3b2a943cad2e1b5212150bfa61ea434abd03d871c9cf9d8fd46fe.jsonl.gz",
+    "sha256": "e9a35893c4b3b2a943cad2e1b5212150bfa61ea434abd03d871c9cf9d8fd46fe",
+    "bytes": 16147219,
+    "opaque_holdout": true
+  },
+  {
+    "original_relative_path": "data/immutable_test/57a784f115fbb6d55f37/holdout.manifest.json",
+    "blob": "data/blobs/f62b2ed1f91c751877142801e17f3a1439e95bbe058e15f635ab3b69ac2a6df7.json.gz",
+    "sha256": "f62b2ed1f91c751877142801e17f3a1439e95bbe058e15f635ab3b69ac2a6df7",
+    "bytes": 941,
+    "opaque_holdout": true
+  },
+  {
+    "original_relative_path": "data/immutable_test/5a9c117a0dede6111cde/holdout.jsonl",
+    "blob": "data/blobs/35f819c8e6fd3dd18067bb91797c0caba58f71211886b57ca6cf8b0638fa54b1.jsonl.gz",
+    "sha256": "35f819c8e6fd3dd18067bb91797c0caba58f71211886b57ca6cf8b0638fa54b1",
+    "bytes": 2186303,
+    "opaque_holdout": true
+  },
+  {
+    "original_relative_path": "data/immutable_test/5a9c117a0dede6111cde/holdout.manifest.json",
+    "blob": "data/blobs/a66f259d671165e2b0498bda99eae8d28831cfd41f480311e41612df9cba96a9.json.gz",
+    "sha256": "a66f259d671165e2b0498bda99eae8d28831cfd41f480311e41612df9cba96a9",
+    "bytes": 925,
+    "opaque_holdout": true
+  },
+  {
+    "original_relative_path": "data/immutable_test/6cd1a885f8715ca89cd1/holdout.jsonl",
+    "blob": "data/blobs/04329a22d3c8eab3989a0b13079c1d5f4abdd3cc705929390952402f814b67e7.jsonl.gz",
+    "sha256": "04329a22d3c8eab3989a0b13079c1d5f4abdd3cc705929390952402f814b67e7",
+    "bytes": 2719915,
+    "opaque_holdout": true
+  },
+  {
+    "original_relative_path": "data/immutable_test/6cd1a885f8715ca89cd1/holdout.manifest.json",
+    "blob": "data/blobs/5eec6f7e2c2b1fca0ca7401fdef321405cd6682e57cb2e90c4307de5ce21371f.json.gz",
+    "sha256": "5eec6f7e2c2b1fca0ca7401fdef321405cd6682e57cb2e90c4307de5ce21371f",
+    "bytes": 939,
+    "opaque_holdout": true
+  },
+  {
+    "original_relative_path": "data/immutable_test/89a6bc1ebd83d60a0cad/holdout.jsonl",
+    "blob": "data/blobs/9524d2d5ca76b4d0056b9208d417ede2a383ef271e3fef2cd95ce918121eb1f8.jsonl.gz",
+    "sha256": "9524d2d5ca76b4d0056b9208d417ede2a383ef271e3fef2cd95ce918121eb1f8",
+    "bytes": 16054434,
+    "opaque_holdout": true
+  },
+  {
+    "original_relative_path": "data/immutable_test/89a6bc1ebd83d60a0cad/holdout.manifest.json",
+    "blob": "data/blobs/86c29adb59281e279ba39eb87ac5188ac31f9e33865dd1d4a02928cbadf12427.json.gz",
+    "sha256": "86c29adb59281e279ba39eb87ac5188ac31f9e33865dd1d4a02928cbadf12427",
+    "bytes": 941,
+    "opaque_holdout": true
+  },
+  {
+    "original_relative_path": "data/immutable_test/8b3752bb811c5b26acad/holdout.jsonl",
+    "blob": "data/blobs/9ba0558cceda65ea2a58ef626ac21502bd5646bb4219013d17c0ee7460042f0b.jsonl.gz",
+    "sha256": "9ba0558cceda65ea2a58ef626ac21502bd5646bb4219013d17c0ee7460042f0b",
+    "bytes": 1728530,
+    "opaque_holdout": true
+  },
+  {
+    "original_relative_path": "data/immutable_test/8b3752bb811c5b26acad/holdout.manifest.json",
+    "blob": "data/blobs/8c70aff448abf2c0edf80f0b7407eb93a03bc23856d7082f161d5bfbc511ebb1.json.gz",
+    "sha256": "8c70aff448abf2c0edf80f0b7407eb93a03bc23856d7082f161d5bfbc511ebb1",
+    "bytes": 925,
+    "opaque_holdout": true
+  },
+  {
+    "original_relative_path": "data/immutable_test/94b898b8c196923416fc/holdout.jsonl",
+    "blob": "data/blobs/28f2adfc8e46cf99dcf25318fee9592c3fbf0fb0a7de477e480c3f5efaa87d9f.jsonl.gz",
+    "sha256": "28f2adfc8e46cf99dcf25318fee9592c3fbf0fb0a7de477e480c3f5efaa87d9f",
+    "bytes": 2717118,
+    "opaque_holdout": true
+  },
+  {
+    "original_relative_path": "data/immutable_test/94b898b8c196923416fc/holdout.manifest.json",
+    "blob": "data/blobs/a0a5b6294984b974ac2dbc79e47e5019514f60232615c2a2f29e5db75ae180e0.json.gz",
+    "sha256": "a0a5b6294984b974ac2dbc79e47e5019514f60232615c2a2f29e5db75ae180e0",
+    "bytes": 942,
+    "opaque_holdout": true
+  },
+  {
+    "original_relative_path": "data/immutable_test/ab9767049bbb5f671e53/holdout.jsonl",
+    "blob": "data/blobs/1c8107092e425430f4f325fd8b0b92b06470dd89eb0a5307c8219affb51bc9c0.jsonl.gz",
+    "sha256": "1c8107092e425430f4f325fd8b0b92b06470dd89eb0a5307c8219affb51bc9c0",
+    "bytes": 2717129,
+    "opaque_holdout": true
+  },
+  {
+    "original_relative_path": "data/immutable_test/ab9767049bbb5f671e53/holdout.manifest.json",
+    "blob": "data/blobs/247353dd9b9d1b3e7758cbd14549cdb4fd896a082253b9934132d7f12adb9a24.json.gz",
+    "sha256": "247353dd9b9d1b3e7758cbd14549cdb4fd896a082253b9934132d7f12adb9a24",
+    "bytes": 939,
+    "opaque_holdout": true
+  },
+  {
+    "original_relative_path": "data/immutable_test/e6afcb8f64205d76980d/holdout.jsonl",
+    "blob": "data/blobs/3014b8426633cbf021eff9685c150987dd99275b1cadfb43feee26bdbb774187.jsonl.gz",
+    "sha256": "3014b8426633cbf021eff9685c150987dd99275b1cadfb43feee26bdbb774187",
+    "bytes": 16210486,
+    "opaque_holdout": true
+  },
+  {
+    "original_relative_path": "data/immutable_test/e6afcb8f64205d76980d/holdout.manifest.json",
+    "blob": "data/blobs/0576419e90da4aae42106e580ce761a8b6cc9f1dff07d1c2f80abbcd2c6a141e.json.gz",
+    "sha256": "0576419e90da4aae42106e580ce761a8b6cc9f1dff07d1c2f80abbcd2c6a141e",
+    "bytes": 941,
+    "opaque_holdout": true
+  },
+  {
+    "original_relative_path": "data/immutable_test/f8ccb2a670bc977c6359/holdout.jsonl",
+    "blob": "data/blobs/73fcd1db4212c5957aa237d63df65e32ed140f9ed639c4bf14754bead49a650e.jsonl.gz",
+    "sha256": "73fcd1db4212c5957aa237d63df65e32ed140f9ed639c4bf14754bead49a650e",
+    "bytes": 16137901,
+    "opaque_holdout": true
+  },
+  {
+    "original_relative_path": "data/immutable_test/f8ccb2a670bc977c6359/holdout.manifest.json",
+    "blob": "data/blobs/21bc09c0e6ca0e7c3adae5a83b1a78f96cf1cde5aa18dd64675e0d1b559c2d3c.json.gz",
+    "sha256": "21bc09c0e6ca0e7c3adae5a83b1a78f96cf1cde5aa18dd64675e0d1b559c2d3c",
+    "bytes": 941,
+    "opaque_holdout": true
+  }
+]

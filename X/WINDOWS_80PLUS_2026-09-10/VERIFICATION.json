@@ -1,0 +1,38 @@
+{
+  "archive_verification": {
+    "status": "PASS",
+    "record_versions": 37370,
+    "qualifying_records": 23786,
+    "full_detail_records": 25725,
+    "candidate_ids": 25568,
+    "data_files_deep_verified": 78,
+    "checked_date": "2026-09-12"
+  },
+  "record_replay": {
+    "id": "V16-fc6d22261c18944a",
+    "metrics_exactly_equal_by_regime": {
+      "BEAR": true,
+      "SIDEWAYS": true,
+      "BULL": true
+    },
+    "candidate_count": 1,
+    "new_strategy_search": false,
+    "independent_test": false
+  },
+  "sqlite_restore": {
+    "source": "live/checkpoints/automatic-6m-bear-f8ccb2a670bc977c-interesting.sqlite3",
+    "rows": 163,
+    "integrity_check": "ok",
+    "all_original_row_values_equal": true
+  },
+  "data_restore": {
+    "files": 78,
+    "all_restored_checksums_matched": true
+  },
+  "scope": "Preservation plus one original V16 replay; not a new validation of all archived strategies.",
+  "selection_coverage": {
+    "source_record_versions": 180263,
+    "all_qualifying_hashes_preserved": 23786,
+    "selected_hashes_exactly_preserved": 37370
+  }
+}

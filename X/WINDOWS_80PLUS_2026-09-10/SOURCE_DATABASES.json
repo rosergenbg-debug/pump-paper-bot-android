@@ -1,0 +1,579 @@
+[
+  {
+    "source": "live/experiments/v12-658fdbc4e5d85b1b/research.sqlite3",
+    "original_path": "F:\\PUMP Research Lab\\experiments\\v12-658fdbc4e5d85b1b\\research.sqlite3",
+    "snapshot_sha256": "aa4f6f32e85a3f3c86f0d63ee1d6143df37802c4e68e48d64aa4bcf86de89a5e",
+    "schema": [
+      {
+        "name": "trials",
+        "sql": "CREATE TABLE trials(\n            id TEXT PRIMARY KEY, config TEXT NOT NULL, origin TEXT NOT NULL,\n            result BLOB, positive INTEGER DEFAULT 0)"
+      },
+      {
+        "name": "meta",
+        "sql": "CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL)"
+      }
+    ],
+    "tables": {
+      "trials": 5655
+    },
+    "metadata": {
+      "meta": [
+        {
+          "key": "journal_policy",
+          "value": "NET>=0.50 on BEAR,SIDEWAYS,BULL; full V16 frontier retained; score-only completed memory"
+        }
+      ]
+    }
+  },
+  {
+    "source": "live/experiments/v13-6a0382929b3c2184/research.sqlite3",
+    "original_path": "F:\\PUMP Research Lab\\experiments\\v13-6a0382929b3c2184\\research.sqlite3",
+    "snapshot_sha256": "b526e99aa0713214595f07a48985687c8ec10a8312a154b0fc0d76445cd1c93a",
+    "schema": [
+      {
+        "name": "trials",
+        "sql": "CREATE TABLE trials(\n            id TEXT PRIMARY KEY, config TEXT NOT NULL, origin TEXT NOT NULL,\n            result BLOB, positive INTEGER DEFAULT 0)"
+      },
+      {
+        "name": "meta",
+        "sql": "CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL)"
+      }
+    ],
+    "tables": {
+      "trials": 48171
+    },
+    "metadata": {
+      "meta": [
+        {
+          "key": "journal_policy",
+          "value": "NET>=0.50 on BEAR,SIDEWAYS,BULL; full V16 frontier retained; score-only completed memory"
+        }
+      ]
+    }
+  },
+  {
+    "source": "live/experiments/v14-6a0382929b3c2184/research.sqlite3",
+    "original_path": "F:\\PUMP Research Lab\\experiments\\v14-6a0382929b3c2184\\research.sqlite3",
+    "snapshot_sha256": "0d31be08924017714720172189fb9dcc610beea1dda773f9aee8bdfdec8aba85",
+    "schema": [
+      {
+        "name": "trials",
+        "sql": "CREATE TABLE trials(\n            id TEXT PRIMARY KEY, config TEXT NOT NULL, origin TEXT NOT NULL,\n            result BLOB, positive INTEGER DEFAULT 0)"
+      },
+      {
+        "name": "meta",
+        "sql": "CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL)"
+      }
+    ],
+    "tables": {
+      "trials": 66
+    },
+    "metadata": {
+      "meta": [
+        {
+          "key": "journal_policy",
+          "value": "NET>=0.50 on BEAR,SIDEWAYS,BULL; full V16 frontier retained; score-only completed memory"
+        }
+      ]
+    }
+  },
+  {
+    "source": "live/experiments/v14-6a0382929b3c2184-retest-c340b76d867c/research.sqlite3",
+    "original_path": "F:\\PUMP Research Lab\\experiments\\v14-6a0382929b3c2184-retest-c340b76d867c\\research.sqlite3",
+    "snapshot_sha256": "def9af9b50bcbc6b57b2e58e573ef56753a5329736e896aec81bd832966933da",
+    "schema": [
+      {
+        "name": "trials",
+        "sql": "CREATE TABLE trials(\n            id TEXT PRIMARY KEY, config TEXT NOT NULL, origin TEXT NOT NULL,\n            result BLOB, positive INTEGER DEFAULT 0)"
+      },
+      {
+        "name": "meta",
+        "sql": "CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL)"
+      }
+    ],
+    "tables": {
+      "trials": 17020
+    },
+    "metadata": {
+      "meta": [
+        {
+          "key": "journal_policy",
+          "value": "NET>=0.50 on BEAR,SIDEWAYS,BULL; full V16 frontier retained; score-only completed memory"
+        }
+      ]
+    }
+  },
+  {
+    "source": "live/experiments/v15-59b126eb7bd78c8c/research.sqlite3",
+    "original_path": "F:\\PUMP Research Lab\\experiments\\v15-59b126eb7bd78c8c\\research.sqlite3",
+    "snapshot_sha256": "acb3c0a8361a18f07d1d8512aca3ff3fdfde05c7cbbe2b49ea4a9465f00ac41f",
+    "schema": [
+      {
+        "name": "trials",
+        "sql": "CREATE TABLE trials(\n            id TEXT PRIMARY KEY, config TEXT NOT NULL, origin TEXT NOT NULL,\n            result BLOB, positive INTEGER DEFAULT 0)"
+      },
+      {
+        "name": "meta",
+        "sql": "CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL)"
+      }
+    ],
+    "tables": {
+      "trials": 17020
+    },
+    "metadata": {
+      "meta": [
+        {
+          "key": "journal_policy",
+          "value": "NET>=0.50 on BEAR,SIDEWAYS,BULL; full V16 frontier retained; score-only completed memory"
+        }
+      ]
+    }
+  },
+  {
+    "source": "live/experiments/v16-59b126eb7bd78c8c/research.sqlite3",
+    "original_path": "F:\\PUMP Research Lab\\experiments\\v16-59b126eb7bd78c8c\\research.sqlite3",
+    "snapshot_sha256": "cba995512c4695dfbb0e9194dd75eb7b138afca1e7111ea41649a5b1b582edd5",
+    "schema": [
+      {
+        "name": "trials",
+        "sql": "CREATE TABLE trials(\n            id TEXT PRIMARY KEY, config TEXT NOT NULL, origin TEXT NOT NULL,\n            result BLOB, positive INTEGER DEFAULT 0)"
+      },
+      {
+        "name": "meta",
+        "sql": "CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL)"
+      }
+    ],
+    "tables": {
+      "trials": 27481
+    },
+    "metadata": {
+      "meta": [
+        {
+          "key": "journal_policy",
+          "value": "NET>=0.50 on BEAR,SIDEWAYS,BULL; full V16 frontier retained; score-only completed memory"
+        }
+      ]
+    }
+  },
+  {
+    "source": "live/experiments/v16-94fbb86f82fa9ef4/research.sqlite3",
+    "original_path": "F:\\PUMP Research Lab\\experiments\\v16-94fbb86f82fa9ef4\\research.sqlite3",
+    "snapshot_sha256": "3cbdffa9cc0eb0d90779722ea01e6fb117f5e3a92f7ea664379f900dc0d5f8a0",
+    "schema": [
+      {
+        "name": "trials",
+        "sql": "CREATE TABLE trials(\n            id TEXT PRIMARY KEY, config TEXT NOT NULL, origin TEXT NOT NULL,\n            result BLOB, positive INTEGER DEFAULT 0)"
+      },
+      {
+        "name": "meta",
+        "sql": "CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL)"
+      }
+    ],
+    "tables": {
+      "trials": 121
+    },
+    "metadata": {
+      "meta": [
+        {
+          "key": "journal_policy",
+          "value": "NET>=0.50 on BEAR,SIDEWAYS,BULL; full V16 frontier retained; score-only completed memory"
+        }
+      ]
+    }
+  },
+  {
+    "source": "live/checkpoints/automatic-6m-bear-f8ccb2a670bc977c-interesting.sqlite3",
+    "original_path": "F:\\PUMP Research Lab\\checkpoints\\automatic-6m-bear-f8ccb2a670bc977c-interesting.sqlite3",
+    "snapshot_sha256": "d4a4ec59cf3e8bf310a8a0167bf05f972d2a30b1bed0017628cd956ccda269fe",
+    "schema": [
+      {
+        "name": "candidates",
+        "sql": "CREATE TABLE candidates (\n                    candidate_id TEXT PRIMARY KEY,\n                    first_seen_utc TEXT NOT NULL,\n                    last_seen_utc TEXT NOT NULL,\n                    first_generation INTEGER NOT NULL,\n                    last_generation INTEGER NOT NULL,\n                    eligible INTEGER NOT NULL,\n                    total_fills INTEGER NOT NULL,\n                    validation_fills INTEGER NOT NULL,\n                    development_compound REAL NOT NULL,\n                    worst_average_net REAL NOT NULL,\n                    max_drawdown REAL NOT NULL,\n                    tags_json TEXT NOT NULL,\n                    rejection_reasons_json TEXT NOT NULL,\n                    config_json TEXT NOT NULL,\n                    train_json TEXT NOT NULL,\n                    validation_a_json TEXT NOT NULL,\n                    validation_b_json TEXT NOT NULL,\n                    preview_json TEXT,\n                    source TEXT NOT NULL\n                )"
+      },
+      {
+        "name": "archive_meta",
+        "sql": "CREATE TABLE archive_meta (\n                    key TEXT PRIMARY KEY,\n                    value TEXT NOT NULL\n                )"
+      }
+    ],
+    "tables": {
+      "candidates": 272
+    },
+    "metadata": {
+      "archive_meta": [
+        {
+          "key": "schema_version",
+          "value": "1"
+        }
+      ]
+    }
+  },
+  {
+    "source": "live/checkpoints/automatic-6m-e6afcb8f64205d76-interesting.sqlite3",
+    "original_path": "F:\\PUMP Research Lab\\checkpoints\\automatic-6m-e6afcb8f64205d76-interesting.sqlite3",
+    "snapshot_sha256": "3b441449fcb041875d3e014df666d8f02c73b215ee09e6896fb132a0cc08f503",
+    "schema": [
+      {
+        "name": "candidates",
+        "sql": "CREATE TABLE candidates (\n                    candidate_id TEXT PRIMARY KEY,\n                    first_seen_utc TEXT NOT NULL,\n                    last_seen_utc TEXT NOT NULL,\n                    first_generation INTEGER NOT NULL,\n                    last_generation INTEGER NOT NULL,\n                    eligible INTEGER NOT NULL,\n                    total_fills INTEGER NOT NULL,\n                    validation_fills INTEGER NOT NULL,\n                    development_compound REAL NOT NULL,\n                    worst_average_net REAL NOT NULL,\n                    max_drawdown REAL NOT NULL,\n                    tags_json TEXT NOT NULL,\n                    rejection_reasons_json TEXT NOT NULL,\n                    config_json TEXT NOT NULL,\n                    train_json TEXT NOT NULL,\n                    validation_a_json TEXT NOT NULL,\n                    validation_b_json TEXT NOT NULL,\n                    preview_json TEXT,\n                    source TEXT NOT NULL\n                )"
+      },
+      {
+        "name": "archive_meta",
+        "sql": "CREATE TABLE archive_meta (\n                    key TEXT PRIMARY KEY,\n                    value TEXT NOT NULL\n                )"
+      }
+    ],
+    "tables": {
+      "candidates": 246
+    },
+    "metadata": {
+      "archive_meta": [
+        {
+          "key": "schema_version",
+          "value": "1"
+        }
+      ]
+    }
+  },
+  {
+    "source": "live/checkpoints/factory-94b898b8c1969234-adaptive-v7-interesting.sqlite3",
+    "original_path": "F:\\PUMP Research Lab\\checkpoints\\factory-94b898b8c1969234-adaptive-v7-interesting.sqlite3",
+    "snapshot_sha256": "b89f7b3729120bb5d65b21b209b95413ce8ee65f7eb0055e5de598605420371e",
+    "schema": [
+      {
+        "name": "candidates",
+        "sql": "CREATE TABLE candidates (\n                    candidate_id TEXT PRIMARY KEY,\n                    first_seen_utc TEXT NOT NULL,\n                    last_seen_utc TEXT NOT NULL,\n                    first_generation INTEGER NOT NULL,\n                    last_generation INTEGER NOT NULL,\n                    eligible INTEGER NOT NULL,\n                    total_fills INTEGER NOT NULL,\n                    validation_fills INTEGER NOT NULL,\n                    development_compound REAL NOT NULL,\n                    worst_average_net REAL NOT NULL,\n                    max_drawdown REAL NOT NULL,\n                    tags_json TEXT NOT NULL,\n                    rejection_reasons_json TEXT NOT NULL,\n                    config_json TEXT NOT NULL,\n                    train_json TEXT NOT NULL,\n                    validation_a_json TEXT NOT NULL,\n                    validation_b_json TEXT NOT NULL,\n                    preview_json TEXT,\n                    source TEXT NOT NULL\n                )"
+      },
+      {
+        "name": "archive_meta",
+        "sql": "CREATE TABLE archive_meta (\n                    key TEXT PRIMARY KEY,\n                    value TEXT NOT NULL\n                )"
+      }
+    ],
+    "tables": {
+      "candidates": 354
+    },
+    "metadata": {
+      "archive_meta": [
+        {
+          "key": "schema_version",
+          "value": "1"
+        }
+      ]
+    }
+  },
+  {
+    "source": "live/models/positive-strategies-v11.sqlite3",
+    "original_path": "F:\\PUMP Research Lab\\models\\positive-strategies-v11.sqlite3",
+    "snapshot_sha256": "4a8bf60ac1a6323cfd61216d50203a9868057633e6f15bee99e7099637524ce0",
+    "schema": [
+      {
+        "name": "strategies",
+        "sql": "CREATE TABLE strategies (\n                    candidate_id TEXT PRIMARY KEY,\n                    first_seen_utc TEXT NOT NULL,\n                    last_seen_utc TEXT NOT NULL,\n                    config_json TEXT NOT NULL,\n                    best_development_compound REAL NOT NULL,\n                    best_total_fills INTEGER NOT NULL,\n                    discovery_count INTEGER NOT NULL\n                )"
+      },
+      {
+        "name": "discoveries",
+        "sql": "CREATE TABLE discoveries (\n                    candidate_id TEXT NOT NULL,\n                    dataset_key TEXT NOT NULL,\n                    regime TEXT NOT NULL,\n                    months INTEGER NOT NULL,\n                    discovered_at_utc TEXT NOT NULL,\n                    generation INTEGER NOT NULL,\n                    eligible INTEGER NOT NULL,\n                    total_fills INTEGER NOT NULL,\n                    development_compound REAL NOT NULL,\n                    candidate_json TEXT NOT NULL,\n                    PRIMARY KEY(candidate_id, dataset_key, regime, months)\n                )"
+      },
+      {
+        "name": "retests",
+        "sql": "CREATE TABLE retests (\n                    candidate_id TEXT NOT NULL,\n                    dataset_key TEXT NOT NULL,\n                    regime TEXT NOT NULL,\n                    months INTEGER NOT NULL,\n                    tested_at_utc TEXT NOT NULL,\n                    metrics_json TEXT NOT NULL,\n                    PRIMARY KEY(candidate_id, dataset_key, regime, months)\n                )"
+      },
+      {
+        "name": "library_meta",
+        "sql": "CREATE TABLE library_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)"
+      }
+    ],
+    "tables": {
+      "strategies": 0,
+      "discoveries": 0,
+      "retests": 0
+    },
+    "metadata": {
+      "library_meta": [
+        {
+          "key": "imported_report:dc6b2a6737c3843b6220b801dca677819e9156c930f2a54ad66957c9491516d7",
+          "value": "C:\\Users\\sera-\\Desktop\\ОТЧЁТЫ-ДЛЯ-АНАЛИЗА\\PUMP_RESEARCH_REPORT_20260901-181955.json"
+        },
+        {
+          "key": "imported_report:8f170c89d5fc1f0c106b6405212ddb8203cb1a0a71789f90e3c8c9350f4135bd",
+          "value": "C:\\Users\\sera-\\Desktop\\ОТЧЁТЫ-ДЛЯ-АНАЛИЗА\\PUMP_RESEARCH_REPORT_20260901-183456.json"
+        },
+        {
+          "key": "imported_report:9d9cff0ad5427d47122e06b5de7c88bcc6167abf38f4cbdb6825169eba68b77b",
+          "value": "C:\\Users\\sera-\\Desktop\\ОТЧЁТЫ-ДЛЯ-АНАЛИЗА\\PUMP_RESEARCH_REPORT_20260901-205204.json"
+        },
+        {
+          "key": "imported_report:3ad0313d7b16fdd741cbbe85b6f38c8428399a4e994d7e2da87056e404338b2d",
+          "value": "C:\\Users\\sera-\\Desktop\\ОТЧЁТЫ-ДЛЯ-АНАЛИЗА\\PUMP_RESEARCH_REPORT_20260901-222525.json"
+        },
+        {
+          "key": "imported_report:352bcf773b3c5aee775a20c4f737bcc8c8dba3e9df769825252bcf0932bd88f3",
+          "value": "C:\\Users\\sera-\\Desktop\\ОТЧЁТЫ-ДЛЯ-АНАЛИЗА\\PUMP_RESEARCH_REPORT_20260902-073409.json"
+        },
+        {
+          "key": "imported_report:66ff6e69b2d92a7a2950c37466ca2d7b7e6a91f88ba4ecdc90ae97e0b6e573c5",
+          "value": "C:\\Users\\sera-\\Desktop\\ОТЧЁТЫ-ДЛЯ-АНАЛИЗА\\PUMP_RESEARCH_REPORT_20260902-150115.json"
+        },
+        {
+          "key": "imported_report:5ae7ed4b65622688a3f0e3a41d3dd1e38874668e86aaf9a68a8c84cbb69c3c48",
+          "value": "C:\\Users\\sera-\\Documents\\PUMP Research Lab\\reports\\ready\\PUMP_RESEARCH_REPORT_20260901-083825.json"
+        },
+        {
+          "key": "imported_report:d902db70e39a69c4d6ca42eb898fd971e4d5ab44170e7c8edde03274f2e214c6",
+          "value": "C:\\Users\\sera-\\Documents\\PUMP Research Lab\\reports\\ready\\PUMP_RESEARCH_REPORT_20260901-092311.json"
+        },
+        {
+          "key": "schema_version",
+          "value": "1"
+        },
+        {
+          "key": "preferred_challenger",
+          "value": "{\"candidate_id\":\"A8AE9249A58\",\"created_at_utc\":\"2026-09-02T15:01:15.567684+00:00\",\"source_report\":\"C:\\\\Users\\\\sera-\\\\Desktop\\\\ОТЧЁТЫ-ДЛЯ-АНАЛИЗА\\\\PUMP_RESEARCH_REPORT_20260902-150115.json\",\"market_regime\":\"BEAR\",\"months\":6,\"test\":{\"signals\":65,\"fills\":4,\"wins\":4,\"win_rate\":1.0,\"average_net\":0.040000000000000036,\"profit_factor\":null,\"compound_net\":0.1698585600000002,\"trades_per_day\":0.1111111111111111,\"exits\":{\"TP\":4},\"max_drawdown\":0.0,\"cvar_5\":0.040000000000000036},\"stress\":{\"passed\":true,\"positive_cases\":8,\"total_cases\":8,\"cases\":{\"BASE\":{\"signals\":65,\"fills\":4,\"wins\":4,\"win_rate\":1.0,\"average_net\":0.040000000000000036,\"profit_factor\":null,\"compound_net\":0.1698585600000002,\"trades_per_day\":0.1111111111111111,\"exits\":{\"TP\":4},\"max_drawdown\":0.0,\"cvar_5\":0.040000000000000036,\"economically_positive\":true},\"FEE_25\":{\"signals\":64,\"fills\":4,\"wins\":4,\"win_rate\":1.0,\"average_net\":0.040000000000000036,\"profit_factor\":null,\"compound_net\":0.1698585600000002,\"trades_per_day\":0.1111111111111111,\"exits\":{\"TP\":4},\"max_drawdown\":0.0,\"cvar_5\":0.040000000000000036,\"economically_positive\":true},\"FEE_50\":{\"signals\":64,\"fills\":4,\"wins\":4,\"win_rate\":1.0,\"average_net\":0.040000000000000036,\"profit_factor\":null,\"compound_net\":0.1698585600000002,\"trades_per_day\":0.1111111111111111,\"exits\":{\"TP\":4},\"max_drawdown\":0.0,\"cvar_5\":0.040000000000000036,\"economically_positive\":true},\"SPREAD_10BP\":{\"signals\":64,\"fills\":4,\"wins\":4,\"win_rate\":1.0,\"average_net\":0.03948000000000007,\"profit_factor\":null,\"compound_net\":0.16752059708298406,\"trades_per_day\":0.1111111111111111,\"exits\":{\"TP\":4},\"max_drawdown\":0.0,\"cvar_5\":0.03947999999999996,\"economically_positive\":true},\"SLIPPAGE_X2\":{\"signals\":65,\"fills\":4,\"wins\":4,\"win_rate\":1.0,\"average_net\":0.040000000000000036,\"profit_factor\":null,\"compound_net\":0.1698585600000002,\"trades_per_day\":0.1111111111111111,\"exits\":{\"TP\":4},\"max_drawdown\":0.0,\"cvar_5\":0.040000000000000036,\"economically_positive\":true},\"LATENCY_1M\":{\"signals\":65,\"fills\":4,\"wins\":4,\"win_rate\":1.0,\"average_net\":0.040000000000000036,\"profit_factor\":null,\"compound_net\":0.1698585600000002,\"trades_per_day\":0.1111111111111111,\"exits\":{\"TP\":4},\"max_drawdown\":0.0,\"cvar_5\":0.040000000000000036,\"economically_positive\":true},\"LATENCY_2M\":{\"signals\":72,\"fills\":3,\"wins\":3,\"win_rate\":1.0,\"average_net\":0.040000000000000036,\"profit_factor\":null,\"compound_net\":0.12486400000000009,\"trades_per_day\":0.08333333333333333,\"exits\":{\"TP\":3},\"max_drawdown\":0.0,\"cvar_5\":0.040000000000000036,\"economically_positive\":true},\"COMBINED\":{\"signals\":71,\"fills\":3,\"wins\":3,\"win_rate\":1.0,\"average_net\":0.039480000000000105,\"profit_factor\":null,\"compound_net\":0.12317754750739218,\"trades_per_day\":0.08333333333333333,\"exits\":{\"TP\":3},\"max_drawdown\":0.0,\"cvar_5\":0.03947999999999996,\"economically_positive\":true}}},\"immutable_holdout\":{\"source_path\":\"C:\\\\Users\\\\sera-\\\\Documents\\\\PUMP Research Lab\\\\data\\\\raw\\\\binance_spot\\\\PUMPUSDT\\\\1m\\\\1757980800000-1773532740000.jsonl\",\"source_sha256\":\"f8ccb2a670bc977c63593123d6934a56b4f7b65737f49700c8c6fd3062f3a355\",\"development_path\":\"C:\\\\Users\\\\sera-\\\\Documents\\\\PUMP Research Lab\\\\data\\\\development\\\\f8ccb2a670bc977c6359\\\\development.jsonl\",\"development_sha256\":\"34eaaa57dee1220e8408783427fdc5a87572b91a73f61c50ab283d42fc1b7c14\",\"development_rows\":207360,\"holdout_path\":\"C:\\\\Users\\\\sera-\\\\Documents\\\\PUMP Research Lab\\\\data\\\\immutable_test\\\\f8ccb2a670bc977c6359\\\\holdout.jsonl\",\"holdout_sha256\":\"73fcd1db4212c5957aa237d63df65e32ed140f9ed639c4bf14754bead49a650e\",\"holdout_rows\":51840,\"split_open_time_ms\":1770422400000,\"state\":\"SEALED_UNOPENED\",\"manifest_path\":\"C:\\\\Users\\\\sera-\\\\Documents\\\\PUMP Research Lab\\\\data\\\\immutable_test\\\\f8ccb2a670bc977c6359\\\\holdout.manifest.json\"}}"
+        }
+      ]
+    }
+  },
+  {
+    "source": "before-cleanup/positive-strategies-v11.sqlite3",
+    "original_path": "C:\\Users\\sera-\\Documents\\Codex\\2026-08-30\\new-chat\\v17_restored\\rollback-before-50pct-20260909.zip",
+    "snapshot_sha256": "df7fcbbb48093a779126b0b7ab36d219cb4f7b575f4b7b7ca2df6b1938f31be1",
+    "schema": [
+      {
+        "name": "strategies",
+        "sql": "CREATE TABLE strategies (\n                    candidate_id TEXT PRIMARY KEY,\n                    first_seen_utc TEXT NOT NULL,\n                    last_seen_utc TEXT NOT NULL,\n                    config_json TEXT NOT NULL,\n                    best_development_compound REAL NOT NULL,\n                    best_total_fills INTEGER NOT NULL,\n                    discovery_count INTEGER NOT NULL\n                )"
+      },
+      {
+        "name": "discoveries",
+        "sql": "CREATE TABLE discoveries (\n                    candidate_id TEXT NOT NULL,\n                    dataset_key TEXT NOT NULL,\n                    regime TEXT NOT NULL,\n                    months INTEGER NOT NULL,\n                    discovered_at_utc TEXT NOT NULL,\n                    generation INTEGER NOT NULL,\n                    eligible INTEGER NOT NULL,\n                    total_fills INTEGER NOT NULL,\n                    development_compound REAL NOT NULL,\n                    candidate_json TEXT NOT NULL,\n                    PRIMARY KEY(candidate_id, dataset_key, regime, months)\n                )"
+      },
+      {
+        "name": "retests",
+        "sql": "CREATE TABLE retests (\n                    candidate_id TEXT NOT NULL,\n                    dataset_key TEXT NOT NULL,\n                    regime TEXT NOT NULL,\n                    months INTEGER NOT NULL,\n                    tested_at_utc TEXT NOT NULL,\n                    metrics_json TEXT NOT NULL,\n                    PRIMARY KEY(candidate_id, dataset_key, regime, months)\n                )"
+      },
+      {
+        "name": "library_meta",
+        "sql": "CREATE TABLE library_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)"
+      }
+    ],
+    "tables": {
+      "strategies": 86,
+      "discoveries": 105,
+      "retests": 86
+    },
+    "metadata": {
+      "library_meta": [
+        {
+          "key": "imported_report:dc6b2a6737c3843b6220b801dca677819e9156c930f2a54ad66957c9491516d7",
+          "value": "C:\\Users\\sera-\\Desktop\\ОТЧЁТЫ-ДЛЯ-АНАЛИЗА\\PUMP_RESEARCH_REPORT_20260901-181955.json"
+        },
+        {
+          "key": "imported_report:8f170c89d5fc1f0c106b6405212ddb8203cb1a0a71789f90e3c8c9350f4135bd",
+          "value": "C:\\Users\\sera-\\Desktop\\ОТЧЁТЫ-ДЛЯ-АНАЛИЗА\\PUMP_RESEARCH_REPORT_20260901-183456.json"
+        },
+        {
+          "key": "imported_report:9d9cff0ad5427d47122e06b5de7c88bcc6167abf38f4cbdb6825169eba68b77b",
+          "value": "C:\\Users\\sera-\\Desktop\\ОТЧЁТЫ-ДЛЯ-АНАЛИЗА\\PUMP_RESEARCH_REPORT_20260901-205204.json"
+        },
+        {
+          "key": "imported_report:3ad0313d7b16fdd741cbbe85b6f38c8428399a4e994d7e2da87056e404338b2d",
+          "value": "C:\\Users\\sera-\\Desktop\\ОТЧЁТЫ-ДЛЯ-АНАЛИЗА\\PUMP_RESEARCH_REPORT_20260901-222525.json"
+        },
+        {
+          "key": "imported_report:352bcf773b3c5aee775a20c4f737bcc8c8dba3e9df769825252bcf0932bd88f3",
+          "value": "C:\\Users\\sera-\\Desktop\\ОТЧЁТЫ-ДЛЯ-АНАЛИЗА\\PUMP_RESEARCH_REPORT_20260902-073409.json"
+        },
+        {
+          "key": "imported_report:66ff6e69b2d92a7a2950c37466ca2d7b7e6a91f88ba4ecdc90ae97e0b6e573c5",
+          "value": "C:\\Users\\sera-\\Desktop\\ОТЧЁТЫ-ДЛЯ-АНАЛИЗА\\PUMP_RESEARCH_REPORT_20260902-150115.json"
+        },
+        {
+          "key": "imported_report:5ae7ed4b65622688a3f0e3a41d3dd1e38874668e86aaf9a68a8c84cbb69c3c48",
+          "value": "C:\\Users\\sera-\\Documents\\PUMP Research Lab\\reports\\ready\\PUMP_RESEARCH_REPORT_20260901-083825.json"
+        },
+        {
+          "key": "imported_report:d902db70e39a69c4d6ca42eb898fd971e4d5ab44170e7c8edde03274f2e214c6",
+          "value": "C:\\Users\\sera-\\Documents\\PUMP Research Lab\\reports\\ready\\PUMP_RESEARCH_REPORT_20260901-092311.json"
+        },
+        {
+          "key": "schema_version",
+          "value": "1"
+        },
+        {
+          "key": "preferred_challenger",
+          "value": "{\"candidate_id\":\"A8AE9249A58\",\"created_at_utc\":\"2026-09-02T15:01:15.567684+00:00\",\"source_report\":\"C:\\\\Users\\\\sera-\\\\Desktop\\\\ОТЧЁТЫ-ДЛЯ-АНАЛИЗА\\\\PUMP_RESEARCH_REPORT_20260902-150115.json\",\"market_regime\":\"BEAR\",\"months\":6,\"test\":{\"signals\":65,\"fills\":4,\"wins\":4,\"win_rate\":1.0,\"average_net\":0.040000000000000036,\"profit_factor\":null,\"compound_net\":0.1698585600000002,\"trades_per_day\":0.1111111111111111,\"exits\":{\"TP\":4},\"max_drawdown\":0.0,\"cvar_5\":0.040000000000000036},\"stress\":{\"passed\":true,\"positive_cases\":8,\"total_cases\":8,\"cases\":{\"BASE\":{\"signals\":65,\"fills\":4,\"wins\":4,\"win_rate\":1.0,\"average_net\":0.040000000000000036,\"profit_factor\":null,\"compound_net\":0.1698585600000002,\"trades_per_day\":0.1111111111111111,\"exits\":{\"TP\":4},\"max_drawdown\":0.0,\"cvar_5\":0.040000000000000036,\"economically_positive\":true},\"FEE_25\":{\"signals\":64,\"fills\":4,\"wins\":4,\"win_rate\":1.0,\"average_net\":0.040000000000000036,\"profit_factor\":null,\"compound_net\":0.1698585600000002,\"trades_per_day\":0.1111111111111111,\"exits\":{\"TP\":4},\"max_drawdown\":0.0,\"cvar_5\":0.040000000000000036,\"economically_positive\":true},\"FEE_50\":{\"signals\":64,\"fills\":4,\"wins\":4,\"win_rate\":1.0,\"average_net\":0.040000000000000036,\"profit_factor\":null,\"compound_net\":0.1698585600000002,\"trades_per_day\":0.1111111111111111,\"exits\":{\"TP\":4},\"max_drawdown\":0.0,\"cvar_5\":0.040000000000000036,\"economically_positive\":true},\"SPREAD_10BP\":{\"signals\":64,\"fills\":4,\"wins\":4,\"win_rate\":1.0,\"average_net\":0.03948000000000007,\"profit_factor\":null,\"compound_net\":0.16752059708298406,\"trades_per_day\":0.1111111111111111,\"exits\":{\"TP\":4},\"max_drawdown\":0.0,\"cvar_5\":0.03947999999999996,\"economically_positive\":true},\"SLIPPAGE_X2\":{\"signals\":65,\"fills\":4,\"wins\":4,\"win_rate\":1.0,\"average_net\":0.040000000000000036,\"profit_factor\":null,\"compound_net\":0.1698585600000002,\"trades_per_day\":0.1111111111111111,\"exits\":{\"TP\":4},\"max_drawdown\":0.0,\"cvar_5\":0.040000000000000036,\"economically_positive\":true},\"LATENCY_1M\":{\"signals\":65,\"fills\":4,\"wins\":4,\"win_rate\":1.0,\"average_net\":0.040000000000000036,\"profit_factor\":null,\"compound_net\":0.1698585600000002,\"trades_per_day\":0.1111111111111111,\"exits\":{\"TP\":4},\"max_drawdown\":0.0,\"cvar_5\":0.040000000000000036,\"economically_positive\":true},\"LATENCY_2M\":{\"signals\":72,\"fills\":3,\"wins\":3,\"win_rate\":1.0,\"average_net\":0.040000000000000036,\"profit_factor\":null,\"compound_net\":0.12486400000000009,\"trades_per_day\":0.08333333333333333,\"exits\":{\"TP\":3},\"max_drawdown\":0.0,\"cvar_5\":0.040000000000000036,\"economically_positive\":true},\"COMBINED\":{\"signals\":71,\"fills\":3,\"wins\":3,\"win_rate\":1.0,\"average_net\":0.039480000000000105,\"profit_factor\":null,\"compound_net\":0.12317754750739218,\"trades_per_day\":0.08333333333333333,\"exits\":{\"TP\":3},\"max_drawdown\":0.0,\"cvar_5\":0.03947999999999996,\"economically_positive\":true}}},\"immutable_holdout\":{\"source_path\":\"C:\\\\Users\\\\sera-\\\\Documents\\\\PUMP Research Lab\\\\data\\\\raw\\\\binance_spot\\\\PUMPUSDT\\\\1m\\\\1757980800000-1773532740000.jsonl\",\"source_sha256\":\"f8ccb2a670bc977c63593123d6934a56b4f7b65737f49700c8c6fd3062f3a355\",\"development_path\":\"C:\\\\Users\\\\sera-\\\\Documents\\\\PUMP Research Lab\\\\data\\\\development\\\\f8ccb2a670bc977c6359\\\\development.jsonl\",\"development_sha256\":\"34eaaa57dee1220e8408783427fdc5a87572b91a73f61c50ab283d42fc1b7c14\",\"development_rows\":207360,\"holdout_path\":\"C:\\\\Users\\\\sera-\\\\Documents\\\\PUMP Research Lab\\\\data\\\\immutable_test\\\\f8ccb2a670bc977c6359\\\\holdout.jsonl\",\"holdout_sha256\":\"73fcd1db4212c5957aa237d63df65e32ed140f9ed639c4bf14754bead49a650e\",\"holdout_rows\":51840,\"split_open_time_ms\":1770422400000,\"state\":\"SEALED_UNOPENED\",\"manifest_path\":\"C:\\\\Users\\\\sera-\\\\Documents\\\\PUMP Research Lab\\\\data\\\\immutable_test\\\\f8ccb2a670bc977c6359\\\\holdout.manifest.json\"}}"
+        }
+      ]
+    }
+  },
+  {
+    "source": "before-cleanup/v12-658fdbc4e5d85b1b.sqlite3",
+    "original_path": "C:\\Users\\sera-\\Documents\\Codex\\2026-08-30\\new-chat\\v17_restored\\rollback-before-50pct-20260909.zip",
+    "snapshot_sha256": "c36859ca23b1f16d7fdc22a1406b120ab3f57e6ae419dd077f06c46ac811991c",
+    "schema": [
+      {
+        "name": "trials",
+        "sql": "CREATE TABLE trials(\n            id TEXT PRIMARY KEY, config TEXT NOT NULL, origin TEXT NOT NULL,\n            result BLOB, positive INTEGER DEFAULT 0)"
+      },
+      {
+        "name": "meta",
+        "sql": "CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL)"
+      }
+    ],
+    "tables": {
+      "trials": 5655
+    },
+    "metadata": {
+      "meta": []
+    }
+  },
+  {
+    "source": "before-cleanup/v13-6a0382929b3c2184.sqlite3",
+    "original_path": "C:\\Users\\sera-\\Documents\\Codex\\2026-08-30\\new-chat\\v17_restored\\rollback-before-50pct-20260909.zip",
+    "snapshot_sha256": "3ab99a515093ecd1413d99d5d096dd7c371f7be222f67f24530a972da3dd597f",
+    "schema": [
+      {
+        "name": "trials",
+        "sql": "CREATE TABLE trials(\n            id TEXT PRIMARY KEY, config TEXT NOT NULL, origin TEXT NOT NULL,\n            result BLOB, positive INTEGER DEFAULT 0)"
+      },
+      {
+        "name": "meta",
+        "sql": "CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL)"
+      }
+    ],
+    "tables": {
+      "trials": 48171
+    },
+    "metadata": {
+      "meta": []
+    }
+  },
+  {
+    "source": "before-cleanup/v14-6a0382929b3c2184-retest-c340b76d867c.sqlite3",
+    "original_path": "C:\\Users\\sera-\\Documents\\Codex\\2026-08-30\\new-chat\\v17_restored\\rollback-before-50pct-20260909.zip",
+    "snapshot_sha256": "210a17992cbda89c4f6a4b911f2f4eaf58f36df99adedb62d9699b56686b837a",
+    "schema": [
+      {
+        "name": "trials",
+        "sql": "CREATE TABLE trials(\n            id TEXT PRIMARY KEY, config TEXT NOT NULL, origin TEXT NOT NULL,\n            result BLOB, positive INTEGER DEFAULT 0)"
+      },
+      {
+        "name": "meta",
+        "sql": "CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL)"
+      }
+    ],
+    "tables": {
+      "trials": 17020
+    },
+    "metadata": {
+      "meta": []
+    }
+  },
+  {
+    "source": "before-cleanup/v14-6a0382929b3c2184.sqlite3",
+    "original_path": "C:\\Users\\sera-\\Documents\\Codex\\2026-08-30\\new-chat\\v17_restored\\rollback-before-50pct-20260909.zip",
+    "snapshot_sha256": "9435175239157eddd94dc251fc2d864b187d08c90f3600b4e3e6e7ed501c0291",
+    "schema": [
+      {
+        "name": "trials",
+        "sql": "CREATE TABLE trials(\n            id TEXT PRIMARY KEY, config TEXT NOT NULL, origin TEXT NOT NULL,\n            result BLOB, positive INTEGER DEFAULT 0)"
+      },
+      {
+        "name": "meta",
+        "sql": "CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL)"
+      }
+    ],
+    "tables": {
+      "trials": 66
+    },
+    "metadata": {
+      "meta": []
+    }
+  },
+  {
+    "source": "before-cleanup/v15-59b126eb7bd78c8c.sqlite3",
+    "original_path": "C:\\Users\\sera-\\Documents\\Codex\\2026-08-30\\new-chat\\v17_restored\\rollback-before-50pct-20260909.zip",
+    "snapshot_sha256": "6257e6b30e6db02b581026864be24de1870e4212df7b1930d4c5ae2ee0790c5d",
+    "schema": [
+      {
+        "name": "trials",
+        "sql": "CREATE TABLE trials(\n            id TEXT PRIMARY KEY, config TEXT NOT NULL, origin TEXT NOT NULL,\n            result BLOB, positive INTEGER DEFAULT 0)"
+      },
+      {
+        "name": "meta",
+        "sql": "CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL)"
+      }
+    ],
+    "tables": {
+      "trials": 17020
+    },
+    "metadata": {
+      "meta": []
+    }
+  },
+  {
+    "source": "before-cleanup/v16-59b126eb7bd78c8c.sqlite3",
+    "original_path": "C:\\Users\\sera-\\Documents\\Codex\\2026-08-30\\new-chat\\v17_restored\\rollback-before-50pct-20260909.zip",
+    "snapshot_sha256": "fa60181490390389492f9a7cb03460f118bb45b4a2c6f60668d9995f2948a1b3",
+    "schema": [
+      {
+        "name": "trials",
+        "sql": "CREATE TABLE trials(\n            id TEXT PRIMARY KEY, config TEXT NOT NULL, origin TEXT NOT NULL,\n            result BLOB, positive INTEGER DEFAULT 0)"
+      },
+      {
+        "name": "meta",
+        "sql": "CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL)"
+      }
+    ],
+    "tables": {
+      "trials": 26219
+    },
+    "metadata": {
+      "meta": []
+    }
+  },
+  {
+    "source": "before-cleanup/v16-94fbb86f82fa9ef4.sqlite3",
+    "original_path": "C:\\Users\\sera-\\Documents\\Codex\\2026-08-30\\new-chat\\v17_restored\\rollback-before-50pct-20260909.zip",
+    "snapshot_sha256": "aa1c3e796e718a4429ae31a2cb89fcf3439c5982df1d9ed75a5e589f595587bb",
+    "schema": [
+      {
+        "name": "trials",
+        "sql": "CREATE TABLE trials(\n            id TEXT PRIMARY KEY, config TEXT NOT NULL, origin TEXT NOT NULL,\n            result BLOB, positive INTEGER DEFAULT 0)"
+      },
+      {
+        "name": "meta",
+        "sql": "CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL)"
+      }
+    ],
+    "tables": {
+      "trials": 121
+    },
+    "metadata": {
+      "meta": []
+    }
+  },
+  {
+    "source": "legacy-c/checkpoints/automatic-6m-e6afcb8f64205d76-interesting.sqlite3",
+    "original_path": "C:\\Users\\sera-\\Documents\\PUMP Research Lab\\checkpoints\\automatic-6m-e6afcb8f64205d76-interesting.sqlite3",
+    "snapshot_sha256": "3a9e892c487f87a74caaaba90f70797dd426503b0d41c234e787aede5397a542",
+    "schema": [
+      {
+        "name": "candidates",
+        "sql": "CREATE TABLE candidates (\n                    candidate_id TEXT PRIMARY KEY,\n                    first_seen_utc TEXT NOT NULL,\n                    last_seen_utc TEXT NOT NULL,\n                    first_generation INTEGER NOT NULL,\n                    last_generation INTEGER NOT NULL,\n                    eligible INTEGER NOT NULL,\n                    total_fills INTEGER NOT NULL,\n                    validation_fills INTEGER NOT NULL,\n                    development_compound REAL NOT NULL,\n                    worst_average_net REAL NOT NULL,\n                    max_drawdown REAL NOT NULL,\n                    tags_json TEXT NOT NULL,\n                    rejection_reasons_json TEXT NOT NULL,\n                    config_json TEXT NOT NULL,\n                    train_json TEXT NOT NULL,\n                    validation_a_json TEXT NOT NULL,\n                    validation_b_json TEXT NOT NULL,\n                    preview_json TEXT,\n                    source TEXT NOT NULL\n                )"
+      },
+      {
+        "name": "archive_meta",
+        "sql": "CREATE TABLE archive_meta (\n                    key TEXT PRIMARY KEY,\n                    value TEXT NOT NULL\n                )"
+      }
+    ],
+    "tables": {
+      "candidates": 166
+    },
+    "metadata": {
+      "archive_meta": [
+        {
+          "key": "schema_version",
+          "value": "1"
+        }
+      ]
+    }
+  }
+]

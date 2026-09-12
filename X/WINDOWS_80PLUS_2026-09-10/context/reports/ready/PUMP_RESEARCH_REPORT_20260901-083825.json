@@ -1,0 +1,3023 @@
+{
+  "report_version": "automatic-research-v1",
+  "created_at_utc": "2026-09-01T08:38:25.769879+00:00",
+  "simulation": true,
+  "real_orders": false,
+  "period": {
+    "months": 1,
+    "days": 30,
+    "start_ms": 1785659220000,
+    "end_ms": 1788251160000
+  },
+  "capital": {
+    "currency": "EUR",
+    "initial": 1000.0,
+    "historical_final": 1173.058332219376,
+    "historical_profit": 173.0583322193761,
+    "historical_return": 0.17305833221937617,
+    "minimum": 979.5280621097569,
+    "maximum": 1173.0583322193768,
+    "timeline": [
+      {
+        "time_ms": 1785659220000,
+        "capital": 1000.0,
+        "event": "START"
+      },
+      {
+        "time_ms": 1785723480000,
+        "capital": 1000.8105163635928,
+        "event": "TIME"
+      },
+      {
+        "time_ms": 1785732900000,
+        "capital": 988.0097495350959,
+        "event": "STOP"
+      },
+      {
+        "time_ms": 1785808980000,
+        "capital": 1012.7099932734733,
+        "event": "TP"
+      },
+      {
+        "time_ms": 1785817080000,
+        "capital": 1038.02774310531,
+        "event": "TP"
+      },
+      {
+        "time_ms": 1785890940000,
+        "capital": 1024.750953059896,
+        "event": "STOP"
+      },
+      {
+        "time_ms": 1785898260000,
+        "capital": 1033.461237588524,
+        "event": "TIME"
+      },
+      {
+        "time_ms": 1785983340000,
+        "capital": 1020.2428549752717,
+        "event": "STOP"
+      },
+      {
+        "time_ms": 1785985200000,
+        "capital": 1007.1935407629959,
+        "event": "STOP"
+      },
+      {
+        "time_ms": 1786080600000,
+        "capital": 994.3111324992209,
+        "event": "STOP"
+      },
+      {
+        "time_ms": 1786081140000,
+        "capital": 981.5934953901029,
+        "event": "STOP"
+      },
+      {
+        "time_ms": 1786332900000,
+        "capital": 1006.1333327748554,
+        "event": "TP"
+      },
+      {
+        "time_ms": 1786348920000,
+        "capital": 993.2644849953319,
+        "event": "STOP"
+      },
+      {
+        "time_ms": 1786412820000,
+        "capital": 1018.0960971202152,
+        "event": "TP"
+      },
+      {
+        "time_ms": 1786435740000,
+        "capital": 1005.0742407996087,
+        "event": "STOP"
+      },
+      {
+        "time_ms": 1786519980000,
+        "capital": 992.2189392300853,
+        "event": "STOP"
+      },
+      {
+        "time_ms": 1786520280000,
+        "capital": 979.5280621097569,
+        "event": "STOP"
+      },
+      {
+        "time_ms": 1786627980000,
+        "capital": 1002.5608828400228,
+        "event": "TIME"
+      },
+      {
+        "time_ms": 1786646880000,
+        "capital": 1014.1890570039383,
+        "event": "TIME"
+      },
+      {
+        "time_ms": 1786696200000,
+        "capital": 1020.0197047035854,
+        "event": "TIME"
+      },
+      {
+        "time_ms": 1786707960000,
+        "capital": 1031.357391771988,
+        "event": "TIME"
+      },
+      {
+        "time_ms": 1786764600000,
+        "capital": 1021.7076677996594,
+        "event": "TIME"
+      },
+      {
+        "time_ms": 1786853400000,
+        "capital": 1035.907706896578,
+        "event": "TIME"
+      },
+      {
+        "time_ms": 1786965300000,
+        "capital": 1022.6580329622881,
+        "event": "STOP"
+      },
+      {
+        "time_ms": 1786967220000,
+        "capital": 1048.2244837863452,
+        "event": "TP"
+      },
+      {
+        "time_ms": 1787119500000,
+        "capital": 1034.8172733489243,
+        "event": "STOP"
+      },
+      {
+        "time_ms": 1787126880000,
+        "capital": 1042.9066495323493,
+        "event": "TIME"
+      },
+      {
+        "time_ms": 1787211720000,
+        "capital": 1050.7803384424221,
+        "event": "TIME"
+      },
+      {
+        "time_ms": 1787278440000,
+        "capital": 1077.0498469034826,
+        "event": "TP"
+      },
+      {
+        "time_ms": 1787317920000,
+        "capital": 1103.9760930760697,
+        "event": "TP"
+      },
+      {
+        "time_ms": 1787375580000,
+        "capital": 1131.5754954029712,
+        "event": "TP"
+      },
+      {
+        "time_ms": 1787376240000,
+        "capital": 1159.8648827880454,
+        "event": "TP"
+      },
+      {
+        "time_ms": 1787450880000,
+        "capital": 1145.0297469912332,
+        "event": "STOP"
+      },
+      {
+        "time_ms": 1787452980000,
+        "capital": 1130.3843585153165,
+        "event": "STOP"
+      },
+      {
+        "time_ms": 1787529840000,
+        "capital": 1115.9262904161621,
+        "event": "STOP"
+      },
+      {
+        "time_ms": 1787531040000,
+        "capital": 1101.6531467912232,
+        "event": "STOP"
+      },
+      {
+        "time_ms": 1787619420000,
+        "capital": 1129.1944754610038,
+        "event": "TP"
+      },
+      {
+        "time_ms": 1787629560000,
+        "capital": 1144.447153384758,
+        "event": "TIME"
+      },
+      {
+        "time_ms": 1787708100000,
+        "capital": 1173.0583322193768,
+        "event": "TP"
+      }
+    ]
+  },
+  "datasets": {
+    "PUMPUSDT": {
+      "raw_path": "C:\\Users\\sera-\\Documents\\PUMP Research Lab\\data\\raw\\binance_spot\\PUMPUSDT\\1m\\1785659220000-1788251160000.jsonl",
+      "manifest_path": "C:\\Users\\sera-\\Documents\\PUMP Research Lab\\data\\raw\\binance_spot\\PUMPUSDT\\1m\\1785659220000-1788251160000.manifest.json",
+      "row_count": 43200,
+      "checksum_sha256": "ab9767049bbb5f671e5382f107b9f05d81c3189cf3462c136b5e57be41738e0b",
+      "size_bytes": 13517966,
+      "quality": "PASS"
+    },
+    "BTCUSDT": {
+      "raw_path": "C:\\Users\\sera-\\Documents\\PUMP Research Lab\\data\\raw\\binance_spot\\BTCUSDT\\1m\\1785659220000-1788251160000.jsonl",
+      "manifest_path": "C:\\Users\\sera-\\Documents\\PUMP Research Lab\\data\\raw\\binance_spot\\BTCUSDT\\1m\\1785659220000-1788251160000.manifest.json",
+      "row_count": 43200,
+      "checksum_sha256": "64ff062d45e252f8f61624e0382e5dfd5feb8b1bd49e77eca89e8a57bd7c8354",
+      "size_bytes": 13615509,
+      "quality": "PASS"
+    },
+    "SOLUSDT": {
+      "raw_path": "C:\\Users\\sera-\\Documents\\PUMP Research Lab\\data\\raw\\binance_spot\\SOLUSDT\\1m\\1785659220000-1788251160000.jsonl",
+      "manifest_path": "C:\\Users\\sera-\\Documents\\PUMP Research Lab\\data\\raw\\binance_spot\\SOLUSDT\\1m\\1785659220000-1788251160000.manifest.json",
+      "row_count": 43200,
+      "checksum_sha256": "00f9a5d6da5f859940e49f6f1ac5c3d6cab80cdbab1941576d68c2ec2574e22f",
+      "size_bytes": 12891368,
+      "quality": "PASS"
+    }
+  },
+  "strategy": {
+    "strategy": "AUTO_X_ECONOMY",
+    "config": {
+      "fee_rate": 0.0021,
+      "limit_discount": 0.001,
+      "limit_ttl_minutes": 2,
+      "target_net": 0.025,
+      "stop_net": -0.012,
+      "max_hold_minutes": 120,
+      "adverse_slippage": 0.0008,
+      "max_entries_per_utc_day": 2,
+      "min_hours_between_entries": 0,
+      "drawdown_gate": -0.04,
+      "spread_rate": 0.0,
+      "entry_latency_minutes": 0,
+      "btc_context_rule": "ANY",
+      "sol_context_rule": "ANY",
+      "vwap_deviation_gate": -0.004,
+      "min_buy_share": 0.5,
+      "min_buy_share_delta": 0.0,
+      "min_green_candle_return": 0.0,
+      "min_volume_ratio_20m": 0.0
+    },
+    "period": {
+      "start_ms": 1785702360000,
+      "end_ms": 1787732819999
+    },
+    "metrics": {
+      "signals": 571,
+      "fills": 38,
+      "wins": 21,
+      "win_rate": 0.5526315789473685,
+      "average_net": 0.004343617581950971,
+      "profit_factor": 1.7712867271472414,
+      "compound_net": 0.17305833221937617,
+      "trades_per_day": 1.6169734936910847,
+      "exits": {
+        "TIME": 11,
+        "STOP": 16,
+        "TP": 11
+      }
+    },
+    "trades": [
+      {
+        "signal_time_ms": 1785716220000,
+        "fill_time_ms": 1785716280000,
+        "exit_time_ms": 1785723480000,
+        "entry": 0.002071926,
+        "exit": 0.0020823328,
+        "reason": "TIME",
+        "gross_return": 0.0050227662570960785,
+        "net_return": 0.0008105163635927504,
+        "buy_fee_rate": 0.0021,
+        "sell_fee_rate": 0.0021,
+        "slippage_rate": 0.0008
+      },
+      {
+        "signal_time_ms": 1785732780000,
+        "fill_time_ms": 1785732840000,
+        "exit_time_ms": 1785732900000,
+        "entry": 0.002071926,
+        "exit": 0.002054034102303586,
+        "reason": "STOP",
+        "gross_return": -0.008635394167752164,
+        "net_return": -0.01279039999999998,
+        "buy_fee_rate": 0.0021,
+        "sell_fee_rate": 0.0021,
+        "slippage_rate": 0.0008
+      },
+      {
+        "signal_time_ms": 1785802740000,
+        "fill_time_ms": 1785802800000,
+        "exit_time_ms": 1785808980000,
+        "entry": 0.002118879,
+        "exit": 0.0021809919451322777,
+        "reason": "TP",
+        "gross_return": 0.029314059525002323,
+        "net_return": 0.02499999999999991,
+        "buy_fee_rate": 0.0021,
+        "sell_fee_rate": 0.0021,
+        "slippage_rate": 0.0
+      },
+      {
+        "signal_time_ms": 1785810420000,
+        "fill_time_ms": 1785810480000,
+        "exit_time_ms": 1785817080000,
+        "entry": 0.002141856,
+        "exit": 0.0022046424942779837,
+        "reason": "TP",
+        "gross_return": 0.029314059525002323,
+        "net_return": 0.02499999999999991,
+        "buy_fee_rate": 0.0021,
+        "sell_fee_rate": 0.0021,
+        "slippage_rate": 0.0
+      },
+      {
+        "signal_time_ms": 1785888480000,
+        "fill_time_ms": 1785888540000,
+        "exit_time_ms": 1785890940000,
+        "entry": 0.002416581,
+        "exit": 0.002395712870526699,
+        "reason": "STOP",
+        "gross_return": -0.008635394167752386,
+        "net_return": -0.01279040000000009,
+        "buy_fee_rate": 0.0021,
+        "sell_fee_rate": 0.0021,
+        "slippage_rate": 0.0008
+      },
+      {
+        "signal_time_ms": 1785891000000,
+        "fill_time_ms": 1785891060000,
+        "exit_time_ms": 1785898260000,
+        "entry": 0.002389608,
+        "exit": 0.0024200624,
+        "reason": "TIME",
+        "gross_return": 0.012744517092343033,
+        "net_return": 0.008499903808451448,
+        "buy_fee_rate": 0.0021,
+        "sell_fee_rate": 0.0021,
+        "slippage_rate": 0.0008
+      },
+      {
+        "signal_time_ms": 1785983160000,
+        "fill_time_ms": 1785983220000,
+        "exit_time_ms": 1785983340000,
+        "entry": 0.002370627,
+        "exit": 0.002350155701430284,
+        "reason": "STOP",
+        "gross_return": -0.008635394167752275,
+        "net_return": -0.01279039999999998,
+        "buy_fee_rate": 0.0021,
+        "sell_fee_rate": 0.0021,
+        "slippage_rate": 0.0008
+      },
+      {
+        "signal_time_ms": 1785984180000,
+        "fill_time_ms": 1785984240000,
+        "exit_time_ms": 1785985200000,
+        "entry": 0.0023686289999999997,
+        "exit": 0.0023481749549478306,
+        "reason": "STOP",
+        "gross_return": -0.008635394167752386,
+        "net_return": -0.01279040000000009,
+        "buy_fee_rate": 0.0021,
+        "sell_fee_rate": 0.0021,
+        "slippage_rate": 0.0008
+      },
+      {
+        "signal_time_ms": 1786080480000,
+        "fill_time_ms": 1786080540000,
+        "exit_time_ms": 1786080600000,
+        "entry": 0.002308689,
+        "exit": 0.0022887525604742462,
+        "reason": "STOP",
+        "gross_return": -0.008635394167752275,
+        "net_return": -0.01279039999999998,
+        "buy_fee_rate": 0.0021,
+        "sell_fee_rate": 0.0021,
+        "slippage_rate": 0.0008
+      },
+      {
+        "signal_time_ms": 1786080720000,
+        "fill_time_ms": 1786080780000,
+        "exit_time_ms": 1786081140000,
+        "entry": 0.002298699,
+        "exit": 0.0022788488280619822,
+        "reason": "STOP",
+        "gross_return": -0.008635394167752164,
+        "net_return": -0.012790399999999869,
+        "buy_fee_rate": 0.0021,
+        "sell_fee_rate": 0.0021,
+        "slippage_rate": 0.0008
+      },
+      {
+        "signal_time_ms": 1786328880000,
+        "fill_time_ms": 1786328940000,
+        "exit_time_ms": 1786332900000,
+        "entry": 0.002675322,
+        "exit": 0.0027537465483565486,
+        "reason": "TP",
+        "gross_return": 0.029314059525002545,
+        "net_return": 0.02499999999999991,
+        "buy_fee_rate": 0.0021,
+        "sell_fee_rate": 0.0021,
+        "slippage_rate": 0.0
+      },
+      {
+        "signal_time_ms": 1786347540000,
+        "fill_time_ms": 1786347600000,
+        "exit_time_ms": 1786348920000,
+        "entry": 0.0027592380000000002,
+        "exit": 0.0027354108922673596,
+        "reason": "STOP",
+        "gross_return": -0.008635394167752386,
+        "net_return": -0.01279039999999998,
+        "buy_fee_rate": 0.0021,
+        "sell_fee_rate": 0.0021,
+        "slippage_rate": 0.0008
+      },
+      {
+        "signal_time_ms": 1786407780000,
+        "fill_time_ms": 1786407840000,
+        "exit_time_ms": 1786412820000,
+        "entry": 0.002739258,
+        "exit": 0.0028195567720663397,
+        "reason": "TP",
+        "gross_return": 0.029314059525002545,
+        "net_return": 0.02499999999999991,
+        "buy_fee_rate": 0.0021,
+        "sell_fee_rate": 0.0021,
+        "slippage_rate": 0.0
+      },
+      {
+        "signal_time_ms": 1786434780000,
+        "fill_time_ms": 1786434840000,
+        "exit_time_ms": 1786435740000,
+        "entry": 0.002825172,
+        "exit": 0.0028007755261883027,
+        "reason": "STOP",
+        "gross_return": -0.008635394167752386,
+        "net_return": -0.01279040000000009,
+        "buy_fee_rate": 0.0021,
+        "sell_fee_rate": 0.0021,
+        "slippage_rate": 0.0008
+      },
+      {
+        "signal_time_ms": 1786516620000,
+        "fill_time_ms": 1786516680000,
+        "exit_time_ms": 1786519980000,
+        "entry": 0.002686311,
+        "exit": 0.002663113645657831,
+        "reason": "STOP",
+        "gross_return": -0.008635394167752275,
+        "net_return": -0.01279040000000009,
+        "buy_fee_rate": 0.0021,
+        "sell_fee_rate": 0.0021,
+        "slippage_rate": 0.0008
+      },
+      {
+        "signal_time_ms": 1786520040000,
+        "fill_time_ms": 1786520100000,
+        "exit_time_ms": 1786520280000,
+        "entry": 0.00266733,
+        "exit": 0.002644296554074529,
+        "reason": "STOP",
+        "gross_return": -0.008635394167752386,
+        "net_return": -0.01279039999999998,
+        "buy_fee_rate": 0.0021,
+        "sell_fee_rate": 0.0021,
+        "slippage_rate": 0.0008
+      },
+      {
+        "signal_time_ms": 1786620720000,
+        "fill_time_ms": 1786620780000,
+        "exit_time_ms": 1786627980000,
+        "entry": 0.002749248,
+        "exit": 0.0028257376,
+        "reason": "TIME",
+        "gross_return": 0.02782200805456614,
+        "net_return": 0.023514202013423358,
+        "buy_fee_rate": 0.0021,
+        "sell_fee_rate": 0.0021,
+        "slippage_rate": 0.0008
+      },
+      {
+        "signal_time_ms": 1786639620000,
+        "fill_time_ms": 1786639680000,
+        "exit_time_ms": 1786646880000,
+        "entry": 0.002808189,
+        "exit": 0.002852716,
+        "reason": "TIME",
+        "gross_return": 0.01585612649291046,
+        "net_return": 0.011598471836419044,
+        "buy_fee_rate": 0.0021,
+        "sell_fee_rate": 0.0021,
+        "slippage_rate": 0.0008
+      },
+      {
+        "signal_time_ms": 1786688940000,
+        "fill_time_ms": 1786689000000,
+        "exit_time_ms": 1786696200000,
+        "entry": 0.002860137,
+        "exit": 0.0028886871999999997,
+        "reason": "TIME",
+        "gross_return": 0.009982109248612758,
+        "net_return": 0.005749073764285795,
+        "buy_fee_rate": 0.0021,
+        "sell_fee_rate": 0.0021,
+        "slippage_rate": 0.0008
+      },
+      {
+        "signal_time_ms": 1786700700000,
+        "fill_time_ms": 1786700760000,
+        "exit_time_ms": 1786707960000,
+        "entry": 0.0028321649999999998,
+        "exit": 0.0028756975999999997,
+        "reason": "TIME",
+        "gross_return": 0.015370785247328378,
+        "net_return": 0.01111516475232932,
+        "buy_fee_rate": 0.0021,
+        "sell_fee_rate": 0.0021,
+        "slippage_rate": 0.0008
+      },
+      {
+        "signal_time_ms": 1786757340000,
+        "fill_time_ms": 1786757400000,
+        "exit_time_ms": 1786764600000,
+        "entry": 0.002782215,
+        "exit": 0.0027677839999999997,
+        "reason": "TIME",
+        "gross_return": -0.005186874486695192,
+        "net_return": -0.00935633374939926,
+        "buy_fee_rate": 0.0021,
+        "sell_fee_rate": 0.0021,
+        "slippage_rate": 0.0008
+      },
+      {
+        "signal_time_ms": 1786846080000,
+        "fill_time_ms": 1786846200000,
+        "exit_time_ms": 1786853400000,
+        "entry": 0.002725272,
+        "exit": 0.0027747784,
+        "reason": "TIME",
+        "gross_return": 0.018165673004382654,
+        "net_return": 0.013898338580055514,
+        "buy_fee_rate": 0.0021,
+        "sell_fee_rate": 0.0021,
+        "slippage_rate": 0.0008
+      },
+      {
+        "signal_time_ms": 1786961700000,
+        "fill_time_ms": 1786961820000,
+        "exit_time_ms": 1786965300000,
+        "entry": 0.002870127,
+        "exit": 0.0028453423220434915,
+        "reason": "STOP",
+        "gross_return": -0.008635394167752386,
+        "net_return": -0.01279039999999998,
+        "buy_fee_rate": 0.0021,
+        "sell_fee_rate": 0.0021,
+        "slippage_rate": 0.0008
+      },
+      {
+        "signal_time_ms": 1786965960000,
+        "fill_time_ms": 1786966080000,
+        "exit_time_ms": 1786967220000,
+        "entry": 0.002856141,
+        "exit": 0.0029398660872858,
+        "reason": "TP",
+        "gross_return": 0.029314059525002323,
+        "net_return": 0.02499999999999991,
+        "buy_fee_rate": 0.0021,
+        "sell_fee_rate": 0.0021,
+        "slippage_rate": 0.0
+      },
+      {
+        "signal_time_ms": 1787119200000,
+        "fill_time_ms": 1787119260000,
+        "exit_time_ms": 1787119500000,
+        "entry": 0.00296703,
+        "exit": 0.002941408526442454,
+        "reason": "STOP",
+        "gross_return": -0.008635394167752275,
+        "net_return": -0.01279039999999998,
+        "buy_fee_rate": 0.0021,
+        "sell_fee_rate": 0.0021,
+        "slippage_rate": 0.0008
+      },
+      {
+        "signal_time_ms": 1787119620000,
+        "fill_time_ms": 1787119680000,
+        "exit_time_ms": 1787126880000,
+        "entry": 0.002949048,
+        "exit": 0.0029846104,
+        "reason": "TIME",
+        "gross_return": 0.012058942411245832,
+        "net_return": 0.007817202506917642,
+        "buy_fee_rate": 0.0021,
+        "sell_fee_rate": 0.0021,
+        "slippage_rate": 0.0008
+      },
+      {
+        "signal_time_ms": 1787204400000,
+        "fill_time_ms": 1787204520000,
+        "exit_time_ms": 1787211720000,
+        "entry": 0.0031898070000000002,
+        "exit": 0.003227416,
+        "reason": "TIME",
+        "gross_return": 0.011790368508188598,
+        "net_return": 0.007549754250395724,
+        "buy_fee_rate": 0.0021,
+        "sell_fee_rate": 0.0021,
+        "slippage_rate": 0.0008
+      },
+      {
+        "signal_time_ms": 1787276040000,
+        "fill_time_ms": 1787276100000,
+        "exit_time_ms": 1787278440000,
+        "entry": 0.003753243,
+        "exit": 0.003863265788713798,
+        "reason": "TP",
+        "gross_return": 0.029314059525002323,
+        "net_return": 0.02499999999999991,
+        "buy_fee_rate": 0.0021,
+        "sell_fee_rate": 0.0021,
+        "slippage_rate": 0.0
+      },
+      {
+        "signal_time_ms": 1787317020000,
+        "fill_time_ms": 1787317080000,
+        "exit_time_ms": 1787317920000,
+        "entry": 0.003991005000000001,
+        "exit": 0.004107997558134582,
+        "reason": "TP",
+        "gross_return": 0.029314059525002323,
+        "net_return": 0.02499999999999991,
+        "buy_fee_rate": 0.0021,
+        "sell_fee_rate": 0.0021,
+        "slippage_rate": 0.0
+      },
+      {
+        "signal_time_ms": 1787375460000,
+        "fill_time_ms": 1787375520000,
+        "exit_time_ms": 1787375580000,
+        "entry": 0.0037971990000000002,
+        "exit": 0.00390851031751428,
+        "reason": "TP",
+        "gross_return": 0.029314059525002545,
+        "net_return": 0.02499999999999991,
+        "buy_fee_rate": 0.0021,
+        "sell_fee_rate": 0.0021,
+        "slippage_rate": 0.0
+      },
+      {
+        "signal_time_ms": 1787375880000,
+        "fill_time_ms": 1787376000000,
+        "exit_time_ms": 1787376240000,
+        "entry": 0.004050944999999999,
+        "exit": 0.00416969464286251,
+        "reason": "TP",
+        "gross_return": 0.029314059525002323,
+        "net_return": 0.02499999999999991,
+        "buy_fee_rate": 0.0021,
+        "sell_fee_rate": 0.0021,
+        "slippage_rate": 0.0
+      },
+      {
+        "signal_time_ms": 1787449920000,
+        "fill_time_ms": 1787449980000,
+        "exit_time_ms": 1787450880000,
+        "entry": 0.00492507,
+        "exit": 0.004882540079246227,
+        "reason": "STOP",
+        "gross_return": -0.008635394167752497,
+        "net_return": -0.01279040000000009,
+        "buy_fee_rate": 0.0021,
+        "sell_fee_rate": 0.0021,
+        "slippage_rate": 0.0008
+      },
+      {
+        "signal_time_ms": 1787451300000,
+        "fill_time_ms": 1787451360000,
+        "exit_time_ms": 1787452980000,
+        "entry": 0.004913082,
+        "exit": 0.0048706556003515105,
+        "reason": "STOP",
+        "gross_return": -0.008635394167752497,
+        "net_return": -0.01279040000000009,
+        "buy_fee_rate": 0.0021,
+        "sell_fee_rate": 0.0021,
+        "slippage_rate": 0.0008
+      },
+      {
+        "signal_time_ms": 1787529600000,
+        "fill_time_ms": 1787529660000,
+        "exit_time_ms": 1787529840000,
+        "entry": 0.005223771,
+        "exit": 0.005178661678372926,
+        "reason": "STOP",
+        "gross_return": -0.008635394167752497,
+        "net_return": -0.01279040000000009,
+        "buy_fee_rate": 0.0021,
+        "sell_fee_rate": 0.0021,
+        "slippage_rate": 0.0008
+      },
+      {
+        "signal_time_ms": 1787530560000,
+        "fill_time_ms": 1787530620000,
+        "exit_time_ms": 1787531040000,
+        "entry": 0.005199795,
+        "exit": 0.0051548927205834925,
+        "reason": "STOP",
+        "gross_return": -0.008635394167752275,
+        "net_return": -0.01279039999999998,
+        "buy_fee_rate": 0.0021,
+        "sell_fee_rate": 0.0021,
+        "slippage_rate": 0.0008
+      },
+      {
+        "signal_time_ms": 1787617860000,
+        "fill_time_ms": 1787617920000,
+        "exit_time_ms": 1787619420000,
+        "entry": 0.004689306,
+        "exit": 0.004826768595214951,
+        "reason": "TP",
+        "gross_return": 0.029314059525002323,
+        "net_return": 0.02499999999999991,
+        "buy_fee_rate": 0.0021,
+        "sell_fee_rate": 0.0021,
+        "slippage_rate": 0.0
+      },
+      {
+        "signal_time_ms": 1787622300000,
+        "fill_time_ms": 1787622360000,
+        "exit_time_ms": 1787629560000,
+        "entry": 0.004776219,
+        "exit": 0.004861108,
+        "reason": "TIME",
+        "gross_return": 0.017773263746909462,
+        "net_return": 0.013507573987666888,
+        "buy_fee_rate": 0.0021,
+        "sell_fee_rate": 0.0021,
+        "slippage_rate": 0.0008
+      },
+      {
+        "signal_time_ms": 1787703000000,
+        "fill_time_ms": 1787703120000,
+        "exit_time_ms": 1787708100000,
+        "entry": 0.004467528,
+        "exit": 0.004598489381721615,
+        "reason": "TP",
+        "gross_return": 0.029314059525002323,
+        "net_return": 0.02499999999999991,
+        "buy_fee_rate": 0.0021,
+        "sell_fee_rate": 0.0021,
+        "slippage_rate": 0.0
+      }
+    ]
+  },
+  "synthetic_test": {
+    "status": "PASS",
+    "passed": 50,
+    "total": 50,
+    "properties": {
+      "deterministic_replay": true,
+      "fee_aware_target_exact": true,
+      "round_trip_cost_is_negative": true,
+      "real_orders": false
+    },
+    "scenarios": [
+      {
+        "id": "S01",
+        "family": "непрерывное падение",
+        "severity": 1,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 1
+      },
+      {
+        "id": "S02",
+        "family": "непрерывное падение",
+        "severity": 2,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 1
+      },
+      {
+        "id": "S03",
+        "family": "непрерывное падение",
+        "severity": 3,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 1
+      },
+      {
+        "id": "S04",
+        "family": "непрерывное падение",
+        "severity": 4,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 1
+      },
+      {
+        "id": "S05",
+        "family": "непрерывное падение",
+        "severity": 5,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 1
+      },
+      {
+        "id": "S06",
+        "family": "слабые отскоки",
+        "severity": 1,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 1
+      },
+      {
+        "id": "S07",
+        "family": "слабые отскоки",
+        "severity": 2,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 1
+      },
+      {
+        "id": "S08",
+        "family": "слабые отскоки",
+        "severity": 3,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 1
+      },
+      {
+        "id": "S09",
+        "family": "слабые отскоки",
+        "severity": 4,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 0
+      },
+      {
+        "id": "S10",
+        "family": "слабые отскоки",
+        "severity": 5,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 0
+      },
+      {
+        "id": "S11",
+        "family": "капитуляция",
+        "severity": 1,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 1
+      },
+      {
+        "id": "S12",
+        "family": "капитуляция",
+        "severity": 2,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 1
+      },
+      {
+        "id": "S13",
+        "family": "капитуляция",
+        "severity": 3,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 1
+      },
+      {
+        "id": "S14",
+        "family": "капитуляция",
+        "severity": 4,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 1
+      },
+      {
+        "id": "S15",
+        "family": "капитуляция",
+        "severity": 5,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 1
+      },
+      {
+        "id": "S16",
+        "family": "ложный разворот",
+        "severity": 1,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 1
+      },
+      {
+        "id": "S17",
+        "family": "ложный разворот",
+        "severity": 2,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 1
+      },
+      {
+        "id": "S18",
+        "family": "ложный разворот",
+        "severity": 3,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 1
+      },
+      {
+        "id": "S19",
+        "family": "ложный разворот",
+        "severity": 4,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 1
+      },
+      {
+        "id": "S20",
+        "family": "ложный разворот",
+        "severity": 5,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 1
+      },
+      {
+        "id": "S21",
+        "family": "настоящий разворот",
+        "severity": 1,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 1
+      },
+      {
+        "id": "S22",
+        "family": "настоящий разворот",
+        "severity": 2,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 1
+      },
+      {
+        "id": "S23",
+        "family": "настоящий разворот",
+        "severity": 3,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 1
+      },
+      {
+        "id": "S24",
+        "family": "настоящий разворот",
+        "severity": 4,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 1
+      },
+      {
+        "id": "S25",
+        "family": "настоящий разворот",
+        "severity": 5,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 1
+      },
+      {
+        "id": "S26",
+        "family": "BTC shock context",
+        "severity": 1,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 1
+      },
+      {
+        "id": "S27",
+        "family": "BTC shock context",
+        "severity": 2,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 1
+      },
+      {
+        "id": "S28",
+        "family": "BTC shock context",
+        "severity": 3,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 0
+      },
+      {
+        "id": "S29",
+        "family": "BTC shock context",
+        "severity": 4,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 0
+      },
+      {
+        "id": "S30",
+        "family": "BTC shock context",
+        "severity": 5,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 0
+      },
+      {
+        "id": "S31",
+        "family": "spread shock",
+        "severity": 1,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 1
+      },
+      {
+        "id": "S32",
+        "family": "spread shock",
+        "severity": 2,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 1
+      },
+      {
+        "id": "S33",
+        "family": "spread shock",
+        "severity": 3,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 1
+      },
+      {
+        "id": "S34",
+        "family": "spread shock",
+        "severity": 4,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 0
+      },
+      {
+        "id": "S35",
+        "family": "spread shock",
+        "severity": 5,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 0
+      },
+      {
+        "id": "S36",
+        "family": "slippage shock",
+        "severity": 1,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 1
+      },
+      {
+        "id": "S37",
+        "family": "slippage shock",
+        "severity": 2,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 1
+      },
+      {
+        "id": "S38",
+        "family": "slippage shock",
+        "severity": 3,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 1
+      },
+      {
+        "id": "S39",
+        "family": "slippage shock",
+        "severity": 4,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 1
+      },
+      {
+        "id": "S40",
+        "family": "slippage shock",
+        "severity": 5,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 1
+      },
+      {
+        "id": "S41",
+        "family": "тонкая ликвидность",
+        "severity": 1,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 1
+      },
+      {
+        "id": "S42",
+        "family": "тонкая ликвидность",
+        "severity": 2,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 1
+      },
+      {
+        "id": "S43",
+        "family": "тонкая ликвидность",
+        "severity": 3,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 1
+      },
+      {
+        "id": "S44",
+        "family": "тонкая ликвидность",
+        "severity": 4,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 1
+      },
+      {
+        "id": "S45",
+        "family": "тонкая ликвидность",
+        "severity": 5,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 1
+      },
+      {
+        "id": "S46",
+        "family": "одновременный TP/STOP",
+        "severity": 1,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 1
+      },
+      {
+        "id": "S47",
+        "family": "одновременный TP/STOP",
+        "severity": 2,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 1
+      },
+      {
+        "id": "S48",
+        "family": "одновременный TP/STOP",
+        "severity": 3,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 1
+      },
+      {
+        "id": "S49",
+        "family": "одновременный TP/STOP",
+        "severity": 4,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 0
+      },
+      {
+        "id": "S50",
+        "family": "одновременный TP/STOP",
+        "severity": 5,
+        "status": "PASS",
+        "deterministic": true,
+        "rows": 900,
+        "fills": 0
+      }
+    ],
+    "meaning": "Проверяет механику и воспроизводимость, но не доказывает прибыльность."
+  },
+  "variant_factory": {
+    "engine": "causal-grid-v5-frequency",
+    "requested_mode": "MAXIMUM",
+    "mode": "MAXIMUM",
+    "mode_was_reduced_for_data_length": false,
+    "history_days": 24.0,
+    "variants_tested": 10000000,
+    "signals_cached": 1441,
+    "compute": {
+      "requested_workers": 8,
+      "active_workers": 8,
+      "multiprocessing": true,
+      "checkpoint": "C:\\Users\\sera-\\Documents\\PUMP Research Lab\\checkpoints\\automatic-1m-maximum.json",
+      "resumed_from_variant": 0
+    },
+    "search_space": {
+      "full_combinations": 8345272320000,
+      "btc_sol_context_ready": true,
+      "btc_rows": 43200,
+      "sol_rows": 43200,
+      "retained_leaders": 200
+    },
+    "split": {
+      "train": [
+        1785702360000,
+        1786696019999
+      ],
+      "validation_a": [
+        1786696020000,
+        1786955219999
+      ],
+      "validation_b": [
+        1786955220000,
+        1787214419999
+      ],
+      "test": [
+        1787214420000,
+        1787732819999
+      ],
+      "test_was_not_used_for_selection": true,
+      "test_was_opened": false,
+      "minimum_trades_per_validation_fold": 47,
+      "minimum_test_trades": 70
+    },
+    "selected": {
+      "candidate_id": "C02574204",
+      "config": {
+        "fee_rate": 0.0021,
+        "limit_discount": 0.0025,
+        "limit_ttl_minutes": 5,
+        "target_net": 0.25,
+        "stop_net": -0.06,
+        "max_hold_minutes": 360,
+        "adverse_slippage": 0.0008,
+        "max_entries_per_utc_day": 8,
+        "min_hours_between_entries": 48,
+        "drawdown_gate": -0.03,
+        "spread_rate": 0.0,
+        "entry_latency_minutes": 0,
+        "btc_context_rule": "DOWN_60",
+        "sol_context_rule": "DOWN_60",
+        "vwap_deviation_gate": -0.006,
+        "min_buy_share": 0.5,
+        "min_buy_share_delta": 0.01,
+        "min_green_candle_return": 0.002,
+        "min_volume_ratio_20m": 0.75
+      },
+      "train": {
+        "signals": 4,
+        "fills": 2,
+        "wins": 2,
+        "win_rate": 1.0,
+        "average_net": 0.021831311593475178,
+        "profit_factor": null,
+        "compound_net": 0.04401691225788573,
+        "trades_per_day": 0.1739025421170219,
+        "exits": {
+          "TIME": 2
+        },
+        "max_drawdown": 0.0,
+        "cvar_5": 0.01077160567713098
+      },
+      "validation_a": {
+        "signals": 1,
+        "fills": 1,
+        "wins": 1,
+        "win_rate": 1.0,
+        "average_net": 0.054996904142110115,
+        "profit_factor": null,
+        "compound_net": 0.054996904142110115,
+        "trades_per_day": 0.3333333333333333,
+        "exits": {
+          "TIME": 1
+        },
+        "max_drawdown": 0.0,
+        "cvar_5": 0.054996904142110115
+      },
+      "validation_b": {
+        "signals": 1,
+        "fills": 1,
+        "wins": 1,
+        "win_rate": 1.0,
+        "average_net": 0.06729164505852325,
+        "profit_factor": null,
+        "compound_net": 0.06729164505852325,
+        "trades_per_day": 0.3333333333333333,
+        "exits": {
+          "TIME": 1
+        },
+        "max_drawdown": 0.0,
+        "cvar_5": 0.06729164505852325
+      },
+      "eligible": false,
+      "score": [
+        0,
+        0.054996904142110115,
+        3.0,
+        0.054996904142110115,
+        -0.0,
+        1,
+        0.021831311593475178
+      ]
+    },
+    "test": null,
+    "baseline_x_test": null,
+    "beats_baseline_x_on_test": false,
+    "stress": null,
+    "no_trade": {
+      "compound_net": 0.0,
+      "max_drawdown": 0.0
+    },
+    "verdict": "NO_TRADE_WINS",
+    "explanation": "Ни один вариант не набрал достаточную выборку и положительную экономику в обеих validation-секциях; TEST не открывался.",
+    "leaderboard": [
+      {
+        "candidate_id": "C02574204",
+        "config": {
+          "fee_rate": 0.0021,
+          "limit_discount": 0.0025,
+          "limit_ttl_minutes": 5,
+          "target_net": 0.25,
+          "stop_net": -0.06,
+          "max_hold_minutes": 360,
+          "adverse_slippage": 0.0008,
+          "max_entries_per_utc_day": 8,
+          "min_hours_between_entries": 48,
+          "drawdown_gate": -0.03,
+          "spread_rate": 0.0,
+          "entry_latency_minutes": 0,
+          "btc_context_rule": "DOWN_60",
+          "sol_context_rule": "DOWN_60",
+          "vwap_deviation_gate": -0.006,
+          "min_buy_share": 0.5,
+          "min_buy_share_delta": 0.01,
+          "min_green_candle_return": 0.002,
+          "min_volume_ratio_20m": 0.75
+        },
+        "train": {
+          "signals": 4,
+          "fills": 2,
+          "wins": 2,
+          "win_rate": 1.0,
+          "average_net": 0.021831311593475178,
+          "profit_factor": null,
+          "compound_net": 0.04401691225788573,
+          "trades_per_day": 0.1739025421170219,
+          "exits": {
+            "TIME": 2
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.01077160567713098
+        },
+        "validation_a": {
+          "signals": 1,
+          "fills": 1,
+          "wins": 1,
+          "win_rate": 1.0,
+          "average_net": 0.054996904142110115,
+          "profit_factor": null,
+          "compound_net": 0.054996904142110115,
+          "trades_per_day": 0.3333333333333333,
+          "exits": {
+            "TIME": 1
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.054996904142110115
+        },
+        "validation_b": {
+          "signals": 1,
+          "fills": 1,
+          "wins": 1,
+          "win_rate": 1.0,
+          "average_net": 0.06729164505852325,
+          "profit_factor": null,
+          "compound_net": 0.06729164505852325,
+          "trades_per_day": 0.3333333333333333,
+          "exits": {
+            "TIME": 1
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.06729164505852325
+        },
+        "eligible": false,
+        "score": [
+          0,
+          0.054996904142110115,
+          3.0,
+          0.054996904142110115,
+          -0.0,
+          1,
+          0.021831311593475178
+        ]
+      },
+      {
+        "candidate_id": "C09971580",
+        "config": {
+          "fee_rate": 0.0021,
+          "limit_discount": 0.0025,
+          "limit_ttl_minutes": 10,
+          "target_net": 0.25,
+          "stop_net": -0.02,
+          "max_hold_minutes": 360,
+          "adverse_slippage": 0.0008,
+          "max_entries_per_utc_day": 5,
+          "min_hours_between_entries": 12,
+          "drawdown_gate": -0.03,
+          "spread_rate": 0.0,
+          "entry_latency_minutes": 0,
+          "btc_context_rule": "DOWN_60",
+          "sol_context_rule": "DOWN_60",
+          "vwap_deviation_gate": -0.006,
+          "min_buy_share": 0.5,
+          "min_buy_share_delta": 0.0,
+          "min_green_candle_return": 0.002,
+          "min_volume_ratio_20m": 0.75
+        },
+        "train": {
+          "signals": 3,
+          "fills": 2,
+          "wins": 2,
+          "win_rate": 1.0,
+          "average_net": 0.019397657718707162,
+          "profit_factor": null,
+          "compound_net": 0.03909717578856253,
+          "trades_per_day": 0.1739025421170219,
+          "exits": {
+            "TIME": 2
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.01077160567713098
+        },
+        "validation_a": {
+          "signals": 1,
+          "fills": 1,
+          "wins": 1,
+          "win_rate": 1.0,
+          "average_net": 0.054996904142110115,
+          "profit_factor": null,
+          "compound_net": 0.054996904142110115,
+          "trades_per_day": 0.3333333333333333,
+          "exits": {
+            "TIME": 1
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.054996904142110115
+        },
+        "validation_b": {
+          "signals": 1,
+          "fills": 1,
+          "wins": 1,
+          "win_rate": 1.0,
+          "average_net": 0.06729164505852325,
+          "profit_factor": null,
+          "compound_net": 0.06729164505852325,
+          "trades_per_day": 0.3333333333333333,
+          "exits": {
+            "TIME": 1
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.06729164505852325
+        },
+        "eligible": false,
+        "score": [
+          0,
+          0.054996904142110115,
+          3.0,
+          0.054996904142110115,
+          -0.0,
+          1,
+          0.019397657718707162
+        ]
+      },
+      {
+        "candidate_id": "C08652900",
+        "config": {
+          "fee_rate": 0.0021,
+          "limit_discount": 0.0025,
+          "limit_ttl_minutes": 10,
+          "target_net": 1.0,
+          "stop_net": -0.02,
+          "max_hold_minutes": 360,
+          "adverse_slippage": 0.0008,
+          "max_entries_per_utc_day": 2,
+          "min_hours_between_entries": 0,
+          "drawdown_gate": -0.03,
+          "spread_rate": 0.0,
+          "entry_latency_minutes": 0,
+          "btc_context_rule": "DOWN_60",
+          "sol_context_rule": "ANY",
+          "vwap_deviation_gate": -0.006,
+          "min_buy_share": 0.5,
+          "min_buy_share_delta": 0.0,
+          "min_green_candle_return": 0.002,
+          "min_volume_ratio_20m": 0.75
+        },
+        "train": {
+          "signals": 3,
+          "fills": 2,
+          "wins": 2,
+          "win_rate": 1.0,
+          "average_net": 0.019397657718707162,
+          "profit_factor": null,
+          "compound_net": 0.03909717578856253,
+          "trades_per_day": 0.1739025421170219,
+          "exits": {
+            "TIME": 2
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.01077160567713098
+        },
+        "validation_a": {
+          "signals": 1,
+          "fills": 1,
+          "wins": 1,
+          "win_rate": 1.0,
+          "average_net": 0.054996904142110115,
+          "profit_factor": null,
+          "compound_net": 0.054996904142110115,
+          "trades_per_day": 0.3333333333333333,
+          "exits": {
+            "TIME": 1
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.054996904142110115
+        },
+        "validation_b": {
+          "signals": 1,
+          "fills": 1,
+          "wins": 1,
+          "win_rate": 1.0,
+          "average_net": 0.06729164505852325,
+          "profit_factor": null,
+          "compound_net": 0.06729164505852325,
+          "trades_per_day": 0.3333333333333333,
+          "exits": {
+            "TIME": 1
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.06729164505852325
+        },
+        "eligible": false,
+        "score": [
+          0,
+          0.054996904142110115,
+          3.0,
+          0.054996904142110115,
+          -0.0,
+          1,
+          0.019397657718707162
+        ]
+      },
+      {
+        "candidate_id": "C07047660",
+        "config": {
+          "fee_rate": 0.0021,
+          "limit_discount": 0.0025,
+          "limit_ttl_minutes": 10,
+          "target_net": 1.0,
+          "stop_net": -0.03,
+          "max_hold_minutes": 360,
+          "adverse_slippage": 0.0008,
+          "max_entries_per_utc_day": 3,
+          "min_hours_between_entries": 72,
+          "drawdown_gate": -0.03,
+          "spread_rate": 0.0,
+          "entry_latency_minutes": 0,
+          "btc_context_rule": "DOWN_60",
+          "sol_context_rule": "ANY",
+          "vwap_deviation_gate": -0.008,
+          "min_buy_share": 0.52,
+          "min_buy_share_delta": -0.02,
+          "min_green_candle_return": 0.001,
+          "min_volume_ratio_20m": 0.75
+        },
+        "train": {
+          "signals": 5,
+          "fills": 2,
+          "wins": 2,
+          "win_rate": 1.0,
+          "average_net": 0.017855265756517635,
+          "profit_factor": null,
+          "compound_net": 0.03599437667722771,
+          "trades_per_day": 0.1739025421170219,
+          "exits": {
+            "TIME": 2
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.011942115069841108
+        },
+        "validation_a": {
+          "signals": 1,
+          "fills": 1,
+          "wins": 1,
+          "win_rate": 1.0,
+          "average_net": 0.054996904142110115,
+          "profit_factor": null,
+          "compound_net": 0.054996904142110115,
+          "trades_per_day": 0.3333333333333333,
+          "exits": {
+            "TIME": 1
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.054996904142110115
+        },
+        "validation_b": {
+          "signals": 1,
+          "fills": 1,
+          "wins": 1,
+          "win_rate": 1.0,
+          "average_net": 0.06729164505852325,
+          "profit_factor": null,
+          "compound_net": 0.06729164505852325,
+          "trades_per_day": 0.3333333333333333,
+          "exits": {
+            "TIME": 1
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.06729164505852325
+        },
+        "eligible": false,
+        "score": [
+          0,
+          0.054996904142110115,
+          3.0,
+          0.054996904142110115,
+          -0.0,
+          1,
+          0.017855265756517635
+        ]
+      },
+      {
+        "candidate_id": "C00968964",
+        "config": {
+          "fee_rate": 0.0021,
+          "limit_discount": 0.0025,
+          "limit_ttl_minutes": 5,
+          "target_net": 0.25,
+          "stop_net": -0.1,
+          "max_hold_minutes": 360,
+          "adverse_slippage": 0.0008,
+          "max_entries_per_utc_day": 10,
+          "min_hours_between_entries": 12,
+          "drawdown_gate": -0.03,
+          "spread_rate": 0.0,
+          "entry_latency_minutes": 0,
+          "btc_context_rule": "DOWN_60",
+          "sol_context_rule": "DOWN_60",
+          "vwap_deviation_gate": -0.008,
+          "min_buy_share": 0.52,
+          "min_buy_share_delta": 0.0,
+          "min_green_candle_return": 0.001,
+          "min_volume_ratio_20m": 0.75
+        },
+        "train": {
+          "signals": 5,
+          "fills": 2,
+          "wins": 2,
+          "win_rate": 1.0,
+          "average_net": 0.017855265756517635,
+          "profit_factor": null,
+          "compound_net": 0.03599437667722771,
+          "trades_per_day": 0.1739025421170219,
+          "exits": {
+            "TIME": 2
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.011942115069841108
+        },
+        "validation_a": {
+          "signals": 1,
+          "fills": 1,
+          "wins": 1,
+          "win_rate": 1.0,
+          "average_net": 0.054996904142110115,
+          "profit_factor": null,
+          "compound_net": 0.054996904142110115,
+          "trades_per_day": 0.3333333333333333,
+          "exits": {
+            "TIME": 1
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.054996904142110115
+        },
+        "validation_b": {
+          "signals": 1,
+          "fills": 1,
+          "wins": 1,
+          "win_rate": 1.0,
+          "average_net": 0.06729164505852325,
+          "profit_factor": null,
+          "compound_net": 0.06729164505852325,
+          "trades_per_day": 0.3333333333333333,
+          "exits": {
+            "TIME": 1
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.06729164505852325
+        },
+        "eligible": false,
+        "score": [
+          0,
+          0.054996904142110115,
+          3.0,
+          0.054996904142110115,
+          -0.0,
+          1,
+          0.017855265756517635
+        ]
+      },
+      {
+        "candidate_id": "C09172860",
+        "config": {
+          "fee_rate": 0.0021,
+          "limit_discount": 0.0025,
+          "limit_ttl_minutes": 10,
+          "target_net": 0.5,
+          "stop_net": -0.03,
+          "max_hold_minutes": 360,
+          "adverse_slippage": 0.0008,
+          "max_entries_per_utc_day": 1,
+          "min_hours_between_entries": 12,
+          "drawdown_gate": -0.03,
+          "spread_rate": 0.0,
+          "entry_latency_minutes": 0,
+          "btc_context_rule": "DOWN_60",
+          "sol_context_rule": "DOWN_60",
+          "vwap_deviation_gate": -0.004,
+          "min_buy_share": 0.5,
+          "min_buy_share_delta": 0.0,
+          "min_green_candle_return": 0.002,
+          "min_volume_ratio_20m": 0.75
+        },
+        "train": {
+          "signals": 6,
+          "fills": 3,
+          "wins": 3,
+          "win_rate": 1.0,
+          "average_net": 0.01397875796756054,
+          "profit_factor": null,
+          "compound_net": 0.04233718651811391,
+          "trades_per_day": 0.26085381317553286,
+          "exits": {
+            "TIME": 3
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.0022299910226233344
+        },
+        "validation_a": {
+          "signals": 1,
+          "fills": 1,
+          "wins": 1,
+          "win_rate": 1.0,
+          "average_net": 0.054996904142110115,
+          "profit_factor": null,
+          "compound_net": 0.054996904142110115,
+          "trades_per_day": 0.3333333333333333,
+          "exits": {
+            "TIME": 1
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.054996904142110115
+        },
+        "validation_b": {
+          "signals": 1,
+          "fills": 1,
+          "wins": 1,
+          "win_rate": 1.0,
+          "average_net": 0.06729164505852325,
+          "profit_factor": null,
+          "compound_net": 0.06729164505852325,
+          "trades_per_day": 0.3333333333333333,
+          "exits": {
+            "TIME": 1
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.06729164505852325
+        },
+        "eligible": false,
+        "score": [
+          0,
+          0.054996904142110115,
+          3.0,
+          0.054996904142110115,
+          -0.0,
+          1,
+          0.01397875796756054
+        ]
+      },
+      {
+        "candidate_id": "C08951484",
+        "config": {
+          "fee_rate": 0.0021,
+          "limit_discount": 0.0025,
+          "limit_ttl_minutes": 5,
+          "target_net": 0.15,
+          "stop_net": -0.02,
+          "max_hold_minutes": 360,
+          "adverse_slippage": 0.0008,
+          "max_entries_per_utc_day": 10,
+          "min_hours_between_entries": 0,
+          "drawdown_gate": -0.03,
+          "spread_rate": 0.0,
+          "entry_latency_minutes": 0,
+          "btc_context_rule": "DOWN_60",
+          "sol_context_rule": "ANY",
+          "vwap_deviation_gate": -0.002,
+          "min_buy_share": 0.48,
+          "min_buy_share_delta": 0.1,
+          "min_green_candle_return": 0.001,
+          "min_volume_ratio_20m": 0.5
+        },
+        "train": {
+          "signals": 13,
+          "fills": 10,
+          "wins": 6,
+          "win_rate": 0.6,
+          "average_net": 0.006858291968942521,
+          "profit_factor": 2.0885199114353235,
+          "compound_net": 0.06864122295531216,
+          "trades_per_day": 0.8695127105851096,
+          "exits": {
+            "TIME": 7,
+            "STOP": 3
+          },
+          "max_drawdown": 0.06106505419325048,
+          "cvar_5": -0.020784000000000136
+        },
+        "validation_a": {
+          "signals": 1,
+          "fills": 1,
+          "wins": 1,
+          "win_rate": 1.0,
+          "average_net": 0.054996904142110115,
+          "profit_factor": null,
+          "compound_net": 0.054996904142110115,
+          "trades_per_day": 0.3333333333333333,
+          "exits": {
+            "TIME": 1
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.054996904142110115
+        },
+        "validation_b": {
+          "signals": 3,
+          "fills": 1,
+          "wins": 1,
+          "win_rate": 1.0,
+          "average_net": 0.06729164505852325,
+          "profit_factor": null,
+          "compound_net": 0.06729164505852325,
+          "trades_per_day": 0.3333333333333333,
+          "exits": {
+            "TIME": 1
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.06729164505852325
+        },
+        "eligible": false,
+        "score": [
+          0,
+          0.054996904142110115,
+          3.0,
+          0.054996904142110115,
+          -0.0,
+          1,
+          0.006858291968942521
+        ]
+      },
+      {
+        "candidate_id": "C06905244",
+        "config": {
+          "fee_rate": 0.0021,
+          "limit_discount": 0.0025,
+          "limit_ttl_minutes": 5,
+          "target_net": 0.15,
+          "stop_net": -0.04,
+          "max_hold_minutes": 360,
+          "adverse_slippage": 0.0008,
+          "max_entries_per_utc_day": 10,
+          "min_hours_between_entries": 6,
+          "drawdown_gate": -0.03,
+          "spread_rate": 0.0,
+          "entry_latency_minutes": 0,
+          "btc_context_rule": "DOWN_60",
+          "sol_context_rule": "ANY",
+          "vwap_deviation_gate": -0.006,
+          "min_buy_share": 0.5,
+          "min_buy_share_delta": 0.02,
+          "min_green_candle_return": 0.001,
+          "min_volume_ratio_20m": 0.5
+        },
+        "train": {
+          "signals": 9,
+          "fills": 5,
+          "wins": 4,
+          "win_rate": 0.8,
+          "average_net": 0.006713878690130892,
+          "profit_factor": 1.8234250748296343,
+          "compound_net": 0.032442921233825084,
+          "trades_per_day": 0.4347563552925548,
+          "exits": {
+            "TIME": 4,
+            "STOP": 1
+          },
+          "max_drawdown": 0.040767999999999915,
+          "cvar_5": -0.040767999999999915
+        },
+        "validation_a": {
+          "signals": 1,
+          "fills": 1,
+          "wins": 1,
+          "win_rate": 1.0,
+          "average_net": 0.054996904142110115,
+          "profit_factor": null,
+          "compound_net": 0.054996904142110115,
+          "trades_per_day": 0.3333333333333333,
+          "exits": {
+            "TIME": 1
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.054996904142110115
+        },
+        "validation_b": {
+          "signals": 3,
+          "fills": 1,
+          "wins": 1,
+          "win_rate": 1.0,
+          "average_net": 0.06729164505852325,
+          "profit_factor": null,
+          "compound_net": 0.06729164505852325,
+          "trades_per_day": 0.3333333333333333,
+          "exits": {
+            "TIME": 1
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.06729164505852325
+        },
+        "eligible": false,
+        "score": [
+          0,
+          0.054996904142110115,
+          3.0,
+          0.054996904142110115,
+          -0.0,
+          1,
+          0.006713878690130892
+        ]
+      },
+      {
+        "candidate_id": "C03112820",
+        "config": {
+          "fee_rate": 0.0021,
+          "limit_discount": 0.0015,
+          "limit_ttl_minutes": 10,
+          "target_net": 1.0,
+          "stop_net": -0.1,
+          "max_hold_minutes": 360,
+          "adverse_slippage": 0.0008,
+          "max_entries_per_utc_day": 1,
+          "min_hours_between_entries": 168,
+          "drawdown_gate": -0.03,
+          "spread_rate": 0.0,
+          "entry_latency_minutes": 0,
+          "btc_context_rule": "DOWN_60",
+          "sol_context_rule": "DOWN_60",
+          "vwap_deviation_gate": -0.002,
+          "min_buy_share": 0.52,
+          "min_buy_share_delta": 0.01,
+          "min_green_candle_return": 0.001,
+          "min_volume_ratio_20m": 0.75
+        },
+        "train": {
+          "signals": 18,
+          "fills": 2,
+          "wins": 2,
+          "win_rate": 1.0,
+          "average_net": 0.025126231132941212,
+          "profit_factor": null,
+          "compound_net": 0.05087811049081448,
+          "trades_per_day": 0.1739025421170219,
+          "exits": {
+            "TIME": 2
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.022743110067186878
+        },
+        "validation_a": {
+          "signals": 1,
+          "fills": 1,
+          "wins": 1,
+          "win_rate": 1.0,
+          "average_net": 0.05394032236530277,
+          "profit_factor": null,
+          "compound_net": 0.05394032236530277,
+          "trades_per_day": 0.3333333333333333,
+          "exits": {
+            "TIME": 1
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.05394032236530277
+        },
+        "validation_b": {
+          "signals": 2,
+          "fills": 1,
+          "wins": 1,
+          "win_rate": 1.0,
+          "average_net": 0.06622275007098333,
+          "profit_factor": null,
+          "compound_net": 0.06622275007098333,
+          "trades_per_day": 0.3333333333333333,
+          "exits": {
+            "TIME": 1
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.06622275007098333
+        },
+        "eligible": false,
+        "score": [
+          0,
+          0.05394032236530277,
+          3.0,
+          0.05394032236530277,
+          -0.0,
+          1,
+          0.025126231132941212
+        ]
+      },
+      {
+        "candidate_id": "C02452004",
+        "config": {
+          "fee_rate": 0.0021,
+          "limit_discount": 0.0015,
+          "limit_ttl_minutes": 5,
+          "target_net": 0.1,
+          "stop_net": -0.04,
+          "max_hold_minutes": 360,
+          "adverse_slippage": 0.0008,
+          "max_entries_per_utc_day": 5,
+          "min_hours_between_entries": 0,
+          "drawdown_gate": -0.03,
+          "spread_rate": 0.0,
+          "entry_latency_minutes": 0,
+          "btc_context_rule": "DOWN_60",
+          "sol_context_rule": "ANY",
+          "vwap_deviation_gate": -0.008,
+          "min_buy_share": 0.55,
+          "min_buy_share_delta": 0.1,
+          "min_green_candle_return": 0.002,
+          "min_volume_ratio_20m": 0.75
+        },
+        "train": {
+          "signals": 2,
+          "fills": 2,
+          "wins": 2,
+          "win_rate": 1.0,
+          "average_net": 0.024745302640765465,
+          "profit_factor": null,
+          "compound_net": 0.050091216964527785,
+          "trades_per_day": 0.1739025421170219,
+          "exits": {
+            "TIME": 2
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.02132209949367536
+        },
+        "validation_a": {
+          "signals": 1,
+          "fills": 1,
+          "wins": 1,
+          "win_rate": 1.0,
+          "average_net": 0.05394032236530277,
+          "profit_factor": null,
+          "compound_net": 0.05394032236530277,
+          "trades_per_day": 0.3333333333333333,
+          "exits": {
+            "TIME": 1
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.05394032236530277
+        },
+        "validation_b": {
+          "signals": 1,
+          "fills": 1,
+          "wins": 1,
+          "win_rate": 1.0,
+          "average_net": 0.10000000000000009,
+          "profit_factor": null,
+          "compound_net": 0.10000000000000009,
+          "trades_per_day": 0.3333333333333333,
+          "exits": {
+            "TP": 1
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.10000000000000009
+        },
+        "eligible": false,
+        "score": [
+          0,
+          0.05394032236530277,
+          3.0,
+          0.05394032236530277,
+          -0.0,
+          1,
+          0.024745302640765465
+        ]
+      },
+      {
+        "candidate_id": "C05516780",
+        "config": {
+          "fee_rate": 0.0021,
+          "limit_discount": 0.0015,
+          "limit_ttl_minutes": 10,
+          "target_net": 0.15,
+          "stop_net": -0.04,
+          "max_hold_minutes": 360,
+          "adverse_slippage": 0.0008,
+          "max_entries_per_utc_day": 5,
+          "min_hours_between_entries": 0,
+          "drawdown_gate": -0.03,
+          "spread_rate": 0.0,
+          "entry_latency_minutes": 0,
+          "btc_context_rule": "DOWN_60",
+          "sol_context_rule": "ANY",
+          "vwap_deviation_gate": -0.004,
+          "min_buy_share": 0.5,
+          "min_buy_share_delta": 0.02,
+          "min_green_candle_return": 0.002,
+          "min_volume_ratio_20m": 0.75
+        },
+        "train": {
+          "signals": 5,
+          "fills": 5,
+          "wins": 5,
+          "win_rate": 1.0,
+          "average_net": 0.017319287335283384,
+          "profit_factor": null,
+          "compound_net": 0.08936993918586333,
+          "trades_per_day": 0.4347563552925548,
+          "exits": {
+            "TIME": 5
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.0012262554282091997
+        },
+        "validation_a": {
+          "signals": 1,
+          "fills": 1,
+          "wins": 1,
+          "win_rate": 1.0,
+          "average_net": 0.05394032236530277,
+          "profit_factor": null,
+          "compound_net": 0.05394032236530277,
+          "trades_per_day": 0.3333333333333333,
+          "exits": {
+            "TIME": 1
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.05394032236530277
+        },
+        "validation_b": {
+          "signals": 1,
+          "fills": 1,
+          "wins": 1,
+          "win_rate": 1.0,
+          "average_net": 0.06622275007098333,
+          "profit_factor": null,
+          "compound_net": 0.06622275007098333,
+          "trades_per_day": 0.3333333333333333,
+          "exits": {
+            "TIME": 1
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.06622275007098333
+        },
+        "eligible": false,
+        "score": [
+          0,
+          0.05394032236530277,
+          3.0,
+          0.05394032236530277,
+          -0.0,
+          1,
+          0.017319287335283384
+        ]
+      },
+      {
+        "candidate_id": "C03893444",
+        "config": {
+          "fee_rate": 0.0021,
+          "limit_discount": 0.0015,
+          "limit_ttl_minutes": 5,
+          "target_net": 0.075,
+          "stop_net": -0.04,
+          "max_hold_minutes": 360,
+          "adverse_slippage": 0.0008,
+          "max_entries_per_utc_day": 2,
+          "min_hours_between_entries": 12,
+          "drawdown_gate": -0.03,
+          "spread_rate": 0.0,
+          "entry_latency_minutes": 0,
+          "btc_context_rule": "ANY",
+          "sol_context_rule": "DOWN_60",
+          "vwap_deviation_gate": -0.008,
+          "min_buy_share": 0.5,
+          "min_buy_share_delta": -0.02,
+          "min_green_candle_return": 0.002,
+          "min_volume_ratio_20m": 0.75
+        },
+        "train": {
+          "signals": 5,
+          "fills": 4,
+          "wins": 3,
+          "win_rate": 0.75,
+          "average_net": 0.0075993212336404325,
+          "profit_factor": 3.311299135699246,
+          "compound_net": 0.030413340181642656,
+          "trades_per_day": 0.3478050842340438,
+          "exits": {
+            "TIME": 4
+          },
+          "max_drawdown": 0.013151601393804668,
+          "cvar_5": -0.013151601393804668
+        },
+        "validation_a": {
+          "signals": 1,
+          "fills": 1,
+          "wins": 1,
+          "win_rate": 1.0,
+          "average_net": 0.05394032236530277,
+          "profit_factor": null,
+          "compound_net": 0.05394032236530277,
+          "trades_per_day": 0.3333333333333333,
+          "exits": {
+            "TIME": 1
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.05394032236530277
+        },
+        "validation_b": {
+          "signals": 1,
+          "fills": 1,
+          "wins": 1,
+          "win_rate": 1.0,
+          "average_net": 0.07499999999999996,
+          "profit_factor": null,
+          "compound_net": 0.07499999999999996,
+          "trades_per_day": 0.3333333333333333,
+          "exits": {
+            "TP": 1
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.07499999999999996
+        },
+        "eligible": false,
+        "score": [
+          0,
+          0.05394032236530277,
+          3.0,
+          0.05394032236530277,
+          -0.0,
+          1,
+          0.0075993212336404325
+        ]
+      },
+      {
+        "candidate_id": "C03911540",
+        "config": {
+          "fee_rate": 0.0021,
+          "limit_discount": 0.0015,
+          "limit_ttl_minutes": 10,
+          "target_net": 0.15,
+          "stop_net": -0.06,
+          "max_hold_minutes": 360,
+          "adverse_slippage": 0.0008,
+          "max_entries_per_utc_day": 5,
+          "min_hours_between_entries": 72,
+          "drawdown_gate": -0.03,
+          "spread_rate": 0.0,
+          "entry_latency_minutes": 0,
+          "btc_context_rule": "DOWN_60",
+          "sol_context_rule": "DOWN_60",
+          "vwap_deviation_gate": -0.004,
+          "min_buy_share": 0.52,
+          "min_buy_share_delta": 0.01,
+          "min_green_candle_return": 0.001,
+          "min_volume_ratio_20m": 0.75
+        },
+        "train": {
+          "signals": 15,
+          "fills": 3,
+          "wins": 2,
+          "win_rate": 0.6666666666666666,
+          "average_net": 0.005071448151956111,
+          "profit_factor": 1.8403083440516357,
+          "compound_net": 0.014847259659797718,
+          "trades_per_day": 0.26085381317553286,
+          "exits": {
+            "TIME": 3
+          },
+          "max_drawdown": 0.018105668667421138,
+          "cvar_5": -0.01810566866742125
+        },
+        "validation_a": {
+          "signals": 1,
+          "fills": 1,
+          "wins": 1,
+          "win_rate": 1.0,
+          "average_net": 0.05394032236530277,
+          "profit_factor": null,
+          "compound_net": 0.05394032236530277,
+          "trades_per_day": 0.3333333333333333,
+          "exits": {
+            "TIME": 1
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.05394032236530277
+        },
+        "validation_b": {
+          "signals": 2,
+          "fills": 1,
+          "wins": 1,
+          "win_rate": 1.0,
+          "average_net": 0.06622275007098333,
+          "profit_factor": null,
+          "compound_net": 0.06622275007098333,
+          "trades_per_day": 0.3333333333333333,
+          "exits": {
+            "TIME": 1
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.06622275007098333
+        },
+        "eligible": false,
+        "score": [
+          0,
+          0.05394032236530277,
+          3.0,
+          0.05394032236530277,
+          -0.0,
+          1,
+          0.005071448151956111
+        ]
+      },
+      {
+        "candidate_id": "C08285636",
+        "config": {
+          "fee_rate": 0.0021,
+          "limit_discount": 0.001,
+          "limit_ttl_minutes": 1,
+          "target_net": 0.1,
+          "stop_net": -0.1,
+          "max_hold_minutes": 360,
+          "adverse_slippage": 0.0008,
+          "max_entries_per_utc_day": 4,
+          "min_hours_between_entries": 12,
+          "drawdown_gate": -0.03,
+          "spread_rate": 0.0,
+          "entry_latency_minutes": 0,
+          "btc_context_rule": "DOWN_60",
+          "sol_context_rule": "DOWN_60",
+          "vwap_deviation_gate": -0.002,
+          "min_buy_share": 0.5,
+          "min_buy_share_delta": 0.02,
+          "min_green_candle_return": 0.002,
+          "min_volume_ratio_20m": 0.5
+        },
+        "train": {
+          "signals": 6,
+          "fills": 4,
+          "wins": 4,
+          "win_rate": 1.0,
+          "average_net": 0.013868764824257585,
+          "profit_factor": null,
+          "compound_net": 0.05645046756988381,
+          "trades_per_day": 0.3478050842340438,
+          "exits": {
+            "TIME": 4
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.0007251411862529977
+        },
+        "validation_a": {
+          "signals": 1,
+          "fills": 1,
+          "wins": 1,
+          "win_rate": 1.0,
+          "average_net": 0.051921794522871156,
+          "profit_factor": null,
+          "compound_net": 0.051921794522871156,
+          "trades_per_day": 0.3333333333333333,
+          "exits": {
+            "TIME": 1
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.051921794522871156
+        },
+        "validation_b": {
+          "signals": 2,
+          "fills": 2,
+          "wins": 2,
+          "win_rate": 1.0,
+          "average_net": 0.05542690637943182,
+          "profit_factor": null,
+          "compound_net": 0.11193919403475006,
+          "trades_per_day": 0.6666666666666666,
+          "exits": {
+            "TIME": 1,
+            "TP": 1
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.010853812758863546
+        },
+        "eligible": false,
+        "score": [
+          0,
+          0.051921794522871156,
+          3.0,
+          0.051921794522871156,
+          -0.0,
+          1,
+          0.013868764824257585
+        ]
+      },
+      {
+        "candidate_id": "C00200468",
+        "config": {
+          "fee_rate": 0.0021,
+          "limit_discount": 0.001,
+          "limit_ttl_minutes": 3,
+          "target_net": 0.075,
+          "stop_net": -0.03,
+          "max_hold_minutes": 360,
+          "adverse_slippage": 0.0008,
+          "max_entries_per_utc_day": 2,
+          "min_hours_between_entries": 6,
+          "drawdown_gate": -0.03,
+          "spread_rate": 0.0,
+          "entry_latency_minutes": 0,
+          "btc_context_rule": "DOWN_60",
+          "sol_context_rule": "DOWN_60",
+          "vwap_deviation_gate": -0.004,
+          "min_buy_share": 0.48,
+          "min_buy_share_delta": 0.01,
+          "min_green_candle_return": 0.001,
+          "min_volume_ratio_20m": 0.75
+        },
+        "train": {
+          "signals": 13,
+          "fills": 8,
+          "wins": 6,
+          "win_rate": 0.75,
+          "average_net": 0.013104645789748362,
+          "profit_factor": 4.08047649000667,
+          "compound_net": 0.10811289087550602,
+          "trades_per_day": 0.6956101684680877,
+          "exits": {
+            "TIME": 7,
+            "STOP": 1
+          },
+          "max_drawdown": 0.030776000000000137,
+          "cvar_5": -0.030776000000000137
+        },
+        "validation_a": {
+          "signals": 1,
+          "fills": 1,
+          "wins": 1,
+          "win_rate": 1.0,
+          "average_net": 0.051921794522871156,
+          "profit_factor": null,
+          "compound_net": 0.051921794522871156,
+          "trades_per_day": 0.3333333333333333,
+          "exits": {
+            "TIME": 1
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.051921794522871156
+        },
+        "validation_b": {
+          "signals": 2,
+          "fills": 1,
+          "wins": 1,
+          "win_rate": 1.0,
+          "average_net": 0.07499999999999996,
+          "profit_factor": null,
+          "compound_net": 0.07499999999999996,
+          "trades_per_day": 0.3333333333333333,
+          "exits": {
+            "TP": 1
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.07499999999999996
+        },
+        "eligible": false,
+        "score": [
+          0,
+          0.051921794522871156,
+          3.0,
+          0.051921794522871156,
+          -0.0,
+          1,
+          0.013104645789748362
+        ]
+      },
+      {
+        "candidate_id": "C01943132",
+        "config": {
+          "fee_rate": 0.0021,
+          "limit_discount": 0.001,
+          "limit_ttl_minutes": 2,
+          "target_net": 0.1,
+          "stop_net": -0.03,
+          "max_hold_minutes": 360,
+          "adverse_slippage": 0.0008,
+          "max_entries_per_utc_day": 10,
+          "min_hours_between_entries": 12,
+          "drawdown_gate": -0.03,
+          "spread_rate": 0.0,
+          "entry_latency_minutes": 0,
+          "btc_context_rule": "DOWN_60",
+          "sol_context_rule": "DOWN_60",
+          "vwap_deviation_gate": -0.004,
+          "min_buy_share": 0.5,
+          "min_buy_share_delta": 0.01,
+          "min_green_candle_return": 0.001,
+          "min_volume_ratio_20m": 0.75
+        },
+        "train": {
+          "signals": 17,
+          "fills": 6,
+          "wins": 4,
+          "win_rate": 0.6666666666666666,
+          "average_net": 0.011409021242961856,
+          "profit_factor": 3.01141768404899,
+          "compound_net": 0.06893840502635684,
+          "trades_per_day": 0.5217076263510657,
+          "exits": {
+            "TIME": 5,
+            "STOP": 1
+          },
+          "max_drawdown": 0.030776000000000137,
+          "cvar_5": -0.030776000000000137
+        },
+        "validation_a": {
+          "signals": 1,
+          "fills": 1,
+          "wins": 1,
+          "win_rate": 1.0,
+          "average_net": 0.051921794522871156,
+          "profit_factor": null,
+          "compound_net": 0.051921794522871156,
+          "trades_per_day": 0.3333333333333333,
+          "exits": {
+            "TIME": 1
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.051921794522871156
+        },
+        "validation_b": {
+          "signals": 2,
+          "fills": 1,
+          "wins": 1,
+          "win_rate": 1.0,
+          "average_net": 0.10000000000000009,
+          "profit_factor": null,
+          "compound_net": 0.10000000000000009,
+          "trades_per_day": 0.3333333333333333,
+          "exits": {
+            "TP": 1
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.10000000000000009
+        },
+        "eligible": false,
+        "score": [
+          0,
+          0.051921794522871156,
+          3.0,
+          0.051921794522871156,
+          -0.0,
+          1,
+          0.011409021242961856
+        ]
+      },
+      {
+        "candidate_id": "C01370156",
+        "config": {
+          "fee_rate": 0.0021,
+          "limit_discount": 0.001,
+          "limit_ttl_minutes": 1,
+          "target_net": 0.5,
+          "stop_net": -0.1,
+          "max_hold_minutes": 360,
+          "adverse_slippage": 0.0008,
+          "max_entries_per_utc_day": 4,
+          "min_hours_between_entries": 72,
+          "drawdown_gate": -0.03,
+          "spread_rate": 0.0,
+          "entry_latency_minutes": 0,
+          "btc_context_rule": "DOWN_60",
+          "sol_context_rule": "ANY",
+          "vwap_deviation_gate": -0.002,
+          "min_buy_share": 0.52,
+          "min_buy_share_delta": 0.01,
+          "min_green_candle_return": 0.001,
+          "min_volume_ratio_20m": 0.75
+        },
+        "train": {
+          "signals": 20,
+          "fills": 3,
+          "wins": 2,
+          "win_rate": 0.6666666666666666,
+          "average_net": 0.004568409389117327,
+          "profit_factor": 1.7369548374985124,
+          "compound_net": 0.013324227508388686,
+          "trades_per_day": 0.26085381317553286,
+          "exits": {
+            "TIME": 3
+          },
+          "max_drawdown": 0.018597107271691726,
+          "cvar_5": -0.018597107271691726
+        },
+        "validation_a": {
+          "signals": 1,
+          "fills": 1,
+          "wins": 1,
+          "win_rate": 1.0,
+          "average_net": 0.051921794522871156,
+          "profit_factor": null,
+          "compound_net": 0.051921794522871156,
+          "trades_per_day": 0.3333333333333333,
+          "exits": {
+            "TIME": 1
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.051921794522871156
+        },
+        "validation_b": {
+          "signals": 2,
+          "fills": 1,
+          "wins": 1,
+          "win_rate": 1.0,
+          "average_net": 0.06568910505092806,
+          "profit_factor": null,
+          "compound_net": 0.06568910505092806,
+          "trades_per_day": 0.3333333333333333,
+          "exits": {
+            "TIME": 1
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.06568910505092806
+        },
+        "eligible": false,
+        "score": [
+          0,
+          0.051921794522871156,
+          3.0,
+          0.051921794522871156,
+          -0.0,
+          1,
+          0.004568409389117327
+        ]
+      },
+      {
+        "candidate_id": "C08384996",
+        "config": {
+          "fee_rate": 0.0021,
+          "limit_discount": 0.001,
+          "limit_ttl_minutes": 1,
+          "target_net": 0.5,
+          "stop_net": -0.03,
+          "max_hold_minutes": 360,
+          "adverse_slippage": 0.0008,
+          "max_entries_per_utc_day": 1,
+          "min_hours_between_entries": 168,
+          "drawdown_gate": -0.03,
+          "spread_rate": 0.0,
+          "entry_latency_minutes": 0,
+          "btc_context_rule": "DOWN_60",
+          "sol_context_rule": "ANY",
+          "vwap_deviation_gate": -0.004,
+          "min_buy_share": 0.55,
+          "min_buy_share_delta": -0.02,
+          "min_green_candle_return": 0.0,
+          "min_volume_ratio_20m": 0.75
+        },
+        "train": {
+          "signals": 33,
+          "fills": 2,
+          "wins": 0,
+          "win_rate": 0.0,
+          "average_net": -0.019062314718065576,
+          "profit_factor": 0.0,
+          "compound_net": -0.03789846801660479,
+          "trades_per_day": 0.1739025421170219,
+          "exits": {
+            "TIME": 1,
+            "STOP": 1
+          },
+          "max_drawdown": 0.03789846801660479,
+          "cvar_5": -0.030776000000000026
+        },
+        "validation_a": {
+          "signals": 2,
+          "fills": 1,
+          "wins": 1,
+          "win_rate": 1.0,
+          "average_net": 0.051921794522871156,
+          "profit_factor": null,
+          "compound_net": 0.051921794522871156,
+          "trades_per_day": 0.3333333333333333,
+          "exits": {
+            "TIME": 1
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.051921794522871156
+        },
+        "validation_b": {
+          "signals": 3,
+          "fills": 1,
+          "wins": 1,
+          "win_rate": 1.0,
+          "average_net": 0.06568910505092806,
+          "profit_factor": null,
+          "compound_net": 0.06568910505092806,
+          "trades_per_day": 0.3333333333333333,
+          "exits": {
+            "TIME": 1
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.06568910505092806
+        },
+        "eligible": false,
+        "score": [
+          0,
+          0.051921794522871156,
+          3.0,
+          0.051921794522871156,
+          -0.0,
+          1,
+          -0.019062314718065576
+        ]
+      },
+      {
+        "candidate_id": "C08305852",
+        "config": {
+          "fee_rate": 0.0021,
+          "limit_discount": 0.0005,
+          "limit_ttl_minutes": 2,
+          "target_net": 0.075,
+          "stop_net": -0.04,
+          "max_hold_minutes": 360,
+          "adverse_slippage": 0.0008,
+          "max_entries_per_utc_day": 5,
+          "min_hours_between_entries": 12,
+          "drawdown_gate": -0.03,
+          "spread_rate": 0.0,
+          "entry_latency_minutes": 0,
+          "btc_context_rule": "DOWN_60",
+          "sol_context_rule": "DOWN_60",
+          "vwap_deviation_gate": -0.004,
+          "min_buy_share": 0.55,
+          "min_buy_share_delta": 0.05,
+          "min_green_candle_return": 0.002,
+          "min_volume_ratio_20m": 0.75
+        },
+        "train": {
+          "signals": 6,
+          "fills": 4,
+          "wins": 4,
+          "win_rate": 1.0,
+          "average_net": 0.015301757297890739,
+          "profit_factor": null,
+          "compound_net": 0.06236496648320555,
+          "trades_per_day": 0.3478050842340438,
+          "exits": {
+            "TIME": 4
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.00022452830922126132
+        },
+        "validation_a": {
+          "signals": 1,
+          "fills": 1,
+          "wins": 1,
+          "win_rate": 1.0,
+          "average_net": 0.051395570513605104,
+          "profit_factor": null,
+          "compound_net": 0.051395570513605104,
+          "trades_per_day": 0.3333333333333333,
+          "exits": {
+            "TIME": 1
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.051395570513605104
+        },
+        "validation_b": {
+          "signals": 1,
+          "fills": 1,
+          "wins": 1,
+          "win_rate": 1.0,
+          "average_net": 0.07499999999999996,
+          "profit_factor": null,
+          "compound_net": 0.07499999999999996,
+          "trades_per_day": 0.3333333333333333,
+          "exits": {
+            "TP": 1
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.07499999999999996
+        },
+        "eligible": false,
+        "score": [
+          0,
+          0.051395570513605104,
+          3.0,
+          0.051395570513605104,
+          -0.0,
+          1,
+          0.015301757297890739
+        ]
+      },
+      {
+        "candidate_id": "C05710324",
+        "config": {
+          "fee_rate": 0.0021,
+          "limit_discount": 0.0,
+          "limit_ttl_minutes": 5,
+          "target_net": 0.5,
+          "stop_net": -0.03,
+          "max_hold_minutes": 360,
+          "adverse_slippage": 0.0008,
+          "max_entries_per_utc_day": 4,
+          "min_hours_between_entries": 48,
+          "drawdown_gate": -0.03,
+          "spread_rate": 0.0,
+          "entry_latency_minutes": 0,
+          "btc_context_rule": "DOWN_60",
+          "sol_context_rule": "ANY",
+          "vwap_deviation_gate": -0.008,
+          "min_buy_share": 0.5,
+          "min_buy_share_delta": 0.0,
+          "min_green_candle_return": 0.002,
+          "min_volume_ratio_20m": 0.75
+        },
+        "train": {
+          "signals": 2,
+          "fills": 2,
+          "wins": 2,
+          "win_rate": 1.0,
+          "average_net": 0.02320818468680441,
+          "profit_factor": null,
+          "compound_net": 0.046943306018872644,
+          "trades_per_day": 0.1739025421170219,
+          "exits": {
+            "TIME": 2
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.01979011634443495
+        },
+        "validation_a": {
+          "signals": 1,
+          "fills": 1,
+          "wins": 1,
+          "win_rate": 1.0,
+          "average_net": 0.051263309595712014,
+          "profit_factor": null,
+          "compound_net": 0.051263309595712014,
+          "trades_per_day": 0.3333333333333333,
+          "exits": {
+            "TIME": 1
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.051263309595712014
+        },
+        "validation_b": {
+          "signals": 1,
+          "fills": 1,
+          "wins": 1,
+          "win_rate": 1.0,
+          "average_net": 0.06497652487322236,
+          "profit_factor": null,
+          "compound_net": 0.06497652487322236,
+          "trades_per_day": 0.3333333333333333,
+          "exits": {
+            "TIME": 1
+          },
+          "max_drawdown": 0.0,
+          "cvar_5": 0.06497652487322236
+        },
+        "eligible": false,
+        "score": [
+          0,
+          0.051263309595712014,
+          3.0,
+          0.051263309595712014,
+          -0.0,
+          1,
+          0.02320818468680441
+        ]
+      }
+    ],
+    "warnings": [
+      "Массовый перебор повышает риск переобучения; TEST не использовался для выбора параметров.",
+      "TEST не является immutable holdout и не даёт права на реальные ордера.",
+      "Высокий win rate без положительных NET и Profit Factor не считается победой.",
+      "BTC/SOL-фильтры применяются только при наличии обеих причинно выровненных баз; иначе контекстные варианты автоматически отсекаются.",
+      "Запрошенная вычислительная глубина не урезается. Для надёжных выводов режиму MAXIMUM желательно минимум 180 дней; короткая история всё равно не допускает слабую выборку к TEST."
+    ],
+    "immutable_holdout": {
+      "source_path": "C:\\Users\\sera-\\Documents\\PUMP Research Lab\\data\\raw\\binance_spot\\PUMPUSDT\\1m\\1785659220000-1788251160000.jsonl",
+      "source_sha256": "ab9767049bbb5f671e5382f107b9f05d81c3189cf3462c136b5e57be41738e0b",
+      "development_path": "C:\\Users\\sera-\\Documents\\PUMP Research Lab\\data\\development\\ab9767049bbb5f671e53\\development.jsonl",
+      "development_sha256": "dee183c1d71e8523b2d8b63b4fbc3a67bc503759af3c3d6f5a814c1f260b42e3",
+      "development_rows": 34560,
+      "holdout_path": "C:\\Users\\sera-\\Documents\\PUMP Research Lab\\data\\immutable_test\\ab9767049bbb5f671e53\\holdout.jsonl",
+      "holdout_sha256": "1c8107092e425430f4f325fd8b0b92b06470dd89eb0a5307c8219affb51bc9c0",
+      "holdout_rows": 8640,
+      "split_open_time_ms": 1787732820000,
+      "state": "SEALED_UNOPENED",
+      "manifest_path": "C:\\Users\\sera-\\Documents\\PUMP Research Lab\\data\\immutable_test\\ab9767049bbb5f671e53\\holdout.manifest.json"
+    }
+  },
+  "hardware": {
+    "cpu": "AMD Ryzen 7 5800X 8-Core Processor",
+    "physical_cores": 8,
+    "logical_processors": 16,
+    "ram_gb": 63.9,
+    "gpu": "NVIDIA GeForce RTX 2080 Ti",
+    "gpu_vram_mb": 11264,
+    "cuda_available": true,
+    "recommended_workers": 8,
+    "resource_mode": "FAST",
+    "workers": 8
+  },
+  "immutable_holdout": {
+    "source_path": "C:\\Users\\sera-\\Documents\\PUMP Research Lab\\data\\raw\\binance_spot\\PUMPUSDT\\1m\\1785659220000-1788251160000.jsonl",
+    "source_sha256": "ab9767049bbb5f671e5382f107b9f05d81c3189cf3462c136b5e57be41738e0b",
+    "development_path": "C:\\Users\\sera-\\Documents\\PUMP Research Lab\\data\\development\\ab9767049bbb5f671e53\\development.jsonl",
+    "development_sha256": "dee183c1d71e8523b2d8b63b4fbc3a67bc503759af3c3d6f5a814c1f260b42e3",
+    "development_rows": 34560,
+    "holdout_path": "C:\\Users\\sera-\\Documents\\PUMP Research Lab\\data\\immutable_test\\ab9767049bbb5f671e53\\holdout.jsonl",
+    "holdout_sha256": "1c8107092e425430f4f325fd8b0b92b06470dd89eb0a5307c8219affb51bc9c0",
+    "holdout_rows": 8640,
+    "split_open_time_ms": 1787732820000,
+    "state": "SEALED_UNOPENED",
+    "manifest_path": "C:\\Users\\sera-\\Documents\\PUMP Research Lab\\data\\immutable_test\\ab9767049bbb5f671e53\\holdout.manifest.json"
+  },
+  "conclusion": "На выбранном историческом окне результат положительный, но это не прогноз будущей доходности.",
+  "limitations": [
+    "Это историческая симуляция, а не обещание будущей прибыли.",
+    "Комиссии и adverse slippage включены; latency и рыночное воздействие моделируются ограниченно.",
+    "BTC и SOL используются фабрикой вариантов как причинные режимные фильтры; защищённый baseline AUTO X остаётся PUMP-only контролем.",
+    "Последние 20% PUMP физически отделены в immutable_test и не используются фабрикой.",
+    "Реальные ордера отключены."
+  ],
+  "report_hash_sha256": "55b02bca25dd8bebbfc6542b11cb7007609d7c6e7b822f623528e9d220e1d4af"
+}

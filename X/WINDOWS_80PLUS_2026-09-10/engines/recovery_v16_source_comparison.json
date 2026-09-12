@@ -1,0 +1,138 @@
+[
+  {
+    "source": "C:\\Users\\sera-\\Documents\\Codex\\2026-08-30\\new-chat\\Pump.exe\\src\\pump_research_lab\\__init__.py",
+    "status": "DIFFERENT"
+  },
+  {
+    "source": "C:\\Users\\sera-\\Documents\\Codex\\2026-08-30\\new-chat\\Pump.exe\\src\\pump_research_lab\\acceptance_v15.py",
+    "status": "SOURCE_MISSING"
+  },
+  {
+    "source": "C:\\Users\\sera-\\Documents\\Codex\\2026-08-30\\new-chat\\Pump.exe\\src\\pump_research_lab\\adaptive_features.py",
+    "status": "DIFFERENT"
+  },
+  {
+    "source": "C:\\Users\\sera-\\Documents\\Codex\\2026-08-30\\new-chat\\Pump.exe\\src\\pump_research_lab\\adaptive_optimizer.py",
+    "status": "DIFFERENT"
+  },
+  {
+    "source": "C:\\Users\\sera-\\Documents\\Codex\\2026-08-30\\new-chat\\Pump.exe\\src\\pump_research_lab\\automation.py",
+    "status": "DIFFERENT"
+  },
+  {
+    "source": "C:\\Users\\sera-\\Documents\\Codex\\2026-08-30\\new-chat\\Pump.exe\\src\\pump_research_lab\\baseline_x.py",
+    "status": "DIFFERENT"
+  },
+  {
+    "source": "C:\\Users\\sera-\\Documents\\Codex\\2026-08-30\\new-chat\\Pump.exe\\src\\pump_research_lab\\candidate_archive.py",
+    "status": "DIFFERENT"
+  },
+  {
+    "source": "C:\\Users\\sera-\\Documents\\Codex\\2026-08-30\\new-chat\\Pump.exe\\src\\pump_research_lab\\catalog.py",
+    "status": "MATCH_EXECUTABLE_STRUCTURE"
+  },
+  {
+    "source": "C:\\Users\\sera-\\Documents\\Codex\\2026-08-30\\new-chat\\Pump.exe\\src\\pump_research_lab\\contexts_v13.py",
+    "status": "SOURCE_MISSING"
+  },
+  {
+    "source": "C:\\Users\\sera-\\Documents\\Codex\\2026-08-30\\new-chat\\Pump.exe\\src\\pump_research_lab\\data_manager.py",
+    "status": "MATCH_EXECUTABLE_STRUCTURE"
+  },
+  {
+    "source": "C:\\Users\\sera-\\Documents\\Codex\\2026-08-30\\new-chat\\Pump.exe\\src\\pump_research_lab\\demo.py",
+    "status": "MATCH_EXECUTABLE_STRUCTURE"
+  },
+  {
+    "source": "C:\\Users\\sera-\\Documents\\Codex\\2026-08-30\\new-chat\\Pump.exe\\src\\pump_research_lab\\domain.py",
+    "status": "MATCH_EXECUTABLE_STRUCTURE"
+  },
+  {
+    "source": "C:\\Users\\sera-\\Documents\\Codex\\2026-08-30\\new-chat\\Pump.exe\\src\\pump_research_lab\\evaluation_v12.py",
+    "status": "SOURCE_MISSING"
+  },
+  {
+    "source": "C:\\Users\\sera-\\Documents\\Codex\\2026-08-30\\new-chat\\Pump.exe\\src\\pump_research_lab\\evaluation_v13.py",
+    "status": "SOURCE_MISSING"
+  },
+  {
+    "source": "C:\\Users\\sera-\\Documents\\Codex\\2026-08-30\\new-chat\\Pump.exe\\src\\pump_research_lab\\fusion_execution.py",
+    "status": "MATCH_EXECUTABLE_STRUCTURE"
+  },
+  {
+    "source": "C:\\Users\\sera-\\Documents\\Codex\\2026-08-30\\new-chat\\Pump.exe\\src\\pump_research_lab\\gui.py",
+    "status": "DIFFERENT"
+  },
+  {
+    "source": "C:\\Users\\sera-\\Documents\\Codex\\2026-08-30\\new-chat\\Pump.exe\\src\\pump_research_lab\\gui_v12.py",
+    "status": "SOURCE_MISSING"
+  },
+  {
+    "source": "C:\\Users\\sera-\\Documents\\Codex\\2026-08-30\\new-chat\\Pump.exe\\src\\pump_research_lab\\hardware.py",
+    "status": "MATCH_EXECUTABLE_STRUCTURE"
+  },
+  {
+    "source": "C:\\Users\\sera-\\Documents\\Codex\\2026-08-30\\new-chat\\Pump.exe\\src\\pump_research_lab\\holdout.py",
+    "status": "DIFFERENT"
+  },
+  {
+    "source": "C:\\Users\\sera-\\Documents\\Codex\\2026-08-30\\new-chat\\Pump.exe\\src\\pump_research_lab\\io.py",
+    "status": "MATCH_EXECUTABLE_STRUCTURE"
+  },
+  {
+    "source": "C:\\Users\\sera-\\Documents\\Codex\\2026-08-30\\new-chat\\Pump.exe\\src\\pump_research_lab\\local_ai.py",
+    "status": "SOURCE_MISSING"
+  },
+  {
+    "source": "C:\\Users\\sera-\\Documents\\Codex\\2026-08-30\\new-chat\\Pump.exe\\src\\pump_research_lab\\optimizer.py",
+    "status": "DIFFERENT"
+  },
+  {
+    "source": "C:\\Users\\sera-\\Documents\\Codex\\2026-08-30\\new-chat\\Pump.exe\\src\\pump_research_lab\\periods_v15.py",
+    "status": "SOURCE_MISSING"
+  },
+  {
+    "source": "C:\\Users\\sera-\\Documents\\Codex\\2026-08-30\\new-chat\\Pump.exe\\src\\pump_research_lab\\presentation_v14.py",
+    "status": "SOURCE_MISSING"
+  },
+  {
+    "source": "C:\\Users\\sera-\\Documents\\Codex\\2026-08-30\\new-chat\\Pump.exe\\src\\pump_research_lab\\regime_lab.py",
+    "status": "DIFFERENT"
+  },
+  {
+    "source": "C:\\Users\\sera-\\Documents\\Codex\\2026-08-30\\new-chat\\Pump.exe\\src\\pump_research_lab\\reporting.py",
+    "status": "MATCH_EXECUTABLE_STRUCTURE"
+  },
+  {
+    "source": "C:\\Users\\sera-\\Documents\\Codex\\2026-08-30\\new-chat\\Pump.exe\\src\\pump_research_lab\\research_v12.py",
+    "status": "SOURCE_MISSING"
+  },
+  {
+    "source": "C:\\Users\\sera-\\Documents\\Codex\\2026-08-30\\new-chat\\Pump.exe\\src\\pump_research_lab\\robustness_v16.py",
+    "status": "SOURCE_MISSING"
+  },
+  {
+    "source": "C:\\Users\\sera-\\Documents\\Codex\\2026-08-30\\new-chat\\Pump.exe\\src\\pump_research_lab\\safety_v12.py",
+    "status": "SOURCE_MISSING"
+  },
+  {
+    "source": "C:\\Users\\sera-\\Documents\\Codex\\2026-08-30\\new-chat\\Pump.exe\\src\\pump_research_lab\\scenarios.py",
+    "status": "MATCH_EXECUTABLE_STRUCTURE"
+  },
+  {
+    "source": "C:\\Users\\sera-\\Documents\\Codex\\2026-08-30\\new-chat\\Pump.exe\\src\\pump_research_lab\\storage_v13.py",
+    "status": "SOURCE_MISSING"
+  },
+  {
+    "source": "C:\\Users\\sera-\\Documents\\Codex\\2026-08-30\\new-chat\\Pump.exe\\src\\pump_research_lab\\strategy_library.py",
+    "status": "SOURCE_MISSING"
+  },
+  {
+    "source": "C:\\Users\\sera-\\Documents\\Codex\\2026-08-30\\new-chat\\Pump.exe\\src\\pump_research_lab\\telemetry.py",
+    "status": "DIFFERENT"
+  },
+  {
+    "source": "C:\\Users\\sera-\\Documents\\Codex\\2026-08-30\\new-chat\\Pump.exe\\src\\pump_research_lab\\validation.py",
+    "status": "MATCH_EXECUTABLE_STRUCTURE"
+  }
+]

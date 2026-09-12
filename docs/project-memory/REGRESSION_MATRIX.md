@@ -79,3 +79,14 @@
 2. остаться здесь как явно описанный manual/NEEDS_TEST check с причиной, почему автоматизация пока отсутствует.
 
 Не удалять строку только потому, что текущий bug исправлен.
+
+
+## Windows archive preservation — 2026-09-12
+
+| Guarantee | Verification | Status |
+|---|---|---|
+| >=80% archive keeps selected source rows and lower related retests | archive.py verify --deep; snapshot coverage audit | AUTO |
+| SQLite restoration is isolated and byte-exact for original row values | restore-db plus source-row comparison/integrity_check | AUTO |
+| All market-file bytes recover with original hashes | restore-data; deep gzip SHA-256 checks | AUTO |
+| Old headline/preview mismatches remain visible | FULL_REPORT_RU and examples | DOCUMENTED |
+| V16 example replays original metrics | verification/replay-result.json compared to archived record | ONE CANDIDATE |

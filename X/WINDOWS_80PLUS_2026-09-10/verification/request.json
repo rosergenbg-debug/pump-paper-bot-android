@@ -1,0 +1,177 @@
+{
+  "engine": "v16",
+  "record_sha256": "3e40167ac4bb11ec81ccdd7f191066ab1dbd559f158c76aa295e7cafaae05ac2",
+  "candidate_id": "V16-fc6d22261c18944a",
+  "capital": 1000.0,
+  "prepared": {
+    "BEAR": {
+      "version": "prepared-research-base-v2-regime",
+      "months": 6,
+      "market_regime": "BEAR",
+      "regime_details": {
+        "name": "BEAR",
+        "label_ru": "ПАДЕНИЕ",
+        "start_ms": 1757980800000,
+        "end_day_ms": 1773446400000,
+        "return_fraction": -0.7692753623188406,
+        "trend_fraction": -0.7026111649585771,
+        "efficiency": 0.1325806523144911,
+        "max_drawdown": -0.9530768352551661,
+        "end_ms": 1773532740000,
+        "start_utc": "2025-09-16",
+        "end_utc": "2026-03-14"
+      },
+      "prepared_at_utc": "2026-09-09T07:25:50.917633+00:00",
+      "expires_after_days": 30,
+      "source": "REGIME_SELECTION",
+      "period": {
+        "months": 6,
+        "days": 180,
+        "start_ms": 1757980800000,
+        "end_ms": 1773532740000
+      },
+      "datasets": {
+        "PUMPUSDT": {
+          "raw_path": "C:\\Users\\sera-\\Documents\\Codex\\2026-09-10\\github-pump-exe-github-17-1\\work\\restore-test\\market\\data\\raw\\binance_spot\\PUMPUSDT\\1m\\1757980800000-1773532740000.jsonl",
+          "manifest_path": "C:\\Users\\sera-\\Documents\\Codex\\2026-09-10\\github-pump-exe-github-17-1\\work\\restore-test\\market\\data\\raw\\binance_spot\\PUMPUSDT\\1m\\1757980800000-1773532740000.manifest.json",
+          "row_count": 259200,
+          "checksum_sha256": "f8ccb2a670bc977c63593123d6934a56b4f7b65737f49700c8c6fd3062f3a355",
+          "size_bytes": 81303728,
+          "quality": "PASS",
+          "reused": true
+        },
+        "BTCUSDT": {
+          "raw_path": "C:\\Users\\sera-\\Documents\\Codex\\2026-09-10\\github-pump-exe-github-17-1\\work\\restore-test\\market\\data\\raw\\binance_spot\\BTCUSDT\\1m\\1757980800000-1773532740000.jsonl",
+          "manifest_path": "C:\\Users\\sera-\\Documents\\Codex\\2026-09-10\\github-pump-exe-github-17-1\\work\\restore-test\\market\\data\\raw\\binance_spot\\BTCUSDT\\1m\\1757980800000-1773532740000.manifest.json",
+          "row_count": 259200,
+          "checksum_sha256": "0bb13f62b9e4ba612b25b5e8294da3ef1198776e81f824a024174e661f8f8e41",
+          "size_bytes": 82376553,
+          "quality": "PASS",
+          "reused": true
+        },
+        "SOLUSDT": {
+          "raw_path": "C:\\Users\\sera-\\Documents\\Codex\\2026-09-10\\github-pump-exe-github-17-1\\work\\restore-test\\market\\data\\raw\\binance_spot\\SOLUSDT\\1m\\1757980800000-1773532740000.jsonl",
+          "manifest_path": "C:\\Users\\sera-\\Documents\\Codex\\2026-09-10\\github-pump-exe-github-17-1\\work\\restore-test\\market\\data\\raw\\binance_spot\\SOLUSDT\\1m\\1757980800000-1773532740000.manifest.json",
+          "row_count": 259200,
+          "checksum_sha256": "2ef9f818ec54496a3317f0f5b3049a1b2c776d061ec4c5c872bca2879fd00953",
+          "size_bytes": 78482546,
+          "quality": "PASS",
+          "reused": true
+        }
+      }
+    },
+    "SIDEWAYS": {
+      "version": "prepared-research-base-v2-regime",
+      "months": 6,
+      "market_regime": "SIDEWAYS",
+      "regime_details": {
+        "name": "SIDEWAYS",
+        "label_ru": "БОКОВИК",
+        "start_ms": 1770249600000,
+        "end_day_ms": 1785715200000,
+        "return_fraction": -0.0586419753086419,
+        "trend_fraction": -0.19784982315133792,
+        "efficiency": 0.014144338091561721,
+        "max_drawdown": -0.5180067001675042,
+        "end_ms": 1785801540000,
+        "start_utc": "2026-02-05",
+        "end_utc": "2026-08-03"
+      },
+      "prepared_at_utc": "2026-09-09T07:26:16.758229+00:00",
+      "expires_after_days": 30,
+      "source": "REGIME_SELECTION",
+      "period": {
+        "months": 6,
+        "days": 180,
+        "start_ms": 1770249600000,
+        "end_ms": 1785801540000
+      },
+      "datasets": {
+        "PUMPUSDT": {
+          "raw_path": "C:\\Users\\sera-\\Documents\\Codex\\2026-09-10\\github-pump-exe-github-17-1\\work\\restore-test\\market\\data\\raw\\binance_spot\\PUMPUSDT\\1m\\1770249600000-1785801540000.jsonl",
+          "manifest_path": "C:\\Users\\sera-\\Documents\\Codex\\2026-09-10\\github-pump-exe-github-17-1\\work\\restore-test\\market\\data\\raw\\binance_spot\\PUMPUSDT\\1m\\1770249600000-1785801540000.manifest.json",
+          "row_count": 259200,
+          "checksum_sha256": "89a6bc1ebd83d60a0cad9203b95dd2cc2408ac09e6e460e018b255e6d4e88982",
+          "size_bytes": 80121724,
+          "quality": "PASS",
+          "reused": true
+        },
+        "BTCUSDT": {
+          "raw_path": "C:\\Users\\sera-\\Documents\\Codex\\2026-09-10\\github-pump-exe-github-17-1\\work\\restore-test\\market\\data\\raw\\binance_spot\\BTCUSDT\\1m\\1770249600000-1785801540000.jsonl",
+          "manifest_path": "C:\\Users\\sera-\\Documents\\Codex\\2026-09-10\\github-pump-exe-github-17-1\\work\\restore-test\\market\\data\\raw\\binance_spot\\BTCUSDT\\1m\\1770249600000-1785801540000.manifest.json",
+          "row_count": 259200,
+          "checksum_sha256": "ab405020c7fb295e8a55a1fd7ac9b2a2418560d520c5e6d3ad81407cc99bc738",
+          "size_bytes": 81857784,
+          "quality": "PASS",
+          "reused": true
+        },
+        "SOLUSDT": {
+          "raw_path": "C:\\Users\\sera-\\Documents\\Codex\\2026-09-10\\github-pump-exe-github-17-1\\work\\restore-test\\market\\data\\raw\\binance_spot\\SOLUSDT\\1m\\1770249600000-1785801540000.jsonl",
+          "manifest_path": "C:\\Users\\sera-\\Documents\\Codex\\2026-09-10\\github-pump-exe-github-17-1\\work\\restore-test\\market\\data\\raw\\binance_spot\\SOLUSDT\\1m\\1770249600000-1785801540000.manifest.json",
+          "row_count": 259200,
+          "checksum_sha256": "84df4cff46d2ff9281a0d202dceb50b0ffad29be208a69372488642667277d2b",
+          "size_bytes": 77296138,
+          "quality": "PASS",
+          "reused": true
+        }
+      }
+    },
+    "BULL": {
+      "version": "prepared-research-base-v2-regime",
+      "months": 6,
+      "market_regime": "BULL",
+      "regime_details": {
+        "name": "BULL",
+        "label_ru": "РОСТ",
+        "start_ms": 1771977600000,
+        "end_day_ms": 1787443200000,
+        "return_fraction": 2.0855962219598583,
+        "trend_fraction": 0.20687644359997392,
+        "efficiency": 0.13889857524278296,
+        "max_drawdown": -0.4888987566607461,
+        "end_ms": 1787529540000,
+        "start_utc": "2026-02-25",
+        "end_utc": "2026-08-23"
+      },
+      "prepared_at_utc": "2026-09-09T07:26:41.818306+00:00",
+      "expires_after_days": 30,
+      "source": "REGIME_SELECTION",
+      "period": {
+        "months": 6,
+        "days": 180,
+        "start_ms": 1771977600000,
+        "end_ms": 1787529540000
+      },
+      "datasets": {
+        "PUMPUSDT": {
+          "raw_path": "C:\\Users\\sera-\\Documents\\Codex\\2026-09-10\\github-pump-exe-github-17-1\\work\\restore-test\\market\\data\\raw\\binance_spot\\PUMPUSDT\\1m\\1771977600000-1787529540000.jsonl",
+          "manifest_path": "C:\\Users\\sera-\\Documents\\Codex\\2026-09-10\\github-pump-exe-github-17-1\\work\\restore-test\\market\\data\\raw\\binance_spot\\PUMPUSDT\\1m\\1771977600000-1787529540000.manifest.json",
+          "row_count": 259200,
+          "checksum_sha256": "57a784f115fbb6d55f371a9a4dbb02eb6387171d939466d759a153960fe0cebb",
+          "size_bytes": 80150865,
+          "quality": "PASS",
+          "reused": true
+        },
+        "BTCUSDT": {
+          "raw_path": "C:\\Users\\sera-\\Documents\\Codex\\2026-09-10\\github-pump-exe-github-17-1\\work\\restore-test\\market\\data\\raw\\binance_spot\\BTCUSDT\\1m\\1771977600000-1787529540000.jsonl",
+          "manifest_path": "C:\\Users\\sera-\\Documents\\Codex\\2026-09-10\\github-pump-exe-github-17-1\\work\\restore-test\\market\\data\\raw\\binance_spot\\BTCUSDT\\1m\\1771977600000-1787529540000.manifest.json",
+          "row_count": 259200,
+          "checksum_sha256": "265fb1be8a274940555097b613f99d7170b5778ee28719ce2272728208e16e4d",
+          "size_bytes": 81805271,
+          "quality": "PASS",
+          "reused": true
+        },
+        "SOLUSDT": {
+          "raw_path": "C:\\Users\\sera-\\Documents\\Codex\\2026-09-10\\github-pump-exe-github-17-1\\work\\restore-test\\market\\data\\raw\\binance_spot\\SOLUSDT\\1m\\1771977600000-1787529540000.jsonl",
+          "manifest_path": "C:\\Users\\sera-\\Documents\\Codex\\2026-09-10\\github-pump-exe-github-17-1\\work\\restore-test\\market\\data\\raw\\binance_spot\\SOLUSDT\\1m\\1771977600000-1787529540000.manifest.json",
+          "row_count": 259200,
+          "checksum_sha256": "0a6663e0d2722fca51aaef1db60373f5bd6e214cf7607a542daf6c9d3698c614",
+          "size_bytes": 77235002,
+          "quality": "PASS",
+          "reused": true
+        }
+      }
+    }
+  },
+  "authority": "HISTORICAL_REPLAY_NOT_NEW_INDEPENDENT_TEST"
+}

@@ -114,3 +114,8 @@ The original replay was reproduced twice. Stop -1.5% produced **57.36% win rate*
 8. Never erase older X checkpoints.
 9. Cross-market filters remain experimental until forward evidence is representative.
 10. Add experiments as isolated stages; do not replace the central app/runtime.
+
+
+## 2026-09-12 — Windows research archive preservation
+
+По поручению владельца защищённый X дополнен `X/WINDOWS_80PLUS_2026-09-10/`. Сохранены все найденные варианты с записанным общим результатом от +80% и связанные прежние/повторные записи, включая архив до очистки. Вход: README/FULL_REPORT_RU/RESTORE_RU. Основной снимок от 10 сентября. Архив не меняет Android runtime/версию и не даёт торговых полномочий. Сохранённые данные, параметры и engine references позволяют восстановление; ограничения старых A*-сборок и расхождения процентов отмечены.

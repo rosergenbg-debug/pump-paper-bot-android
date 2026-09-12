@@ -1,0 +1,242 @@
+[
+  {
+    "path": "context/checkpoints/automatic-1m-94b898b8c1969234-adaptive-v7.json",
+    "source": "F:\\PUMP Research Lab\\checkpoints\\automatic-1m-94b898b8c1969234-adaptive-v7.json",
+    "sha256": "756c57c48e3d4a72889e2814d8737c878ad021a15841040a229516f38a567757",
+    "size": 315853
+  },
+  {
+    "path": "context/checkpoints/automatic-1m-94b898b8c1969234-maximum.json",
+    "source": "F:\\PUMP Research Lab\\checkpoints\\automatic-1m-94b898b8c1969234-maximum.json",
+    "sha256": "677cff7ed5705fe4b2efeb392c049c3b9fd4ad67236ac771a63da40975a39d70",
+    "size": 467434
+  },
+  {
+    "path": "context/checkpoints/automatic-1m-maximum.json",
+    "source": "F:\\PUMP Research Lab\\checkpoints\\automatic-1m-maximum.json",
+    "sha256": "064e9c1ee24d475a60605eb1f3c294559d0b24ee9ace6fd61be009e81f40de2b",
+    "size": 443275
+  },
+  {
+    "path": "context/checkpoints/automatic-3m-maximum.json",
+    "source": "F:\\PUMP Research Lab\\checkpoints\\automatic-3m-maximum.json",
+    "sha256": "d3ce39863cbaaf8978af1fe152fc6a74443f715dc8b5c46f955dea06bb404fd7",
+    "size": 451767
+  },
+  {
+    "path": "context/checkpoints/automatic-6m-bear-f8ccb2a670bc977c-adaptive-v10.json",
+    "source": "F:\\PUMP Research Lab\\checkpoints\\automatic-6m-bear-f8ccb2a670bc977c-adaptive-v10.json",
+    "sha256": "633bb1b2c9b07e96f0b5ce3b83413c339bb4796e6d9656617030d1a9767da526",
+    "size": 474268
+  },
+  {
+    "path": "context/checkpoints/automatic-6m-e6afcb8f64205d76-adaptive-v7.json",
+    "source": "F:\\PUMP Research Lab\\checkpoints\\automatic-6m-e6afcb8f64205d76-adaptive-v7.json",
+    "sha256": "c5d3c51fb3e2e014893b7af486b4747dd76961c19974e46e4c50f7b04a991261",
+    "size": 335842
+  },
+  {
+    "path": "context/checkpoints/automatic-6m-e6afcb8f64205d76-adaptive-v8.json",
+    "source": "F:\\PUMP Research Lab\\checkpoints\\automatic-6m-e6afcb8f64205d76-adaptive-v8.json",
+    "sha256": "171f8a252e603acac4e4dcbd690cbac04bfc7c23d5bfdf357745a369e5f6730c",
+    "size": 406924
+  },
+  {
+    "path": "context/checkpoints/automatic-6m-e6afcb8f64205d76-maximum.json",
+    "source": "F:\\PUMP Research Lab\\checkpoints\\automatic-6m-e6afcb8f64205d76-maximum.json",
+    "sha256": "f09ae0eddca2baa55260870f3396f199cf18bb2e7eff943aec5a065e1d34d5a4",
+    "size": 467644
+  },
+  {
+    "path": "context/checkpoints/factory-94b898b8c1969234-adaptive-v7.json",
+    "source": "F:\\PUMP Research Lab\\checkpoints\\factory-94b898b8c1969234-adaptive-v7.json",
+    "sha256": "712c7cae5622fbbcc483c017172015c55ebe2b89b90f8238b38d378e6529278e",
+    "size": 320635
+  },
+  {
+    "path": "context/reports/20260831-134019/auto_x_economy_report.json",
+    "source": "F:\\PUMP Research Lab\\reports\\20260831-134019\\auto_x_economy_report.json",
+    "sha256": "77e5c0038cdf56cd389797b5fa5ebdffe42084e0e10a05b4458fb6a28001a628",
+    "size": 3825
+  },
+  {
+    "path": "context/reports/20260831-134019/auto_x_economy_report.md",
+    "source": "F:\\PUMP Research Lab\\reports\\20260831-134019\\auto_x_economy_report.md",
+    "sha256": "dbeda2f0481d655f8527a35d57ec49a8844a8b30fff081c4448df8eec29b39eb",
+    "size": 496
+  },
+  {
+    "path": "context/reports/20260831-134111/auto_x_economy_report.json",
+    "source": "F:\\PUMP Research Lab\\reports\\20260831-134111\\auto_x_economy_report.json",
+    "sha256": "bc534cb015365b0a80087051472cbf95c40e0f7cf0309ccddc8fbd8ee143903e",
+    "size": 3825
+  },
+  {
+    "path": "context/reports/20260831-134111/auto_x_economy_report.md",
+    "source": "F:\\PUMP Research Lab\\reports\\20260831-134111\\auto_x_economy_report.md",
+    "sha256": "dbeda2f0481d655f8527a35d57ec49a8844a8b30fff081c4448df8eec29b39eb",
+    "size": 496
+  },
+  {
+    "path": "context/reports/20260831-134215/auto_x_economy_report.json",
+    "source": "F:\\PUMP Research Lab\\reports\\20260831-134215\\auto_x_economy_report.json",
+    "sha256": "b78221041a0eb3c948e0882cedf8777312f8c728068a7d6ea2e3c1490f94836d",
+    "size": 5490
+  },
+  {
+    "path": "context/reports/20260831-134215/auto_x_economy_report.md",
+    "source": "F:\\PUMP Research Lab\\reports\\20260831-134215\\auto_x_economy_report.md",
+    "sha256": "05c7ea5f341782b1672a73057f5a6c1f7ac0e94e744c2df6f8ac7722dec85c2b",
+    "size": 497
+  },
+  {
+    "path": "context/reports/20260831-134329/auto_x_economy_report.json",
+    "source": "F:\\PUMP Research Lab\\reports\\20260831-134329\\auto_x_economy_report.json",
+    "sha256": "2599c123548efedb668bacb78f05ddfc109e9735c508ee4c38dd80cfddfc7163",
+    "size": 5490
+  },
+  {
+    "path": "context/reports/20260831-134329/auto_x_economy_report.md",
+    "source": "F:\\PUMP Research Lab\\reports\\20260831-134329\\auto_x_economy_report.md",
+    "sha256": "05c7ea5f341782b1672a73057f5a6c1f7ac0e94e744c2df6f8ac7722dec85c2b",
+    "size": 497
+  },
+  {
+    "path": "context/reports/20260831-183058/auto_x_economy_report.json",
+    "source": "F:\\PUMP Research Lab\\reports\\20260831-183058\\auto_x_economy_report.json",
+    "sha256": "e222361bb11aae0031207aa46e9af93aa94427a2a1dfb1c01da72fca4f2e156a",
+    "size": 18297
+  },
+  {
+    "path": "context/reports/20260831-183058/auto_x_economy_report.md",
+    "source": "F:\\PUMP Research Lab\\reports\\20260831-183058\\auto_x_economy_report.md",
+    "sha256": "c7fb21223759ec1cb4c2ad693a43cd6e9730520cba9bd285c9f430488a5fa5c3",
+    "size": 501
+  },
+  {
+    "path": "context/reports/20260831-183105/auto_x_economy_report.json",
+    "source": "F:\\PUMP Research Lab\\reports\\20260831-183105\\auto_x_economy_report.json",
+    "sha256": "263fad8e74460bed4e3b9e0ab87411b744319ad44ba3a51d4510c37b8259b7d7",
+    "size": 18297
+  },
+  {
+    "path": "context/reports/20260831-183105/auto_x_economy_report.md",
+    "source": "F:\\PUMP Research Lab\\reports\\20260831-183105\\auto_x_economy_report.md",
+    "sha256": "c7fb21223759ec1cb4c2ad693a43cd6e9730520cba9bd285c9f430488a5fa5c3",
+    "size": 501
+  },
+  {
+    "path": "context/reports/ready/PUMP_RESEARCH_REPORT_20260901-083825.json",
+    "source": "F:\\PUMP Research Lab\\reports\\ready\\PUMP_RESEARCH_REPORT_20260901-083825.json",
+    "sha256": "5ae7ed4b65622688a3f0e3a41d3dd1e38874668e86aaf9a68a8c84cbb69c3c48",
+    "size": 91249
+  },
+  {
+    "path": "context/reports/ready/PUMP_RESEARCH_REPORT_20260901-083825.md",
+    "source": "F:\\PUMP Research Lab\\reports\\ready\\PUMP_RESEARCH_REPORT_20260901-083825.md",
+    "sha256": "57c5e0f5e2ce058dadcf99a618712a369dda1ae739ca5e5d3994294654e92a8d",
+    "size": 4383
+  },
+  {
+    "path": "context/reports/ready/PUMP_RESEARCH_REPORT_20260901-092311.json",
+    "source": "F:\\PUMP Research Lab\\reports\\ready\\PUMP_RESEARCH_REPORT_20260901-092311.json",
+    "sha256": "d902db70e39a69c4d6ca42eb898fd971e4d5ab44170e7c8edde03274f2e214c6",
+    "size": 130947
+  },
+  {
+    "path": "context/reports/ready/PUMP_RESEARCH_REPORT_20260901-092311.md",
+    "source": "F:\\PUMP Research Lab\\reports\\ready\\PUMP_RESEARCH_REPORT_20260901-092311.md",
+    "sha256": "ad5db3bc04ecebb580fb658b851154f1b9a62e4e06a9ca8020445f532ca364f3",
+    "size": 7286
+  },
+  {
+    "path": "context/reports/ready/V12_LIVE.json",
+    "source": "F:\\PUMP Research Lab\\reports\\ready\\V12_LIVE.json",
+    "sha256": "6b5b03df735016120567bb15c23e29aa7e96d4b83c7ad79cea3e5a157abe80c8",
+    "size": 938516
+  },
+  {
+    "path": "context/reports/ready/V12_LIVE.md",
+    "source": "F:\\PUMP Research Lab\\reports\\ready\\V12_LIVE.md",
+    "sha256": "63be74986669aeadf58b1c20e0f2248fb7313e4a2b54519559fad0aa19ae4b8f",
+    "size": 12687
+  },
+  {
+    "path": "context/reports/ready/V13_LIVE.json",
+    "source": "F:\\PUMP Research Lab\\reports\\ready\\V13_LIVE.json",
+    "sha256": "cdeddef580d87d8355dc1cdc230ebec2b18ba8553b493f0906df7cd1fd58b634",
+    "size": 930822
+  },
+  {
+    "path": "context/reports/ready/V13_LIVE.md",
+    "source": "F:\\PUMP Research Lab\\reports\\ready\\V13_LIVE.md",
+    "sha256": "4ce560504820e8691c94bed549e78fc53aae6225554b8b0aa98ab0c28eb50c00",
+    "size": 13060
+  },
+  {
+    "path": "context/reports/ready/V14_LIVE.json",
+    "source": "F:\\PUMP Research Lab\\reports\\ready\\V14_LIVE.json",
+    "sha256": "fa53fa8e89d38d331fc0283e0ba315e96d9c4b3b3583696dc9a749a8b19df9a9",
+    "size": 892703
+  },
+  {
+    "path": "context/reports/ready/V14_LIVE.md",
+    "source": "F:\\PUMP Research Lab\\reports\\ready\\V14_LIVE.md",
+    "sha256": "1e9444b9f206a1fc35b2f7eb24ace63d826447ec1f31bf34de55aaf1261db63d",
+    "size": 12797
+  },
+  {
+    "path": "context/reports/ready/V15_LIVE.json",
+    "source": "F:\\PUMP Research Lab\\reports\\ready\\V15_LIVE.json",
+    "sha256": "0e549de4ffc12aea419f9f9fadcfb620a1818ee69fc0ab9d47224b83a7db63eb",
+    "size": 936999
+  },
+  {
+    "path": "context/reports/ready/V15_LIVE.md",
+    "source": "F:\\PUMP Research Lab\\reports\\ready\\V15_LIVE.md",
+    "sha256": "4cc5c325ba6379f432677c629a7d52a367a64db44a7311210cdf695831f76690",
+    "size": 179965
+  },
+  {
+    "path": "context/reports/ready/V16_LIVE.json",
+    "source": "F:\\PUMP Research Lab\\reports\\ready\\V16_LIVE.json",
+    "sha256": "15d310da8df3641305a89253ce3c576e78310717719c0b0808fcea417900f7ba",
+    "size": 930672
+  },
+  {
+    "path": "context/reports/ready/V16_LIVE.md",
+    "source": "F:\\PUMP Research Lab\\reports\\ready\\V16_LIVE.md",
+    "sha256": "a9b1c8cc787faad6f523be0e24506df2cb549bcf25f3ed608e1b9fff52f9de73",
+    "size": 478216
+  },
+  {
+    "path": "context/reports/ready/VARIANT_FACTORY_20260901-081324.json",
+    "source": "F:\\PUMP Research Lab\\reports\\ready\\VARIANT_FACTORY_20260901-081324.json",
+    "sha256": "d830a15f748f3fef2b335b4211f86bdc1148ee774c3c79055d1fb9516c4d996e",
+    "size": 50480
+  },
+  {
+    "path": "context/reports/ready/VARIANT_FACTORY_20260901-081324.md",
+    "source": "F:\\PUMP Research Lab\\reports\\ready\\VARIANT_FACTORY_20260901-081324.md",
+    "sha256": "714d5aa0e8b68dbb60c7804c98a4f305319ea8d4166fb0fbd23e4dc8736dd76b",
+    "size": 3263
+  },
+  {
+    "path": "context/reports/self_test/auto_x_economy_report.json",
+    "source": "F:\\PUMP Research Lab\\reports\\self_test\\auto_x_economy_report.json",
+    "sha256": "ed076d5a86530ac08c5ccaa641563ff1be53022584820807eb83acfda800247c",
+    "size": 3001
+  },
+  {
+    "path": "context/reports/self_test/auto_x_economy_report.md",
+    "source": "F:\\PUMP Research Lab\\reports\\self_test\\auto_x_economy_report.md",
+    "sha256": "5a8844125159f94329e78b9e7941ef14134bca51431adb23667f57c94bd68269",
+    "size": 493
+  },
+  {
+    "path": "context/legacy-c/automatic-6m-e6afcb8f64205d76-adaptive-v8.json",
+    "source": "C:\\Users\\sera-\\Documents\\PUMP Research Lab\\checkpoints\\automatic-6m-e6afcb8f64205d76-adaptive-v8.json",
+    "sha256": "8d3c3c292e45e59306800709a6d626e7cbfa8835d3680b261c859fac49676de7",
+    "size": 407023
+  }
+]
