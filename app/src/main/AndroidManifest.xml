@@ -83,9 +83,13 @@
             android:name=".CriticalOverviewActivity"
             android:exported="false"
             android:screenOrientation="portrait" />
-        <!-- V6.7 deliberately restores the complete V6.5 owner surface as the launcher. -->
+        <!-- Original V6.9 screen retained for rollback; compact Fusion dashboard is the launcher. -->
         <activity
             android:name=".MainActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+        <activity
+            android:name=".FusionDashboardActivity"
             android:exported="true"
             android:screenOrientation="portrait">
             <intent-filter>
