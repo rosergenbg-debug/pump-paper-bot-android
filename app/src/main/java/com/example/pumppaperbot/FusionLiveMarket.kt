@@ -33,19 +33,23 @@ internal class FusionLiveMarket {
         val btcMid: Double,
         val pump: List<Candle>,
         val btc: List<Candle>,
-        val updatedAt: Long
+        val updatedAt: Long,
+        val candlesUpdatedAt: Long = updatedAt
     ) {
         fun fresh(now: Long = System.currentTimeMillis()) =
             updatedAt in 1L..now && now - updatedAt <= 90_000L
     }
 
-    fun load(context: Context, interval: String): Quote {
+    fun load(context: Context, interval: String, previous: Quote? = null): Quote {
         require(interval in setOf("5m", "15m", "30m", "1h"))
         val key = BitpandaFusionSecureKeyStore.read(context)
         require(key.isNotBlank()) { "Не введён Bitpanda Fusion API-ключ Read" }
+        val delay = FusionRefreshState.retryDelaySeconds(context)
+        require(delay <= 0L) { "Bitpanda: пауза после ошибки API, ещё ${delay} с" }
+        val now = System.currentTimeMillis()
 
         // The ticker's 'price' is the reference mid price, not a guaranteed fill.
-        val tickers = JSONArray(get("v1/tickers?pair=PUMP-EUR%2CBTC-EUR", key))
+        val tickers = JSONArray(get(context, "v1/tickers?pair=PUMP-EUR%2CBTC-EUR", key))
         fun ticker(pair: String): Double {
             for (i in 0 until tickers.length()) {
                 val t = tickers.optJSONObject(i) ?: continue
@@ -55,7 +59,7 @@ internal class FusionLiveMarket {
         }
         val pumpMid = ticker("PUMP-EUR")
         val btcMid = ticker("BTC-EUR")
-        val book = JSONObject(get("v1/orderbook/PUMP-EUR?depth=1", key))
+        val book = JSONObject(get(context, "v1/orderbook/PUMP-EUR?depth=1", key))
         fun firstPrice(side: String): Double {
             val first = book.optJSONArray(side)?.optJSONObject(0)
                 ?: error("Нет стороны $side в стакане Bitpanda")
@@ -64,13 +68,26 @@ internal class FusionLiveMarket {
         val bid = firstPrice("bids")
         val ask = firstPrice("asks")
         require(ask >= bid) { "Некорректные котировки Bitpanda" }
-        val pumpCandles = parseCandles(get("v1/candles/PUMP-EUR?interval=$interval&limit=60", key))
-        val btcCandles = parseCandles(get("v1/candles/BTC-EUR?interval=$interval&limit=60", key))
+        // Candles change on bar boundaries, not on every ticker refresh.
+        // Reuse cached OHLCV for up to one minute while refreshing bid/ask every 15 sec.
+        val cached = previous ?: FusionQuoteCache.read(context, interval)
+        val reuseCandles = cached != null &&
+            cached.candlesUpdatedAt in 1L..now &&
+            now - cached.candlesUpdatedAt < 60_000L
+        val pumpCandles = if (reuseCandles) cached!!.pump else
+            parseCandles(get(context, "v1/candles/PUMP-EUR?interval=$interval&limit=60", key))
+        val btcCandles = if (reuseCandles) cached!!.btc else
+            parseCandles(get(context, "v1/candles/BTC-EUR?interval=$interval&limit=60", key))
         require(pumpCandles.size >= 2 && btcCandles.size >= 2) { "Bitpanda вернула недостаточно свечей" }
-        return Quote(pumpMid, bid, ask, btcMid, pumpCandles, btcCandles, System.currentTimeMillis())
+        val result = Quote(pumpMid, bid, ask, btcMid, pumpCandles, btcCandles,
+            System.currentTimeMillis(),
+            if (reuseCandles) cached!!.candlesUpdatedAt else System.currentTimeMillis())
+        FusionQuoteCache.save(context, interval, result)
+        FusionRefreshState.success(context)
+        return result
     }
 
-    private fun get(path: String, key: String): String {
+    private fun get(context: Context, path: String, key: String): String {
         val url = "https://api.fusion.bitpanda.com/$path"
         val request = Request.Builder()
             .url(url)
@@ -79,7 +96,13 @@ internal class FusionLiveMarket {
             .get()
             .build()
         client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) error("Ошибка Bitpanda HTTP ${response.code}")
+            if (!response.isSuccessful) {
+                val code = response.code
+                val retryAfter = response.header("Retry-After")?.toLongOrNull()
+                if (code == 429 || code == 401 || code == 403 || code >= 500)
+                    FusionRefreshState.blocked(context, code, retryAfter)
+                error("Ошибка Bitpanda HTTP ${code}")
+            }
             return response.body?.string() ?: error("Пустой ответ Bitpanda")
         }
     }
