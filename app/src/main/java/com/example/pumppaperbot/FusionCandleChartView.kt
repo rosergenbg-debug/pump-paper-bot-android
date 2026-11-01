@@ -3,6 +3,7 @@ package com.example.pumppaperbot
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.DashPathEffect
 import android.graphics.Paint
 import android.graphics.RectF
 import android.util.AttributeSet
@@ -14,31 +15,57 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * Bitpanda OHLC candlesticks, with a full day visible at 30m (48 bars).
- * A shared interval/time window is supplied by FusionDashboardActivity for BTC and PUMP.
- * No labels or order-flow gauges overlap the candles.
+ * Synced 48-bar OHLC chart. Keeps all candles inside the chart bounds,
+ * leaves a visible right margin, and displays current/min/max in a left rail.
  */
 internal class FusionCandleChartView @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null
 ) : View(context, attrs) {
+    private val background = Color.rgb(16, 24, 32)
     private val grid = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.rgb(52, 62, 72); strokeWidth = dp(.75f)
+        color = Color.rgb(49, 60, 70); strokeWidth = dp(.7f)
     }
-    private val axis = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.rgb(165, 176, 189); textSize = sp(10f); textAlign = Paint.Align.RIGHT
+    private val timePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.rgb(175, 182, 193); textSize = sp(9f)
+        textAlign = Paint.Align.CENTER
     }
-    private val time = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.rgb(165, 176, 189); textSize = sp(10f); textAlign = Paint.Align.CENTER
+    private val scaleText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.rgb(235, 240, 245); textSize = sp(9.5f)
+        textAlign = Paint.Align.RIGHT
     }
-    private val up = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(21, 211, 116) }
-    private val down = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(255, 85, 104) }
+    private val currentText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE; textSize = sp(10f)
+        textAlign = Paint.Align.RIGHT; isFakeBoldText = true
+    }
+    private val percentText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.rgb(232, 197, 88); textSize = sp(8.5f)
+        textAlign = Paint.Align.LEFT
+    }
+    private val percentGuide = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(145, 241, 194, 69)
+        strokeWidth = dp(.65f)
+        pathEffect = DashPathEffect(floatArrayOf(dp(3f), dp(4f)), 0f)
+    }
+    private val liveGuide = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.rgb(242, 217, 88)
+        strokeWidth = dp(.95f)
+        pathEffect = DashPathEffect(floatArrayOf(dp(4f), dp(3f)), 0f)
+    }
+    private val up = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.rgb(23, 204, 109); strokeWidth = dp(.9f)
+    }
+    private val down = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.rgb(255, 86, 102); strokeWidth = dp(.9f)
+    }
     private val entryLine = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.rgb(98, 159, 247); strokeWidth = dp(1.0f)
+        color = Color.rgb(90, 154, 253)
+        strokeWidth = dp(.9f)
+        pathEffect = DashPathEffect(floatArrayOf(dp(5f), dp(4f)), 0f)
     }
     private val rect = RectF()
-
     private var candles: List<FusionLiveMarket.Candle> = emptyList()
     private var entry: Double? = null
+    private var livePrice: Double? = null
     private var btc = false
     private var candleMillis = 30L * 60_000L
     private var windowEnd = 0L
@@ -48,89 +75,111 @@ internal class FusionCandleChartView @JvmOverloads constructor(
         intervalMillis: Long,
         currentTime: Long,
         isBitcoin: Boolean,
-        entryPrice: Double? = null
+        entryPrice: Double? = null,
+        currentPrice: Double? = null
     ) {
         require(intervalMillis > 0L)
-        val cutoff = currentTime - 48L * intervalMillis
+        candleMillis = intervalMillis
+        windowEnd = currentTime
+        btc = isBitcoin
+        val lower = (currentTime / intervalMillis) * intervalMillis - 47L * intervalMillis
         candles = data.asSequence()
-            .filter { it.timestamp >= cutoff && it.timestamp <= currentTime }
+            .filter { it.timestamp in lower..currentTime }
             .filter { it.open > 0.0 && it.high > 0.0 && it.low > 0.0 && it.close > 0.0 }
             .filter { it.low <= min(it.open, it.close) && it.high >= max(it.open, it.close) }
             .sortedBy { it.timestamp }
             .distinctBy { it.timestamp }
-            .toList()
-            .takeLast(49)
-        this.candleMillis = intervalMillis
-        this.windowEnd = currentTime
-        btc = isBitcoin
+            .toList().takeLast(48)
         entry = entryPrice?.takeIf { it.isFinite() && it > 0.0 }
+        livePrice = currentPrice?.takeIf { it.isFinite() && it > 0.0 }
         invalidate()
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        canvas.drawColor(Color.rgb(16, 24, 32))
-        val points = candles
-        if (points.isEmpty()) {
-            canvas.drawText("Нет свежих свечей Bitpanda", width / 2f, height / 2f, time)
+        canvas.drawColor(background)
+        val bars = candles
+        if (bars.isEmpty()) {
+            canvas.drawText("Нет свежих свечей Bitpanda", width / 2f, height / 2f, timePaint)
             return
         }
-        val left = dp(if (btc) 65f else 75f)
-        val right = width - dp(9f)
-        val top = dp(14f)
+
+        // Separate left price axis; right margin is >= five millimeters on phone screens.
+        val left = dp(if (btc) 78f else 88f)
+        val right = width - dp(28f)
+        val top = dp(20f)
         val bottom = height - dp(30f)
-        if (right <= left || bottom <= top) return
+        if (right - left < dp(45f) || bottom - top < dp(60f)) return
 
-        val rawLow = points.minOf { it.low }
-        val rawHigh = points.maxOf { it.high }
-        val range = max(rawHigh - rawLow, rawHigh * .0005)
-        val minP = max(0.0, rawLow - range * .07)
-        val maxP = rawHigh + range * .07
+        val rawMin = min(bars.minOf { it.low }, livePrice ?: Double.POSITIVE_INFINITY)
+        val rawMax = max(bars.maxOf { it.high }, livePrice ?: 0.0)
+        // Include all wicks and current price, with modest vertical headroom.
+        val rawSpan = max(rawMax - rawMin, rawMax * 0.00045)
+        val minP = (rawMin - rawSpan * .11).coerceAtLeast(0.0)
+        val maxP = rawMax + rawSpan * .11
         val span = max(maxP - minP, 1e-12)
-        fun yy(price: Double): Float =
-            (bottom - (price - minP) / span * (bottom - top)).toFloat()
+        fun y(value: Double): Float =
+            (bottom - (value - minP) / span * (bottom - top)).toFloat()
 
-        // Fixed 24-hour clock-aligned viewport: five minutes = up to 288 candles;
-        // fifteen = 96; thirty = 48; one hour = 24.
         val intervalStart = (windowEnd / candleMillis) * candleMillis
         val start = intervalStart - 47L * candleMillis
-        val end = intervalStart + candleMillis
-        val widthPerBar = (right - left) / 48f
-        fun xx(timestamp: Long): Float =
-            left + ((timestamp - start).toDouble() / candleMillis).toFloat() * widthPerBar + widthPerBar / 2f
+        val periodEnd = intervalStart + candleMillis
+        val barWidth = (right - left) / 48f
+        fun x(timestamp: Long): Float =
+            left + ((timestamp - start).toDouble() / candleMillis).toFloat() * barWidth + barWidth * .5f
 
         for (i in 0..4) {
-            val y = top + (bottom - top) * i / 4f
-            canvas.drawLine(left, y, right, y, grid)
-            canvas.drawText(format(maxP - span * i / 4.0), left - dp(5f), y + dp(3f), axis)
-
-            val x = left + (right - left) * i / 4f
-            canvas.drawLine(x, top, x, bottom, grid)
-            val at = start + (end - start) * i / 4L
-            canvas.drawText(SimpleDateFormat("HH:mm", Locale.GERMANY).format(Date(at)), x.coerceIn(left + dp(15f), right - dp(15f)), bottom + dp(17f), time)
+            val yy = top + (bottom - top) * i / 4f
+            canvas.drawLine(left, yy, right, yy, grid)
+            val xx = left + (right - left) * i / 4f
+            canvas.drawLine(xx, top, xx, bottom, grid)
+            val at = start + (periodEnd - start) * i / 4L
+            canvas.drawText(SimpleDateFormat("HH:mm", Locale.GERMANY).format(Date(at)),
+                xx.coerceIn(left + dp(15f), right - dp(15f)), bottom + dp(17f), timePaint)
         }
 
-        val entryValue = entry
-        if (entryValue != null && entryValue in minP..maxP) {
-            canvas.drawLine(left, yy(entryValue), right, yy(entryValue), entryLine)
+        val current = livePrice ?: bars.last().close
+        // Thin yellow lines: one, two, three, four percent above and below CURRENT.
+        // Levels outside the auto-scaled visible price range are not drawn.
+        for (percent in -4..4) {
+            if (percent == 0) continue
+            val level = current * (1.0 + percent / 100.0)
+            if (level <= minP || level >= maxP) continue
+            val yy = y(level)
+            if (yy < top + dp(9f) || yy > bottom - dp(7f)) continue
+            canvas.drawLine(left, yy, right, yy, percentGuide)
+            canvas.drawText("${if (percent > 0) "+" else ""}$percent%",
+                right + dp(3f), yy + dp(3f), percentText)
         }
 
-        val saved = canvas.save()
+        val openPrice = entry
+        if (openPrice != null && openPrice in minP..maxP)
+            canvas.drawLine(left, y(openPrice), right, y(openPrice), entryLine)
+
+        val clip = canvas.save()
         canvas.clipRect(left, top, right, bottom)
-        points.forEach { c ->
-            if (c.timestamp < start || c.timestamp >= end) return@forEach
-            val x = xx(c.timestamp)
-            val color = if (c.close >= c.open) up else down
-            val high = yy(c.high)
-            val low = yy(c.low)
-            canvas.drawLine(x, high, x, low, color)
-            val y1 = yy(max(c.open, c.close))
-            val y2 = yy(min(c.open, c.close))
-            val half = (widthPerBar * .35f).coerceIn(dp(.7f), dp(6f))
-            rect.set(x - half, y1, x + half, max(y2, y1 + dp(.8f)))
-            canvas.drawRect(rect, color)
+        for (c in bars) {
+            if (c.timestamp < start || c.timestamp >= periodEnd) continue
+            val cx = x(c.timestamp)
+            val brush = if (c.close >= c.open) up else down
+            canvas.drawLine(cx, y(c.high), cx, y(c.low), brush)
+            val upper = y(max(c.open, c.close))
+            val lower = y(min(c.open, c.close))
+            val half = (barWidth * .35f).coerceIn(dp(.55f), dp(5f))
+            rect.set(cx - half, upper, cx + half, max(lower, upper + dp(.85f)))
+            canvas.drawRect(rect, brush)
         }
-        canvas.restoreToCount(saved)
+        canvas.restoreToCount(clip)
+
+        // Current-price line and left-side labels are drawn AFTER candles so they remain legible.
+        val liveY = y(current).coerceIn(top, bottom)
+        canvas.drawLine(left, liveY, right, liveY, liveGuide)
+        val axisRight = left - dp(5f)
+        canvas.drawText("MAX " + format(rawMax), axisRight, top + dp(9f), scaleText)
+        canvas.drawText("MIN " + format(rawMin), axisRight, bottom - dp(2f), scaleText)
+        val labelY = liveY.coerceIn(top + dp(23f), bottom - dp(20f))
+        canvas.drawText("NOW", axisRight, labelY - dp(9f), currentText)
+        canvas.drawText(format(current), axisRight, labelY + dp(4f), currentText)
     }
 
     private fun format(price: Double): String =
