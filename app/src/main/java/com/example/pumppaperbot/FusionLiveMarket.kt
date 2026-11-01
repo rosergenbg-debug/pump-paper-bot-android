@@ -64,8 +64,8 @@ internal class FusionLiveMarket {
         val bid = firstPrice("bids")
         val ask = firstPrice("asks")
         require(ask >= bid) { "Некорректные котировки Bitpanda" }
-        val pumpCandles = parseCandles(get("v1/candles/PUMP-EUR?interval=$interval&limit=300", key))
-        val btcCandles = parseCandles(get("v1/candles/BTC-EUR?interval=$interval&limit=300", key))
+        val pumpCandles = parseCandles(get("v1/candles/PUMP-EUR?interval=$interval&limit=60", key))
+        val btcCandles = parseCandles(get("v1/candles/BTC-EUR?interval=$interval&limit=60", key))
         require(pumpCandles.size >= 2 && btcCandles.size >= 2) { "Bitpanda вернула недостаточно свечей" }
         return Quote(pumpMid, bid, ask, btcMid, pumpCandles, btcCandles, System.currentTimeMillis())
     }
