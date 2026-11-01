@@ -1,8 +1,8 @@
-name: V6.9.4 Fusion Compact · safe build
+name: V6.9.5 Fusion Compact · safe build
 
 on:
   push:
-    branches: ["codex/v6.9-fusion-compact-20261101"]
+    branches: ["codex/v6.9-fusion-candle-flow-fees-20261101"]
   workflow_dispatch:
 
 permissions:
@@ -25,16 +25,16 @@ jobs:
       - name: Verify APK package and launcher
         run: |
           "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging app/build/outputs/apk/debug/app-debug.apk | tee "$RUNNER_TEMP/badging.txt"
-          grep -F "versionCode='133' versionName='6.9.4'" "$RUNNER_TEMP/badging.txt"
+          grep -F "versionCode='134' versionName='6.9.5'" "$RUNNER_TEMP/badging.txt"
           grep -F "launchable-activity: name='com.example.pumppaperbot.FusionDashboardActivity'" "$RUNNER_TEMP/badging.txt"
           unzip -t app/build/outputs/apk/debug/app-debug.apk
       - name: Upload test APK
         uses: actions/upload-artifact@v4
         with:
-          name: PUMP-Fusion-6.9.4-test-APK
+          name: PUMP-Fusion-6.9.5-test-APK
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 7
-      - name: Sign V6.9.4 with the compatible PumpSignal update key
+      - name: Sign V6.9.5 with the compatible PumpSignal update key
         env:
           KS_PUMP: ${{ secrets.PUMP_SIGNING_KEYSTORE_BASE64 }}
           KS_ANDROID: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -108,25 +108,25 @@ jobs:
           "$ANDROID_HOME/build-tools/34.0.0/apksigner" sign \
             --ks "$KEYFILE" --ks-pass "pass:$PASS" --ks-key-alias "$ALIAS" --key-pass "pass:$KEYPASS" \
             --v1-signing-enabled false --v2-signing-enabled true --v3-signing-enabled true \
-            --out PumpSignal-V6.9.4-Compatible-FINAL.apk app/build/outputs/apk/debug/app-debug.apk
+            --out PumpSignal-V6.9.5-Compatible-FINAL.apk app/build/outputs/apk/debug/app-debug.apk
 
           "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose --print-certs \
-            PumpSignal-V6.9.4-Compatible-FINAL.apk | tee "$RUNNER_TEMP/final-signature.txt"
+            PumpSignal-V6.9.5-Compatible-FINAL.apk | tee "$RUNNER_TEMP/final-signature.txt"
           grep -F "Verified using v2 scheme (APK Signature Scheme v2): true" "$RUNNER_TEMP/final-signature.txt"
           grep -F "Verified using v3 scheme (APK Signature Scheme v3): true" "$RUNNER_TEMP/final-signature.txt"
           ACTUAL=$(grep -F "Signer #1 certificate SHA-256 digest:" "$RUNNER_TEMP/final-signature.txt" | awk '{print $NF}' | tr 'A-F' 'a-f')
           test "$ACTUAL" = "$EXPECTED"
-          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging PumpSignal-V6.9.4-Compatible-FINAL.apk | tee "$RUNNER_TEMP/final-badging.txt"
-          grep -F "package: name='com.example.pumppaperbot.v8' versionCode='133' versionName='6.9.4'" "$RUNNER_TEMP/final-badging.txt"
+          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging PumpSignal-V6.9.5-Compatible-FINAL.apk | tee "$RUNNER_TEMP/final-badging.txt"
+          grep -F "package: name='com.example.pumppaperbot.v8' versionCode='133' versionName='6.9.5'" "$RUNNER_TEMP/final-badging.txt"
           grep -F "launchable-activity: name='com.example.pumppaperbot.FusionDashboardActivity'" "$RUNNER_TEMP/final-badging.txt"
-          unzip -t PumpSignal-V6.9.4-Compatible-FINAL.apk
-          sha256sum PumpSignal-V6.9.4-Compatible-FINAL.apk | tee "$RUNNER_TEMP/final-sha256.txt"
+          unzip -t PumpSignal-V6.9.5-Compatible-FINAL.apk
+          sha256sum PumpSignal-V6.9.5-Compatible-FINAL.apk | tee "$RUNNER_TEMP/final-sha256.txt"
 
 
       - name: Upload compatible signed APK (only when a matching signing key exists)
-        if: ${{ hashFiles('PumpSignal-V6.9.4-Compatible-FINAL.apk') != '' }}
+        if: ${{ hashFiles('PumpSignal-V6.9.5-Compatible-FINAL.apk') != '' }}
         uses: actions/upload-artifact@v4
         with:
-          name: PUMP-Fusion-6.9.4-compatible-signed-APK
-          path: PumpSignal-V6.9.4-Compatible-FINAL.apk
+          name: PUMP-Fusion-6.9.5-compatible-signed-APK
+          path: PumpSignal-V6.9.5-Compatible-FINAL.apk
           retention-days: 7
