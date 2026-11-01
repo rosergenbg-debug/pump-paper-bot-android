@@ -320,9 +320,11 @@ class FusionDashboardActivity : AppCompatActivity() {
             "ИНТЕРВАЛ %s   ВЕРХ €%.8f   НИЗ €%.8f\nСЕЙЧАС €%.8f  ·  BID €%.8f / ASK €%.8f",
             interval, pumpHigh, pumpLow, q.pumpMid, q.pumpBid, q.pumpAsk
         )
-        btcChart.render(btc24, width, now, isBitcoin = true)
+        btcChart.render(btc24, width, now, isBitcoin = true,
+            currentPrice = q.btcMid)
         pumpChart.render(pump24, width, now, isBitcoin = false,
-            entryPrice = snap.entryPrice.takeIf { inPosition })
+            entryPrice = snap.entryPrice.takeIf { inPosition },
+            currentPrice = q.pumpMid)
     }
 
     private fun recordTrade(buy: Boolean) {
