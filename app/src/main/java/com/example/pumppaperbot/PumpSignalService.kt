@@ -14,6 +14,9 @@ class PumpSignalService : Service() {
     private val handler = Handler(Looper.getMainLooper())
     private val executor: ExecutorService = Executors.newSingleThreadExecutor()
     private val shockExecutor: ExecutorService = Executors.newSingleThreadExecutor()
+    private val fusionExecutor: ExecutorService = Executors.newSingleThreadExecutor()
+    private val fusionInFlight = AtomicBoolean(false)
+    private val fusionMarket = FusionLiveMarket()
     private val xExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private val shockCheckQueuedOrRunning = AtomicBoolean(false)
     private val xCheckQueuedOrRunning = AtomicBoolean(false)
@@ -39,6 +42,33 @@ class PumpSignalService : Service() {
         }
     }
 
+    private val fusionLoop = object : Runnable {
+        override fun run() {
+            if (destroyed) return
+            // The foreground UI is responsible for 15-second refreshes.
+            // In background, refresh once a minute using this existing foreground service.
+            if (!FusionRefreshState.isForeground(this@PumpSignalService) &&
+                BitpandaFusionSecureKeyStore.read(this@PumpSignalService).isNotBlank() &&
+                FusionRefreshState.canRequest(this@PumpSignalService) &&
+                fusionInFlight.compareAndSet(false, true)
+            ) {
+                fusionExecutor.execute {
+                    try {
+                        val currentInterval = getSharedPreferences("fusion_compact_display_v1", MODE_PRIVATE)
+                            .getString("interval", "30m") ?: "30m"
+                        val old = FusionQuoteCache.read(this@PumpSignalService, currentInterval)
+                        fusionMarket.load(this@PumpSignalService, currentInterval, old)
+                    } catch (_: Exception) {
+                        // REST errors are surfaced on the screen; do not record keys or bodies.
+                    } finally {
+                        fusionInFlight.set(false)
+                    }
+                }
+            }
+            if (!destroyed) handler.postDelayed(this, FusionRefreshState.BACKGROUND_INTERVAL_MS)
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
         destroyed = false
@@ -58,8 +88,10 @@ class PumpSignalService : Service() {
         microImpulse.start()
         handler.removeCallbacks(loop)
         handler.removeCallbacks(xLoop)
+        handler.removeCallbacks(fusionLoop)
         handler.post(loop)
         handler.post(xLoop)
+        handler.postDelayed(fusionLoop, FusionRefreshState.BACKGROUND_INTERVAL_MS)
         return START_STICKY
     }
 
@@ -79,9 +111,11 @@ class PumpSignalService : Service() {
         destroyed = true
         handler.removeCallbacks(loop)
         handler.removeCallbacks(xLoop)
+        handler.removeCallbacks(fusionLoop)
         microImpulse.stop()
         executor.shutdownNow()
         shockExecutor.shutdownNow()
+        fusionExecutor.shutdownNow()
         xExecutor.shutdownNow()
         super.onDestroy()
     }
