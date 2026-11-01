@@ -155,7 +155,7 @@ class FusionDashboardActivity : AppCompatActivity() {
         trade.addView(sellButton, LinearLayout.LayoutParams(0, dp(58), 1f).apply { leftMargin = dp(9) })
         root.addView(trade, topMargin(11))
 
-        root.addView(label("BITCOIN / EUR • 24 ЧАСА", 20, "#FFB347", true), topMargin(24))
+        root.addView(label("BITCOIN / EUR • СВЕЧИ", 20, "#FFB347", true), topMargin(24))
         btcInfo = label("ВЕРХ —  НИЗ —  СЕЙЧАС —", 15, "#F0F6FC", true)
         root.addView(btcInfo, topMargin(5))
         root.addView(intervalControls(), topMargin(10))
@@ -194,6 +194,8 @@ class FusionDashboardActivity : AppCompatActivity() {
     private fun chooseInterval(code: String) {
         if (interval == code) return
         interval = code
+        quote = null
+        render()
         getSharedPreferences("fusion_compact_display_v1", MODE_PRIVATE).edit()
             .putString("interval", interval).apply()
         updateSpeedButtons()
@@ -277,7 +279,13 @@ class FusionDashboardActivity : AppCompatActivity() {
             return
         }
         val now = System.currentTimeMillis()
-        val dayStart = now - 24L * 60L * 60L * 1000L
+        val width = when (interval) {
+            "5m" -> 5L * 60_000L
+            "15m" -> 15L * 60_000L
+            "1h" -> 60L * 60_000L
+            else -> 30L * 60_000L
+        }
+        val dayStart = now - 48L * width
         val btc24 = q.btc.filter { it.timestamp >= dayStart }
         val pump24 = q.pump.filter { it.timestamp >= dayStart }
         if (btc24.isEmpty() || pump24.isEmpty()) {
@@ -291,20 +299,14 @@ class FusionDashboardActivity : AppCompatActivity() {
         val btcLow = btc24.minOf { it.low }
         btcInfo.text = String.format(
             Locale.GERMANY,
-            "ВЕРХ €%,.0f   НИЗ €%,.0f\nСЕЙЧАС €%,.2f",
-            btcHigh, btcLow, q.btcMid
+            "ИНТЕРВАЛ %s   ВЕРХ €%,.0f   НИЗ €%,.0f\nСЕЙЧАС €%,.2f",
+            interval, btcHigh, btcLow, q.btcMid
         )
         pumpInfo.text = String.format(
             Locale.GERMANY,
-            "ВЕРХ €%.8f   НИЗ €%.8f\nСЕЙЧАС €%.8f  ·  BID €%.8f / ASK €%.8f",
-            pumpHigh, pumpLow, q.pumpMid, q.pumpBid, q.pumpAsk
+            "ИНТЕРВАЛ %s   ВЕРХ €%.8f   НИЗ €%.8f\nСЕЙЧАС €%.8f  ·  BID €%.8f / ASK €%.8f",
+            interval, pumpHigh, pumpLow, q.pumpMid, q.pumpBid, q.pumpAsk
         )
-        val width = when (interval) {
-            "5m" -> 5L * 60_000L
-            "15m" -> 15L * 60_000L
-            "1h" -> 60L * 60_000L
-            else -> 30L * 60_000L
-        }
         btcChart.render(btc24, width, now, isBitcoin = true)
         pumpChart.render(pump24, width, now, isBitcoin = false,
             entryPrice = snap.entryPrice.takeIf { inPosition })
