@@ -8,7 +8,7 @@ import java.util.concurrent.TimeUnit
  * No API keys are stored here. All timestamps are wall-clock milliseconds.
  */
 internal object FusionRefreshState {
-    const val FOREGROUND_INTERVAL_MS = 15_000L
+    const val FOREGROUND_INTERVAL_MS = 5_000L
     const val BACKGROUND_INTERVAL_MS = 60_000L
     private const val PREFS = "fusion_refresh_v1"
     private const val KEY_VISIBLE = "activity_visible"
