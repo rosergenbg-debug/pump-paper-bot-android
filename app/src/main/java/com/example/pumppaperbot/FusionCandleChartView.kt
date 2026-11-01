@@ -51,7 +51,7 @@ internal class FusionCandleChartView @JvmOverloads constructor(
         entryPrice: Double? = null
     ) {
         require(intervalMillis > 0L)
-        val cutoff = currentTime - 24L * 60L * 60_000L
+        val cutoff = currentTime - 48L * intervalMillis
         candles = data.asSequence()
             .filter { it.timestamp >= cutoff && it.timestamp <= currentTime }
             .filter { it.open > 0.0 && it.high > 0.0 && it.low > 0.0 && it.close > 0.0 }
@@ -59,7 +59,7 @@ internal class FusionCandleChartView @JvmOverloads constructor(
             .sortedBy { it.timestamp }
             .distinctBy { it.timestamp }
             .toList()
-            .takeLast((24L * 60L * 60_000L / intervalMillis).toInt() + 1)
+            .takeLast(49)
         this.candleMillis = intervalMillis
         this.windowEnd = currentTime
         btc = isBitcoin
@@ -93,9 +93,9 @@ internal class FusionCandleChartView @JvmOverloads constructor(
         // Fixed 24-hour clock-aligned viewport: five minutes = up to 288 candles;
         // fifteen = 96; thirty = 48; one hour = 24.
         val intervalStart = (windowEnd / candleMillis) * candleMillis
-        val start = intervalStart - (24L * 60L * 60_000L) + candleMillis
+        val start = intervalStart - 47L * candleMillis
         val end = intervalStart + candleMillis
-        val widthPerBar = (right - left) / (24L * 60L * 60_000L / candleMillis).toFloat()
+        val widthPerBar = (right - left) / 48f
         fun xx(timestamp: Long): Float =
             left + ((timestamp - start).toDouble() / candleMillis).toFloat() * widthPerBar + widthPerBar / 2f
 
