@@ -55,8 +55,9 @@ class FusionDashboardActivity : AppCompatActivity() {
 
     private val ticker = object : Runnable {
         override fun run() {
+            FusionRefreshState.heartbeat(this@FusionDashboardActivity)
             refreshMarket()
-            handler.postDelayed(this, 20_000L)
+            handler.postDelayed(this, FusionRefreshState.FOREGROUND_INTERVAL_MS)
         }
     }
     private val flowTicker = object : Runnable {
@@ -96,6 +97,13 @@ class FusionDashboardActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        FusionRefreshState.foreground(this, true)
+        // A background refresh may already have updated the shared non-secret quote cache.
+        FusionQuoteCache.read(this, interval)?.let { cached ->
+            val old = quote
+            if (old == null || cached.updatedAt > old.updatedAt) quote = cached
+        }
+        render()
         handler.removeCallbacks(ticker)
         handler.post(ticker)
         handler.removeCallbacks(flowTicker)
@@ -103,6 +111,7 @@ class FusionDashboardActivity : AppCompatActivity() {
     }
 
     override fun onPause() {
+        FusionRefreshState.foreground(this, false)
         handler.removeCallbacks(ticker)
         handler.removeCallbacks(flowTicker)
         super.onPause()
@@ -221,7 +230,10 @@ class FusionDashboardActivity : AppCompatActivity() {
             return
         }
         executor.execute {
-            val result = runCatching { market.load(applicationContext, currentInterval) }
+            val current = quote.takeIf { currentInterval == interval }
+            val result = runCatching {
+                market.load(applicationContext, currentInterval, current)
+            }
             runOnUiThread {
                 fetching.set(false)
                 if (isFinishing || isDestroyed) return@runOnUiThread
@@ -244,7 +256,8 @@ class FusionDashboardActivity : AppCompatActivity() {
         status.text = when {
             BitpandaFusionSecureKeyStore.read(this).isBlank() ->
                 "Ключ не введён • нажмите BITPANDA • КЛЮЧ READ"
-            q != null -> "Bitpanda Fusion • живые данные • ${PumpBotEngine.formatTime(q.updatedAt)}"
+            q != null -> "Bitpanda Fusion • 5 с на экране / 60 с в фоне • " +
+                java.text.SimpleDateFormat("HH:mm:ss", Locale.GERMANY).format(java.util.Date(q.updatedAt))
             else -> "ДАННЫЕ НЕАКТУАЛЬНЫ • ${fetchError.ifBlank { "ожидание ответа Bitpanda" }}"
         }
         status.setTextColor(Color.parseColor(if (q != null) "#7EE787" else "#FFB86C"))
