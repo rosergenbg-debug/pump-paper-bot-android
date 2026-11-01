@@ -21,7 +21,7 @@ jobs:
       - name: Compile and unit test
         run: |
           chmod +x gradlew
-          ./gradlew testDebugUnitTest lintDebug assembleDebug
+          ./gradlew testDebugUnitTest lintDebug assembleDebug assembleRelease
       - name: Verify APK package and launcher
         run: |
           "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging app/build/outputs/apk/debug/app-debug.apk | tee "$RUNNER_TEMP/badging.txt"
@@ -33,6 +33,12 @@ jobs:
         with:
           name: PUMP-Fusion-6.9.5-test-APK
           path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 7
+      - name: Upload unsigned release APK for offline same-key signing
+        uses: actions/upload-artifact@v4
+        with:
+          name: PUMP-Fusion-6.9.5-unsigned-release
+          path: app/build/outputs/apk/release/app-release-unsigned.apk
           retention-days: 7
       - name: Sign V6.9.5 with the compatible PumpSignal update key
         env:
