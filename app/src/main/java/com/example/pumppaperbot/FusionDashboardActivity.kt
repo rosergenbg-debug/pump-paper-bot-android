@@ -46,16 +46,28 @@ class FusionDashboardActivity : AppCompatActivity() {
     private lateinit var position: TextView
     private lateinit var pumpInfo: TextView
     private lateinit var btcInfo: TextView
-    private lateinit var pumpChart: FusionPriceChartView
-    private lateinit var btcChart: FusionPriceChartView
+    private lateinit var pumpChart: FusionCandleChartView
+    private lateinit var btcChart: FusionCandleChartView
     private lateinit var buyButton: Button
     private lateinit var sellButton: Button
-    private val speedButtons = linkedMapOf<String, Button>()
+    private val speedButtons = linkedMapOf<String, MutableList<Button>>()
+    private lateinit var flowPanel: FusionMoneyFlowPanel
 
     private val ticker = object : Runnable {
         override fun run() {
             refreshMarket()
             handler.postDelayed(this, 20_000L)
+        }
+    }
+    private val flowTicker = object : Runnable {
+        override fun run() {
+            if (::flowPanel.isInitialized) {
+                flowPanel.render(FusionFlowViewModel.from(
+                    MicroImpulseStore.state(this@FusionDashboardActivity),
+                    System.currentTimeMillis()
+                ))
+            }
+            handler.postDelayed(this, 5_000L)
         }
     }
 
@@ -86,10 +98,13 @@ class FusionDashboardActivity : AppCompatActivity() {
         super.onResume()
         handler.removeCallbacks(ticker)
         handler.post(ticker)
+        handler.removeCallbacks(flowTicker)
+        handler.post(flowTicker)
     }
 
     override fun onPause() {
         handler.removeCallbacks(ticker)
+        handler.removeCallbacks(flowTicker)
         super.onPause()
     }
 
@@ -143,29 +158,37 @@ class FusionDashboardActivity : AppCompatActivity() {
         root.addView(label("BITCOIN / EUR • 24 ЧАСА", 20, "#FFB347", true), topMargin(24))
         btcInfo = label("ВЕРХ —  НИЗ —  СЕЙЧАС —", 15, "#F0F6FC", true)
         root.addView(btcInfo, topMargin(5))
-        btcChart = FusionPriceChartView(this)
+        root.addView(intervalControls(), topMargin(10))
+        btcChart = FusionCandleChartView(this)
         root.addView(btcChart, LinearLayout.LayoutParams(-1, dp(265)).apply { topMargin = dp(8) })
 
         root.addView(label("PUMP / EUR • BITPANDA FUSION", 20, "#3BDD8C", true), topMargin(23))
         pumpInfo = label("ВЕРХ —  НИЗ —  СЕЙЧАС —", 15, "#F0F6FC", true)
         root.addView(pumpInfo, topMargin(5))
 
-        val speeds = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        listOf("5m" to "5 МИН", "15m" to "15 МИН", "30m" to "30 МИН", "1h" to "1 ЧАС")
-            .forEachIndexed { index, (code, text) ->
-                val b = button(text, "#27313B")
-                b.textSize = 12f
-                b.setOnClickListener { chooseInterval(code) }
-                speeds.addView(b, LinearLayout.LayoutParams(0, dp(46), 1f).apply {
-                    if (index > 0) leftMargin = dp(4)
-                })
-                speedButtons[code] = b
-            }
-        root.addView(speeds, topMargin(10))
-        pumpChart = FusionPriceChartView(this)
+        root.addView(intervalControls(), topMargin(10))
+        pumpChart = FusionCandleChartView(this)
         root.addView(pumpChart, LinearLayout.LayoutParams(-1, dp(315)).apply { topMargin = dp(8) })
-        root.addView(label("Синяя пунктирная линия — цена входа. График и котировки: только Bitpanda Fusion. Стратегия V6.9 работает отдельно.", 11, "#8B949E", false), topMargin(8))
+        root.addView(label("Синяя линия — цена входа. Свечи и котировки: Bitpanda Fusion. Стратегия V6.9 работает отдельно.", 11, "#8B949E", false), topMargin(8))
+        flowPanel = FusionMoneyFlowPanel(this)
+        root.addView(flowPanel, topMargin(16))
         updateSpeedButtons()
+    }
+
+    /** The two sets of interval buttons deliberately control a single shared 24h window. */
+    private fun intervalControls(): LinearLayout {
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        listOf("5m" to "5 МИН", "15m" to "15 МИН",
+            "30m" to "30 МИН", "1h" to "1 ЧАС"
+        ).forEachIndexed { i, (code, label) ->
+            val button = button(label, "#27313B").apply { textSize = 12f }
+            button.setOnClickListener { chooseInterval(code) }
+            row.addView(button, LinearLayout.LayoutParams(0, dp(46), 1f).apply {
+                if (i > 0) leftMargin = dp(4)
+            })
+            speedButtons.getOrPut(code) { mutableListOf() }.add(button)
+        }
+        return row
     }
 
     private fun chooseInterval(code: String) {
@@ -178,8 +201,10 @@ class FusionDashboardActivity : AppCompatActivity() {
     }
 
     private fun updateSpeedButtons() {
-        speedButtons.forEach { (code, b) ->
-            b.setBackgroundColor(Color.parseColor(if (code == interval) "#1B6F40" else "#27313B"))
+        speedButtons.forEach { (code, buttons) ->
+            buttons.forEach { button ->
+                button.setBackgroundColor(Color.parseColor(if (code == interval) "#1B6F40" else "#27313B"))
+            }
         }
     }
 
@@ -225,9 +250,13 @@ class FusionDashboardActivity : AppCompatActivity() {
         val inPosition = snap.waitMode == "SELL" && snap.entryPrice > 0.0
         if (inPosition) {
             val currentBid = q?.pumpBid
-            val change = currentBid?.let { (it / snap.entryPrice - 1.0) * 100.0 }
+            val change = currentBid?.let {
+                FusionPositionFees.pnlPercent(snap.entryPrice, it)
+            }
             position.text = if (change != null)
-                String.format(Locale.GERMANY, "%+.2f%%\nВход €%.8f → продажа €%.8f\nБез учёта комиссий", change, snap.entryPrice, currentBid)
+                String.format(Locale.GERMANY,
+                    "%+.2f%%\nВход €%.8f → BID €%.8f\nВключены комиссии: 0,25%% покупка + 0,25%% продажа",
+                    change, snap.entryPrice, currentBid)
             else String.format(Locale.GERMANY, "ПОЗИЦИЯ ОТКРЫТА\nВход €%.8f\nЖдём свежую цену Bitpanda", snap.entryPrice)
             position.setTextColor(Color.parseColor(if (change == null || change >= 0.0) "#7EE787" else "#FF7B72"))
         } else {
@@ -242,13 +271,22 @@ class FusionDashboardActivity : AppCompatActivity() {
         if (q == null) {
             btcInfo.text = "ВЕРХ —   НИЗ —   СЕЙЧАС —"
             pumpInfo.text = "ВЕРХ —   НИЗ —   СЕЙЧАС —"
+            val now = System.currentTimeMillis()
+            btcChart.render(emptyList(), 30L * 60_000L, now, isBitcoin = true)
+            pumpChart.render(emptyList(), 30L * 60_000L, now, isBitcoin = false)
             return
         }
         val now = System.currentTimeMillis()
-        val btc24 = q.btc.filter { it.timestamp >= now - 24L * 60L * 60L * 1000L }
-            .ifEmpty { q.btc }
-        val pumpHigh = q.pump.maxOf { it.high }
-        val pumpLow = q.pump.minOf { it.low }
+        val dayStart = now - 24L * 60L * 60L * 1000L
+        val btc24 = q.btc.filter { it.timestamp >= dayStart }
+        val pump24 = q.pump.filter { it.timestamp >= dayStart }
+        if (btc24.isEmpty() || pump24.isEmpty()) {
+            btcInfo.text = "Свечи Bitpanda за последние сутки недоступны"
+            pumpInfo.text = "Свечи Bitpanda за последние сутки недоступны"
+            return
+        }
+        val pumpHigh = pump24.maxOf { it.high }
+        val pumpLow = pump24.minOf { it.low }
         val btcHigh = btc24.maxOf { it.high }
         val btcLow = btc24.minOf { it.low }
         btcInfo.text = String.format(
@@ -261,9 +299,15 @@ class FusionDashboardActivity : AppCompatActivity() {
             "ВЕРХ €%.8f   НИЗ €%.8f\nСЕЙЧАС €%.8f  ·  BID €%.8f / ASK €%.8f",
             pumpHigh, pumpLow, q.pumpMid, q.pumpBid, q.pumpAsk
         )
-        btcChart.render(btc24, q.btcMid, q.updatedAt, btc = true)
-        pumpChart.render(q.pump, q.pumpMid, q.updatedAt, btc = false,
-            entry = snap.entryPrice.takeIf { inPosition })
+        val width = when (interval) {
+            "5m" -> 5L * 60_000L
+            "15m" -> 15L * 60_000L
+            "1h" -> 60L * 60_000L
+            else -> 30L * 60_000L
+        }
+        btcChart.render(btc24, width, now, isBitcoin = true)
+        pumpChart.render(pump24, width, now, isBitcoin = false,
+            entryPrice = snap.entryPrice.takeIf { inPosition })
     }
 
     private fun recordTrade(buy: Boolean) {
