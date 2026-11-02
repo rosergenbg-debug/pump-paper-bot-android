@@ -77,11 +77,12 @@ class FusionDashboardActivity : AppCompatActivity() {
         interval = getSharedPreferences("fusion_compact_display_v1", MODE_PRIVATE)
             .getString("interval", "30m")?.takeIf { it in listOf("5m", "15m", "30m", "1h") } ?: "30m"
         PumpBotEngine.ensureInitialized(this)
-        if (!PumpBotEngine.snapshot(this).running) {
-            PumpBotEngine.setRunning(this, true)
-            PumpAlert.ensureChannels(this)
-            ContextCompat.startForegroundService(this, Intent(this, PumpSignalService::class.java))
-        }
+        // Always ask Android to start the monitor when opening the app.
+        // The saved "running" preference may survive a killed process/service.
+        // PumpSignalService.onStartCommand is idempotent for the websocket.
+        PumpBotEngine.setRunning(this, true)
+        PumpAlert.ensureChannels(this)
+        ContextCompat.startForegroundService(this, Intent(this, PumpSignalService::class.java))
         val work = PeriodicWorkRequestBuilder<PumpBotWorker>(15, TimeUnit.MINUTES)
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
             .setInputData(workDataOf(
