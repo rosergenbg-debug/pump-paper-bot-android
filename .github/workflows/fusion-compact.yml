@@ -2,7 +2,7 @@ name: V6.9.9 Fusion Compact · safe build
 
 on:
   push:
-    branches: ["codex/v6.9.9-flow-service-recovery-20261102"]
+    branches: ["codex/v6.9.9-chart-ui-polish-20261102"]
   workflow_dispatch:
 
 permissions:
