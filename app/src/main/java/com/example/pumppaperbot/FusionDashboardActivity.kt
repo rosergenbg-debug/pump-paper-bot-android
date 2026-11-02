@@ -135,7 +135,7 @@ class FusionDashboardActivity : AppCompatActivity() {
         scroll.addView(root)
         setContentView(scroll)
 
-        root.addView(label("PUMP Сигнал • FUSION", 26, "#F0F6FC", true))
+        root.addView(label("PUMP Сигнал V${BuildConfig.VERSION_NAME}", 26, "#F0F6FC", true))
         status = label("Ожидаем Bitpanda…", 12, "#9EAAB8", false)
         root.addView(status)
 
@@ -168,7 +168,6 @@ class FusionDashboardActivity : AppCompatActivity() {
         root.addView(label("BITCOIN / EUR • СВЕЧИ", 20, "#FFB347", true), topMargin(24))
         btcInfo = label("ВЕРХ —  НИЗ —  СЕЙЧАС —", 15, "#F0F6FC", true)
         root.addView(btcInfo, topMargin(5))
-        root.addView(intervalControls(), topMargin(10))
         btcChart = FusionCandleChartView(this)
         root.addView(btcChart, LinearLayout.LayoutParams(-1, dp(265)).apply { topMargin = dp(8) })
 
@@ -182,6 +181,9 @@ class FusionDashboardActivity : AppCompatActivity() {
         root.addView(label("Синяя линия — цена входа. Свечи и котировки: Bitpanda Fusion. Стратегия V6.9 работает отдельно.", 11, "#8B949E", false), topMargin(8))
         flowPanel = FusionMoneyFlowPanel(this)
         root.addView(flowPanel, topMargin(16))
+        root.addView(label("roserge.nbg@gmail.com", 12, "#8B949E", false).apply {
+            gravity = Gravity.CENTER_HORIZONTAL
+        }, topMargin(22))
         updateSpeedButtons()
     }
 
