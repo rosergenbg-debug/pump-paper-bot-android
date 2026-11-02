@@ -11,6 +11,8 @@ import android.view.View
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.ceil
+import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
 
@@ -62,6 +64,11 @@ internal class FusionCandleChartView @JvmOverloads constructor(
         strokeWidth = dp(.9f)
         pathEffect = DashPathEffect(floatArrayOf(dp(5f), dp(4f)), 0f)
     }
+    private val periodText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        textSize = sp(14.5f)
+        textAlign = Paint.Align.LEFT
+        isFakeBoldText = true
+    }
     private val rect = RectF()
     private var candles: List<FusionLiveMarket.Candle> = emptyList()
     private var entry: Double? = null
@@ -106,8 +113,9 @@ internal class FusionCandleChartView @JvmOverloads constructor(
 
         // Separate left price axis; right margin is >= five millimeters on phone screens.
         val left = dp(if (btc) 78f else 88f)
-        val right = width - dp(28f)
-        val top = dp(20f)
+        val right = width - dp(40f)
+        // Keep a header strip free for percentage change over the visible interval.
+        val top = dp(43f)
         val bottom = height - dp(30f)
         if (right - left < dp(45f) || bottom - top < dp(60f)) return
 
@@ -139,17 +147,45 @@ internal class FusionCandleChartView @JvmOverloads constructor(
         }
 
         val current = livePrice ?: bars.last().close
-        // Thin yellow lines: one, two, three, four percent above and below CURRENT.
-        // Levels outside the auto-scaled visible price range are not drawn.
-        for (percent in -4..4) {
-            if (percent == 0) continue
-            val level = current * (1.0 + percent / 100.0)
-            if (level <= minP || level >= maxP) continue
-            val yy = y(level)
-            if (yy < top + dp(9f) || yy > bottom - dp(7f)) continue
-            canvas.drawLine(left, yy, right, yy, percentGuide)
-            canvas.drawText("${if (percent > 0) "+" else ""}$percent%",
-                right + dp(3f), yy + dp(3f), percentText)
+        val firstPrice = bars.first().open
+        val intervalHours = 48L * candleMillis / 3_600_000L
+        val periodPercent = if (firstPrice > 0.0)
+            (current / firstPrice - 1.0) * 100.0 else 0.0
+        periodText.color = if (periodPercent >= 0.0) up.color else down.color
+        canvas.drawText(
+            String.format(Locale.GERMANY, "ЗА %d Ч: %+.2f%%", intervalHours, periodPercent),
+            left + dp(2f), dp(24f), periodText
+        )
+
+        // Reference lines are based on the live/current price, and extend over
+        // the ENTIRE visible price range rather than stopping at +/-4%.
+        val lowPercent = floor((minP / current - 1.0) * 100.0)
+            .toInt().coerceAtLeast(-99)
+        val highPercent = ceil((maxP / current - 1.0) * 100.0)
+            .toInt().coerceAtMost(10000)
+        val pixelsPerPercent = (bottom - top) * current * .01 / span
+        val minSpacing = dp(13f)
+        val legibilityStep = ceil(minSpacing / pixelsPerPercent.coerceAtLeast(0.0001))
+            .toInt().coerceAtLeast(1)
+        val densityStep = ceil((highPercent - lowPercent).toDouble() / 120.0)
+            .toInt().coerceAtLeast(1)
+        val step = max(legibilityStep, densityStep)
+        var percent = Math.floorDiv(lowPercent, step) * step
+        var lines = 0
+        while (percent <= highPercent && lines < 125) {
+            if (percent != 0) {
+                val level = current * (1.0 + percent / 100.0)
+                if (level > minP && level < maxP) {
+                    val yy = y(level)
+                    if (yy >= top + dp(6f) && yy <= bottom - dp(6f)) {
+                        canvas.drawLine(left, yy, right, yy, percentGuide)
+                        canvas.drawText("${if (percent > 0) "+" else ""}$percent%",
+                            right + dp(3f), yy + dp(3f), percentText)
+                    }
+                }
+            }
+            percent += step
+            lines++
         }
 
         val openPrice = entry
