@@ -367,7 +367,7 @@ class MicroImpulseStream(
     }
 
     private companion object {
-        const val STREAM_URL = "wss://stream.binance.com:9443/stream?streams=pumpusdt@aggTrade/pumpusdt@bookTicker/btcusdt@aggTrade"
+        const val STREAM_URL = "wss://stream.binance.com:443/stream?streams=pumpusdt@aggTrade/pumpusdt@bookTicker/btcusdt@aggTrade"
         const val RAW_HISTORY_MILLIS = 5L * 60L * 1_000L
         const val BITCOIN_HISTORY_MILLIS = 60_000L
         const val SAVE_INTERVAL_MILLIS = 15_000L
