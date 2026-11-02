@@ -34,6 +34,18 @@ jobs:
           name: PUMP-Fusion-6.9.9-test-APK
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 7
+      - name: Bundle Android SDK signer for offline compatible release signing
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/apk-sign-tools"
+          cp "$ANDROID_HOME/build-tools/34.0.0/lib/apksigner.jar" "$RUNNER_TEMP/apk-sign-tools/apksigner.jar"
+          cp "$ANDROID_HOME/build-tools/34.0.0/apksigner" "$RUNNER_TEMP/apk-sign-tools/apksigner"
+      - name: Upload official Android SDK APK signing tools
+        uses: actions/upload-artifact@v4
+        with:
+          name: PUMP-6.9.9-android-signer-tools
+          path: ${{ runner.temp }}/apk-sign-tools/
+          retention-days: 1
       - name: Upload unsigned release APK for offline same-key signing
         uses: actions/upload-artifact@v4
         with:
