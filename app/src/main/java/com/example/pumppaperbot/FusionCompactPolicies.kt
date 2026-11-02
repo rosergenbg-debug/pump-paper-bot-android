@@ -30,8 +30,10 @@ internal data class FusionFlowViewModel(
     companion object {
         fun from(micro: MicroImpulseSnapshot, now: Long): FusionFlowViewModel {
             // A saved old snapshot must never masquerade as live zero-flow market activity.
-            val fresh = micro.connected && micro.updatedAt in 1L..now &&
-                now - micro.updatedAt <= 25_000L
+            val ageMillis = if (micro.updatedAt in 1L..now) now - micro.updatedAt else Long.MAX_VALUE
+            // Do not infer a network outage from a temporary lack of trades.
+            // Separate the websocket connection state from transaction freshness.
+            val fresh = micro.connected && ageMillis <= 45_000L
             val rows = listOf(
                 FusionFlowLine(1, micro.buyNotional60s, micro.sellNotional60s),
                 FusionFlowLine(5, micro.buyNotional5m, micro.sellNotional5m),
@@ -41,10 +43,19 @@ internal data class FusionFlowViewModel(
             )
             val coverage = max(0L, micro.flowHistorySeconds)
             val status = when {
-                !fresh -> "Поток Binance недоступен или устарел"
-                coverage < 60L -> "Накопление истории • менее 1 минуты"
-                coverage < 3600L -> "Живой поток • история набирается (${coverage / 60} мин)"
-                else -> "Живой поток • 60 минут истории"
+                !micro.connected && micro.phase == "CONNECTING" ->
+                    "Подключение Binance WebSocket… ожидаем сделки PUMP"
+                !micro.connected && micro.phase == "RECONNECTING" ->
+                    "Переподключение Binance: " + micro.error.take(110).ifBlank { "сеть недоступна" }
+                !micro.connected ->
+                    "Нет подключения к потоку сделок Binance (${micro.phase})"
+                micro.updatedAt <= 0L ->
+                    "Binance подключён, ожидаем первые сделки PUMP"
+                !fresh ->
+                    "Binance подключён • данные сделок не обновлялись ${ageMillis / 1000L} с"
+                coverage < 60L -> "Живой поток Binance • история менее 1 минуты"
+                coverage < 3600L -> "Живой поток Binance • история набирается (${coverage / 60} мин)"
+                else -> "Живой поток Binance • 60 минут истории"
             }
             return FusionFlowViewModel(rows, fresh, coverage, status)
         }
