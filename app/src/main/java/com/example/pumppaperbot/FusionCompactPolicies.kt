@@ -33,7 +33,7 @@ internal data class FusionFlowViewModel(
             val ageMillis = if (micro.updatedAt in 1L..now) now - micro.updatedAt else Long.MAX_VALUE
             // Do not infer a network outage from a temporary lack of trades.
             // Separate the websocket connection state from transaction freshness.
-            val fresh = micro.connected && ageMillis <= 45_000L
+            val fresh = micro.connected && ageMillis <= 40_000L
             val rows = listOf(
                 FusionFlowLine(1, micro.buyNotional60s, micro.sellNotional60s),
                 FusionFlowLine(5, micro.buyNotional5m, micro.sellNotional5m),
