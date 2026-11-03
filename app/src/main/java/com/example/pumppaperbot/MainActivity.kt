@@ -32,6 +32,9 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 class MainActivity : AppCompatActivity() {
+    // Compatibility entry point: old OS notifications may reference this component.
+    // Route them to the supported Fusion interface instead of showing legacy UI.
+    private var forwardedToFusion = false
     private val handler = Handler(Looper.getMainLooper())
     private val chartExecutor = Executors.newSingleThreadExecutor()
     private val chartSyncRunning = AtomicBoolean(false)
@@ -104,6 +107,14 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Keep historical class for Android compatibility, but don't open its old screen.
+        forwardedToFusion = true
+        startActivity(Intent(this, FusionDashboardActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        })
+        finish()
+        return
+        @Suppress("UNREACHABLE_CODE")
         runCatching { ResearchHistoryArchive.ensureCaptured(this) }
         runCatching { ResearchPerformanceLedger.capture(this) }
         setContentView(R.layout.activity_main)
@@ -248,6 +259,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        if (forwardedToFusion) return
         updateUi()
         handler.post(refreshUi)
         handler.post(refreshChart)
