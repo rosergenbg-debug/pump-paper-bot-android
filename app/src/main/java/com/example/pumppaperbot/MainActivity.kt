@@ -107,14 +107,16 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Keep historical class for Android compatibility, but don't open its old screen.
-        forwardedToFusion = true
-        startActivity(Intent(this, FusionDashboardActivity::class.java).apply {
-            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-        })
-        finish()
-        return
-        @Suppress("UNREACHABLE_CODE")
+        // Old PendingIntents can survive an APK update. Redirect their target safely.
+        // Explicit legacy mode is retained only for compatibility diagnostics.
+        if (intent?.getBooleanExtra("EXPLICIT_LEGACY_DIAGNOSTICS", false) != true) {
+            forwardedToFusion = true
+            startActivity(Intent(this, FusionDashboardActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            })
+            finish()
+            return
+        }
         runCatching { ResearchHistoryArchive.ensureCaptured(this) }
         runCatching { ResearchPerformanceLedger.capture(this) }
         setContentView(R.layout.activity_main)
