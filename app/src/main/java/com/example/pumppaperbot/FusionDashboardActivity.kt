@@ -52,6 +52,7 @@ class FusionDashboardActivity : AppCompatActivity() {
     private lateinit var sellButton: Button
     private val speedButtons = linkedMapOf<String, MutableList<Button>>()
     private lateinit var flowPanel: FusionMoneyFlowPanel
+    private lateinit var marketStats: TextView
 
     private val ticker = object : Runnable {
         override fun run() {
@@ -181,6 +182,15 @@ class FusionDashboardActivity : AppCompatActivity() {
         root.addView(label("Синяя линия — цена входа. Свечи и котировки: Bitpanda Fusion. Стратегия V6.9 работает отдельно.", 11, "#8B949E", false), topMargin(8))
         flowPanel = FusionMoneyFlowPanel(this)
         root.addView(flowPanel, topMargin(16))
+
+        // All data below comes from the EXISTING Bitpanda ticker and orderbook
+        // requests; no extra requests or additional API permissions are needed.
+        marketStats = label("FUSION • спред и диапазон за 24 ч: ожидаем данные…",
+            11, "#D8E3EB", false).apply {
+            setPadding(dp(10), dp(7), dp(10), dp(7))
+            setBackgroundColor(Color.parseColor("#13222D"))
+        }
+        root.addView(marketStats, topMargin(8))
         root.addView(label("roserge.nbg@gmail.com", 12, "#8B949E", false).apply {
             gravity = Gravity.CENTER_HORIZONTAL
         }, topMargin(22))
@@ -286,6 +296,21 @@ class FusionDashboardActivity : AppCompatActivity() {
         buyButton.alpha = if (buyButton.isEnabled) 1f else .45f
         sellButton.alpha = if (sellButton.isEnabled) 1f else .45f
 
+        marketStats.text = if (q == null) {
+            "FUSION • спред и 24ч диапазон: нет свежей котировки"
+        } else {
+            val spreadPct = FusionMarketMetrics.spreadPercent(q.pumpBid, q.pumpAsk)
+            val spreadEuro = FusionMarketMetrics.spreadEuro(q.pumpBid, q.pumpAsk)
+            val range = if (q.pumpHigh24h != null && q.pumpLow24h != null &&
+                q.pumpHigh24h >= q.pumpLow24h) {
+                String.format(Locale.GERMANY,
+                    "\nPUMP 24ч • максимум €%.8f · минимум €%.8f",
+                    q.pumpHigh24h, q.pumpLow24h)
+            } else ""
+            String.format(Locale.GERMANY,
+                "FUSION • спред BID/ASK %.3f%% (€%.8f)",
+                spreadPct, spreadEuro) + range
+        }
         if (q == null) {
             btcInfo.text = "ВЕРХ —   НИЗ —   СЕЙЧАС —"
             pumpInfo.text = "ВЕРХ —   НИЗ —   СЕЙЧАС —"
