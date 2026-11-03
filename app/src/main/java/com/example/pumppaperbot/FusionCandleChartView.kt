@@ -35,6 +35,13 @@ internal class FusionCandleChartView @JvmOverloads constructor(
         color = Color.rgb(235, 240, 245); textSize = sp(9.5f)
         textAlign = Paint.Align.RIGHT
     }
+    // Each yellow percentage line has a real, selectable stop-loss reference price
+    // in the same LEFT gutter as the current price; the percentage stays at the right.
+    private val percentPriceText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.rgb(241, 242, 247)
+        textSize = sp(8.8f)
+        textAlign = Paint.Align.RIGHT
+    }
     private val currentText = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE; textSize = sp(10f)
         textAlign = Paint.Align.RIGHT; isFakeBoldText = true
@@ -164,7 +171,7 @@ internal class FusionCandleChartView @JvmOverloads constructor(
         val highPercent = ceil((maxP / current - 1.0) * 100.0)
             .toInt().coerceAtMost(10000)
         val pixelsPerPercent = (bottom - top) * current * .01 / span
-        val minSpacing = dp(13f)
+        val minSpacing = dp(17f)
         val legibilityStep = ceil(minSpacing / pixelsPerPercent.coerceAtLeast(0.0001))
             .toInt().coerceAtLeast(1)
         val densityStep = ceil((highPercent - lowPercent).toDouble() / 120.0)
@@ -174,13 +181,17 @@ internal class FusionCandleChartView @JvmOverloads constructor(
         var lines = 0
         while (percent <= highPercent && lines < 125) {
             if (percent != 0) {
-                val level = current * (1.0 + percent / 100.0)
+                val level = FusionPercentLevels.price(current, percent)
                 if (level > minP && level < maxP) {
                     val yy = y(level)
                     if (yy >= top + dp(6f) && yy <= bottom - dp(6f)) {
                         canvas.drawLine(left, yy, right, yy, percentGuide)
                         canvas.drawText("${if (percent > 0) "+" else ""}$percent%",
                             right + dp(3f), yy + dp(3f), percentText)
+                        canvas.drawText(
+                            FusionPercentLevels.format(level, btc),
+                            left - dp(5f), yy + dp(3f), percentPriceText
+                        )
                     }
                 }
             }
