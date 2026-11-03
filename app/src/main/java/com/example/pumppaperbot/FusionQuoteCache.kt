@@ -19,6 +19,8 @@ internal object FusionQuoteCache {
             .put("candlesUpdatedAt", quote.candlesUpdatedAt)
             .put("pumpMid", quote.pumpMid).put("pumpBid", quote.pumpBid)
             .put("pumpAsk", quote.pumpAsk).put("btcMid", quote.btcMid)
+            .put("pumpHigh24h", quote.pumpHigh24h ?: JSONObject.NULL)
+            .put("pumpLow24h", quote.pumpLow24h ?: JSONObject.NULL)
             .put("pump", candles(quote.pump)).put("btc", candles(quote.btc))
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putString(KEY_JSON, obj.toString()).apply()
@@ -42,7 +44,11 @@ internal object FusionQuoteCache {
             pumpAsk = obj.getDouble("pumpAsk"),
             btcMid = obj.getDouble("btcMid"),
             pump = pump, btc = btc,
-            updatedAt = updatedAt, candlesUpdatedAt = candleAt
+            updatedAt = updatedAt, candlesUpdatedAt = candleAt,
+            pumpHigh24h = obj.optString("pumpHigh24h").toDoubleOrNull()
+                ?.takeIf { it.isFinite() && it > 0.0 },
+            pumpLow24h = obj.optString("pumpLow24h").toDoubleOrNull()
+                ?.takeIf { it.isFinite() && it > 0.0 }
         )
     }.getOrNull()
 
