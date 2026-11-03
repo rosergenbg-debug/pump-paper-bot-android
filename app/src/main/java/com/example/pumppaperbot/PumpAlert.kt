@@ -852,7 +852,7 @@ object PumpAlert {
     fun monitorId(): Int = monitorNotificationId
 
     private fun openAppIntent(context: Context): PendingIntent {
-        val intent = Intent(context, MainActivity::class.java)
+        val intent = Intent(context, FusionDashboardActivity::class.java)
         intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         return PendingIntent.getActivity(
             context,
