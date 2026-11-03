@@ -1,8 +1,8 @@
-name: V6.9.10 Fusion Compact · safe build
+name: V6.9.11 Fusion Compact · safe build
 
 on:
   push:
-    branches: ["codex/v6.9.10-price-labels-20261103"]
+    branches: ["codex/v6.9.11-notification-compact-market-20261103"]
   workflow_dispatch:
 
 permissions:
@@ -25,13 +25,15 @@ jobs:
       - name: Verify APK package and launcher
         run: |
           "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging app/build/outputs/apk/debug/app-debug.apk | tee "$RUNNER_TEMP/badging.txt"
-          grep -F "versionCode='139' versionName='6.9.10'" "$RUNNER_TEMP/badging.txt"
+          grep -F "versionCode='140' versionName='6.9.11'" "$RUNNER_TEMP/badging.txt"
           grep -F "launchable-activity: name='com.example.pumppaperbot.FusionDashboardActivity'" "$RUNNER_TEMP/badging.txt"
+          # All current PumpAlert notifications must open Fusion, never legacy MainActivity.
+          grep -F 'Intent(context, FusionDashboardActivity::class.java)' app/src/main/java/com/example/pumppaperbot/PumpAlert.kt
           unzip -t app/build/outputs/apk/debug/app-debug.apk
       - name: Upload test APK
         uses: actions/upload-artifact@v4
         with:
-          name: PUMP-Fusion-6.9.10-test-APK
+          name: PUMP-Fusion-6.9.11-test-APK
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 7
       - name: Bundle Android SDK signer for offline compatible release signing
@@ -43,16 +45,16 @@ jobs:
       - name: Upload official Android SDK APK signing tools
         uses: actions/upload-artifact@v4
         with:
-          name: PUMP-6.9.10-android-signer-tools
+          name: PUMP-6.9.11-android-signer-tools
           path: ${{ runner.temp }}/apk-sign-tools/
           retention-days: 1
       - name: Upload unsigned release APK for offline same-key signing
         uses: actions/upload-artifact@v4
         with:
-          name: PUMP-Fusion-6.9.10-unsigned-release
+          name: PUMP-Fusion-6.9.11-unsigned-release
           path: app/build/outputs/apk/release/app-release-unsigned.apk
           retention-days: 7
-      - name: Sign V6.9.10 with the compatible PumpSignal update key
+      - name: Sign V6.9.11 with the compatible PumpSignal update key
         env:
           KS_PUMP: ${{ secrets.PUMP_SIGNING_KEYSTORE_BASE64 }}
           KS_ANDROID: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -126,25 +128,25 @@ jobs:
           "$ANDROID_HOME/build-tools/34.0.0/apksigner" sign \
             --ks "$KEYFILE" --ks-pass "pass:$PASS" --ks-key-alias "$ALIAS" --key-pass "pass:$KEYPASS" \
             --v1-signing-enabled false --v2-signing-enabled true --v3-signing-enabled true \
-            --out PumpSignal-V6.9.10-Compatible-FINAL.apk app/build/outputs/apk/debug/app-debug.apk
+            --out PumpSignal-V6.9.11-Compatible-FINAL.apk app/build/outputs/apk/debug/app-debug.apk
 
           "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose --print-certs \
-            PumpSignal-V6.9.10-Compatible-FINAL.apk | tee "$RUNNER_TEMP/final-signature.txt"
+            PumpSignal-V6.9.11-Compatible-FINAL.apk | tee "$RUNNER_TEMP/final-signature.txt"
           grep -F "Verified using v2 scheme (APK Signature Scheme v2): true" "$RUNNER_TEMP/final-signature.txt"
           grep -F "Verified using v3 scheme (APK Signature Scheme v3): true" "$RUNNER_TEMP/final-signature.txt"
           ACTUAL=$(grep -F "Signer #1 certificate SHA-256 digest:" "$RUNNER_TEMP/final-signature.txt" | awk '{print $NF}' | tr 'A-F' 'a-f')
           test "$ACTUAL" = "$EXPECTED"
-          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging PumpSignal-V6.9.10-Compatible-FINAL.apk | tee "$RUNNER_TEMP/final-badging.txt"
-          grep -F "package: name='com.example.pumppaperbot.v8' versionCode='139' versionName='6.9.10'" "$RUNNER_TEMP/final-badging.txt"
+          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging PumpSignal-V6.9.11-Compatible-FINAL.apk | tee "$RUNNER_TEMP/final-badging.txt"
+          grep -F "package: name='com.example.pumppaperbot.v8' versionCode='140' versionName='6.9.11'" "$RUNNER_TEMP/final-badging.txt"
           grep -F "launchable-activity: name='com.example.pumppaperbot.FusionDashboardActivity'" "$RUNNER_TEMP/final-badging.txt"
-          unzip -t PumpSignal-V6.9.10-Compatible-FINAL.apk
-          sha256sum PumpSignal-V6.9.10-Compatible-FINAL.apk | tee "$RUNNER_TEMP/final-sha256.txt"
+          unzip -t PumpSignal-V6.9.11-Compatible-FINAL.apk
+          sha256sum PumpSignal-V6.9.11-Compatible-FINAL.apk | tee "$RUNNER_TEMP/final-sha256.txt"
 
 
       - name: Upload compatible signed APK (only when a matching signing key exists)
-        if: ${{ hashFiles('PumpSignal-V6.9.10-Compatible-FINAL.apk') != '' }}
+        if: ${{ hashFiles('PumpSignal-V6.9.11-Compatible-FINAL.apk') != '' }}
         uses: actions/upload-artifact@v4
         with:
-          name: PUMP-Fusion-6.9.10-compatible-signed-APK
-          path: PumpSignal-V6.9.10-Compatible-FINAL.apk
+          name: PUMP-Fusion-6.9.11-compatible-signed-APK
+          path: PumpSignal-V6.9.11-Compatible-FINAL.apk
           retention-days: 7
