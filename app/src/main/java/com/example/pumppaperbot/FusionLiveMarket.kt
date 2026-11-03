@@ -34,7 +34,9 @@ internal class FusionLiveMarket {
         val pump: List<Candle>,
         val btc: List<Candle>,
         val updatedAt: Long,
-        val candlesUpdatedAt: Long = updatedAt
+        val candlesUpdatedAt: Long = updatedAt,
+        val pumpHigh24h: Double? = null,
+        val pumpLow24h: Double? = null
     ) {
         fun fresh(now: Long = System.currentTimeMillis()) =
             updatedAt in 1L..now && now - updatedAt <= 90_000L
@@ -59,6 +61,14 @@ internal class FusionLiveMarket {
         }
         val pumpMid = ticker("PUMP-EUR")
         val btcMid = ticker("BTC-EUR")
+        val pumpTicker = (0 until tickers.length()).mapNotNull { tickers.optJSONObject(it) }
+            .firstOrNull { it.optString("pair") == "PUMP-EUR" }
+        // Official Fusion 24h ticker high/low. Optional fields never break live charts.
+        fun optionalPositive(field: String): Double? =
+            pumpTicker?.optString(field)?.toDoubleOrNull()
+                ?.takeIf { it.isFinite() && it > 0.0 }
+        val high24h = optionalPositive("high")
+        val low24h = optionalPositive("low")
         val book = JSONObject(get(context, "v1/orderbook/PUMP-EUR?depth=1", key))
         fun firstPrice(side: String): Double {
             val first = book.optJSONArray(side)?.optJSONObject(0)
@@ -79,9 +89,18 @@ internal class FusionLiveMarket {
         val btcCandles = if (reuseCandles) cached!!.btc else
             parseCandles(get(context, "v1/candles/BTC-EUR?interval=$interval&limit=60", key))
         require(pumpCandles.size >= 2 && btcCandles.size >= 2) { "Bitpanda вернула недостаточно свечей" }
-        val result = Quote(pumpMid, bid, ask, btcMid, pumpCandles, btcCandles,
-            System.currentTimeMillis(),
-            if (reuseCandles) cached!!.candlesUpdatedAt else System.currentTimeMillis())
+        val result = Quote(
+            pumpMid = pumpMid,
+            pumpBid = bid,
+            pumpAsk = ask,
+            btcMid = btcMid,
+            pump = pumpCandles,
+            btc = btcCandles,
+            updatedAt = System.currentTimeMillis(),
+            candlesUpdatedAt = if (reuseCandles) cached!!.candlesUpdatedAt else System.currentTimeMillis(),
+            pumpHigh24h = high24h,
+            pumpLow24h = low24h
+        )
         FusionQuoteCache.save(context, interval, result)
         FusionRefreshState.success(context)
         return result
